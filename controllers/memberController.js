@@ -1,4 +1,5 @@
 import pool, { query } from '../config/db.js';
+import { exportToExcel } from '../services/reportExporter.js'; // Ensure this line is present
 
 // @desc    Create a new member profile
 // @route   POST /api/members
@@ -293,5 +294,187 @@ export const updateMemberStatus = async (req, res, next) => {
     next(error);
   } finally {
     client.release();
+  }
+};
+
+
+// @desc    Delete a member profile (Hard delete for clean profiles only)
+// @route   DELETE /api/members/:id
+// @access  Protected (Admin)
+export const deleteMember = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const memberCheck = await query('SELECT first_name, last_name FROM members WHERE id = $1', [id]);
+    if (memberCheck.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Member profile not found.' }
+      });
+    }
+
+    const ledgerCheck = await query(`
+      SELECT 
+        (SELECT COUNT(*) FROM loans WHERE member_id = $1) as loan_count,
+        (SELECT COUNT(*) FROM share_capital_transactions WHERE member_id = $1) as transaction_count
+    `, [id]);
+
+    const { loan_count, transaction_count } = ledgerCheck.rows[0];
+
+    if (parseInt(loan_count, 10) > 0 || parseInt(transaction_count, 10) > 0) {
+      return res.status(400).json({
+        success: false,
+        error: { 
+          message: 'Cannot delete member. This profile has historical financial ledger records or loans attached to it. Please update their status to "inactive" instead.' 
+        }
+      });
+    }
+
+    await query('DELETE FROM member_status_logs WHERE member_id = $1', [id]);
+    await query('DELETE FROM members WHERE id = $1', [id]);
+
+    res.status(200).json({
+      success: true,
+      message: `Member profile for ${memberCheck.rows[0].first_name} ${memberCheck.rows[0].last_name} was permanently removed from the system.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get complete real-time financial dashboard summary for a single member
+// @route   GET /api/members/:id/dashboard-summary
+// @access  Protected (Admin, Manager, Member-Owner)
+export const getMemberDashboardSummary = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // RBAC Check: Members can only view their own dashboard summary
+    if (req.user.role === 'member') {
+      const ownCheck = await query('SELECT id FROM members WHERE user_id = $1', [req.user.id]);
+      if (ownCheck.rowCount === 0 || ownCheck.rows[0].id !== id) {
+        return res.status(403).json({
+          success: false,
+          error: { message: 'You are not authorized to view this financial summary.' }
+        });
+      }
+    }
+
+    // Verify member exists first
+    const memberCheck = await query('SELECT first_name, last_name, status FROM members WHERE id = $1', [id]);
+    if (memberCheck.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Member profile not found.' }
+      });
+    }
+
+    // Run parallel summary aggregations across financial ledgers
+    const summaryQuery = `
+      SELECT
+        -- Share Capital Balance
+        COALESCE((SELECT SUM(CASE WHEN UPPER(transaction_type) = 'DEPOSIT' THEN amount ELSE -amount END) 
+                  FROM share_capital_transactions WHERE member_id = $1), 0) as share_capital_balance,
+        
+        -- Fixed Deposit Balance
+        COALESCE((SELECT SUM(amount) FROM fixed_deposits WHERE member_id = $1 AND status = 'active'), 0) as fixed_deposit_balance,
+        
+        -- Total Investments Placement
+        COALESCE((SELECT SUM(amount) FROM investments WHERE member_id = $1 AND status = 'active'), 0) as active_investments_total,
+        
+        -- Outstanding Active Loans Summary
+        COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status = 'disbursed'), 0) as active_loans_count,
+        COALESCE((SELECT SUM(principal_amount) FROM loans WHERE member_id = $1 AND status = 'disbursed'), 0) as original_loan_principal,
+        
+        -- Remaining Outstanding Principal
+        COALESCE(
+          (SELECT SUM(l.principal_amount) FROM loans l WHERE l.member_id = $1 AND l.status = 'disbursed') - 
+          (SELECT COALESCE(SUM(rs.principal_paid), 0) FROM repayment_schedules rs JOIN loans l ON rs.loan_id = l.id WHERE l.member_id = $1 AND l.status = 'disbursed'),
+          0
+        ) as outstanding_loan_balance
+    `;
+
+    const summaryResult = await query(summaryQuery, [id]);
+    const metrics = summaryResult.rows[0];
+
+    res.status(200).json({
+      success: true,
+      data: {
+        member_id: id,
+        full_name: `${memberCheck.rows[0].first_name} ${memberCheck.rows[0].last_name}`,
+        profile_status: memberCheck.rows[0].status,
+        balances: {
+          share_capital: parseFloat(metrics.share_capital_balance),
+          fixed_deposits: parseFloat(metrics.fixed_deposit_balance),
+          investments: parseFloat(metrics.active_investments_total),
+          total_assets: parseFloat(metrics.share_capital_balance) + parseFloat(metrics.fixed_deposit_balance) + parseFloat(metrics.active_investments_total)
+        },
+        loans: {
+          active_count: parseInt(metrics.active_loans_count, 10),
+          original_principal: parseFloat(metrics.original_loan_principal),
+          outstanding_balance: parseFloat(metrics.outstanding_loan_balance)
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Export filtered/searched member directory list straight to Excel sheet
+// @route   GET /api/members/export/excel
+// @access  Protected (Admin, Manager)
+export const exportMembersReport = async (req, res, next) => {
+  try {
+    const { search, status } = req.query;
+
+    // Use a clone of your original listing logic
+    let queryText = 'SELECT id, first_name, last_name, email, phone, status, created_at FROM members WHERE 1=1';
+    const queryParams = [];
+    let paramIndex = 1;
+
+    if (status) {
+      queryText += ` AND status = $${paramIndex}`;
+      queryParams.push(status);
+      paramIndex++;
+    }
+
+    if (search) {
+      queryText += ` AND (first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR COALESCE(email, '') ILIKE $${paramIndex})`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    queryText += ' ORDER BY last_name ASC, first_name ASC';
+    const result = await query(queryText, queryParams);
+
+    const formattedMembers = result.rows.map(row => ({
+      ...row,
+      full_name: `${row.first_name} ${row.last_name}`,
+      created_at: row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : 'N/A'
+    }));
+
+    // Re-use your helper service from reportExporter.js
+    const columns = [
+      { header: 'Member ID', key: 'id', width: 15 },
+      { header: 'Full Name', key: 'full_name', width: 25 },
+      { header: 'Email Address', key: 'email', width: 25 },
+      { header: 'Phone Number', key: 'phone', width: 18 },
+      { header: 'Account Status', key: 'status', width: 15 },
+      { header: 'Registration Date', key: 'created_at', width: 18 }
+    ];
+
+    // Notice we import exportToExcel inside reportController. If you use it here, 
+    // remember to check if you need to add its import at the top of your file:
+    // import { exportToExcel } from '../services/reportExporter.js';
+    return await exportToExcel(
+      res,
+      'Cooperative_Members_Directory',
+      'Members_List',
+      columns,
+      formattedMembers
+    );
+  } catch (error) {
+    next(error);
   }
 };

@@ -4,7 +4,10 @@ import {
   getAllMembers, 
   getMemberById, 
   updateMember, 
-  updateMemberStatus 
+  updateMemberStatus,
+  deleteMember,
+  getMemberDashboardSummary, // Imported summary function
+  exportMembersReport        // Imported exporter function
 } from '../controllers/memberController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -20,9 +23,15 @@ router.route('/')
 
 router.route('/:id')
   .get(getMemberById) // Internal owner checks in controller allow members to view their own profile
-  .put(restrictTo('admin', 'manager'), updateMember);
+  .put(restrictTo('admin', 'manager'), updateMember)
+  .delete(restrictTo('admin'), deleteMember);
 
 // Records Maintenance Engine - Status Modification & Auditing
 router.patch('/:id/status', restrictTo('admin', 'manager'), updateMemberStatus);
+
+// Financial Dashboard & Reporting
+router.get('/:id/dashboard-summary', getMemberDashboardSummary);
+// EXPORT ROUTE (Placed above /:id routes to avoid string parsing collisions)
+router.get('/export/excel', restrictTo('admin', 'manager'), exportMembersReport);
 
 export default router;
