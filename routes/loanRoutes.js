@@ -6,7 +6,9 @@ import {
   disburseLoan,
   getLoans,
   getLoanById,
-  postRepayment
+  postRepayment,
+  rejectLoanApplication,
+  getLoanMetricsSummary
 } from '../controllers/loanController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -35,5 +37,12 @@ router.route('/:id/disburse')
 // 4. Repayments
 router.route('/repayments')
   .post(restrictTo('admin', 'manager'), postRepayment);
+  
+router.route('/:id/reject')
+  .patch(restrictTo('admin', 'manager'), rejectLoanApplication); // Injected active routing path
+
+// 5. Loan Metrics & Reporting
+router.route('/metrics/summary')
+  .get(restrictTo('admin', 'manager'), getLoanMetricsSummary);
 
 export default router;

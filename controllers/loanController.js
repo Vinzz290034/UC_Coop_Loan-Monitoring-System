@@ -549,3 +549,122 @@ export const postRepayment = async (req, res, next) => {
     client.release();
   }
 };
+
+// @desc    Reject a pending loan application with underwriter remarks
+// @route   PATCH /api/loans/:id/reject
+// @access  Protected (Admin, Manager)
+export const rejectLoanApplication = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { remarks } = req.body;
+
+    await client.query('BEGIN');
+
+    const loanCheck = await client.query('SELECT status, principal_amount FROM loans WHERE id = $1 FOR UPDATE', [id]);
+    if (loanCheck.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Loan application not found.' }
+      });
+    }
+
+    const loan = loanCheck.rows[0];
+
+    if (loan.status !== 'pending_approval') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: { message: `Only pending applications can be rejected. Current status: ${loan.status}` }
+      });
+    }
+
+    const updateLoanQuery = `
+      UPDATE loans
+      SET status = 'rejected', updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING *
+    `;
+    const updatedResult = await client.query(updateLoanQuery, [id]);
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      message: 'Loan application has been officially rejected.',
+      data: {
+        loan_id: updatedResult.rows[0].id,
+        status: updatedResult.rows[0].status,
+        underwriter_remarks: remarks || 'No remarks provided.'
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
+// @desc    Get system-wide loan portfolio performance and credit risk metrics
+// @route   GET /api/loans/metrics/summary
+// @access  Protected (Admin, Manager)
+export const getLoanMetricsSummary = async (req, res, next) => {
+  try {
+    // Aggregates high-level credit metrics across the entire database layout
+    const metricsQuery = `
+      SELECT
+        -- Total number of all active loans disbursed
+        COUNT(CASE WHEN status = 'disbursed' THEN 1 END) as active_loans_count,
+        
+        -- Total principal capital ever deployed to members
+        COALESCE(SUM(CASE WHEN status = 'disbursed' THEN principal_amount ELSE 0 END), 0) as total_capital_deployed,
+        
+        -- Cumulative principal recovered through payments
+        COALESCE(
+          (SELECT SUM(principal_paid) FROM repayment_schedules WHERE status = 'paid' OR status = 'partially_paid'), 
+          0
+        ) as total_principal_recovered,
+
+        -- Cumulative interest earned/collected so far
+        COALESCE(
+          (SELECT SUM(interest_paid) FROM repayment_schedules), 
+          0
+        ) as total_interest_earned,
+
+        -- Total number of applications requiring underwriter review
+        COUNT(CASE WHEN status = 'pending_approval' THEN 1 END) as pending_applications_count,
+
+        -- Total number of defaulted/delinquent accounts
+        COUNT(CASE WHEN status = 'defaulted' THEN 1 END) as defaulted_loans_count
+    `;
+
+    const result = await query(metricsQuery);
+    const metrics = result.rows[0];
+
+    // Compute remaining active portfolio risk asset metrics
+    const totalDeployed = parseFloat(metrics.total_capital_deployed);
+    const totalRecovered = parseFloat(metrics.total_principal_recovered);
+    const totalOutstandingPrincipal = Math.max(0, totalDeployed - totalRecovered);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        portfolio_health: {
+          active_loans: parseInt(metrics.active_loans_count, 10),
+          defaulted_loans: parseInt(metrics.defaulted_loans_count, 10),
+          pending_applications: parseInt(metrics.pending_applications_count, 10)
+        },
+        ledger_aggregates: {
+          total_capital_deployed: totalDeployed,
+          total_principal_recovered: totalRecovered,
+          current_outstanding_balance: totalOutstandingPrincipal,
+          total_interest_earned: parseFloat(metrics.total_interest_earned)
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
