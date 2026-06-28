@@ -182,3 +182,51 @@ export const getAgingReport = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Get complete billing status and history for a single specific loan
+// @route   GET /api/billing/loan/:loanId
+// @access  Protected (Admin, Manager)
+export const getBillingByLoanId = async (req, res, next) => {
+  try {
+    const { loanId } = req.params;
+
+    const historyQuery = `
+      SELECT 
+        rs.id as schedule_id,
+        rs.installment_number,
+        rs.due_date,
+        rs.principal_due,
+        rs.interest_due,
+        rs.total_due,
+        rs.principal_paid,
+        rs.interest_paid,
+        rs.status as installment_status,
+        (rs.total_due - (rs.principal_paid + rs.interest_paid)) as outstanding_remaining,
+        CASE 
+          WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN (CURRENT_DATE - rs.due_date)
+          ELSE 0
+        END as days_overdue
+      FROM repayment_schedules rs
+      WHERE rs.loan_id = $1
+      ORDER BY rs.installment_number ASC
+    `;
+
+    const result = await query(historyQuery, [loanId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'No repayment schedules or billing records found for this loan ID.' }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      loan_id: loanId,
+      records_count: result.rowCount,
+      data: result.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+};
