@@ -68,7 +68,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Protect client side routes
   useEffect(() => {
     if (!loading) {
-      const publicPaths = ['/', '/login'];
+      // Public routes — accessible without authentication.
+      // Add any new public pages here to prevent the auth guard from redirecting them.
+      const publicPaths = ['/', '/login', '/terms', '/privacy'];
       const isPublicPath = publicPaths.includes(pathname);
       
       if (!user && !isPublicPath) {
