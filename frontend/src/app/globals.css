@@ -1,0 +1,276 @@
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&family=Plus+Jakarta+Sans:wght@100..900&display=swap');
+
+@import "tailwindcss";
+
+/* ── Dark mode: use .dark class instead of prefers-color-scheme ── */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ── Brand Colors ──────────────────────────────────────────── */
+  --color-primary: #047857;
+  --color-secondary: #34D399;
+  --color-tertiary: #A45049;
+  --color-neutral: #737874;
+
+  /* ── Surface & Layout (light mode defaults) ─────────────────── */
+  --color-on-surface: oklch(13% 0.025 160);
+  /* #002115 — oklch enables /opacity modifiers */
+  --color-outline: #737874;
+  --color-outline-variant: #bdc9c1;
+  --color-surface-dim: #d7dbd6;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f0f5f0;
+  --color-surface-container: #ebefea;
+  --color-surface-container-high: #e5e9e4;
+  --color-surface-container-highest: #dfe4df;
+  --color-surface: #f6fbf5;
+  --color-background: #f6fbf5;
+  --color-surface-bright: #ffffff;
+
+  /*
+   * ── Explicit neutral scale override ─────────────────────────
+   * Tailwind v4 generates neutral-50…950 from --color-neutral
+   * (#737874), which shifts the whole scale toward mid-grey.
+   * We pin the most commonly-used readable shades here so that
+   * text-neutral-700/800/900/950 always produce dark, legible ink
+   * in light mode.
+   */
+  --color-neutral-50: #f9faf9;
+  --color-neutral-100: #f3f4f3;
+  --color-neutral-200: #e5e7e5;
+  --color-neutral-300: #d1d5d2;
+  --color-neutral-400: #9ca39d;
+  --color-neutral-500: #737874;
+  --color-neutral-600: #565c57;
+  --color-neutral-700: #3d4140;
+  --color-neutral-800: #272b28;
+  --color-neutral-900: #181b18;
+  --color-neutral-950: #0d0f0d;
+
+  /* ── Typography ────────────────────────────────────────────── */
+  --font-sans: 'Hanken Grotesk', sans-serif;
+  --font-headline: 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'Hanken Grotesk', sans-serif;
+  --font-label: 'Hanken Grotesk', sans-serif;
+
+  /* ── Animations ─────────────────────────────────────────────── */
+  --animate-float: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-10px) rotate(1deg);
+  }
+
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes aurora-shift {
+  0% {
+    transform: translate(0%, 0%) scale(1);
+    opacity: 0.55;
+  }
+
+  33% {
+    transform: translate(6%, -8%) scale(1.1);
+    opacity: 0.65;
+  }
+
+  66% {
+    transform: translate(-5%, 6%) scale(0.95);
+    opacity: 0.50;
+  }
+
+  100% {
+    transform: translate(0%, 0%) scale(1);
+    opacity: 0.55;
+  }
+}
+
+@keyframes aurora-shift-alt {
+  0% {
+    transform: translate(0%, 0%) scale(1);
+    opacity: 0.40;
+  }
+
+  33% {
+    transform: translate(-8%, 5%) scale(1.08);
+    opacity: 0.55;
+  }
+
+  66% {
+    transform: translate(7%, -4%) scale(0.92);
+    opacity: 0.35;
+  }
+
+  100% {
+    transform: translate(0%, 0%) scale(1);
+    opacity: 0.40;
+  }
+}
+
+@keyframes particle-drift-1 {
+  0% {
+    transform: translate(0px, 0px) rotate(0deg);
+    opacity: 0.25;
+  }
+
+  50% {
+    transform: translate(30px, -40px) rotate(180deg);
+    opacity: 0.55;
+  }
+
+  100% {
+    transform: translate(0px, 0px) rotate(360deg);
+    opacity: 0.25;
+  }
+}
+
+@keyframes particle-drift-2 {
+  0% {
+    transform: translate(0px, 0px) rotate(0deg);
+    opacity: 0.20;
+  }
+
+  50% {
+    transform: translate(-25px, 35px) rotate(-150deg);
+    opacity: 0.45;
+  }
+
+  100% {
+    transform: translate(0px, 0px) rotate(-360deg);
+    opacity: 0.20;
+  }
+}
+
+@keyframes particle-drift-3 {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: 0.15;
+  }
+
+  50% {
+    transform: translate(15px, 20px) scale(1.3);
+    opacity: 0.40;
+  }
+
+  100% {
+    transform: translate(0px, 0px) scale(1);
+    opacity: 0.15;
+  }
+}
+
+@keyframes grid-fade {
+
+  0%,
+  100% {
+    opacity: 0.04;
+  }
+
+  50% {
+    opacity: 0.08;
+  }
+}
+
+/* ============================================================
+   Light Mode (default)
+   ============================================================ */
+:root {
+  --background: #f6fbf5;
+  --foreground: #181d1a;
+  color-scheme: light;
+}
+
+/* ============================================================
+   Dark Mode — Deep Forest Obsidian Theme
+   ============================================================ */
+.dark {
+  --background: #020504;
+  --foreground: #f1f5f3;
+  color-scheme: dark;
+
+  /* Core surfaces */
+  --color-background: #020504;
+  --color-surface: #040a08;
+  --color-surface-bright: #0c1714;
+
+  /* Container hierarchy */
+  --color-surface-container-lowest: #010302;
+  --color-surface-container-low: #070e0b;
+  --color-surface-container: #0c1714;
+  --color-surface-container-high: #12211c;
+  --color-surface-container-highest: #192c26;
+
+  /* Content & borders */
+  --color-on-surface: oklch(96% 0.008 160);
+  /* #f1f5f3 — oklch enables /opacity modifiers */
+  --color-outline: #6d827b;
+  --color-outline-variant: #162621;
+}
+
+/* ============================================================
+   Base Reset
+   ============================================================ */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-headline);
+}
+
+/* ============================================================
+   Glass Card utility
+   ============================================================ */
+.glass-card {
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(189, 201, 193, 0.4);
+}
+
+.dark .glass-card {
+  background: rgba(4, 10, 8, 0.88);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(22, 38, 33, 0.5);
+}
+
+/* ============================================================
+   Scrollbar styling
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-neutral);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
