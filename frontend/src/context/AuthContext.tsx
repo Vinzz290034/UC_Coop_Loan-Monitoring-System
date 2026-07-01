@@ -23,7 +23,8 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: (usernameOrEmail: string, password: string) => Promise<User>;
+  login: (username: string, password: string) => Promise<User>;
+  register: (username: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -70,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!loading) {
       // Public routes — accessible without authentication.
       // Add any new public pages here to prevent the auth guard from redirecting them.
-      const publicPaths = ['/', '/login', '/terms', '/privacy'];
+      const publicPaths = ['/', '/login', '/register', '/terms', '/privacy'];
       const isPublicPath = publicPaths.includes(pathname);
       
       if (!user && !isPublicPath) {
@@ -81,10 +82,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, pathname, router]);
 
-  const login = async (usernameOrEmail: string, password: string): Promise<User> => {
+  const login = async (username: string, password: string): Promise<User> => {
     try {
       const response = await api.post('/auth/login', {
-        usernameOrEmail,
+        username,
         password,
       });
 
@@ -106,6 +107,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const register = async (username: string, password: string): Promise<void> => {
+    try {
+      await api.post('/auth/register', {
+        username,
+        password,
+        role: 'member',
+      });
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.response?.data?.message || 'Registration failed.';
+      throw new Error(message);
+    }
+  };
+
   const logout = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('token');
@@ -123,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token,
         loading,
         login,
+        register,
         logout,
         isAuthenticated: !!user,
       }}

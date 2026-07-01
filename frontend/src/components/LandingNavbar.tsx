@@ -37,11 +37,10 @@ export default function LandingNavbar({ activeIndex = 0 }: LandingNavbarProps) {
             <Link
               key={item}
               href="#"
-              className={`px-4 py-2 rounded-full font-body text-sm font-semibold transition-all ${
-                i === activeIndex
-                  ? 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary'
-                  : 'text-on-surface/70 dark:text-neutral-300 hover:text-primary dark:hover:text-secondary hover:bg-primary/5 dark:hover:bg-secondary/5'
-              }`}
+              className={`px-4 py-2 rounded-full font-body text-sm font-semibold transition-all ${i === activeIndex
+                ? 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary'
+                : 'text-on-surface/70 dark:text-neutral-300 hover:text-primary dark:hover:text-secondary hover:bg-primary/5 dark:hover:bg-secondary/5'
+                }`}
             >
               {item}
             </Link>
@@ -53,15 +52,15 @@ export default function LandingNavbar({ activeIndex = 0 }: LandingNavbarProps) {
           <ThemeToggle />
           <button
             onClick={() => router.push('/login')}
-            className="hidden sm:inline-flex font-label text-sm font-bold px-5 py-2 rounded-full text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-all active:scale-95 cursor-pointer"
+            className="hidden sm:inline-flex font-label text-sm font-bold px-5 py-2 rounded-full border-2 border-on-surface/20 dark:border-neutral-700 text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-all active:scale-95 cursor-pointer"
           >
             Login
           </button>
           <button
-            onClick={() => router.push('/login?signup=true')}
+            onClick={() => router.push('/register')}
             className="font-label text-sm font-bold px-5 py-2.5 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-lg shadow-primary/25 dark:shadow-secondary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all active:scale-95 cursor-pointer"
           >
-            Get Started
+            Sign Up
           </button>
 
           {/* Mobile hamburger */}
@@ -84,11 +83,10 @@ export default function LandingNavbar({ activeIndex = 0 }: LandingNavbarProps) {
               key={item}
               href="#"
               onClick={() => setMobileMenuOpen(false)}
-              className={`font-body text-sm py-2.5 px-4 rounded-xl font-semibold transition-colors ${
-                i === activeIndex
-                  ? 'text-primary dark:text-secondary bg-primary/8 dark:bg-secondary/8'
-                  : 'text-on-surface/80 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-              }`}
+              className={`font-body text-sm py-2.5 px-4 rounded-xl font-semibold transition-colors ${i === activeIndex
+                ? 'text-primary dark:text-secondary bg-primary/8 dark:bg-secondary/8'
+                : 'text-on-surface/80 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                }`}
             >
               {item}
             </Link>
