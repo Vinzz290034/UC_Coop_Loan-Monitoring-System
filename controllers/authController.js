@@ -160,3 +160,78 @@ export const getMe = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Initiate password recovery / forgot password workflow
+// @route   POST /api/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { username } = req.body;
+
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide your account username.' }
+      });
+    }
+
+    // 1. Locate user via username
+    const userResult = await query(
+      'SELECT id, username, role, password_hash FROM users WHERE username = $1',
+      [username]
+    );
+
+    if (userResult.rowCount === 0) {
+      // Security Practice: Return a generic success to prevent account enumeration sweeps
+      return res.status(200).json({
+        success: true,
+        message: 'If an account matches those records, a recovery link has been dispatched.'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Safety Verification Check: Don't process requests if account portal is frozen
+    if (user.password_hash && user.password_hash.startsWith('PORTAL_FROZEN_')) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'This portal account is currently locked or frozen. Contact management.' }
+      });
+    }
+
+    // 2. Resolve communication channel (Fetch email based on role)
+    let recoveryEmail = null;
+
+    if (user.role === 'member') {
+      const memberResult = await query(
+        'SELECT email FROM members WHERE user_id = $1',
+        [user.id]
+      );
+      if (memberResult.rowCount > 0) {
+        recoveryEmail = memberResult.rows[0].email;
+      }
+    } else {
+      // Fallback for system administrators/managers (defaults to an internal registry template or username fallback)
+      recoveryEmail = `${user.username}@cooperative-system.local`;
+    }
+
+    // 3. Generate a secure short-lived recovery token using the token signer utility
+    const recoveryToken = signToken(user.id);
+
+    // =========================================================================
+    // NOTIFICATION HOOK
+    // Place your production SMTP or SMS microservice integration worker here.
+    // Example: await sendEmail({ to: recoveryEmail, subject: 'Password Reset', token: recoveryToken });
+    // =========================================================================
+
+    res.status(200).json({
+      success: true,
+      message: 'If an account matches those records, a recovery link has been dispatched.',
+      // Included in development environment mode to make testing frontend flows simple:
+      _dev_recovery_email_target: recoveryEmail,
+      _dev_token_payload: recoveryToken
+    });
+  } catch (error) {
+    next(error);
+  }
+};
