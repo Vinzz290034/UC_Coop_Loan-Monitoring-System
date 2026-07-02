@@ -638,6 +638,7 @@ export const getLoanMetricsSummary = async (req, res, next) => {
 
         -- Total number of defaulted/delinquent accounts
         COUNT(CASE WHEN status = 'defaulted' THEN 1 END) as defaulted_loans_count
+      FROM loans
     `;
 
     const result = await query(metricsQuery);

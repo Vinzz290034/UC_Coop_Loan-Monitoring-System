@@ -16,19 +16,23 @@ const signToken = (id) => {
 // @access  Public
 export const login = async (req, res, next) => {
   try {
-    const { username, password } = req.body;
+    const { username, usernameOrEmail, password } = req.body;
+    const loginIdentifier = username || usernameOrEmail;
 
-    if (!username || !password) {
+    if (!loginIdentifier || !password) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Please provide both username and password.' }
+        error: { message: 'Please provide both username/email and password.' }
       });
     }
 
-    // Check if user exists
+    // Check if user exists (by username or member email)
     const userResult = await query(
-      'SELECT id, username, password_hash, role FROM users WHERE username = $1',
-      [username]
+      `SELECT u.id, u.username, u.password_hash, u.role 
+       FROM users u 
+       LEFT JOIN members m ON m.user_id = u.id 
+       WHERE u.username = $1 OR m.email = $1`,
+      [loginIdentifier]
     );
 
     if (userResult.rowCount === 0) {

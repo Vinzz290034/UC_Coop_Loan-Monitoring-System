@@ -373,14 +373,14 @@ export const getMemberDashboardSummary = async (req, res, next) => {
     const summaryQuery = `
       SELECT
         -- Share Capital Balance
-        COALESCE((SELECT SUM(CASE WHEN UPPER(transaction_type) = 'DEPOSIT' THEN amount ELSE -amount END) 
+        COALESCE((SELECT SUM(CASE WHEN UPPER(transaction_type) = 'CREDIT' THEN amount ELSE -amount END) 
                   FROM share_capital_transactions WHERE member_id = $1), 0) as share_capital_balance,
         
         -- Fixed Deposit Balance
-        COALESCE((SELECT SUM(amount) FROM fixed_deposits WHERE member_id = $1 AND status = 'active'), 0) as fixed_deposit_balance,
+        COALESCE((SELECT SUM(principal_amount) FROM fixed_deposits WHERE member_id = $1 AND status = 'active'), 0) as fixed_deposit_balance,
         
         -- Total Investments Placement
-        COALESCE((SELECT SUM(amount) FROM investments WHERE member_id = $1 AND status = 'active'), 0) as active_investments_total,
+        COALESCE((SELECT SUM(current_balance) FROM investments WHERE member_id = $1 AND status = 'active'), 0) as active_investments_total,
         
         -- Outstanding Active Loans Summary
         COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status = 'disbursed'), 0) as active_loans_count,
