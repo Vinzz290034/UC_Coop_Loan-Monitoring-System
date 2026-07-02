@@ -1,11 +1,12 @@
 import express from 'express';
-import { login, register, getMe } from '../controllers/authController.js';
+import { login, register, getMe, forgotPassword } from '../controllers/authController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 // Public routes
 router.post('/login', login);
+router.post('/forgot-password', forgotPassword); // Injected public password recovery path
 
 // Protected routes
 router.get('/me', protect, getMe);
