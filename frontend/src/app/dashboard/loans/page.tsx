@@ -489,7 +489,7 @@ export default function LoansPage() {
                                 {loadingDetails ? (
                                   <div className="flex items-center gap-2 py-4 justify-center">
                                     <div className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
-                                    <span className="text-neutral-600 dark:text-neutral-400 font-semibold text-xs">Parsing installment ledger...</span>
+                                    <span className="text-neutral-600 dark:text-neutral-400 font-semibold text-xs">Loading schedules and ledger data...</span>
                                   </div>
                                 ) : !loanDetails ? (
                                   <p className="text-center text-xs text-neutral-600 dark:text-neutral-400">Failed to parse loan details.</p>

@@ -71,7 +71,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!loading) {
       // Public routes — accessible without authentication.
       // Add any new public pages here to prevent the auth guard from redirecting them.
-      const publicPaths = ['/', '/login', '/register', '/terms', '/privacy'];
+      const publicPaths = [
+        '/',
+        '/login',
+        '/register',
+        '/terms',
+        '/privacy',
+        '/about',
+        '/features',
+        '/how-it-works',
+        '/contact'
+      ];
       const isPublicPath = publicPaths.includes(pathname);
       
       if (!user && !isPublicPath) {

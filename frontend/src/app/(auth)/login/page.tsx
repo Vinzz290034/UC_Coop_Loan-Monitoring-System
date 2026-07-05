@@ -18,14 +18,14 @@ import Link from 'next/link';
 
 // ─── Floating Peso / Currency Symbols ─────────────────────────────────────────
 const FLOATERS = [
-  { symbol: '₱', x: '8%',  y: '15%', size: 'text-3xl', delay: '0s',   dur: '14s', opacity: 0.07 },
-  { symbol: '$', x: '85%', y: '10%', size: 'text-2xl', delay: '2s',   dur: '18s', opacity: 0.06 },
-  { symbol: '₱', x: '70%', y: '75%', size: 'text-4xl', delay: '4s',   dur: '16s', opacity: 0.08 },
-  { symbol: '%', x: '20%', y: '80%', size: 'text-xl',  delay: '1s',   dur: '20s', opacity: 0.05 },
-  { symbol: '$', x: '50%', y: '5%',  size: 'text-3xl', delay: '6s',   dur: '15s', opacity: 0.06 },
-  { symbol: '₱', x: '92%', y: '50%', size: 'text-2xl', delay: '3s',   dur: '22s', opacity: 0.07 },
-  { symbol: '$', x: '3%',  y: '55%', size: 'text-xl',  delay: '8s',   dur: '17s', opacity: 0.05 },
-  { symbol: '%', x: '60%', y: '90%', size: 'text-2xl', delay: '5s',   dur: '13s', opacity: 0.06 },
+  { symbol: '₱', x: '8%', y: '15%', size: 'text-3xl', delay: '0s', dur: '14s', opacity: 0.07 },
+  { symbol: '$', x: '85%', y: '10%', size: 'text-2xl', delay: '2s', dur: '18s', opacity: 0.06 },
+  { symbol: '₱', x: '70%', y: '75%', size: 'text-4xl', delay: '4s', dur: '16s', opacity: 0.08 },
+  { symbol: '%', x: '20%', y: '80%', size: 'text-xl', delay: '1s', dur: '20s', opacity: 0.05 },
+  { symbol: '$', x: '50%', y: '5%', size: 'text-3xl', delay: '6s', dur: '15s', opacity: 0.06 },
+  { symbol: '₱', x: '92%', y: '50%', size: 'text-2xl', delay: '3s', dur: '22s', opacity: 0.07 },
+  { symbol: '$', x: '3%', y: '55%', size: 'text-xl', delay: '8s', dur: '17s', opacity: 0.05 },
+  { symbol: '%', x: '60%', y: '90%', size: 'text-2xl', delay: '5s', dur: '13s', opacity: 0.06 },
 ];
 
 function AuthBackground() {
@@ -110,10 +110,10 @@ function LoginForm() {
     <div className="glass-card rounded-3xl p-8 md:p-10 border border-outline-variant/70 shadow-2xl bg-white/95 dark:bg-neutral-900/95">
       <header className="mb-8">
         <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
-          Secure Access
+          Cooperative Portal Login
         </h2>
         <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
-          Please provide your credentials to continue.
+          Please enter your credentials to access your account.
         </p>
       </header>
 
@@ -183,13 +183,24 @@ function LoginForm() {
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
+          <div className="flex justify-end px-1 mt-1">
+            <button
+              type="button"
+              onClick={() => {
+                alert("Forgot Password request submitted. Automatic password reset options are currently pending administrative backend setup. Please contact support at coop-security@lendflow.net to manually restore your account access.");
+              }}
+              className="text-xs text-primary dark:text-secondary font-bold hover:underline"
+            >
+              Forgot Password?
+            </button>
+          </div>
         </div>
 
         {/* Submit */}
         <button
           type="submit"
           disabled={submitting}
-          className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-extrabold rounded-full shadow-lg hover:shadow-primary/25 dark:hover:shadow-secondary/25 hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center cursor-pointer"
+          className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-base font-extrabold rounded-full shadow-lg hover:shadow-primary/25 dark:hover:shadow-secondary/25 hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center cursor-pointer"
         >
           {submitting ? (
             <>
@@ -197,7 +208,7 @@ function LoginForm() {
               Verifying credentials…
             </>
           ) : (
-            'Authenticate Secure Session'
+            'Login'
           )}
         </button>
 
