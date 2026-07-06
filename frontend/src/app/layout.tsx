@@ -4,8 +4,9 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
+import Script from "next/script"; // Imported Next.js Script component
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
   title: "LendFlow Pro | Loan Monitoring & Financial Management System",
@@ -22,10 +23,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
-      {/* Blocking script: runs before React hydrates to apply saved theme class.
-          This prevents Flash of Unstyled Content (FOUC) when dark mode is active. */}
       <head>
-        <script
+        {/* Next.js optimized blocking script to prevent Flash of Unstyled Content (FOUC) */}
+        <Script
+          id="theme-initializer"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -42,7 +44,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-screen flex flex-col font-sans antialiased">
+      <body className="min-h-screen flex flex-col font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
             {children}
