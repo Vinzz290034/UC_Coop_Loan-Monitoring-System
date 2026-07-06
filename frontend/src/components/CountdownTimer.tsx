@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Timer } from 'lucide-react';
 
 interface CountdownTimerProps {
@@ -12,13 +12,21 @@ interface CountdownTimerProps {
 export default function CountdownTimer({
   initialSeconds,
   onComplete,
-  label = "Session Timeout:",
+  label = "Auto-logout in:",
 }: CountdownTimerProps) {
   const [seconds, setSeconds] = useState(initialSeconds);
 
+  // Store the latest onComplete callback in a ref so the interval effect
+  // doesn't need to depend on it — prevents restarting the interval every
+  // time the parent re-renders and produces a new function reference.
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
   useEffect(() => {
     if (seconds <= 0) {
-      if (onComplete) onComplete();
+      onCompleteRef.current?.();
       return;
     }
 
@@ -27,7 +35,7 @@ export default function CountdownTimer({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [seconds, onComplete]);
+  }, [seconds]); // onComplete intentionally omitted — accessed via ref
 
   const formatTime = (time: number) => {
     const mins = Math.floor(time / 60);
@@ -48,7 +56,7 @@ export default function CountdownTimer({
       <Timer className="w-3.5 h-3.5" />
       <span>{label}</span>
       <span className="font-mono text-sm tracking-wider font-bold">
-        {formatTime(seconds)}
+        {formatTime(seconds)} minutes
       </span>
     </div>
   );

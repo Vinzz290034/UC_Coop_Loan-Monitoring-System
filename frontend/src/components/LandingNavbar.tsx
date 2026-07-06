@@ -13,9 +13,15 @@ interface LandingNavbarProps {
 }
 
 // ── Nav items config ──────────────────────────────────────────────────────────
-const NAV_ITEMS = ['Personal', 'Business', 'Enterprise', 'Developer'] as const;
+const NAV_ITEMS = [
+  { name: 'Home', path: '/' },
+  { name: 'Features', path: '/features' },
+  { name: 'How It Works', path: '/how-it-works' },
+  { name: 'About', path: '/about' },
+  { name: 'Contact', path: '/contact' },
+] as const;
 
-export default function LandingNavbar({ activeIndex = 0 }: LandingNavbarProps) {
+export default function LandingNavbar({ activeIndex = -1 }: LandingNavbarProps) {
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -35,14 +41,14 @@ export default function LandingNavbar({ activeIndex = 0 }: LandingNavbarProps) {
         <nav className="hidden md:flex items-center gap-1" aria-label="Main navigation">
           {NAV_ITEMS.map((item, i) => (
             <Link
-              key={item}
-              href="#"
+              key={item.name}
+              href={item.path}
               className={`px-4 py-2 rounded-full font-body text-sm font-semibold transition-all ${i === activeIndex
                 ? 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary'
                 : 'text-on-surface/70 dark:text-neutral-300 hover:text-primary dark:hover:text-secondary hover:bg-primary/5 dark:hover:bg-secondary/5'
                 }`}
             >
-              {item}
+              {item.name}
             </Link>
           ))}
         </nav>
@@ -80,15 +86,15 @@ export default function LandingNavbar({ activeIndex = 0 }: LandingNavbarProps) {
         <div className="md:hidden bg-white/95 dark:bg-neutral-950/95 backdrop-blur-xl border-b border-outline-variant/30 px-6 py-5 flex flex-col gap-2">
           {NAV_ITEMS.map((item, i) => (
             <Link
-              key={item}
-              href="#"
+              key={item.name}
+              href={item.path}
               onClick={() => setMobileMenuOpen(false)}
               className={`font-body text-sm py-2.5 px-4 rounded-xl font-semibold transition-colors ${i === activeIndex
                 ? 'text-primary dark:text-secondary bg-primary/8 dark:bg-secondary/8'
                 : 'text-on-surface/80 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
                 }`}
             >
-              {item}
+              {item.name}
             </Link>
           ))}
           <button

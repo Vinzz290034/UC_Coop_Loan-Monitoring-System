@@ -37,7 +37,7 @@ export default function DashboardLayout({
       <div className="min-h-screen bg-background dark:bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary dark:border-secondary/20 dark:border-t-secondary animate-spin"></div>
-          <p className="font-body text-xs font-semibold text-neutral-600 dark:text-neutral-300">Establishing secure gateway...</p>
+          <p className="font-body text-xs font-semibold text-neutral-600 dark:text-neutral-300">Loading...</p>
         </div>
       </div>
     );
@@ -58,13 +58,13 @@ export default function DashboardLayout({
       allowed: true,
     },
     {
-      name: 'Members Ledger',
+      name: 'Members',
       path: '/dashboard/members',
       icon: Users,
       allowed: isAdminOrManager,
     },
     {
-      name: 'Loan Management',
+      name: 'Loans',
       path: '/dashboard/loans',
       icon: Banknote,
       allowed: true,
@@ -76,13 +76,13 @@ export default function DashboardLayout({
       allowed: true,
     },
     {
-      name: 'Billing & Collection',
+      name: 'Billings',
       path: '/dashboard/billing',
       icon: CalendarCheck,
       allowed: isAdminOrManager,
     },
     {
-      name: 'Analytical Reports',
+      name: 'Reports',
       path: '/dashboard/reports',
       icon: BarChart3,
       allowed: isAdminOrManager,
@@ -175,7 +175,7 @@ export default function DashboardLayout({
             title="Log Out"
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
-            {!sidebarCollapsed && <span className="font-body">Terminate Session</span>}
+            {!sidebarCollapsed && <span className="font-body">Log Out</span>}
           </button>
           
           {!sidebarCollapsed && (
