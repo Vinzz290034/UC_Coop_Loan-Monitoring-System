@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { errorHandler } from './middleware/errorMiddleware.js';
+import { auditLogger, activityTracker } from './middleware/auditMiddleware.js';
 
 import authRoutes from './routes/authRoutes.js';
 import memberRoutes from './routes/memberRoutes.js';
@@ -12,6 +13,8 @@ import accountRoutes from './routes/accountRoutes.js';
 import loanRoutes from './routes/loanRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
+import auditRoutes from './routes/auditRoutes.js';
 
 dotenv.config();
 
@@ -57,6 +60,10 @@ app.get('/', (req, res) => {
   res.send('Welcome to the UC COOP Loan Monitoring and Financial Management System API.');
 });
 
+// Audit & Activity Tracking Middleware (applied to all API routes)
+app.use('/api', auditLogger);
+app.use('/api', activityTracker);
+
 // Mounted Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/members', memberRoutes);
@@ -64,6 +71,8 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/loans', loanRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/audit', auditRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
