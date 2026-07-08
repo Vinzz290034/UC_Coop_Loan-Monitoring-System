@@ -72,8 +72,8 @@ export default function FinancialSummaryChart({ data }: FinancialSummaryChartPro
               fontWeight: 600,
               boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
             }}
-            formatter={(value: number) => [
-              new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(value),
+            formatter={(value: any) => [
+              new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value || 0)),
             ]}
           />
           <Legend
