@@ -243,6 +243,75 @@ export const forgotPassword = async (req, res, next) => {
   }
 };
 
+
+// @desc    Reset user password using a valid recovery token
+// @route   POST /api/auth/reset-password
+// @access  Public
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide both the validation token and your new password.' }
+      });
+    }
+
+    // 1. Verify the signature and expiration of the recovery token
+    let decoded;
+    try {
+      decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET || 'coop_loan_monitoring_secret_key_2026_dev'
+      );
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'The recovery link is invalid or has expired. Please request a new one.' }
+      });
+    }
+
+    // 2. Extract user and check if the profile portal is frozen
+    const userResult = await query(
+      'SELECT id, password_hash FROM users WHERE id = $1',
+      [decoded.id]
+    );
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Account context could not be resolved.' }
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    if (user.password_hash && user.password_hash.startsWith('PORTAL_FROZEN_')) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'This portal account is frozen. Password modification is blocked.' }
+      });
+    }
+
+    // 3. Hash the new password and commit it to storage
+    const salt = await bcrypt.genSalt(10);
+    const brandNewHash = await bcrypt.hash(newPassword, salt);
+
+    await query(
+      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [brandNewHash, user.id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Your account password has been updated successfully. You can now log in.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Get all users (for admin user management/overview)
 // @route   GET /api/auth/users
 // @access  Protected (Admin)
