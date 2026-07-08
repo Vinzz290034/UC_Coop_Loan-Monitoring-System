@@ -24,6 +24,30 @@ export default function CountdownTimer({
     onCompleteRef.current = onComplete;
   }, [onComplete]);
 
+  // Sync state if initialSeconds changes (e.g. from parent re-renders)
+  useEffect(() => {
+    setSeconds(initialSeconds);
+  }, [initialSeconds]);
+
+  // Handle user activity to reset the inactivity timer back to initialSeconds
+  useEffect(() => {
+    const handleActivity = () => {
+      setSeconds((prev) => {
+        if (prev !== initialSeconds) {
+          return initialSeconds;
+        }
+        return prev;
+      });
+    };
+
+    const events = ['mousemove', 'click', 'keydown', 'scroll', 'touchstart'];
+    events.forEach((event) => window.addEventListener(event, handleActivity, { passive: true }));
+
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, handleActivity));
+    };
+  }, [initialSeconds]);
+
   useEffect(() => {
     if (seconds <= 0) {
       onCompleteRef.current?.();
