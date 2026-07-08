@@ -56,6 +56,9 @@ export const login = async (req, res, next) => {
     // Sign JWT
     const token = signToken(user.id);
 
+    // Update last login timestamp
+    await query('UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+
     // If member, fetch member details
     let memberProfile = null;
     if (user.role === 'member') {
@@ -234,6 +237,77 @@ export const forgotPassword = async (req, res, next) => {
       // Included in development environment mode to make testing frontend flows simple:
       _dev_recovery_email_target: recoveryEmail,
       _dev_token_payload: recoveryToken
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all users (for admin user management/overview)
+// @route   GET /api/auth/users
+// @access  Protected (Admin)
+export const getAllUsers = async (req, res, next) => {
+  try {
+    const { search, role, is_active } = req.query;
+
+    let queryText = `
+      SELECT 
+        u.id, u.username, u.role, u.is_active, u.last_login_at, u.last_activity_at, u.created_at,
+        m.id as member_id, m.first_name, m.last_name, m.email, m.phone, m.status as member_status
+      FROM users u
+      LEFT JOIN members m ON m.user_id = u.id
+      WHERE 1=1
+    `;
+    const queryParams = [];
+    let paramIndex = 1;
+
+    if (role) {
+      queryText += ` AND u.role = $${paramIndex}`;
+      queryParams.push(role);
+      paramIndex++;
+    }
+
+    if (is_active !== undefined && is_active !== '') {
+      queryText += ` AND u.is_active = $${paramIndex}`;
+      queryParams.push(is_active === 'true');
+      paramIndex++;
+    }
+
+    if (search) {
+      queryText += ` AND (
+        u.username ILIKE $${paramIndex} OR
+        COALESCE(m.first_name, '') ILIKE $${paramIndex} OR
+        COALESCE(m.last_name, '') ILIKE $${paramIndex} OR
+        COALESCE(m.email, '') ILIKE $${paramIndex}
+      )`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    queryText += ' ORDER BY u.created_at DESC';
+
+    const result = await query(queryText, queryParams);
+
+    res.status(200).json({
+      success: true,
+      count: result.rowCount,
+      data: result.rows.map(row => ({
+        id: row.id,
+        username: row.username,
+        role: row.role,
+        is_active: row.is_active,
+        last_login_at: row.last_login_at,
+        last_activity_at: row.last_activity_at,
+        created_at: row.created_at,
+        member_profile: row.member_id ? {
+          id: row.member_id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          email: row.email,
+          phone: row.phone,
+          status: row.member_status
+        } : null
+      }))
     });
   } catch (error) {
     next(error);

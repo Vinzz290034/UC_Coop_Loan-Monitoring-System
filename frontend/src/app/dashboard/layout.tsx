@@ -18,7 +18,9 @@ import {
   Shield,
   Building2,
   Calendar,
-  Cpu
+  Cpu,
+  UserCog,
+  ScrollText,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import CountdownTimer from '@/components/CountdownTimer';
@@ -86,6 +88,18 @@ export default function DashboardLayout({
       path: '/dashboard/reports',
       icon: BarChart3,
       allowed: isAdminOrManager,
+    },
+    {
+      name: 'Users',
+      path: '/dashboard/users',
+      icon: UserCog,
+      allowed: user.role === 'admin',
+    },
+    {
+      name: 'Audit Trail',
+      path: '/dashboard/audit',
+      icon: ScrollText,
+      allowed: user.role === 'admin',
     },
   ];
 

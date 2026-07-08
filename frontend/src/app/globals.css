@@ -191,27 +191,31 @@
    Dark Mode — Deep Forest Obsidian Theme
    ============================================================ */
 .dark {
-  --background: #020504;
-  --foreground: #f1f5f3;
+  --background: #121513;
+  --foreground: #eef2ef;
   color-scheme: dark;
 
-  /* Core surfaces */
-  --color-background: #020504;
-  --color-surface: #040a08;
-  --color-surface-bright: #0c1714;
+  /* Overrides for brand/accent colors specifically in dark mode */
+  --color-primary: #059669;          /* Slightly brighter emerald for readability in dark mode */
+  --color-secondary: #50b396;        /* Softer cool sage/teal-green (less yellow, desaturated, high contrast) */
+  --color-neutral: #828c85;          /* Softer, mid-tone neutral grey-green */
+
+  /* Core surfaces (Soft dark gray with a subtle forest-cool undertone) */
+  --color-background: #121513;
+  --color-surface: #171c19;
+  --color-surface-bright: #262c29;
 
   /* Container hierarchy */
-  --color-surface-container-lowest: #010302;
-  --color-surface-container-low: #070e0b;
-  --color-surface-container: #0c1714;
-  --color-surface-container-high: #12211c;
-  --color-surface-container-highest: #192c26;
+  --color-surface-container-lowest: #0e110f;
+  --color-surface-container-low: #141816;
+  --color-surface-container: #1b201d;
+  --color-surface-container-high: #222925;
+  --color-surface-container-highest: #2a322d;
 
   /* Content & borders */
-  --color-on-surface: oklch(96% 0.008 160);
-  /* #f1f5f3 — oklch enables /opacity modifiers */
-  --color-outline: #6d827b;
-  --color-outline-variant: #162621;
+  --color-on-surface: oklch(95% 0.006 160); /* Extremely soft off-white */
+  --color-outline: #5c6861;                  /* Muted border color */
+  --color-outline-variant: #262d29;          /* Subtle border variant */
 }
 
 /* ============================================================

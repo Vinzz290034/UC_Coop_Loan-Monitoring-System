@@ -4,6 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import { SkeletonCard } from '@/components/ui/Skeleton';
+import KpiCard from '@/components/charts/KpiCard';
+import ChartContainer from '@/components/charts/ChartContainer';
+import LoanStatusChart from '@/components/charts/LoanStatusChart';
+import MonthlyTrendsChart from '@/components/charts/MonthlyTrendsChart';
+import MemberGrowthChart from '@/components/charts/MemberGrowthChart';
+import RepaymentChart from '@/components/charts/RepaymentChart';
+import FinancialSummaryChart from '@/components/charts/FinancialSummaryChart';
 import {
   TrendingUp,
   TrendingDown,
@@ -12,14 +19,18 @@ import {
   Coins,
   ShieldCheck,
   Building,
-  UserPlus,
-  FileCheck,
-  PlusCircle,
   PiggyBank,
   CheckCircle2,
-  CalendarCheck,
   Percent,
-  User as UserIcon
+  Users,
+  UserCheck,
+  UserX,
+  Banknote,
+  FileCheck,
+  PlusCircle,
+  CalendarCheck,
+  User as UserIcon,
+  RefreshCw,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -27,36 +38,63 @@ export default function OverviewPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [adminMetrics, setAdminMetrics] = useState<any>(null);
-  const [memberMetrics, setMemberMetrics] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchDashboardData() {
-      if (!user) return;
-      try {
-        setLoading(true);
-        setError(null);
-        if (user.role === 'admin' || user.role === 'manager') {
-          const response = await api.get('/loans/metrics/summary');
-          setAdminMetrics(response.data.data);
-        } else if (user.role === 'member') {
-          const memberId = user.profile?.id;
-          if (memberId) {
-            const response = await api.get(`/members/${memberId}/dashboard-summary`);
-            setMemberMetrics(response.data.data);
-          } else {
-            setError('Could not associate authenticated session with member profile.');
-          }
-        }
-      } catch (err: any) {
-        console.error('Error fetching dashboard summary:', err);
-        setError(err.response?.data?.message || 'Error loading dashboard metrics.');
-      } finally {
-        setLoading(false);
-      }
-    }
+  // Member-specific data
+  const [memberMetrics, setMemberMetrics] = useState<any>(null);
 
+  // Admin/Manager analytics data
+  const [dashboardSummary, setDashboardSummary] = useState<any>(null);
+  const [loanTrends, setLoanTrends] = useState<any[]>([]);
+  const [repaymentTrends, setRepaymentTrends] = useState<any[]>([]);
+  const [memberGrowth, setMemberGrowth] = useState<any[]>([]);
+  const [loanDistribution, setLoanDistribution] = useState<any[]>([]);
+  const [financialSummary, setFinancialSummary] = useState<any[]>([]);
+
+  const fetchDashboardData = async (isRefresh = false) => {
+    if (!user) return;
+    try {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+
+      if (user.role === 'admin' || user.role === 'manager') {
+        // Fetch all analytics endpoints in parallel
+        const [summaryRes, trendsRes, repaymentRes, growthRes, distRes, finRes] = await Promise.all([
+          api.get('/analytics/dashboard-summary'),
+          api.get('/analytics/loan-trends'),
+          api.get('/analytics/repayment-trends'),
+          api.get('/analytics/member-growth'),
+          api.get('/analytics/loan-status-distribution'),
+          api.get('/analytics/financial-summary'),
+        ]);
+
+        setDashboardSummary(summaryRes.data.data);
+        setLoanTrends(trendsRes.data.data);
+        setRepaymentTrends(repaymentRes.data.data);
+        setMemberGrowth(growthRes.data.data);
+        setLoanDistribution(distRes.data.data);
+        setFinancialSummary(finRes.data.data);
+      } else if (user.role === 'member') {
+        const memberId = user.profile?.id;
+        if (memberId) {
+          const response = await api.get(`/members/${memberId}/dashboard-summary`);
+          setMemberMetrics(response.data.data);
+        } else {
+          setError('Could not associate authenticated session with member profile.');
+        }
+      }
+    } catch (err: any) {
+      console.error('Error fetching dashboard data:', err);
+      setError(err.response?.data?.error?.message || 'Error loading dashboard metrics.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDashboardData();
   }, [user]);
 
@@ -73,10 +111,15 @@ export default function OverviewPage() {
         <div className="flex items-center justify-between">
           <div className="h-8 bg-neutral/20 w-48 rounded animate-pulse"></div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
+          <SkeletonCard />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="h-80 bg-neutral/10 rounded-3xl animate-pulse"></div>
+          <div className="h-80 bg-neutral/10 rounded-3xl animate-pulse"></div>
         </div>
       </div>
     );
@@ -111,57 +154,10 @@ export default function OverviewPage() {
 
         {/* Member Balances Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Share Capital</span>
-              <div className="p-2 rounded-xl bg-primary/10 text-primary dark:text-secondary">
-                <Building className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="font-headline text-2xl font-extrabold text-on-surface dark:text-white">
-              {formatCurrency(balances.share_capital)}
-            </div>
-            <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Cumulative equity contributions</p>
-          </div>
-
-          <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Fixed Deposit</span>
-              <div className="p-2 rounded-xl bg-primary/10 text-primary dark:text-secondary">
-                <PiggyBank className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="font-headline text-2xl font-extrabold text-on-surface dark:text-white">
-              {formatCurrency(balances.fixed_deposits)}
-            </div>
-            <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">High-yield timed placement placements</p>
-          </div>
-
-          <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Coop Investments</span>
-              <div className="p-2 rounded-xl bg-primary/10 text-primary dark:text-secondary">
-                <Coins className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="font-headline text-2xl font-extrabold text-on-surface dark:text-white">
-              {formatCurrency(balances.investments)}
-            </div>
-            <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Member-backed investment portfolios</p>
-          </div>
-
-          <div className="p-6 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-3xl shadow-md border border-primary-container">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-bold uppercase font-label opacity-90">Total Net Assets</span>
-              <div className="p-2 rounded-xl bg-white/20">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="font-headline text-3xl font-extrabold">
-              {formatCurrency(balances.total_assets)}
-            </div>
-            <p className="text-[11px] opacity-80 mt-2">Total non-loan asset valuation</p>
-          </div>
+          <KpiCard label="Share Capital" value={formatCurrency(balances.share_capital)} icon={Building} description="Cumulative equity contributions" />
+          <KpiCard label="Fixed Deposit" value={formatCurrency(balances.fixed_deposits)} icon={PiggyBank} description="High-yield timed placements" />
+          <KpiCard label="Coop Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Member-backed investment portfolios" />
+          <KpiCard label="Total Net Assets" value={formatCurrency(balances.total_assets)} icon={ShieldCheck} variant="primary" description="Total non-loan asset valuation" />
         </div>
 
         {/* Member Loan Summary card */}
@@ -198,120 +194,169 @@ export default function OverviewPage() {
   }
 
   // --- ADMIN / MANAGER VIEW ---
-  const health = adminMetrics?.portfolio_health || { active_loans: 0, defaulted_loans: 0, pending_applications: 0 };
-  const aggregates = adminMetrics?.ledger_aggregates || { total_capital_deployed: 0, total_principal_recovered: 0, current_outstanding_balance: 0, total_interest_earned: 0 };
-  const recoveryRate = aggregates.total_capital_deployed > 0 
-    ? (aggregates.total_principal_recovered / aggregates.total_capital_deployed) * 100 
+  const ds = dashboardSummary || {};
+  const recoveryRate = ds.total_capital_ever_deployed > 0
+    ? ((ds.total_repayments_collected / ds.total_capital_ever_deployed) * 100)
     : 0;
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white">
-          System Overview
-        </h1>
-        <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-          Cooperative Credit Monitoring & Portfolio Metrics
-        </p>
-      </div>
-
-      {/* Admin metrics grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Deployed Capital</span>
-            <div className="p-2 rounded-xl bg-primary/10 text-primary dark:text-secondary">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="font-headline text-2xl font-extrabold text-on-surface dark:text-white">
-            {formatCurrency(aggregates.total_capital_deployed)}
-          </div>
-          <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Cumulative disbursed principal volume</p>
-        </div>
-
-        <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Outstanding Principal</span>
-            <div className="p-2 rounded-xl bg-tertiary/10 text-tertiary">
-              <TrendingDown className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="font-headline text-2xl font-extrabold text-tertiary">
-            {formatCurrency(aggregates.current_outstanding_balance)}
-          </div>
-          <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Remaining active credit exposure</p>
-        </div>
-
-        <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Interest Earned</span>
-            <div className="p-2 rounded-xl bg-primary/10 text-primary dark:text-secondary">
-              <Percent className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="font-headline text-2xl font-extrabold text-primary dark:text-secondary">
-            {formatCurrency(aggregates.total_interest_earned)}
-          </div>
-          <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Cumulative interest collected</p>
-        </div>
-
-        <div className="p-6 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-3xl shadow-md border border-primary-container">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold uppercase font-label opacity-90">Recovery Rate</span>
-            <div className="p-2 rounded-xl bg-white/20">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="font-headline text-3xl font-extrabold">
-            {recoveryRate.toFixed(1)}%
-          </div>
-          <p className="text-[11px] opacity-80 mt-2">
-            Recovered {formatCurrency(aggregates.total_principal_recovered)}
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white">
+            System Overview
+          </h1>
+          <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+            Cooperative Credit Monitoring & Portfolio Analytics
           </p>
         </div>
+        <button
+          onClick={() => fetchDashboardData(true)}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface dark:bg-surface-container-high border border-outline-variant/50 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/10 transition-colors active:scale-95 disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
       </div>
 
-      {/* Portfolio Health & Alert states */}
+      {/* Row 1: Financial KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <KpiCard
+          label="Total Capital Deployed"
+          value={formatCurrency(ds.total_capital_ever_deployed)}
+          icon={TrendingUp}
+          description="Cumulative disbursed principal volume"
+        />
+        <KpiCard
+          label="Outstanding Balance"
+          value={formatCurrency(ds.total_outstanding_balance)}
+          icon={TrendingDown}
+          variant="danger"
+          description="Remaining active credit exposure"
+        />
+        <KpiCard
+          label="Interest Earned"
+          value={formatCurrency(ds.total_interest_earned)}
+          icon={Percent}
+          variant="warning"
+          description="Cumulative interest collected"
+        />
+        <KpiCard
+          label="Recovery Rate"
+          value={`${recoveryRate.toFixed(1)}%`}
+          icon={ShieldCheck}
+          variant="primary"
+          description={`Recovered ${formatCurrency(ds.total_repayments_collected)}`}
+        />
+      </div>
+
+      {/* Row 2: Member & Loan Count KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Users className="w-4 h-4 text-primary dark:text-secondary" />
+            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Total Members</span>
+          </div>
+          <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
+          <div className="flex items-center gap-2 mt-1.5 text-[10px]">
+            <span className="flex items-center gap-0.5 text-green-600"><UserCheck className="w-3 h-3" />{ds.active_members || 0} active</span>
+            <span className="flex items-center gap-0.5 text-neutral-500"><UserX className="w-3 h-3" />{ds.inactive_members || 0} inactive</span>
+          </div>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Banknote className="w-4 h-4 text-primary dark:text-secondary" />
+            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Active Loans</span>
+          </div>
+          <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.disbursed_loans || 0}</div>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="w-4 h-4 text-amber-500" />
+            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Pending Approval</span>
+          </div>
+          <div className={`font-headline text-xl font-extrabold ${(ds.pending_loans || 0) > 0 ? 'text-amber-500' : 'text-on-surface dark:text-white'}`}>
+            {ds.pending_loans || 0}
+          </div>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="w-4 h-4 text-green-500" />
+            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Fully Paid</span>
+          </div>
+          <div className="font-headline text-xl font-extrabold text-green-600 dark:text-green-400">{ds.fully_paid_loans || 0}</div>
+        </div>
+
+        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-4 h-4 text-red-500" />
+            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Defaulted</span>
+          </div>
+          <div className={`font-headline text-xl font-extrabold ${(ds.defaulted_loans || 0) > 0 ? 'text-red-500' : 'text-on-surface dark:text-white'}`}>
+            {ds.defaulted_loans || 0}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Financial Assets KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Disbursed Active Loans</span>
-            <h3 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white mt-2">
-              {health.active_loans}
-            </h3>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-neutral/5 flex items-center justify-center text-neutral-600 dark:text-neutral-400 font-headline text-lg font-bold">
-            #
-          </div>
-        </div>
-
-        <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Pending Approval Reviews</span>
-            <h3 className={`font-headline text-3xl font-extrabold mt-2 ${health.pending_applications > 0 ? 'text-primary dark:text-secondary' : 'text-on-surface dark:text-white'}`}>
-              {health.pending_applications}
-            </h3>
-          </div>
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${health.pending_applications > 0 ? 'bg-primary/10 text-primary dark:text-secondary' : 'bg-neutral/5 text-neutral-600 dark:text-neutral-400'}`}>
-            <Clock className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Defaulted Risk Accounts</span>
-            <h3 className={`font-headline text-3xl font-extrabold mt-2 ${health.defaulted_loans > 0 ? 'text-tertiary' : 'text-on-surface dark:text-white'}`}>
-              {health.defaulted_loans}
-            </h3>
-          </div>
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${health.defaulted_loans > 0 ? 'bg-tertiary/10 text-tertiary' : 'bg-neutral/5 text-neutral-600 dark:text-neutral-400'}`}>
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-        </div>
+        <KpiCard
+          label="Total Share Capital"
+          value={formatCurrency(ds.total_share_capital)}
+          icon={Building}
+          description="Combined member equity contributions"
+        />
+        <KpiCard
+          label="Active Fixed Deposits"
+          value={formatCurrency(ds.total_active_fixed_deposits)}
+          icon={PiggyBank}
+          description="Timed deposit placements"
+        />
+        <KpiCard
+          label="Active Investments"
+          value={formatCurrency(ds.total_active_investments)}
+          icon={Coins}
+          description="Member-backed investment portfolios"
+        />
       </div>
 
-      {/* System Actions & Navigation Shortcuts */}
+      {/* Row 4: Charts - Loan Trends + Loan Status Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <ChartContainer
+          title="Monthly Loan Activity"
+          subtitle="Applications, disbursements & completions over the last 12 months"
+          className="lg:col-span-2"
+        >
+          <MonthlyTrendsChart data={loanTrends} />
+        </ChartContainer>
+
+        <ChartContainer title="Loan Status Distribution" subtitle="Current loan portfolio by status">
+          <LoanStatusChart data={loanDistribution} />
+        </ChartContainer>
+      </div>
+
+      {/* Row 5: Repayment Trends + Member Growth */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartContainer title="Monthly Repayments" subtitle="Payment collection amounts over the last 12 months">
+          <RepaymentChart data={repaymentTrends} />
+        </ChartContainer>
+
+        <ChartContainer title="Member Growth" subtitle="New registrations and cumulative membership over time">
+          <MemberGrowthChart data={memberGrowth} />
+        </ChartContainer>
+      </div>
+
+      {/* Row 6: Financial Summary Chart */}
+      <ChartContainer title="Financial Flow Analysis" subtitle="Share capital contributions vs loan disbursements over time">
+        <FinancialSummaryChart data={financialSummary} />
+      </ChartContainer>
+
+      {/* Row 7: Quick Actions */}
       <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-4">
         <h3 className="font-headline text-base font-bold text-on-surface dark:text-white">Administrative Actions Quick-Desk</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
