@@ -298,19 +298,28 @@ export default function OverviewPage() {
         </div>
 
         {/* Quick Actions Panel */}
+        {/* Quick Transactions Panel — High-Visibility Button Style */}
         <div className="space-y-4">
           <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
             {/* Apply for Loan */}
             <button
               onClick={openLoanModal}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl hover:border-primary/40 dark:hover:border-secondary/40 transition-all text-left group shadow-sm hover:shadow-md cursor-pointer"
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
             >
-              <div>
-                <h4 className="font-headline font-bold text-base text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors">Apply for a Loan</h4>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">Submit a new credit application request.</p>
+              <div className="space-y-1">
+                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
+                  Apply for a Loan
+                </h4>
+                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                  Submit a new credit application request.
+                </p>
+                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                  Proceed &rarr;
+                </span>
               </div>
-              <div className="p-3.5 bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary rounded-2xl group-hover:scale-105 transition-all">
+              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
                 <PlusCircle className="w-6 h-6" />
               </div>
             </button>
@@ -323,18 +332,25 @@ export default function OverviewPage() {
                 setSuccessData(null);
                 setModalError(null);
               }}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl hover:border-primary/40 dark:hover:border-secondary/40 transition-all text-left group shadow-sm hover:shadow-md cursor-pointer"
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
             >
-              <div>
-                <h4 className="font-headline font-bold text-base text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors">Initiate Investment</h4>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">Add capital or start fixed deposit placement.</p>
+              <div className="space-y-1">
+                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
+                  Initiate Investment
+                </h4>
+                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                  Add capital or start fixed deposit placement.
+                </p>
+                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                  Proceed &rarr;
+                </span>
               </div>
-              <div className="p-3.5 bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary rounded-2xl group-hover:scale-105 transition-all">
+              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
                 <Coins className="w-6 h-6" />
               </div>
             </button>
 
-            {/* Schedule Appointment */}
+            {/* Book Appointment */}
             <button
               onClick={() => {
                 setActiveModal('appointment');
@@ -342,16 +358,24 @@ export default function OverviewPage() {
                 setSuccessData(null);
                 setModalError(null);
               }}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl hover:border-primary/40 dark:hover:border-secondary/40 transition-all text-left group shadow-sm hover:shadow-md cursor-pointer"
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
             >
-              <div>
-                <h4 className="font-headline font-bold text-base text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors">Book Appointment</h4>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">Schedule an office consultation or cash transaction.</p>
+              <div className="space-y-1">
+                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
+                  Book Appointment
+                </h4>
+                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                  Schedule an office consultation or cash transaction.
+                </p>
+                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                  Proceed &rarr;
+                </span>
               </div>
-              <div className="p-3.5 bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary rounded-2xl group-hover:scale-105 transition-all">
+              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
                 <CalendarCheck className="w-6 h-6" />
               </div>
             </button>
+
           </div>
         </div>
 
@@ -442,11 +466,10 @@ export default function OverviewPage() {
                                   setSelectedProduct(p);
                                   setLoanAmount(parseFloat(p.min_amount));
                                 }}
-                                className={`w-full p-4 rounded-2xl border text-left transition-all ${
-                                  selectedProduct?.id === p.id
-                                    ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
-                                    : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
-                                }`}
+                                className={`w-full p-4 rounded-2xl border text-left transition-all ${selectedProduct?.id === p.id
+                                  ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
+                                  : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                                  }`}
                               >
                                 <div className="flex justify-between items-center">
                                   <span className="font-bold text-on-surface dark:text-white text-base">{p.name}</span>
@@ -583,11 +606,10 @@ export default function OverviewPage() {
                             <button
                               type="button"
                               onClick={() => setInvestmentType('capital')}
-                              className={`p-4 rounded-2xl border text-center transition-all ${
-                                investmentType === 'capital'
-                                  ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
-                                  : 'border-outline-variant/65'
-                              }`}
+                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'capital'
+                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
+                                : 'border-outline-variant/65'
+                                }`}
                             >
                               <Building className="w-6 h-6 mx-auto mb-2 text-neutral-600 dark:text-neutral-300" />
                               <span className="font-bold text-sm block">Share Capital</span>
@@ -597,11 +619,10 @@ export default function OverviewPage() {
                             <button
                               type="button"
                               onClick={() => setInvestmentType('fixed_deposit')}
-                              className={`p-4 rounded-2xl border text-center transition-all ${
-                                investmentType === 'fixed_deposit'
-                                  ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
-                                  : 'border-outline-variant/65'
-                              }`}
+                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'fixed_deposit'
+                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
+                                : 'border-outline-variant/65'
+                                }`}
                             >
                               <PiggyBank className="w-6 h-6 mx-auto mb-2 text-neutral-600 dark:text-neutral-300" />
                               <span className="font-bold text-sm block">Fixed Deposit</span>
@@ -661,7 +682,7 @@ export default function OverviewPage() {
                           ✓
                         </div>
                         <h4 className="font-headline font-bold text-xl text-on-surface dark:text-white">Transaction Requested!</h4>
-                        
+
                         {/* Reference Ticket info */}
                         <div className="p-5 border border-dashed border-outline-variant rounded-2xl bg-neutral/5 text-left space-y-2.5 max-w-sm mx-auto">
                           <div className="flex justify-between text-xs">
@@ -736,11 +757,10 @@ export default function OverviewPage() {
                             <button
                               type="button"
                               onClick={() => setAppointmentSlot('morning')}
-                              className={`py-3 rounded-2xl border font-bold text-sm text-center transition-all ${
-                                appointmentSlot === 'morning'
-                                  ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
-                                  : 'border-outline-variant/65'
-                              }`}
+                              className={`py-3 rounded-2xl border font-bold text-sm text-center transition-all ${appointmentSlot === 'morning'
+                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
+                                : 'border-outline-variant/65'
+                                }`}
                             >
                               Morning (8:00 AM - 12:00 PM)
                             </button>
@@ -748,11 +768,10 @@ export default function OverviewPage() {
                             <button
                               type="button"
                               onClick={() => setAppointmentSlot('afternoon')}
-                              className={`py-3 rounded-2xl border font-bold text-sm text-center transition-all ${
-                                appointmentSlot === 'afternoon'
-                                  ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
-                                  : 'border-outline-variant/65'
-                              }`}
+                              className={`py-3 rounded-2xl border font-bold text-sm text-center transition-all ${appointmentSlot === 'afternoon'
+                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
+                                : 'border-outline-variant/65'
+                                }`}
                             >
                               Afternoon (1:00 PM - 5:00 PM)
                             </button>
