@@ -52,6 +52,30 @@ export default function OverviewPage() {
   const [loanDistribution, setLoanDistribution] = useState<any[]>([]);
   const [financialSummary, setFinancialSummary] = useState<any[]>([]);
 
+  // --- MEMBER WIZARD FORM STATES ---
+  // (Must be declared at the top level alongside other hooks, never after
+  //  conditional returns, to satisfy React's Rules of Hooks.)
+  const [activeModal, setActiveModal] = useState<'loan' | 'investment' | 'appointment' | null>(null);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [successData, setSuccessData] = useState<any>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  // Loan Form States
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [loanAmount, setLoanAmount] = useState<number>(0);
+
+  // Investment Form States
+  const [investmentType, setInvestmentType] = useState<'capital' | 'fixed_deposit'>('capital');
+  const [investmentAmount, setInvestmentAmount] = useState<string>('');
+  const [fdDuration, setFdDuration] = useState<string>('12'); // months
+
+  // Appointment Form States
+  const [appointmentPurpose, setAppointmentPurpose] = useState<string>('Loan Application Consultation');
+  const [appointmentDate, setAppointmentDate] = useState<string>('');
+  const [appointmentSlot, setAppointmentSlot] = useState<'morning' | 'afternoon'>('morning');
+
   const fetchDashboardData = async (isRefresh = false) => {
     if (!user) return;
     try {
@@ -137,26 +161,6 @@ export default function OverviewPage() {
   }
 
   // --- MEMBER VIEW & WIZARD FLOWS ---
-  const [activeModal, setActiveModal] = useState<'loan' | 'investment' | 'appointment' | null>(null);
-  const [wizardStep, setWizardStep] = useState(1);
-  const [submitting, setSubmitting] = useState(false);
-  const [successData, setSuccessData] = useState<any>(null);
-  const [modalError, setModalError] = useState<string | null>(null);
-
-  // Loan Form States
-  const [products, setProducts] = useState<any[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [loanAmount, setLoanAmount] = useState<number>(0);
-
-  // Investment Form States
-  const [investmentType, setInvestmentType] = useState<'capital' | 'fixed_deposit'>('capital');
-  const [investmentAmount, setInvestmentAmount] = useState<string>('');
-  const [fdDuration, setFdDuration] = useState<string>('12'); // months
-
-  // Appointment Form States
-  const [appointmentPurpose, setAppointmentPurpose] = useState<string>('Loan Application Consultation');
-  const [appointmentDate, setAppointmentDate] = useState<string>('');
-  const [appointmentSlot, setAppointmentSlot] = useState<'morning' | 'afternoon'>('morning');
 
   // Fetch products when opening loan modal
   const openLoanModal = async () => {
