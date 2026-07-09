@@ -289,16 +289,18 @@ export default function OverviewPage() {
           </p>
         </div>
 
-        {/* Member Balances Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <KpiCard label="Share Capital" value={formatCurrency(balances.share_capital)} icon={Building} description="Cumulative equity contributions" />
-          <KpiCard label="Fixed Deposit" value={formatCurrency(balances.fixed_deposits)} icon={PiggyBank} description="High-yield timed placements" />
-          <KpiCard label="Coop Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Member-backed investment portfolios" />
-          <KpiCard label="Total Net Assets" value={formatCurrency(balances.total_assets)} icon={ShieldCheck} variant="primary" description="Total non-loan asset valuation" />
+        {/* Account Balances Section */}
+        <div className="space-y-4">
+          <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Account Balances</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <KpiCard label="Share Capital" value={formatCurrency(balances.share_capital)} icon={Building} description="Cumulative equity contributions" />
+            <KpiCard label="Fixed Deposit" value={formatCurrency(balances.fixed_deposits)} icon={PiggyBank} description="High-yield timed placements" />
+            <KpiCard label="Coop Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Member-backed investment portfolios" />
+            <KpiCard label="Total Net Assets" value={formatCurrency(balances.total_assets)} icon={ShieldCheck} variant="primary" description="Total non-loan asset valuation" />
+          </div>
         </div>
 
-        {/* Quick Actions Panel */}
-        {/* Quick Transactions Panel — High-Visibility Button Style */}
+        {/* Quick Transactions Section */}
         <div className="space-y-4">
           <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -379,10 +381,10 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        {/* Member Loan Summary card */}
+        {/* Active Loan Account Section */}
         <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
           <div className="space-y-2">
-            <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Active Loan Account</h3>
+            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Active Loan Account</h2>
             <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
               Your ongoing active repayment obligations and outstanding balance matrix.
             </p>
@@ -846,89 +848,135 @@ export default function OverviewPage() {
         </button>
       </div>
 
-      {/* Row 1: Financial KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <KpiCard
-          label="Total Capital Deployed"
-          value={formatCurrency(ds.total_capital_ever_deployed)}
-          icon={TrendingUp}
-          description="Cumulative disbursed principal volume"
-        />
-        <KpiCard
-          label="Outstanding Balance"
-          value={formatCurrency(ds.total_outstanding_balance)}
-          icon={TrendingDown}
-          variant="danger"
-          description="Remaining active credit exposure"
-        />
-        <KpiCard
-          label="Interest Earned"
-          value={formatCurrency(ds.total_interest_earned)}
-          icon={Percent}
-          variant="warning"
-          description="Cumulative interest collected"
-        />
-        <KpiCard
-          label="Recovery Rate"
-          value={`${recoveryRate.toFixed(1)}%`}
-          icon={ShieldCheck}
-          variant="primary"
-          description={`Recovered ${formatCurrency(ds.total_repayments_collected)}`}
-        />
-      </div>
+      {/* Administrative Actions Quick-Desk */}
+      <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-4">
+        <h2 className="font-headline text-base font-bold text-on-surface dark:text-white flex items-center gap-2">
+          <span className="text-lg"></span> Administrative Actions Quick-Desk
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <button
+            onClick={() => router.push('/dashboard/members')}
+            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
+          >
+            <UserIcon className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
+            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Register Member</span>
+          </button>
 
-      {/* Row 2: Member & Loan Count KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="w-4 h-4 text-primary dark:text-secondary" />
-            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Total Members</span>
-          </div>
-          <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
-          <div className="flex items-center gap-2 mt-1.5 text-[10px]">
-            <span className="flex items-center gap-0.5 text-green-600"><UserCheck className="w-3 h-3" />{ds.active_members || 0} active</span>
-            <span className="flex items-center gap-0.5 text-neutral-500"><UserX className="w-3 h-3" />{ds.inactive_members || 0} inactive</span>
-          </div>
-        </div>
+          <button
+            onClick={() => router.push('/dashboard/loans')}
+            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
+          >
+            <PlusCircle className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
+            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Configure Product</span>
+          </button>
 
-        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Banknote className="w-4 h-4 text-primary dark:text-secondary" />
-            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Active Loans</span>
-          </div>
-          <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.disbursed_loans || 0}</div>
-        </div>
+          <button
+            onClick={() => router.push('/dashboard/billing')}
+            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
+          >
+            <CalendarCheck className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
+            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Billing Collection Queue</span>
+          </button>
 
-        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock className="w-4 h-4 text-amber-500" />
-            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Pending Approval</span>
-          </div>
-          <div className={`font-headline text-xl font-extrabold ${(ds.pending_loans || 0) > 0 ? 'text-amber-500' : 'text-on-surface dark:text-white'}`}>
-            {ds.pending_loans || 0}
-          </div>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <CheckCircle2 className="w-4 h-4 text-green-500" />
-            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Fully Paid</span>
-          </div>
-          <div className="font-headline text-xl font-extrabold text-green-600 dark:text-green-400">{ds.fully_paid_loans || 0}</div>
-        </div>
-
-        <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle className="w-4 h-4 text-red-500" />
-            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Defaulted</span>
-          </div>
-          <div className={`font-headline text-xl font-extrabold ${(ds.defaulted_loans || 0) > 0 ? 'text-red-500' : 'text-on-surface dark:text-white'}`}>
-            {ds.defaulted_loans || 0}
-          </div>
+          <button
+            onClick={() => router.push('/dashboard/reports')}
+            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
+          >
+            <FileCheck className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
+            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Export Reports</span>
+          </button>
         </div>
       </div>
 
-      {/* Row 3: Financial Assets KPI cards */}
+      {/* Financial Health */}
+      <div className="space-y-4">
+        <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Financial Health</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <KpiCard
+            label="Total Capital Deployed"
+            value={formatCurrency(ds.total_capital_ever_deployed)}
+            icon={TrendingUp}
+            description="Cumulative disbursed principal volume"
+          />
+          <KpiCard
+            label="Outstanding Balance"
+            value={formatCurrency(ds.total_outstanding_balance)}
+            icon={TrendingDown}
+            variant="danger"
+            description="Remaining active credit exposure"
+          />
+          <KpiCard
+            label="Interest Earned"
+            value={formatCurrency(ds.total_interest_earned)}
+            icon={Percent}
+            variant="warning"
+            description="Cumulative interest collected"
+          />
+          <KpiCard
+            label="Recovery Rate"
+            value={`${recoveryRate.toFixed(1)}%`}
+            icon={ShieldCheck}
+            variant="primary"
+            description={`Recovered ${formatCurrency(ds.total_repayments_collected)}`}
+          />
+        </div>
+      </div>
+
+      {/* Operational Status */}
+      <div className="space-y-4">
+        <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Operational Status</h2>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <Users className="w-4 h-4 text-primary dark:text-secondary" />
+              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Total Members</span>
+            </div>
+            <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
+            <div className="flex items-center gap-2 mt-1.5 text-[10px]">
+              <span className="flex items-center gap-0.5 text-green-600"><UserCheck className="w-3 h-3" />{ds.active_members || 0} active</span>
+              <span className="flex items-center gap-0.5 text-neutral-500"><UserX className="w-3 h-3" />{ds.inactive_members || 0} inactive</span>
+            </div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <Banknote className="w-4 h-4 text-primary dark:text-secondary" />
+              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Active Loans</span>
+            </div>
+            <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.disbursed_loans || 0}</div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="w-4 h-4 text-amber-500" />
+              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Pending Approval</span>
+            </div>
+            <div className={`font-headline text-xl font-extrabold ${(ds.pending_loans || 0) > 0 ? 'text-amber-500' : 'text-on-surface dark:text-white'}`}>
+              {ds.pending_loans || 0}
+            </div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
+              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Fully Paid</span>
+            </div>
+            <div className="font-headline text-xl font-extrabold text-green-600 dark:text-green-400">{ds.fully_paid_loans || 0}</div>
+          </div>
+
+          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" />
+              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Defaulted</span>
+            </div>
+            <div className={`font-headline text-xl font-extrabold ${(ds.defaulted_loans || 0) > 0 ? 'text-red-500' : 'text-on-surface dark:text-white'}`}>
+              {ds.defaulted_loans || 0}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Financial Assets */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <KpiCard
           label="Total Share Capital"
@@ -950,73 +998,39 @@ export default function OverviewPage() {
         />
       </div>
 
-      {/* Row 4: Charts - Loan Trends + Loan Status Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <ChartContainer
-          title="Monthly Loan Activity"
-          subtitle="Applications, disbursements & completions over the last 12 months"
-          className="lg:col-span-2"
-        >
-          <MonthlyTrendsChart data={loanTrends} />
-        </ChartContainer>
-
-        <ChartContainer title="Loan Status Distribution" subtitle="Current loan portfolio by status">
-          <LoanStatusChart data={loanDistribution} />
-        </ChartContainer>
-      </div>
-
-      {/* Row 5: Repayment Trends + Member Growth */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartContainer title="Monthly Repayments" subtitle="Payment collection amounts over the last 12 months">
-          <RepaymentChart data={repaymentTrends} />
-        </ChartContainer>
-
-        <ChartContainer title="Member Growth" subtitle="New registrations and cumulative membership over time">
-          <MemberGrowthChart data={memberGrowth} />
-        </ChartContainer>
-      </div>
-
-      {/* Row 6: Financial Summary Chart */}
-      <ChartContainer title="Financial Flow Analysis" subtitle="Share capital contributions vs loan disbursements over time">
-        <FinancialSummaryChart data={financialSummary} />
-      </ChartContainer>
-
-      {/* Row 7: Quick Actions */}
-      <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-4">
-        <h3 className="font-headline text-base font-bold text-on-surface dark:text-white">Administrative Actions Quick-Desk</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <button
-            onClick={() => router.push('/dashboard/members')}
-            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
+      {/* Analytics Performance */}
+      <div className="space-y-6">
+        <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Analytics Performance</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartContainer
+            title="Monthly Loan Activity"
+            subtitle="Applications, disbursements & completions over the last 12 months"
           >
-            <UserIcon className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
-            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Register Member</span>
-          </button>
+            <MonthlyTrendsChart data={loanTrends} />
+          </ChartContainer>
 
-          <button
-            onClick={() => router.push('/dashboard/loans')}
-            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
-          >
-            <PlusCircle className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
-            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Configure Loan Product</span>
-          </button>
-
-          <button
-            onClick={() => router.push('/dashboard/billing')}
-            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
-          >
-            <CalendarCheck className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
-            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Billing Collection Queue</span>
-          </button>
-
-          <button
-            onClick={() => router.push('/dashboard/reports')}
-            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
-          >
-            <FileCheck className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
-            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Extract Excel Reports</span>
-          </button>
+          <ChartContainer title="Loan Status Distribution" subtitle="Current loan portfolio by status">
+            <LoanStatusChart data={loanDistribution} />
+          </ChartContainer>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartContainer title="Monthly Repayments" subtitle="Payment collection amounts over the last 12 months">
+            <RepaymentChart data={repaymentTrends} />
+          </ChartContainer>
+
+          <ChartContainer title="Member Growth" subtitle="New registrations and cumulative membership over time">
+            <MemberGrowthChart data={memberGrowth} />
+          </ChartContainer>
+        </div>
+      </div>
+
+      {/* Financial Flow Analysis */}
+      <div className="space-y-4">
+        <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Financial Flow Analysis</h2>
+        <ChartContainer title="Capital Flow" subtitle="Share capital contributions vs loan disbursements over time">
+          <FinancialSummaryChart data={financialSummary} />
+        </ChartContainer>
       </div>
     </div>
   );

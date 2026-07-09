@@ -193,7 +193,7 @@ function DashboardLayoutContent({
       {/* Main Panel */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Top Header */}
-        <header className="h-20 bg-white dark:bg-surface-container-low border-b border-outline-variant/65 flex items-center justify-between px-6 md:px-8 z-30">
+        <header className="h-20 bg-white dark:bg-surface-container-low border-b border-outline-variant/65 flex items-center justify-between px-6 py-6 md:px-8 z-30">
           <div className="flex items-center gap-3">
             <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white capitalize">
               {pathname === '/dashboard'
