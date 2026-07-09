@@ -10,7 +10,23 @@ import pool, { query } from '../config/db.js';
 export const postShareCapitalTransaction = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { member_id, transaction_type, amount, remarks } = req.body;
+    let { member_id, transaction_type, amount, remarks } = req.body;
+
+    if (req.user.role === 'member') {
+      if (!req.user.profile?.id) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Authenticated user session is not linked to a member profile.' }
+        });
+      }
+      member_id = req.user.profile.id;
+      if (transaction_type !== 'credit') {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Members can only initiate credit transactions (deposits).' }
+        });
+      }
+    }
 
     if (!member_id || !transaction_type || !amount) {
       return res.status(400).json({
@@ -143,7 +159,17 @@ export const getShareCapital = async (req, res, next) => {
 export const createFixedDeposit = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { member_id, principal_amount, interest_rate, duration_months } = req.body;
+    let { member_id, principal_amount, interest_rate, duration_months } = req.body;
+
+    if (req.user.role === 'member') {
+      if (!req.user.profile?.id) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Authenticated user session is not linked to a member profile.' }
+        });
+      }
+      member_id = req.user.profile.id;
+    }
 
     if (!member_id || !principal_amount || !interest_rate || !duration_months) {
       return res.status(400).json({
@@ -253,7 +279,17 @@ export const getFixedDeposits = async (req, res, next) => {
 export const createInvestment = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { member_id, investment_name, principal_amount } = req.body;
+    let { member_id, investment_name, principal_amount } = req.body;
+
+    if (req.user.role === 'member') {
+      if (!req.user.profile?.id) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Authenticated user session is not linked to a member profile.' }
+        });
+      }
+      member_id = req.user.profile.id;
+    }
 
     if (!member_id || !investment_name || !principal_amount) {
       return res.status(400).json({

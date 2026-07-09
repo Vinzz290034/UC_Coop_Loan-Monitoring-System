@@ -74,7 +74,18 @@ export const getLoanProducts = async (req, res, next) => {
 // @access  Protected (Admin, Manager)
 export const applyForLoan = async (req, res, next) => {
   try {
-    const { member_id, loan_product_id, principal_amount } = req.body;
+    let { member_id, loan_product_id, principal_amount } = req.body;
+
+    // Enforce own profile ID if caller is a member
+    if (req.user.role === 'member') {
+      if (!req.user.profile?.id) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Authenticated user session is not linked to a member profile.' }
+        });
+      }
+      member_id = req.user.profile.id;
+    }
 
     if (!member_id || !loan_product_id || !principal_amount) {
       return res.status(400).json({

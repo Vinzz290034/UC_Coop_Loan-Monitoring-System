@@ -24,7 +24,7 @@ router.route('/products')
 
 // 2. Loan Applications & Listings
 router.route('/')
-  .post(restrictTo('admin', 'manager'), applyForLoan)
+  .post(restrictTo('admin', 'manager', 'member'), applyForLoan)
   .get(getLoans);
 
 router.route('/:id')

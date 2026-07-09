@@ -17,21 +17,21 @@ router.use(protect);
 
 // 1. Share Capital Ledger
 router.route('/share-capital')
-  .post(restrictTo('admin', 'manager'), postShareCapitalTransaction);
+  .post(restrictTo('admin', 'manager', 'member'), postShareCapitalTransaction);
 
 router.route('/share-capital/:memberId')
   .get(getShareCapital);
 
 // 2. Fixed Deposit placements
 router.route('/fixed-deposits')
-  .post(restrictTo('admin', 'manager'), createFixedDeposit);
+  .post(restrictTo('admin', 'manager', 'member'), createFixedDeposit);
 
 router.route('/fixed-deposits/:memberId')
   .get(getFixedDeposits);
 
 // 3. Investment tracking
 router.route('/investments')
-  .post(restrictTo('admin', 'manager'), createInvestment);
+  .post(restrictTo('admin', 'manager', 'member'), createInvestment);
 
 router.route('/investments/:id/transactions')
   .post(restrictTo('admin', 'manager'), postInvestmentTransaction);
