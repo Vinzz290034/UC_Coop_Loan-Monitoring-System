@@ -52,6 +52,30 @@ export default function OverviewPage() {
   const [loanDistribution, setLoanDistribution] = useState<any[]>([]);
   const [financialSummary, setFinancialSummary] = useState<any[]>([]);
 
+  // --- MEMBER WIZARD FORM STATES ---
+  // (Must be declared at the top level alongside other hooks, never after
+  //  conditional returns, to satisfy React's Rules of Hooks.)
+  const [activeModal, setActiveModal] = useState<'loan' | 'investment' | 'appointment' | null>(null);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [successData, setSuccessData] = useState<any>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  // Loan Form States
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [loanAmount, setLoanAmount] = useState<number>(0);
+
+  // Investment Form States
+  const [investmentType, setInvestmentType] = useState<'capital' | 'fixed_deposit'>('capital');
+  const [investmentAmount, setInvestmentAmount] = useState<string>('');
+  const [fdDuration, setFdDuration] = useState<string>('12'); // months
+
+  // Appointment Form States
+  const [appointmentPurpose, setAppointmentPurpose] = useState<string>('Loan Application Consultation');
+  const [appointmentDate, setAppointmentDate] = useState<string>('');
+  const [appointmentSlot, setAppointmentSlot] = useState<'morning' | 'afternoon'>('morning');
+
   const fetchDashboardData = async (isRefresh = false) => {
     if (!user) return;
     try {
@@ -136,7 +160,120 @@ export default function OverviewPage() {
     );
   }
 
-  // --- MEMBER VIEW ---
+  // --- MEMBER VIEW & WIZARD FLOWS ---
+
+  // Fetch products when opening loan modal
+  const openLoanModal = async () => {
+    try {
+      setModalError(null);
+      setSubmitting(true);
+      setActiveModal('loan');
+      setWizardStep(1);
+      setSuccessData(null);
+      const res = await api.get('/loans/products');
+      const activeProducts = res.data.data.filter((p: any) => p.is_active);
+      setProducts(activeProducts);
+      if (activeProducts.length > 0) {
+        setSelectedProduct(activeProducts[0]);
+        setLoanAmount(parseFloat(activeProducts[0].min_amount));
+      }
+    } catch (err: any) {
+      setModalError('Failed to fetch available loan products. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleApplyLoan = async () => {
+    if (!selectedProduct || loanAmount <= 0) return;
+    try {
+      setSubmitting(true);
+      setModalError(null);
+      const res = await api.post('/loans', {
+        loan_product_id: selectedProduct.id,
+        principal_amount: loanAmount
+      });
+      setSuccessData(res.data.data);
+      setWizardStep(3); // Go to success step
+      fetchDashboardData();
+    } catch (err: any) {
+      setModalError(err.response?.data?.error?.message || 'Failed to submit loan application.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleInitiateInvestment = async () => {
+    const amount = parseFloat(investmentAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setModalError('Please enter a valid amount.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setModalError(null);
+      let res;
+      if (investmentType === 'capital') {
+        res = await api.post('/accounts/share-capital', {
+          transaction_type: 'credit',
+          amount: amount,
+          remarks: 'Member Share Capital Placement'
+        });
+      } else {
+        res = await api.post('/accounts/fixed-deposits', {
+          principal_amount: amount,
+          interest_rate: 0.05, // 5% default
+          duration_months: parseInt(fdDuration, 10)
+        });
+      }
+      setSuccessData({
+        ...res.data.data,
+        type: investmentType,
+        amount: amount,
+        reference_code: `TXN-${Math.floor(100000 + Math.random() * 900000)}`
+      });
+      setWizardStep(3);
+      fetchDashboardData();
+    } catch (err: any) {
+      setModalError(err.response?.data?.error?.message || 'Failed to initiate investment.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBookAppointment = async () => {
+    if (!appointmentDate || !appointmentPurpose) {
+      setModalError('Please select a date and purpose.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setModalError(null);
+      const res = await api.post('/appointments', {
+        purpose: appointmentPurpose,
+        appointment_date: appointmentDate,
+        time_slot: appointmentSlot
+      });
+      setSuccessData(res.data.data);
+      setWizardStep(3);
+    } catch (err: any) {
+      setModalError(err.response?.data?.error?.message || 'Failed to book appointment.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const closeModal = () => {
+    setActiveModal(null);
+    setWizardStep(1);
+    setSuccessData(null);
+    setModalError(null);
+    setInvestmentAmount('');
+    setAppointmentDate('');
+  };
+
   if (user?.role === 'member') {
     const balances = memberMetrics?.balances || { share_capital: 0, fixed_deposits: 0, investments: 0, total_assets: 0 };
     const loans = memberMetrics?.loans || { active_count: 0, original_principal: 0, outstanding_balance: 0 };
@@ -158,6 +295,88 @@ export default function OverviewPage() {
           <KpiCard label="Fixed Deposit" value={formatCurrency(balances.fixed_deposits)} icon={PiggyBank} description="High-yield timed placements" />
           <KpiCard label="Coop Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Member-backed investment portfolios" />
           <KpiCard label="Total Net Assets" value={formatCurrency(balances.total_assets)} icon={ShieldCheck} variant="primary" description="Total non-loan asset valuation" />
+        </div>
+
+        {/* Quick Actions Panel */}
+        {/* Quick Transactions Panel — High-Visibility Button Style */}
+        <div className="space-y-4">
+          <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            {/* Apply for Loan */}
+            <button
+              onClick={openLoanModal}
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+            >
+              <div className="space-y-1">
+                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
+                  Apply for a Loan
+                </h4>
+                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                  Submit a new credit application request.
+                </p>
+                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                  Proceed &rarr;
+                </span>
+              </div>
+              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                <PlusCircle className="w-6 h-6" />
+              </div>
+            </button>
+
+            {/* Initiate Investment */}
+            <button
+              onClick={() => {
+                setActiveModal('investment');
+                setWizardStep(1);
+                setSuccessData(null);
+                setModalError(null);
+              }}
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+            >
+              <div className="space-y-1">
+                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
+                  Initiate Investment
+                </h4>
+                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                  Add capital or start fixed deposit placement.
+                </p>
+                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                  Proceed &rarr;
+                </span>
+              </div>
+              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                <Coins className="w-6 h-6" />
+              </div>
+            </button>
+
+            {/* Book Appointment */}
+            <button
+              onClick={() => {
+                setActiveModal('appointment');
+                setWizardStep(1);
+                setSuccessData(null);
+                setModalError(null);
+              }}
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+            >
+              <div className="space-y-1">
+                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
+                  Book Appointment
+                </h4>
+                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                  Schedule an office consultation or cash transaction.
+                </p>
+                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                  Proceed &rarr;
+                </span>
+              </div>
+              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                <CalendarCheck className="w-6 h-6" />
+              </div>
+            </button>
+
+          </div>
         </div>
 
         {/* Member Loan Summary card */}
@@ -189,6 +408,412 @@ export default function OverviewPage() {
             <span className="text-[10px] text-tertiary/85 mt-1">Remaining payment principal</span>
           </div>
         </div>
+
+        {/* ======================================================== */}
+        {/* TRANSACTIONS MODAL OVERLAYS (ELDERLY ACCESSIBLE DESIGN) */}
+        {/* ======================================================== */}
+        {activeModal && (
+          <div className="fixed inset-0 bg-neutral-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-outline-variant/40 flex justify-between items-center bg-surface-container-low dark:bg-surface-container-high/40">
+                <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white capitalize">
+                  {activeModal === 'loan' && 'Apply for a Loan'}
+                  {activeModal === 'investment' && 'Initiate Investment'}
+                  {activeModal === 'appointment' && 'Book Office Appointment'}
+                </h3>
+                <button
+                  onClick={closeModal}
+                  className="p-1.5 rounded-full hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <span className="text-xl font-bold font-mono">&times;</span>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                {modalError && (
+                  <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-sm font-semibold flex items-start gap-2.5">
+                    <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <span>{modalError}</span>
+                  </div>
+                )}
+
+                {/* ----------------- LOAN WIZARD ----------------- */}
+                {activeModal === 'loan' && (
+                  <div className="space-y-6">
+                    {/* Step Indicators */}
+                    <div className="flex items-center justify-center gap-4 text-xs font-bold text-neutral-500">
+                      <span className={`${wizardStep === 1 ? 'text-primary dark:text-secondary' : 'text-neutral-400'}`}>1. Choose Product</span>
+                      <span className="text-neutral-300">&bull;&bull;&bull;</span>
+                      <span className={`${wizardStep === 2 ? 'text-primary dark:text-secondary' : 'text-neutral-400'}`}>2. Amount & Term</span>
+                      <span className="text-neutral-300">&bull;&bull;&bull;</span>
+                      <span className={`${wizardStep === 3 ? 'text-primary dark:text-secondary' : 'text-neutral-400'}`}>3. Confirmation</span>
+                    </div>
+
+                    {/* Step 1: Choose Product */}
+                    {wizardStep === 1 && (
+                      <div className="space-y-4">
+                        <span className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Select the type of loan you need:</span>
+                        {products.length === 0 ? (
+                          <div className="text-center py-6 text-sm text-neutral-500">No active loan products available.</div>
+                        ) : (
+                          <div className="space-y-3">
+                            {products.map((p) => (
+                              <button
+                                key={p.id}
+                                onClick={() => {
+                                  setSelectedProduct(p);
+                                  setLoanAmount(parseFloat(p.min_amount));
+                                }}
+                                className={`w-full p-4 rounded-2xl border text-left transition-all ${selectedProduct?.id === p.id
+                                  ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
+                                  : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                                  }`}
+                              >
+                                <div className="flex justify-between items-center">
+                                  <span className="font-bold text-on-surface dark:text-white text-base">{p.name}</span>
+                                  <span className="text-xs font-bold bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2.5 py-1 rounded-full uppercase">
+                                    {p.amortization_type.replace('_', ' ')}
+                                  </span>
+                                </div>
+                                <div className="mt-2 text-xs text-neutral-600 dark:text-neutral-400 flex justify-between">
+                                  <span>Interest: <strong className="text-on-surface dark:text-white font-semibold">{(parseFloat(p.interest_rate) * 100).toFixed(1)}%</strong></span>
+                                  <span>Term: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months} months</strong></span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <button
+                          disabled={!selectedProduct}
+                          onClick={() => setWizardStep(2)}
+                          className="w-full mt-4 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-base"
+                        >
+                          Continue to Amount
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Step 2: Amount & Term Slider */}
+                    {wizardStep === 2 && selectedProduct && (
+                      <div className="space-y-6">
+                        <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
+                          <span className="text-xs text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Requested Amortization Principal</span>
+                          <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
+                            {formatCurrency(loanAmount)}
+                          </div>
+                        </div>
+
+                        {/* Large Accessible Slider */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400 flex justify-between">
+                            <span>Adjust Amount:</span>
+                            <span>Min: {formatCurrency(parseFloat(selectedProduct.min_amount))}</span>
+                          </label>
+                          <input
+                            type="range"
+                            min={selectedProduct.min_amount}
+                            max={selectedProduct.max_amount}
+                            step="1000"
+                            value={loanAmount}
+                            onChange={(e) => setLoanAmount(parseFloat(e.target.value))}
+                            className="w-full h-3 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-primary dark:accent-secondary"
+                          />
+                          <div className="text-right text-xs font-bold text-neutral-600 dark:text-neutral-400">
+                            Max: {formatCurrency(parseFloat(selectedProduct.max_amount))}
+                          </div>
+                        </div>
+
+                        {/* Estimated Repayment Math block */}
+                        <div className="border border-outline-variant/65 rounded-2xl p-4 space-y-2 text-sm bg-surface-container-low">
+                          <h5 className="font-bold text-on-surface dark:text-white border-b border-outline-variant/30 pb-1.5 mb-2">Estimated Monthly Repayments</h5>
+                          <div className="flex justify-between">
+                            <span className="text-neutral-600 dark:text-neutral-400">Loan Product</span>
+                            <span className="font-semibold">{selectedProduct.name}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-neutral-600 dark:text-neutral-400">Amortization Method</span>
+                            <span className="font-semibold uppercase">{selectedProduct.amortization_type.replace('_', ' ')}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-neutral-600 dark:text-neutral-400">Duration Term</span>
+                            <span className="font-semibold">{selectedProduct.term_months} Months</span>
+                          </div>
+                          <div className="flex justify-between pt-2 border-t border-outline-variant/20 font-bold text-base text-primary dark:text-secondary">
+                            <span>Est. Monthly Due</span>
+                            <span>
+                              {formatCurrency(
+                                selectedProduct.amortization_type === 'flat_rate'
+                                  ? (loanAmount + (loanAmount * parseFloat(selectedProduct.interest_rate) * (selectedProduct.term_months / 12))) / selectedProduct.term_months
+                                  : (loanAmount * (parseFloat(selectedProduct.interest_rate) / 12) * Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months)) / (Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months) - 1)
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-4">
+                          <button
+                            onClick={() => setWizardStep(1)}
+                            className="flex-1 py-3 bg-neutral/10 hover:bg-neutral/15 dark:bg-neutral/20 dark:hover:bg-neutral/25 text-on-surface dark:text-white rounded-2xl font-bold transition-colors cursor-pointer text-center"
+                          >
+                            Back
+                          </button>
+                          <button
+                            disabled={submitting}
+                            onClick={handleApplyLoan}
+                            className="flex-1 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center"
+                          >
+                            {submitting ? 'Submitting...' : 'Apply Now'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 3: Success Screen */}
+                    {wizardStep === 3 && successData && (
+                      <div className="text-center space-y-4 py-4">
+                        <div className="w-16 h-16 bg-primary/20 dark:bg-secondary/20 text-primary dark:text-secondary rounded-full flex items-center justify-center mx-auto mb-2 text-2xl font-bold">
+                          ✓
+                        </div>
+                        <h4 className="font-headline font-bold text-xl text-on-surface dark:text-white">Loan Application Submitted!</h4>
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400 max-w-sm mx-auto">
+                          Your application has been received with status <strong className="text-primary font-bold">Pending Review</strong>. Please visit the cooperative office to complete physical requirements.
+                        </p>
+                        <div className="pt-4">
+                          <button
+                            onClick={closeModal}
+                            className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer"
+                          >
+                            Go Back to Dashboard
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ----------------- INVESTMENT WIZARD ----------------- */}
+                {activeModal === 'investment' && (
+                  <div className="space-y-6">
+                    {/* Step 1 & 2: Forms */}
+                    {wizardStep === 1 && (
+                      <div className="space-y-6">
+                        {/* Type Picker */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Select Asset Portfolio Type:</label>
+                          <div className="grid grid-cols-2 gap-4">
+                            <button
+                              type="button"
+                              onClick={() => setInvestmentType('capital')}
+                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'capital'
+                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
+                                : 'border-outline-variant/65'
+                                }`}
+                            >
+                              <Building className="w-6 h-6 mx-auto mb-2 text-neutral-600 dark:text-neutral-300" />
+                              <span className="font-bold text-sm block">Share Capital</span>
+                              <span className="text-[10px] text-neutral-500 block mt-0.5">Coop equity shares</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setInvestmentType('fixed_deposit')}
+                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'fixed_deposit'
+                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
+                                : 'border-outline-variant/65'
+                                }`}
+                            >
+                              <PiggyBank className="w-6 h-6 mx-auto mb-2 text-neutral-600 dark:text-neutral-300" />
+                              <span className="font-bold text-sm block">Fixed Deposit</span>
+                              <span className="text-[10px] text-neutral-500 block mt-0.5">High-yield placements</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Amount Input */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Enter Placement Amount (₱):</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 5000"
+                            value={investmentAmount}
+                            onChange={(e) => setInvestmentAmount(e.target.value)}
+                            className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent font-bold text-lg focus:outline-none focus:border-primary"
+                          />
+                        </div>
+
+                        {/* Fixed Deposit extra fields */}
+                        {investmentType === 'fixed_deposit' && (
+                          <div className="space-y-4 p-4 border border-outline-variant/50 rounded-2xl bg-neutral/5">
+                            <div className="space-y-1">
+                              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Rate Yield</label>
+                              <div className="font-bold text-sm">5.0% Per Annum</div>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Duration Term:</label>
+                              <select
+                                value={fdDuration}
+                                onChange={(e) => setFdDuration(e.target.value)}
+                                className="w-full px-3 py-2 border border-outline-variant/65 rounded-xl bg-transparent focus:outline-none"
+                              >
+                                <option value="6">6 Months Placement</option>
+                                <option value="12">12 Months (1 Year)</option>
+                                <option value="24">24 Months (2 Years)</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        <button
+                          disabled={submitting || !investmentAmount}
+                          onClick={handleInitiateInvestment}
+                          className="w-full mt-4 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-base"
+                        >
+                          {submitting ? 'Processing...' : 'Submit Placement'}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Step 3: Success Screen with payment reference instruction */}
+                    {wizardStep === 3 && successData && (
+                      <div className="space-y-5 text-center py-2">
+                        <div className="w-16 h-16 bg-primary/20 dark:bg-secondary/20 text-primary dark:text-secondary rounded-full flex items-center justify-center mx-auto mb-2 text-2xl font-bold">
+                          ✓
+                        </div>
+                        <h4 className="font-headline font-bold text-xl text-on-surface dark:text-white">Transaction Requested!</h4>
+
+                        {/* Reference Ticket info */}
+                        <div className="p-5 border border-dashed border-outline-variant rounded-2xl bg-neutral/5 text-left space-y-2.5 max-w-sm mx-auto">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-neutral-500 font-bold uppercase">Transaction Type:</span>
+                            <span className="font-bold uppercase text-primary">{successData.type === 'capital' ? 'Share Capital' : 'Fixed Deposit'}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-neutral-500 font-bold uppercase">Payment Code:</span>
+                            <span className="font-mono font-bold text-sm tracking-wider">{successData.reference_code}</span>
+                          </div>
+                          <div className="flex justify-between text-xs pt-1 border-t border-outline-variant/30">
+                            <span className="text-neutral-500 font-bold uppercase">Amount Due:</span>
+                            <span className="font-extrabold text-base text-on-surface dark:text-white">{formatCurrency(successData.amount)}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-neutral-600 dark:text-neutral-400 space-y-1 max-w-md mx-auto pt-2">
+                          <p className="font-semibold text-on-surface dark:text-white">How to settle your deposit:</p>
+                          <p>1. Present this payment code over-the-counter to the cooperative cashier.</p>
+                          <p>2. Keep your transaction receipt until the cashier updates your ledger balance.</p>
+                        </div>
+
+                        <div className="pt-4">
+                          <button
+                            onClick={closeModal}
+                            className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer"
+                          >
+                            Finish
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ----------------- APPOINTMENT WIZARD ----------------- */}
+                {activeModal === 'appointment' && (
+                  <div className="space-y-6">
+                    {wizardStep === 1 && (
+                      <div className="space-y-5">
+                        {/* Purpose Selection */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Purpose of Consultation:</label>
+                          <select
+                            value={appointmentPurpose}
+                            onChange={(e) => setAppointmentPurpose(e.target.value)}
+                            className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent focus:outline-none focus:border-primary text-base font-medium"
+                          >
+                            <option value="Loan Application Consultation">Discuss a Loan Application</option>
+                            <option value="Fixed Deposit Account Placement">Open a new Fixed Deposit</option>
+                            <option value="Capital Placement Deposit">Share Capital Deposit</option>
+                            <option value="General Inquiry">General Cooperative Inquiry</option>
+                          </select>
+                        </div>
+
+                        {/* Date Selection */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Select Date:</label>
+                          <input
+                            type="date"
+                            min={new Date(Date.now() + 86400000).toISOString().split('T')[0]} // Min is tomorrow
+                            value={appointmentDate}
+                            onChange={(e) => setAppointmentDate(e.target.value)}
+                            className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent focus:outline-none focus:border-primary text-base font-medium"
+                          />
+                        </div>
+
+                        {/* Time Slot Toggle */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400 font-label">Select Preferred Schedule Time:</label>
+                          <div className="grid grid-cols-2 gap-4">
+                            <button
+                              type="button"
+                              onClick={() => setAppointmentSlot('morning')}
+                              className={`py-3 rounded-2xl border font-bold text-sm text-center transition-all ${appointmentSlot === 'morning'
+                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
+                                : 'border-outline-variant/65'
+                                }`}
+                            >
+                              Morning (8:00 AM - 12:00 PM)
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setAppointmentSlot('afternoon')}
+                              className={`py-3 rounded-2xl border font-bold text-sm text-center transition-all ${appointmentSlot === 'afternoon'
+                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
+                                : 'border-outline-variant/65'
+                                }`}
+                            >
+                              Afternoon (1:00 PM - 5:00 PM)
+                            </button>
+                          </div>
+                        </div>
+
+                        <button
+                          disabled={submitting || !appointmentDate}
+                          onClick={handleBookAppointment}
+                          className="w-full mt-4 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-base"
+                        >
+                          {submitting ? 'Booking...' : 'Confirm Appointment Booking'}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Step 3: Success Screen */}
+                    {wizardStep === 3 && successData && (
+                      <div className="text-center space-y-4 py-4">
+                        <div className="w-16 h-16 bg-primary/20 dark:bg-secondary/20 text-primary dark:text-secondary rounded-full flex items-center justify-center mx-auto mb-2 text-2xl font-bold">
+                          ✓
+                        </div>
+                        <h4 className="font-headline font-bold text-xl text-on-surface dark:text-white">Appointment Scheduled!</h4>
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400 max-w-sm mx-auto">
+                          Your appointment for <strong className="text-on-surface dark:text-white font-semibold">{successData.purpose}</strong> has been successfully booked on <strong className="text-on-surface dark:text-white font-semibold">{successData.appointment_date}</strong> ({successData.time_slot}).
+                        </p>
+                        <div className="pt-4">
+                          <button
+                            onClick={closeModal}
+                            className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer"
+                          >
+                            Finish
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

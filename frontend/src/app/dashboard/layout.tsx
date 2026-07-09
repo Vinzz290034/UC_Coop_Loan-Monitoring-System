@@ -24,29 +24,20 @@ import {
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import CountdownTimer from '@/components/CountdownTimer';
+import { BreadcrumbProvider, useBreadcrumb } from '@/context/BreadcrumbContext';
 
-export default function DashboardLayout({
+function DashboardLayoutContent({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, logout, loading } = useAuth();
+  const { user, logout } = useAuth();
   const pathname = usePathname();
+  const { breadcrumbLabels } = useBreadcrumb();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background dark:bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary dark:border-secondary/20 dark:border-t-secondary animate-spin"></div>
-          <p className="font-body text-xs font-semibold text-neutral-600 dark:text-neutral-300">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (!user) {
-    return null; // AuthContext handles redirect to /login
+    return null;
   }
 
   // Navigation Links based on role
@@ -104,12 +95,11 @@ export default function DashboardLayout({
   ];
 
   return (
-    <div className="min-h-screen flex bg-background dark:bg-background transition-colors duration-200">
+    <div className="h-screen flex bg-background dark:bg-background transition-colors duration-200">
       {/* Sidebar Navigation */}
       <aside
-        className={`bg-white dark:bg-surface-container-low border-r border-outline-variant/65 flex flex-col transition-all duration-300 ${
-          sidebarCollapsed ? 'w-20' : 'w-64'
-        }`}
+        className={`h-screen bg-white dark:bg-surface-container-low border-r border-outline-variant/65 flex flex-col transition-all duration-300 ${sidebarCollapsed ? 'w-20' : 'w-64'
+          }`}
       >
         {/* Brand Banner */}
         <div className="h-20 border-b border-outline-variant/50 flex items-center justify-between px-6">
@@ -167,11 +157,10 @@ export default function DashboardLayout({
                 <Link
                   key={item.path}
                   href={item.path}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                    isActive
-                      ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
-                      : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 dark:hover:bg-neutral/10 hover:text-on-surface dark:hover:text-white'
-                  }`}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive
+                    ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 dark:hover:bg-neutral/10 hover:text-on-surface dark:hover:text-white'
+                    }`}
                   title={item.name}
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
@@ -191,7 +180,7 @@ export default function DashboardLayout({
             <LogOut className="w-5 h-5 flex-shrink-0" />
             {!sidebarCollapsed && <span className="font-body">Log Out</span>}
           </button>
-          
+
           {!sidebarCollapsed && (
             <div className="pt-2 text-center text-[10px] text-neutral-500 dark:text-neutral-400 font-bold border-t border-outline-variant/20 flex items-center justify-center gap-1.5 select-none">
               <Cpu className="w-3.5 h-3.5 text-primary dark:text-secondary animate-pulse" />
@@ -209,13 +198,17 @@ export default function DashboardLayout({
             <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white capitalize">
               {pathname === '/dashboard'
                 ? 'System Dashboard'
-                : pathname.split('/').slice(2).join(' / ')}
+                : pathname
+                  .split('/')
+                  .slice(2)
+                  .map((segment) => breadcrumbLabels[segment] || segment)
+                  .join(' / ')}
             </h2>
           </div>
-          
+
           <div className="flex items-center gap-4">
-            {/* Session countdown timer */}
-            <CountdownTimer initialSeconds={3600} onComplete={logout} />
+            {/* Session countdown timer - updated to 900 seconds (15 minutes) */}
+            <CountdownTimer initialSeconds={900} onComplete={logout} />
 
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral/5 dark:bg-neutral/10 border border-outline-variant/30 text-xs text-neutral-600 dark:text-neutral-300">
               <Calendar className="w-3.5 h-3.5" />
@@ -240,3 +233,29 @@ export default function DashboardLayout({
     </div>
   );
 }
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background dark:bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary dark:border-secondary/20 dark:border-t-secondary animate-spin"></div>
+          <p className="font-body text-xs font-semibold text-neutral-600 dark:text-neutral-300">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <BreadcrumbProvider>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </BreadcrumbProvider>
+  );
+}
+

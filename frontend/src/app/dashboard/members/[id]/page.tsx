@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useBreadcrumb } from '@/context/BreadcrumbContext';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import {
   ArrowLeft,
@@ -35,6 +36,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   const { user } = useAuth();
   const resolvedParams = use(params);
   const memberId = resolvedParams.id;
+  const { setBreadcrumbLabel } = useBreadcrumb();
 
   const [member, setMember] = useState<any>(null);
   const [balances, setBalances] = useState<any>(null);
@@ -69,6 +71,9 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
       const profileRes = await api.get(`/members/${memberId}`);
       const mData = profileRes.data.data;
       setMember(mData);
+      if (mData?.first_name) {
+        setBreadcrumbLabel(memberId, `${mData.first_name} ${mData.last_name}`);
+      }
       
       // Initialize edit fields
       setFirstName(mData.first_name || '');

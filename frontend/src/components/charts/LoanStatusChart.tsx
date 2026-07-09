@@ -79,7 +79,7 @@ export default function LoanStatusChart({ data }: LoanStatusChartProps) {
               fontWeight: 600,
               boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
             }}
-            formatter={(value: number, name: string) => [`${value} loan(s)`, name]}
+            formatter={(value: any, name: any) => [`${value} loan(s)`, name]}
           />
           <Legend
             verticalAlign="bottom"

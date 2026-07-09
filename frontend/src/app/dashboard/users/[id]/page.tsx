@@ -21,12 +21,14 @@ import {
   Activity,
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
+import { useBreadcrumb } from '@/context/BreadcrumbContext';
 
 export default function UserDetailPage() {
   const { user } = useAuth();
   const router = useRouter();
   const params = useParams();
   const userId = params.id as string;
+  const { setBreadcrumbLabel } = useBreadcrumb();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,9 +51,12 @@ export default function UserDetailPage() {
         setError(null);
 
         // Fetch user activity from audit controller
-        const activityRes = await api.get(`/audit/user/${userId}/activity?limit=50`);
+        const activityRes = await api.get(`/audit/user/${userId}/activity?limit=55`);
         setUserData(activityRes.data.user);
         setActivityData(activityRes.data);
+        if (activityRes.data.user?.username) {
+          setBreadcrumbLabel(userId, activityRes.data.user.username);
+        }
 
         // If user has a member profile, fetch financial summary
         const usersRes = await api.get(`/auth/users?search=`);
