@@ -71,13 +71,13 @@ export default function CountdownTimer({
 
   return (
     <div
-      className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-xs font-semibold ${
+      className={`flex items-center gap-2.5 px-4 py-2 rounded-full border transition-all text-sm font-semibold ${
         isLow
           ? 'bg-tertiary/10 border-tertiary text-tertiary animate-pulse'
           : 'bg-primary/10 border-primary text-primary'
       }`}
     >
-      <Timer className="w-3.5 h-3.5" />
+      <Timer className="w-4 h-4" />
       <span>{label}</span>
       <span className="font-mono text-sm tracking-wider font-bold">
         {formatTime(seconds)} minutes
