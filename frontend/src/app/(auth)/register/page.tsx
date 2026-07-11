@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -12,6 +12,11 @@ import {
   EyeOff,
   CheckCircle2,
   UserPlus,
+  Mail,
+  ShieldCheck,
+  ArrowRight,
+  RotateCw,
+  Info,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import Link from 'next/link';
@@ -109,30 +114,175 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
+// ─── Step Progress Indicator ──────────────────────────────────────────────────
+function StepIndicator({ currentStep }: { currentStep: number }) {
+  const steps = [
+    { label: 'Account Info', num: 1 },
+    { label: 'Verify Email', num: 2 },
+    { label: 'Complete', num: 3 },
+  ];
+
+  return (
+    <div className="flex items-center justify-center gap-2 mb-6">
+      {steps.map((step, i) => (
+        <React.Fragment key={step.num}>
+          <div className="flex items-center gap-1.5">
+            <div
+              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
+                currentStep >= step.num
+                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                  : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
+              }`}
+            >
+              {currentStep > step.num ? <CheckCircle2 className="w-4 h-4" /> : step.num}
+            </div>
+            <span
+              className={`text-[10px] font-bold hidden sm:inline ${
+                currentStep >= step.num
+                  ? 'text-primary dark:text-secondary'
+                  : 'text-neutral-400 dark:text-neutral-500'
+              }`}
+            >
+              {step.label}
+            </span>
+          </div>
+          {i < steps.length - 1 && (
+            <div
+              className={`w-8 sm:w-12 h-0.5 rounded transition-all duration-300 ${
+                currentStep > step.num
+                  ? 'bg-primary dark:bg-secondary'
+                  : 'bg-neutral-200 dark:bg-neutral-700'
+              }`}
+            />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ─── OTP Input Component ──────────────────────────────────────────────────────
+function OtpInput({
+  value,
+  onChange,
+  length = 6,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  length?: number;
+}) {
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleChange = (index: number, char: string) => {
+    if (char && !/^\d$/.test(char)) return; // Only digits
+    const newVal = value.split('');
+    newVal[index] = char;
+    const result = newVal.join('').slice(0, length);
+    onChange(result);
+    if (char && index < length - 1) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !value[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
+    onChange(pasted);
+    const nextIndex = Math.min(pasted.length, length - 1);
+    inputRefs.current[nextIndex]?.focus();
+  };
+
+  return (
+    <div className="flex gap-2 sm:gap-3 justify-center">
+      {Array.from({ length }, (_, i) => (
+        <input
+          key={i}
+          ref={(el) => { inputRefs.current[i] = el; }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={value[i] || ''}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          onPaste={i === 0 ? handlePaste : undefined}
+          className="w-11 h-13 sm:w-12 sm:h-14 text-center text-xl font-bold font-mono bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/30 dark:focus:ring-secondary/30 focus:border-primary dark:focus:border-secondary outline-none transition-all text-on-surface dark:text-white"
+          autoComplete="one-time-code"
+        />
+      ))}
+    </div>
+  );
+}
+
 // ─── Register Page ────────────────────────────────────────────────────────────
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { memberRegister, verifyOtp, resendOtp } = useAuth();
   const router = useRouter();
 
+  // Multi-step state
+  const [step, setStep] = useState(1);
+
+  // Step 1 — form fields
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // Step 2 — OTP
+  const [otpValue, setOtpValue] = useState('');
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [otpTimer, setOtpTimer] = useState(600); // 10 min in seconds
+
+  // Shared state
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const interval = setInterval(() => setResendCooldown((v) => v - 1), 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  // OTP expiry timer
+  useEffect(() => {
+    if (step !== 2 || otpTimer <= 0) return;
+    const interval = setInterval(() => setOtpTimer((v) => v - 1), 1000);
+    return () => clearInterval(interval);
+  }, [step, otpTimer]);
+
+  const formatTimer = (s: number) => {
+    const min = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${min}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  // ─── Step 1: Submit registration form ───────────────────────────────────────
+  const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!username || !password || !confirmPassword) {
+    if (!firstName || !lastName || !email || !username || !password || !confirmPassword) {
       setError('Please fill in all fields.');
       return;
     }
     if (username.length < 3) {
       setError('Username must be at least 3 characters long.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      setError('Username can only contain letters, numbers, and underscores.');
       return;
     }
     if (password.length < 6) {
@@ -146,10 +296,60 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
-      await register(username, password);
-      setSuccess(true);
+      const result = await memberRegister({
+        first_name: firstName,
+        last_name: lastName,
+        username,
+        password,
+        email,
+      });
+      setPendingEmail(result.email);
+      setDevOtp(result._dev_otp || null);
+      setResendCooldown(60);
+      setOtpTimer(600);
+      setStep(2);
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ─── Step 2: Verify OTP ─────────────────────────────────────────────────────
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (otpValue.length !== 6) {
+      setError('Please enter the complete 6-digit verification code.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await verifyOtp(pendingEmail, otpValue);
+      setStep(3);
+    } catch (err: any) {
+      setError(err.message || 'Verification failed. Please try again.');
+      setOtpValue('');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ─── Resend OTP ─────────────────────────────────────────────────────────────
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || submitting) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const result = await resendOtp(pendingEmail);
+      setDevOtp(result._dev_otp || null);
+      setResendCooldown(60);
+      setOtpTimer(600);
+      setOtpValue('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend code.');
     } finally {
       setSubmitting(false);
     }
@@ -182,34 +382,12 @@ export default function RegisterPage() {
         </div>
 
         <div className="glass-card rounded-3xl p-8 md:p-10 border border-outline-variant/70 shadow-2xl bg-white/95 dark:bg-neutral-900/95">
+          <StepIndicator currentStep={step} />
 
-          {success ? (
-            /* ── Success State ── */
-            <div className="space-y-6 text-center py-4">
-              <div className="flex items-center justify-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 dark:bg-secondary/10 flex items-center justify-center">
-                  <CheckCircle2 className="w-9 h-9 text-primary dark:text-secondary" />
-                </div>
-              </div>
-              <div>
-                <h2 className="font-headline text-2xl font-extrabold text-on-surface dark:text-white mb-2">
-                  Account Created!
-                </h2>
-                <p className="font-body text-sm text-on-surface/70 dark:text-neutral-300">
-                  Your cooperative account for <span className="font-bold text-primary dark:text-secondary">@{username}</span> has been registered as a member.
-                </p>
-              </div>
-              <button
-                onClick={() => router.push('/login')}
-                className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-extrabold rounded-full shadow-lg hover:scale-[1.01] active:scale-95 transition-all"
-              >
-                Proceed to Login
-              </button>
-            </div>
-          ) : (
-            /* ── Registration Form ── */
+          {/* ═══════════════════ STEP 1: Registration Form ═══════════════════ */}
+          {step === 1 && (
             <>
-              <header className="mb-8">
+              <header className="mb-6">
                 <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
                   Create Account
                 </h2>
@@ -218,7 +396,7 @@ export default function RegisterPage() {
                 </p>
               </header>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleStep1Submit} className="space-y-4">
                 {error && (
                   <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs font-bold flex items-center gap-2.5">
                     <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -226,12 +404,66 @@ export default function RegisterPage() {
                   </div>
                 )}
 
+                {/* Name Fields — side by side */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-firstname">
+                      First Name
+                    </label>
+                    <input
+                      type="text"
+                      id="reg-firstname"
+                      required
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="Juan"
+                      className="w-full px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-lastname">
+                      Last Name
+                    </label>
+                    <input
+                      type="text"
+                      id="reg-lastname"
+                      required
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Dela Cruz"
+                      className="w-full px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-email">
+                    Email Address
+                  </label>
+                  <div className="relative group">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">
+                      <Mail className="w-5 h-5" />
+                    </span>
+                    <input
+                      type="email"
+                      id="reg-email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="member@email.com"
+                      className="w-full pl-12 pr-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                    />
+                  </div>
+                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400 px-1">
+                    A verification code will be sent to this email.
+                  </p>
+                </div>
+
                 {/* Username */}
-                <div className="space-y-2">
-                  <label
-                    className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1"
-                    htmlFor="reg-username"
-                  >
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-username">
                     Username
                   </label>
                   <div className="relative group">
@@ -246,7 +478,7 @@ export default function RegisterPage() {
                       value={username}
                       onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ''))}
                       placeholder="Choose a unique username"
-                      className="w-full pl-12 pr-4 py-3.5 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                      className="w-full pl-12 pr-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
                     />
                   </div>
                   <p className="text-[10px] text-neutral-500 dark:text-neutral-400 px-1">
@@ -255,11 +487,8 @@ export default function RegisterPage() {
                 </div>
 
                 {/* Password */}
-                <div className="space-y-2">
-                  <label
-                    className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1"
-                    htmlFor="reg-password"
-                  >
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-password">
                     Password
                   </label>
                   <div className="relative group">
@@ -274,7 +503,7 @@ export default function RegisterPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full pl-12 pr-12 py-3.5 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                      className="w-full pl-12 pr-12 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
                     />
                     <button
                       type="button"
@@ -289,11 +518,8 @@ export default function RegisterPage() {
                 </div>
 
                 {/* Confirm Password */}
-                <div className="space-y-2">
-                  <label
-                    className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1"
-                    htmlFor="reg-confirm"
-                  >
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-confirm">
                     Confirm Password
                   </label>
                   <div className="relative group">
@@ -308,7 +534,7 @@ export default function RegisterPage() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter your password"
-                      className={`w-full pl-12 pr-12 py-3.5 bg-neutral-50 dark:bg-neutral-800/50 border-2 rounded-xl focus:ring-2 outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500 ${
+                      className={`w-full pl-12 pr-12 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 rounded-xl focus:ring-2 outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500 ${
                         confirmPassword && password !== confirmPassword
                           ? 'border-tertiary focus:border-tertiary focus:ring-tertiary/20'
                           : confirmPassword && password === confirmPassword
@@ -347,15 +573,18 @@ export default function RegisterPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-extrabold rounded-full shadow-lg hover:shadow-primary/25 dark:hover:shadow-secondary/25 hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center cursor-pointer"
+                  className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-extrabold rounded-full shadow-lg hover:shadow-primary/25 dark:hover:shadow-secondary/25 hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {submitting ? (
                     <>
-                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin mr-2" />
-                      Creating account…
+                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Sending verification code…
                     </>
                   ) : (
-                    'Create Cooperative Account'
+                    <>
+                      Continue
+                      <ArrowRight className="w-4 h-4" />
+                    </>
                   )}
                 </button>
 
@@ -370,6 +599,119 @@ export default function RegisterPage() {
                 </p>
               </form>
             </>
+          )}
+
+          {/* ═══════════════════ STEP 2: OTP Verification ═══════════════════ */}
+          {step === 2 && (
+            <>
+              <div className="text-center space-y-3 mb-6">
+                <div className="flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 dark:bg-secondary/10 flex items-center justify-center">
+                    <ShieldCheck className="w-9 h-9 text-primary dark:text-secondary" />
+                  </div>
+                </div>
+                <div>
+                  <h2 className="font-headline text-2xl font-extrabold text-on-surface dark:text-white mb-1">
+                    Verify Your Email
+                  </h2>
+                  <p className="font-body text-sm text-on-surface/70 dark:text-neutral-300">
+                    We sent a 6-digit code to{' '}
+                    <span className="font-bold text-primary dark:text-secondary">{pendingEmail}</span>
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleVerifyOtp} className="space-y-5">
+                {error && (
+                  <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs font-bold flex items-center gap-2.5">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                {/* Dev mode OTP display */}
+                {devOtp && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-xs text-blue-700 dark:text-blue-300 font-bold flex items-start gap-2">
+                    <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Dev Mode:</strong> Your OTP is <span className="font-mono text-sm bg-blue-100 dark:bg-blue-800/50 px-1.5 py-0.5 rounded">{devOtp}</span>
+                    </span>
+                  </div>
+                )}
+
+                {/* OTP Input */}
+                <OtpInput value={otpValue} onChange={setOtpValue} />
+
+                {/* Timer + Resend */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className={`font-bold ${otpTimer <= 60 ? 'text-tertiary' : 'text-neutral-500 dark:text-neutral-400'}`}>
+                    Code expires in {formatTimer(otpTimer)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resendCooldown > 0 || submitting}
+                    className="flex items-center gap-1 text-primary dark:text-secondary font-bold hover:underline disabled:text-neutral-400 dark:disabled:text-neutral-500 disabled:no-underline disabled:cursor-not-allowed transition-colors"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+                  </button>
+                </div>
+
+                {/* Verify Button */}
+                <button
+                  type="submit"
+                  disabled={submitting || otpValue.length !== 6}
+                  className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-extrabold rounded-full shadow-lg hover:shadow-primary/25 dark:hover:shadow-secondary/25 hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {submitting ? (
+                    <>
+                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                      Verifying…
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      Verify & Create Account
+                    </>
+                  )}
+                </button>
+
+                {/* Back button */}
+                <button
+                  type="button"
+                  onClick={() => { setStep(1); setError(null); setOtpValue(''); }}
+                  className="w-full text-center text-xs text-on-surface/50 dark:text-neutral-400 font-semibold hover:text-primary dark:hover:text-secondary transition-colors"
+                >
+                  ← Back to registration form
+                </button>
+              </form>
+            </>
+          )}
+
+          {/* ═══════════════════ STEP 3: Success ═══════════════════ */}
+          {step === 3 && (
+            <div className="space-y-6 text-center py-4">
+              <div className="flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-primary/10 dark:bg-secondary/10 flex items-center justify-center">
+                  <CheckCircle2 className="w-9 h-9 text-primary dark:text-secondary" />
+                </div>
+              </div>
+              <div>
+                <h2 className="font-headline text-2xl font-extrabold text-on-surface dark:text-white mb-2">
+                  Account Created!
+                </h2>
+                <p className="font-body text-sm text-on-surface/70 dark:text-neutral-300">
+                  Your cooperative account for <span className="font-bold text-primary dark:text-secondary">@{username}</span> has been verified and registered as a member.
+                </p>
+              </div>
+              <button
+                onClick={() => router.push('/login')}
+                className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-extrabold rounded-full shadow-lg hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
+              >
+                Proceed to Login
+              </button>
+            </div>
           )}
         </div>
 

@@ -19,12 +19,23 @@ export interface User {
   } | null;
 }
 
+interface RegisterPayload {
+  first_name: string;
+  last_name: string;
+  username: string;
+  password: string;
+  email: string;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<User>;
   register: (username: string, password: string) => Promise<void>;
+  memberRegister: (data: RegisterPayload) => Promise<{ email: string; _dev_otp?: string }>;
+  verifyOtp: (email: string, otp_code: string) => Promise<void>;
+  resendOtp: (email: string) => Promise<{ _dev_otp?: string }>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -117,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Legacy register — used by admin-created accounts (calls protected endpoint)
   const register = async (username: string, password: string): Promise<void> => {
     try {
       await api.post('/auth/register', {
@@ -126,6 +138,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     } catch (error: any) {
       const message = error.response?.data?.error?.message || error.response?.data?.message || 'Registration failed.';
+      throw new Error(message);
+    }
+  };
+
+  // Member self-registration — Step 1: submit form, receive OTP via email
+  const memberRegister = async (data: RegisterPayload): Promise<{ email: string; _dev_otp?: string }> => {
+    try {
+      const response = await api.post('/auth/member-register', data);
+      return {
+        email: response.data.email,
+        _dev_otp: response.data._dev_otp,
+      };
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.response?.data?.message || 'Registration failed.';
+      throw new Error(message);
+    }
+  };
+
+  // Member self-registration — Step 2: verify OTP
+  const verifyOtp = async (email: string, otp_code: string): Promise<void> => {
+    try {
+      await api.post('/auth/verify-otp', { email, otp_code });
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.response?.data?.message || 'Verification failed.';
+      throw new Error(message);
+    }
+  };
+
+  // Resend OTP for pending registration
+  const resendOtp = async (email: string): Promise<{ _dev_otp?: string }> => {
+    try {
+      const response = await api.post('/auth/resend-otp', { email });
+      return {
+        _dev_otp: response.data._dev_otp,
+      };
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.response?.data?.message || 'Failed to resend code.';
       throw new Error(message);
     }
   };
@@ -148,6 +197,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         login,
         register,
+        memberRegister,
+        verifyOtp,
+        resendOtp,
         logout,
         isAuthenticated: !!user,
       }}
