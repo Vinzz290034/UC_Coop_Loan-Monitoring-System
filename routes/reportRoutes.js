@@ -2,7 +2,8 @@ import express from 'express';
 import {
   getCashDisbursementReport,
   getLoanMonitoringReport,
-  getTransactionReport
+  getTransactionReport,
+  getRevenueCollectionReport
 } from '../controllers/reportController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -15,5 +16,6 @@ router.use(restrictTo('admin', 'manager'));
 router.get('/cash-disbursement', getCashDisbursementReport);
 router.get('/loan-monitoring', getLoanMonitoringReport);
 router.get('/transactions', getTransactionReport);
+router.get('/revenue', getRevenueCollectionReport);
 
 export default router;

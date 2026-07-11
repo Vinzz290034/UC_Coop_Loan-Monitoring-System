@@ -265,3 +265,91 @@ export const getTransactionReport = async (req, res, next) => {
     next(error);
   }
 };
+
+// ==========================================
+// 4. REVENUE EARNINGS & INTERST COLLECTION REPORT
+// ==========================================
+
+// @desc    Get Revenue Earnings and Collection Performance Report (JSON or Excel)
+// @route   GET /api/reports/revenue
+// @access  Protected (Admin, Manager)
+export const getRevenueCollectionReport = async (req, res, next) => {
+  try {
+    const dbQuery = `
+      SELECT 
+        lp.name as product_name,
+        COUNT(DISTINCT l.id) as active_loans_count,
+        COALESCE(SUM(rs.principal_due), 0) as expected_principal,
+        COALESCE(SUM(rs.interest_due), 0) as expected_interest,
+        COALESCE(SUM(rs.principal_paid), 0) as collected_principal,
+        COALESCE(SUM(rs.interest_paid), 0) as collected_revenue_interest,
+        (COALESCE(SUM(rs.interest_due), 0) - COALESCE(SUM(rs.interest_paid), 0)) as uncollected_interest_variance
+      FROM loan_products lp
+      JOIN loans l ON l.loan_product_id = lp.id
+      LEFT JOIN repayment_schedules rs ON rs.loan_id = l.id
+      WHERE l.status IN ('disbursed', 'fully_paid', 'defaulted')
+      GROUP BY lp.id, lp.name
+      ORDER BY lp.name ASC
+    `;
+
+    const result = await query(dbQuery);
+
+    const formattedData = result.rows.map(row => {
+      const expectedInterest = parseFloat(row.expected_interest);
+      const collectedInterest = parseFloat(row.collected_revenue_interest);
+      
+      // Calculate individual product realization rate percentages
+      const realizationRate = expectedInterest > 0 
+        ? Math.round((collectedInterest / expectedInterest) * 10000) / 100 
+        : 100.00;
+
+      return {
+        product_name: row.product_name,
+        active_loans_count: parseInt(row.active_loans_count, 10),
+        expected_principal: parseFloat(row.expected_principal),
+        expected_interest: expectedInterest,
+        collected_principal: parseFloat(row.collected_principal),
+        collected_revenue_interest: collectedInterest,
+        uncollected_interest_variance: parseFloat(row.uncollected_interest_variance),
+        revenue_realization_rate: realizationRate + '%'
+      };
+    });
+
+    if (req.query.export === 'excel') {
+      const columns = [
+        { header: 'Loan Product Name', key: 'product_name', width: 25 },
+        { header: 'Loans Count', key: 'active_loans_count', width: 15 },
+        { header: 'Expected Principal (₱)', key: 'expected_principal', width: 22 },
+        { header: 'Expected Interest Revenue (₱)', key: 'expected_interest', width: 26 },
+        { header: 'Collected Principal (₱)', key: 'collected_principal', width: 22 },
+        { header: 'Collected Interest Gain (₱)', key: 'collected_revenue_interest', width: 26 },
+        { header: 'Outstanding Variance (₱)', key: 'uncollected_interest_variance', width: 22 },
+        { header: 'Revenue Recovery Rate', key: 'revenue_realization_rate', width: 22 }
+      ];
+
+      return await exportToExcel(
+        res,
+        'Revenue_Collection_Report',
+        'Revenue_Performance',
+        columns,
+        formattedData
+      );
+    }
+
+    // Calculate system-wide summary metrics for JSON response
+    const totalRevenueEarned = formattedData.reduce((acc, row) => acc + row.collected_revenue_interest, 0);
+    const totalPrincipalRecovered = formattedData.reduce((acc, row) => acc + row.collected_principal, 0);
+
+    res.status(200).json({
+      success: true,
+      summary: {
+        total_portfolio_principal_recovered: Math.round(totalPrincipalRecovered * 100) / 100,
+        total_clean_interest_revenue_earned: Math.round(totalRevenueEarned * 100) / 100
+      },
+      count: formattedData.length,
+      data: formattedData
+    });
+  } catch (error) {
+    next(error);
+  }
+};
