@@ -295,7 +295,7 @@ export default function OverviewPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <KpiCard label="Share Capital" value={formatCurrency(balances.share_capital)} icon={Building} description="Cumulative equity contributions" />
             <KpiCard label="Fixed Deposit" value={formatCurrency(balances.fixed_deposits)} icon={PiggyBank} description="High-yield timed placements" />
-            <KpiCard label="Coop Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Member-backed investment portfolios" />
+            <KpiCard label="MyCooP Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Member-backed investment portfolios" />
             <KpiCard label="Total Net Assets" value={formatCurrency(balances.total_assets)} icon={ShieldCheck} variant="primary" description="Total non-loan asset valuation" />
           </div>
         </div>
