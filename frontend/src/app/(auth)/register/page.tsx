@@ -129,16 +129,16 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
           <div className="flex items-center gap-1.5">
             <div
               className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${currentStep >= step.num
-                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
-                  : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
+                ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400'
                 }`}
             >
               {currentStep > step.num ? <CheckCircle2 className="w-4 h-4" /> : step.num}
             </div>
             <span
               className={`text-[10px] font-bold hidden sm:inline ${currentStep >= step.num
-                  ? 'text-primary dark:text-secondary'
-                  : 'text-neutral-400 dark:text-neutral-500'
+                ? 'text-primary dark:text-secondary'
+                : 'text-neutral-400 dark:text-neutral-500'
                 }`}
             >
               {step.label}
@@ -147,8 +147,8 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
           {i < steps.length - 1 && (
             <div
               className={`w-8 sm:w-12 h-0.5 rounded transition-all duration-300 ${currentStep > step.num
-                  ? 'bg-primary dark:bg-secondary'
-                  : 'bg-neutral-200 dark:bg-neutral-700'
+                ? 'bg-primary dark:bg-secondary'
+                : 'bg-neutral-200 dark:bg-neutral-700'
                 }`}
             />
           )}
@@ -370,8 +370,8 @@ export default function RegisterPage() {
       <main className="w-full max-w-md z-10 space-y-6 pt-16 py-10">
         {/* Brand Header */}
         <div className="text-center space-y-2 flex flex-col items-center">
-          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-16 h-16 object-contain mb-2" />
-          <h1 className="font-headline text-4xl font-extrabold text-primary dark:text-secondary tracking-tight">
+          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-20 h-10 object-contain mb-1" />
+          <h1 className="font-brandname text-4xl font-bold text-primary dark:text-secondary tracking-tight">
             SynCo
           </h1>
           <p className="font-label text-xs font-extrabold text-on-surface/50 dark:text-neutral-400 uppercase tracking-widest">
@@ -533,10 +533,10 @@ export default function RegisterPage() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter your password"
                       className={`w-full pl-12 pr-12 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 rounded-xl focus:ring-2 outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500 ${confirmPassword && password !== confirmPassword
-                          ? 'border-tertiary focus:border-tertiary focus:ring-tertiary/20'
-                          : confirmPassword && password === confirmPassword
-                            ? 'border-secondary focus:border-secondary focus:ring-secondary/20'
-                            : 'border-neutral-300 dark:border-neutral-700 focus:border-primary dark:focus:border-secondary focus:ring-primary/20 dark:focus:ring-secondary/20'
+                        ? 'border-tertiary focus:border-tertiary focus:ring-tertiary/20'
+                        : confirmPassword && password === confirmPassword
+                          ? 'border-secondary focus:border-secondary focus:ring-secondary/20'
+                          : 'border-neutral-300 dark:border-neutral-700 focus:border-primary dark:focus:border-secondary focus:ring-primary/20 dark:focus:ring-secondary/20'
                         }`}
                     />
                     <button

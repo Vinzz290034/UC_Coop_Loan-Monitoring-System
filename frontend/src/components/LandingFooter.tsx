@@ -29,7 +29,7 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
           <div className="md:col-span-2 space-y-5">
             <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity w-fit">
               <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-8 h-8 object-contain" />
-              <span className="font-headline text-lg font-extrabold text-primary dark:text-secondary">SynCo</span>
+              <span className="font-brandname text-lg font-extrabold text-primary dark:text-secondary">SynCo</span>
             </Link>
             <p className="font-body text-xs text-neutral-500 dark:text-neutral-500 max-w-xs leading-relaxed">
               Institutional excellence in automated finance. Empowering the next generation of lenders with precision and reliability.

@@ -104,8 +104,8 @@ function DashboardLayoutContent({
         {/* Brand Banner */}
         <div className="h-20 border-b border-outline-variant/50 flex items-center justify-between px-6">
           {!sidebarCollapsed && (
-            <div className="font-headline font-bold text-lg text-primary dark:text-secondary flex items-center gap-2">
-              <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-5 h-5 object-contain" />
+            <div className="font-brandname font-bold text-lg text-primary dark:text-secondary flex items-center gap-1">
+              <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-10 h-5 object-contain" />
               SynCo
             </div>
           )}

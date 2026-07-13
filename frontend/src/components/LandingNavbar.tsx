@@ -30,8 +30,8 @@ export default function LandingNavbar({ activeIndex = -1 }: LandingNavbarProps) 
       <div className="flex justify-between items-center w-full px-6 md:px-12 max-w-7xl mx-auto h-20">
 
         {/* ── Logo ──────────────────────────────────────────────────── */}
-        <Link href="/" className="font-headline text-xl font-extrabold text-primary dark:text-secondary flex items-center gap-2.5 hover:opacity-90 transition-opacity">
-          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-8 h-8 object-contain" />
+        <Link href="/" className="font-brandname text-2xl font-bold text-primary dark:text-secondary flex items-center gap-1 hover:opacity-90 transition-opacity">
+          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-14 h-14 object-contain" />
           SynCo
         </Link>
 
