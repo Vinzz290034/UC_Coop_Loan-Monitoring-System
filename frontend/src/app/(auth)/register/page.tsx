@@ -369,7 +369,8 @@ export default function RegisterPage() {
 
       <main className="w-full max-w-md z-10 space-y-6 pt-16 py-10">
         {/* Brand Header */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-2 flex flex-col items-center">
+          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-16 h-16 object-contain mb-2" />
           <h1 className="font-headline text-4xl font-extrabold text-primary dark:text-secondary tracking-tight">
             SynCo
           </h1>

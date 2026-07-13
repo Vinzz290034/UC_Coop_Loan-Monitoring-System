@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: "SynCo | Loan Monitoring & Financial Management System",
   description: "Institutional-grade automated finance and loan monitoring system for cooperatives.",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/SynCo_logo.png",
   }
 };
 

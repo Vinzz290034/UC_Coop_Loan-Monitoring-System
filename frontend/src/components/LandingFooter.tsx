@@ -28,9 +28,7 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
           {/* Brand column */}
           <div className="md:col-span-2 space-y-5">
             <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity w-fit">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm">
-                <Building2 className="w-4 h-4 text-white" />
-              </div>
+              <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-8 h-8 object-contain" />
               <span className="font-headline text-lg font-extrabold text-primary dark:text-secondary">SynCo</span>
             </Link>
             <p className="font-body text-xs text-neutral-500 dark:text-neutral-500 max-w-xs leading-relaxed">

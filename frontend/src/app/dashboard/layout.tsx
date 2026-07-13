@@ -105,12 +105,12 @@ function DashboardLayoutContent({
         <div className="h-20 border-b border-outline-variant/50 flex items-center justify-between px-6">
           {!sidebarCollapsed && (
             <div className="font-headline font-bold text-lg text-primary dark:text-secondary flex items-center gap-2">
-              <Building2 className="w-5 h-5" />
+              <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-5 h-5 object-contain" />
               SynCo
             </div>
           )}
           {sidebarCollapsed && (
-            <Building2 className="w-6 h-6 text-primary dark:text-secondary mx-auto" />
+            <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-6 h-6 object-contain mx-auto" />
           )}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}

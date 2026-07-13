@@ -31,9 +31,7 @@ export default function LandingNavbar({ activeIndex = -1 }: LandingNavbarProps) 
 
         {/* ── Logo ──────────────────────────────────────────────────── */}
         <Link href="/" className="font-headline text-xl font-extrabold text-primary dark:text-secondary flex items-center gap-2.5 hover:opacity-90 transition-opacity">
-          <div className="w-8 h-8 rounded-lg bg-primary dark:bg-secondary flex items-center justify-center shadow-md shadow-primary/30 dark:shadow-secondary/30">
-            <Building2 className="w-4 h-4 text-white dark:text-neutral-950" />
-          </div>
+          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-8 h-8 object-contain" />
           SynCo
         </Link>
 
