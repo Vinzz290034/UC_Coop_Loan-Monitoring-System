@@ -106,7 +106,7 @@ function DashboardLayoutContent({
           {!sidebarCollapsed && (
             <div className="font-headline font-bold text-lg text-primary dark:text-secondary flex items-center gap-2">
               <Building2 className="w-5 h-5" />
-              LendFlow Pro
+              SynCo
             </div>
           )}
           {sidebarCollapsed && (

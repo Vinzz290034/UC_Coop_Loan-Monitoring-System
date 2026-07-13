@@ -9,7 +9,7 @@ import Script from "next/script"; // Imported Next.js Script component
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: "LendFlow Pro | Loan Monitoring & Financial Management System",
+  title: "SynCo | Loan Monitoring & Financial Management System",
   description: "Institutional-grade automated finance and loan monitoring system for cooperatives.",
   icons: {
     icon: "/favicon.ico",

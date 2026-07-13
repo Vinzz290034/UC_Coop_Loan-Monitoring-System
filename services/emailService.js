@@ -54,7 +54,7 @@ function buildOtpEmailHtml(otpCode, recipientName) {
         <!-- Header -->
         <div style="background:linear-gradient(135deg,#047857 0%,#059669 100%);padding:32px 24px;text-align:center;">
           <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">
-            LendFlow Pro
+            SynCo
           </h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:11px;text-transform:uppercase;letter-spacing:2px;font-weight:700;">
             UC Cooperative Loan Monitoring
@@ -90,7 +90,7 @@ function buildOtpEmailHtml(otpCode, recipientName) {
         <!-- Footer -->
         <div style="background:#fafafa;padding:16px 24px;border-top:1px solid #e5e5e5;text-align:center;">
           <p style="margin:0;font-size:11px;color:#a3a3a3;">
-            &copy; ${new Date().getFullYear()} LendFlow Pro &mdash; UC COOP Loan Monitoring System
+            &copy; ${new Date().getFullYear()} SynCo &mdash; UC COOP Loan Monitoring System
           </p>
         </div>
       </div>
@@ -125,11 +125,11 @@ export async function sendOtpEmail(toEmail, otpCode, recipientName = '') {
 
   // Production: send real email
   const mailOptions = {
-    from: `"LendFlow Pro" <${process.env.SMTP_USER}>`,
+    from: `"SynCo" <${process.env.SMTP_USER}>`,
     to: toEmail,
-    subject: 'Your Verification Code — LendFlow Pro',
+    subject: 'Your Verification Code — SynCo',
     html: buildOtpEmailHtml(otpCode, recipientName),
-    text: `Your LendFlow Pro verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`,
+    text: `Your SynCo verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`,
   };
 
   try {

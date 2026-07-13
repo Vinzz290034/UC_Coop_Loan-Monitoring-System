@@ -248,10 +248,10 @@ export default function LoginPage() {
         {/* Brand Header */}
         <div className="text-center space-y-2">
           <h1 className="font-headline text-4xl font-extrabold text-primary dark:text-secondary tracking-tight">
-            LendFlow Pro
+            SynCo
           </h1>
           <p className="font-label text-xs font-extrabold text-on-surface/50 dark:text-neutral-400 uppercase tracking-widest">
-            Institutional Finance Management
+            Flowing Connection. Efficient Finance
           </p>
         </div>
 

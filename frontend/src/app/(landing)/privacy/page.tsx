@@ -48,7 +48,7 @@ const SECTIONS = [
     content: (
       <>
         <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed mb-4">
-          LendFlow Pro collects high-precision data necessary to provide sophisticated loan management
+          SynCo collects high-precision data necessary to provide sophisticated loan management
           services, including institutional identifiers, transactional history, and system health metrics.
         </p>
         {/* Two-column data type grid */}
@@ -82,7 +82,7 @@ const SECTIONS = [
     content: (
       <>
         <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed mb-4">
-          LendFlow Pro processes data to ensure the technological sophistication of our loan management
+          SynCo processes data to ensure the technological sophistication of our loan management
           environment. Our primary uses include:
         </p>
         <ul className="space-y-3">
@@ -120,8 +120,8 @@ const SECTIONS = [
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
             { label: 'Cloud Infrastructure', desc: 'Secure AWS data hosting across multiple regions.' },
-            { label: 'KYC Providers',         desc: 'Verification services to ensure regulatory compliance.' },
-            { label: 'Payment Rails',          desc: 'Processing partners for ACH and wire transfers.' },
+            { label: 'KYC Providers', desc: 'Verification services to ensure regulatory compliance.' },
+            { label: 'Payment Rails', desc: 'Processing partners for ACH and wire transfers.' },
           ].map(p => (
             <div key={p.label} className="p-4 bg-white dark:bg-neutral-800/70 rounded-2xl border border-outline-variant/40 dark:border-neutral-700/60">
               <div className="font-label text-sm font-bold text-on-surface dark:text-white mb-1">{p.label}</div>
@@ -140,7 +140,7 @@ const SECTIONS = [
     content: (
       <>
         <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed mb-6">
-          LendFlow Pro employs bank-grade AES-256 encryption for all data at rest and TLS 1.3 for
+          SynCo employs bank-grade AES-256 encryption for all data at rest and TLS 1.3 for
           data in transit. We maintain SOC 2 Type II compliance and undergo quarterly penetration
           testing by independent third-party cybersecurity firms.
         </p>
@@ -148,7 +148,7 @@ const SECTIONS = [
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {[
             { title: 'End-to-End Encryption', desc: 'AES-256 at rest and TLS 1.3 in transit prevent unauthorized interception.' },
-            { title: 'Access Control',         desc: 'Strict RBAC ensures only authorized personnel access sensitive data shards.' },
+            { title: 'Access Control', desc: 'Strict RBAC ensures only authorized personnel access sensitive data shards.' },
           ].map(f => (
             <div key={f.title} className="flex gap-4">
               <div className="w-10 h-10 rounded-2xl bg-primary/10 dark:bg-primary/15 border border-primary/20 flex items-center justify-center flex-shrink-0">
@@ -180,11 +180,11 @@ const SECTIONS = [
     content: (
       <div className="space-y-3">
         {[
-          { right: 'Access',      desc: 'Request a full export of all personal data we hold about you.' },
-          { right: 'Correction',  desc: 'Ask us to correct inaccurate or outdated institutional records.' },
-          { right: 'Deletion',    desc: 'Request erasure of your data, subject to legal retention requirements.' },
+          { right: 'Access', desc: 'Request a full export of all personal data we hold about you.' },
+          { right: 'Correction', desc: 'Ask us to correct inaccurate or outdated institutional records.' },
+          { right: 'Deletion', desc: 'Request erasure of your data, subject to legal retention requirements.' },
           { right: 'Portability', desc: 'Receive your data in a machine-readable format (JSON / CSV).' },
-          { right: 'Objection',   desc: 'Opt out of non-essential data processing activities at any time.' },
+          { right: 'Objection', desc: 'Opt out of non-essential data processing activities at any time.' },
         ].map(r => (
           <div key={r.right} className="flex items-start gap-3 p-4 bg-white dark:bg-neutral-800/70 rounded-2xl border border-outline-variant/40 dark:border-neutral-700/60 hover:border-primary/30 dark:hover:border-secondary/30 transition-colors">
             <div className="w-2 h-2 rounded-full bg-primary dark:bg-secondary mt-2 flex-shrink-0" />
@@ -264,7 +264,7 @@ export default function PrivacyPage() {
             </h1>
 
             <p className="font-body text-lg text-on-surface/65 dark:text-neutral-400 max-w-2xl leading-relaxed">
-              At LendFlow Pro, we prioritize the absolute security of your institutional financial data.
+              At SynCo, we prioritize the absolute security of your institutional financial data.
               This policy outlines how we protect and manage your information with complete transparency.
             </p>
 
@@ -352,9 +352,8 @@ export default function PrivacyPage() {
                  * The `section-indicator` class is driven by the parent group.
                  */}
                 <div
-                  className={`absolute left-[-2px] top-0 w-0.5 rounded-full bg-gradient-to-b from-primary to-secondary transition-all duration-500 ${
-                    activeSection === section.id ? 'h-full' : 'h-10 group-hover:h-full'
-                  }`}
+                  className={`absolute left-[-2px] top-0 w-0.5 rounded-full bg-gradient-to-b from-primary to-secondary transition-all duration-500 ${activeSection === section.id ? 'h-full' : 'h-10 group-hover:h-full'
+                    }`}
                 />
 
                 {/* Section number + icon + title */}
@@ -381,7 +380,7 @@ export default function PrivacyPage() {
             <a href="/privacy_hero.png" target="_blank" rel="noopener noreferrer" aria-label="View full image">
               <img
                 src="/privacy_hero.png"
-                alt="Minimalist corporate workspace with a laptop showing financial charts, representing LendFlow Pro's secure data environment"
+                alt="Minimalist corporate workspace with a laptop showing financial charts, representing SynCo's secure data environment"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />
               {/* Gradient overlay for readability */}

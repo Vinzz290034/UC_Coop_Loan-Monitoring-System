@@ -13,8 +13,8 @@ interface LandingFooterProps {
 // ── Footer column config ──────────────────────────────────────────────────────
 const FOOTER_COLUMNS = [
   { title: 'Account', links: ['Personal Dashboard', 'Business Profile', 'Treasury Access'] },
-  { title: 'Company',  links: ['About Us', 'Careers', 'Privacy Policy'] },
-  { title: 'Help',     links: ['Support Center', 'API Status', 'Documentation'] },
+  { title: 'Company', links: ['About Us', 'Careers', 'Privacy Policy'] },
+  { title: 'Help', links: ['Support Center', 'API Status', 'Documentation'] },
 ] as const;
 
 export default function LandingFooter({ activeLegal = null }: LandingFooterProps) {
@@ -31,7 +31,7 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm">
                 <Building2 className="w-4 h-4 text-white" />
               </div>
-              <span className="font-headline text-lg font-extrabold text-primary dark:text-secondary">LendFlow Pro</span>
+              <span className="font-headline text-lg font-extrabold text-primary dark:text-secondary">SynCo</span>
             </Link>
             <p className="font-body text-xs text-neutral-500 dark:text-neutral-500 max-w-xs leading-relaxed">
               Institutional excellence in automated finance. Empowering the next generation of lenders with precision and reliability.
@@ -80,7 +80,7 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
         {/* ── Bottom bar ──────────────────────────────────────────── */}
         <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-neutral-400">
           <div className="flex flex-col gap-1.5 text-left w-full sm:w-auto">
-            <div>© 2026 LendFlow Pro. All rights reserved.</div>
+            <div>© 2026 SynCo. All rights reserved.</div>
             <div className="text-[10px] text-neutral-500 flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-primary dark:text-secondary" />
               Engineered &amp; Maintained by{' '}
@@ -92,21 +92,19 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
           <div className="flex gap-6 self-start sm:self-center">
             <Link
               href="/terms"
-              className={`transition-colors ${
-                activeLegal === 'terms'
-                  ? 'text-primary dark:text-secondary font-bold underline underline-offset-2'
-                  : 'hover:text-primary dark:hover:text-secondary'
-              }`}
+              className={`transition-colors ${activeLegal === 'terms'
+                ? 'text-primary dark:text-secondary font-bold underline underline-offset-2'
+                : 'hover:text-primary dark:hover:text-secondary'
+                }`}
             >
               Terms
             </Link>
             <Link
               href="/privacy"
-              className={`transition-colors ${
-                activeLegal === 'privacy'
-                  ? 'text-primary dark:text-secondary font-bold underline underline-offset-2'
-                  : 'hover:text-primary dark:hover:text-secondary'
-              }`}
+              className={`transition-colors ${activeLegal === 'privacy'
+                ? 'text-primary dark:text-secondary font-bold underline underline-offset-2'
+                : 'hover:text-primary dark:hover:text-secondary'
+                }`}
             >
               Privacy
             </Link>

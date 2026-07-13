@@ -49,7 +49,7 @@ export default function FeaturesPage() {
             System Modules &amp; Capabilities
           </h1>
           <p className="font-body text-neutral-600 dark:text-neutral-400 max-w-xl mx-auto">
-            LendFlow Pro provides institutional-grade loan calculation algorithms and audit compliance tracing built for campus cooperatives.
+            SynCo provides institutional-grade loan calculation algorithms and audit compliance tracing built for campus cooperatives.
           </p>
         </header>
 

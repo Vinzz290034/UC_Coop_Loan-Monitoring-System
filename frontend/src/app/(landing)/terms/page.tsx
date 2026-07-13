@@ -39,11 +39,11 @@ import LandingFooter from '@/components/LandingFooter';
 
 // ── Table of Contents config ──────────────────────────────────────────────────
 const TOC_ITEMS = [
-  { id: 'introduction',   label: '1. Introduction',    icon: <FileText className="w-3.5 h-3.5" /> },
-  { id: 'authorized-use', label: '2. Authorized Use',  icon: <Ban className="w-3.5 h-3.5" /> },
-  { id: 'lending-terms',  label: '3. Lending Terms',   icon: <Landmark className="w-3.5 h-3.5" /> },
-  { id: 'data-security',  label: '4. Data Security',   icon: <Lock className="w-3.5 h-3.5" /> },
-  { id: 'governing-law',  label: '5. Governing Law',   icon: <Scale className="w-3.5 h-3.5" /> },
+  { id: 'introduction', label: '1. Introduction', icon: <FileText className="w-3.5 h-3.5" /> },
+  { id: 'authorized-use', label: '2. Authorized Use', icon: <Ban className="w-3.5 h-3.5" /> },
+  { id: 'lending-terms', label: '3. Lending Terms', icon: <Landmark className="w-3.5 h-3.5" /> },
+  { id: 'data-security', label: '4. Data Security', icon: <Lock className="w-3.5 h-3.5" /> },
+  { id: 'governing-law', label: '5. Governing Law', icon: <Scale className="w-3.5 h-3.5" /> },
 ] as const;
 
 type SectionId = typeof TOC_ITEMS[number]['id'];
@@ -157,11 +157,10 @@ export default function TermsPage() {
                       <li key={item.id}>
                         <button
                           onClick={() => scrollToSection(item.id)}
-                          className={`w-full flex items-center gap-2.5 text-left py-2.5 px-3.5 rounded-xl font-body text-sm font-semibold transition-all ${
-                            isActive
-                              ? 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary'
-                              : 'text-on-surface/60 dark:text-neutral-400 hover:text-primary dark:hover:text-secondary hover:bg-primary/5 dark:hover:bg-secondary/5'
-                          }`}
+                          className={`w-full flex items-center gap-2.5 text-left py-2.5 px-3.5 rounded-xl font-body text-sm font-semibold transition-all ${isActive
+                            ? 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary'
+                            : 'text-on-surface/60 dark:text-neutral-400 hover:text-primary dark:hover:text-secondary hover:bg-primary/5 dark:hover:bg-secondary/5'
+                            }`}
                         >
                           {/* Icon changes color with active state */}
                           <span className={isActive ? 'text-primary dark:text-secondary' : 'text-on-surface/40 dark:text-neutral-600'}>
@@ -204,13 +203,13 @@ export default function TermsPage() {
                 <SectionHeader number="1" title="Introduction" />
                 <div className="bg-white dark:bg-neutral-800/70 rounded-3xl p-8 border border-outline-variant/40 dark:border-neutral-700/50 shadow-sm">
                   <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed mb-4">
-                    Welcome to LendFlow Pro. These Terms of Service (&quot;Terms&quot;) constitute a legally
-                    binding agreement between you (&quot;User,&quot; &quot;Partner,&quot; or &quot;Lender&quot;) and LendFlow Pro
+                    Welcome to SynCo. These Terms of Service (&quot;Terms&quot;) constitute a legally
+                    binding agreement between you (&quot;User,&quot; &quot;Partner,&quot; or &quot;Lender&quot;) and SynCo
                     (&quot;Company,&quot; &quot;we,&quot; or &quot;us&quot;). By accessing or using our institutional loan management
                     platform, you agree to be bound by these Terms and our Privacy Policy.
                   </p>
                   <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed">
-                    LendFlow Pro provides high-performance technological infrastructure for institutional
+                    SynCo provides high-performance technological infrastructure for institutional
                     lenders. Our services are designed for sophisticated financial entities and require
                     absolute compliance with the operational standards set forth in this document.
                   </p>
@@ -259,7 +258,7 @@ export default function TermsPage() {
                 <div className="bg-white dark:bg-neutral-800/70 rounded-3xl border border-outline-variant/40 dark:border-neutral-700/50 shadow-sm overflow-hidden">
                   <div className="p-8 border-b border-outline-variant/20 dark:border-neutral-700/50">
                     <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed">
-                      The LendFlow Pro platform facilitates the orchestration of loan products but does
+                      The SynCo platform facilitates the orchestration of loan products but does
                       not act as the lender of record. All financial obligations, credit assessments, and
                       regulatory filings remain the sole responsibility of the Partner institution.
                     </p>
@@ -268,7 +267,7 @@ export default function TermsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-outline-variant/20 dark:divide-neutral-700/50">
                     {[
                       { icon: <Landmark className="w-5 h-5" />, title: 'Protocol Compliance', desc: 'All loans processed through the system must adhere to the configured underwriting protocols approved during onboarding.' },
-                      { icon: <CheckCircle2 className="w-5 h-5" />, title: 'Disbursement Logic', desc: "Automated disbursements are executed based on Smart Contracts. LendFlow Pro is not liable for errors in third-party banking APIs." },
+                      { icon: <CheckCircle2 className="w-5 h-5" />, title: 'Disbursement Logic', desc: "Automated disbursements are executed based on Smart Contracts. SynCo is not liable for errors in third-party banking APIs." },
                       { icon: <FileText className="w-5 h-5" />, title: 'Default Management', desc: 'Our system provides automated flagging for delinquent accounts, but remediation actions are at the discretion of the Lender.' },
                     ].map(f => (
                       <div key={f.title} className="p-6 space-y-2">
@@ -291,7 +290,7 @@ export default function TermsPage() {
                     <div className="flex flex-col md:flex-row gap-10 items-start">
                       <div className="flex-1">
                         <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed mb-6">
-                          LendFlow Pro employs bank-grade AES-256 encryption for all data at rest and
+                          SynCo employs bank-grade AES-256 encryption for all data at rest and
                           TLS 1.3 for data in transit. We maintain SOC 2 Type II compliance and undergo
                           quarterly penetration testing by independent third-party cybersecurity firms.
                         </p>
@@ -340,7 +339,7 @@ export default function TermsPage() {
                   </p>
                   <div className="pt-6 border-t border-outline-variant/20 dark:border-neutral-700">
                     <blockquote className="font-body text-sm italic text-on-surface/50 dark:text-neutral-500">
-                      &quot;The reliability of LendFlow Pro&rsquo;s infrastructure is matched only by the
+                      &quot;The reliability of SynCo&rsquo;s infrastructure is matched only by the
                       clarity of its governance.&quot; — Legal Review, 2026
                     </blockquote>
                   </div>

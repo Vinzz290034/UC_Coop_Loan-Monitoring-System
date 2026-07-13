@@ -34,7 +34,7 @@ export default function LandingNavbar({ activeIndex = -1 }: LandingNavbarProps) 
           <div className="w-8 h-8 rounded-lg bg-primary dark:bg-secondary flex items-center justify-center shadow-md shadow-primary/30 dark:shadow-secondary/30">
             <Building2 className="w-4 h-4 text-white dark:text-neutral-950" />
           </div>
-          LendFlow Pro
+          SynCo
         </Link>
 
         {/* ── Desktop nav ───────────────────────────────────────────── */}
