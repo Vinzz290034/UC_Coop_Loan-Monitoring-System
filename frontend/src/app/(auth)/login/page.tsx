@@ -84,6 +84,8 @@ function AuthBackground() {
 // ─── Login Form ───────────────────────────────────────────────────────────────
 function LoginForm() {
   const { login } = useAuth();
+  const searchParams = useSearchParams();
+  const resetSuccess = searchParams.get('reset') === 'success';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -118,6 +120,13 @@ function LoginForm() {
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {resetSuccess && (
+          <div className="p-4 bg-primary/10 border border-primary/20 text-primary dark:text-secondary rounded-2xl text-xs font-bold flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-primary dark:text-secondary" />
+            <span>Your password has been successfully reset. Please log in with your new credentials.</span>
+          </div>
+        )}
+
         {error && (
           <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs font-bold flex items-center gap-2.5">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -184,15 +193,12 @@ function LoginForm() {
             </button>
           </div>
           <div className="flex justify-end px-1 mt-1">
-            <button
-              type="button"
-              onClick={() => {
-                alert("Forgot Password request submitted. Automatic password reset options are currently pending administrative backend setup. Please contact support at coop-security@lendflow.net to manually restore your account access.");
-              }}
+            <Link
+              href="/forgot-password"
               className="text-xs text-primary dark:text-secondary font-bold hover:underline"
             >
               Forgot Password?
-            </button>
+            </Link>
           </div>
         </div>
 

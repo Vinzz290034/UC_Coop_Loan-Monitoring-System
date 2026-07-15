@@ -186,14 +186,16 @@ export const forgotPassword = async (req, res, next) => {
     // 1. Locate user via username
     const userResult = await query(
       'SELECT id, username, role, password_hash FROM users WHERE username = $1',
-      [username]
+      [username.toLowerCase()]
     );
 
     if (userResult.rowCount === 0) {
-      // Security Practice: Return a generic success to prevent account enumeration sweeps
-      return res.status(200).json({
-        success: true,
-        message: 'If an account matches those records, a recovery link has been dispatched.'
+      // Security Practice: Return a generic message or allow user to know they can try again.
+      // But per A3, we restrict password resets to registered members. Let's return a generic success/friendly message
+      // so it doesn't leak usernames, or let's be descriptive. Let's return error if user doesn't exist, or just standard:
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No registered member account matches this username.' }
       });
     }
 
@@ -207,38 +209,66 @@ export const forgotPassword = async (req, res, next) => {
       });
     }
 
-    // 2. Resolve communication channel (Fetch email based on role)
-    let recoveryEmail = null;
-
-    if (user.role === 'member') {
-      const memberResult = await query(
-        'SELECT email FROM members WHERE user_id = $1',
-        [user.id]
-      );
-      if (memberResult.rowCount > 0) {
-        recoveryEmail = memberResult.rows[0].email;
-      }
-    } else {
-      // Fallback for system administrators/managers (defaults to an internal registry template or username fallback)
-      recoveryEmail = `${user.username}@cooperative-system.local`;
+    // A3: Only allow password resets for member accounts with registered emails
+    if (user.role !== 'member') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Password reset is only available for member accounts with registered emails.' }
+      });
     }
 
-    // 3. Generate a secure short-lived recovery token using the token signer utility
-    const recoveryToken = signToken(user.id);
+    // 2. Resolve communication channel (Fetch email based on role)
+    const memberResult = await query(
+      'SELECT first_name, email FROM members WHERE user_id = $1',
+      [user.id]
+    );
 
-    // =========================================================================
-    // NOTIFICATION HOOK
-    // Place your production SMTP or SMS microservice integration worker here.
-    // Example: await sendEmail({ to: recoveryEmail, subject: 'Password Reset', token: recoveryToken });
-    // =========================================================================
+    if (memberResult.rowCount === 0 || !memberResult.rows[0].email) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No registered email found for this user.' }
+      });
+    }
 
-    res.status(200).json({
+    const member = memberResult.rows[0];
+    const recoveryEmail = member.email;
+
+    // 3. Generate OTP
+    const otpCode = generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // 4. Invalidate any previous OTPs for this email and purpose
+    await query(
+      'DELETE FROM otp_verifications WHERE email = $1 AND purpose = $2',
+      [recoveryEmail.toLowerCase(), 'password_reset']
+    );
+
+    // 5. Store OTP + user data
+    const resetData = {
+      user_id: user.id,
+    };
+
+    await query(
+      `INSERT INTO otp_verifications (email, otp_code, purpose, registration_data, expires_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [recoveryEmail.toLowerCase(), otpCode, 'password_reset', JSON.stringify(resetData), expiresAt]
+    );
+
+    // 6. Send OTP email
+    const emailResult = await sendOtpEmail(recoveryEmail.toLowerCase(), otpCode, member.first_name, 'password_reset');
+
+    const responsePayload = {
       success: true,
-      message: 'If an account matches those records, a recovery link has been dispatched.',
-      // Included in development environment mode to make testing frontend flows simple:
-      _dev_recovery_email_target: recoveryEmail,
-      _dev_token_payload: recoveryToken
-    });
+      message: 'Verification code sent to your email. Please check your inbox.',
+      email: recoveryEmail.toLowerCase(),
+    };
+
+    // In dev mode, include OTP in response for testing
+    if (emailResult.devMode) {
+      responsePayload._dev_otp = otpCode;
+    }
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -256,6 +286,20 @@ export const resetPassword = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: { message: 'Please provide both the validation token and your new password.' }
+      });
+    }
+
+    // Validate password strength policy (A2)
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Password must be at least 8 characters long.' }
+      });
+    }
+    if (!/[a-zA-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Password must contain at least one letter and at least one number.' }
       });
     }
 
@@ -399,6 +443,20 @@ export const memberRegister = async (req, res, next) => {
       });
     }
 
+    if (!/^[a-zA-Z\s'-]+$/.test(first_name)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'First name must contain letters, spaces, hyphens, and apostrophes only, and cannot contain numbers or special characters.' }
+      });
+    }
+
+    if (!/^[a-zA-Z\s'-]+$/.test(last_name)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Last name must contain letters, spaces, hyphens, and apostrophes only, and cannot contain numbers or special characters.' }
+      });
+    }
+
     if (username.length < 3) {
       return res.status(400).json({
         success: false,
@@ -406,17 +464,38 @@ export const memberRegister = async (req, res, next) => {
       });
     }
 
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    if (!/^[a-zA-Z]/.test(username)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username must begin with a letter.' }
+      });
+    }
+
+    if (/\s/.test(username)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username must be a single word (no spaces).' }
+      });
+    }
+
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(username)) {
       return res.status(400).json({
         success: false,
         error: { message: 'Username can only contain letters, numbers, and underscores.' }
       });
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Password must be at least 6 characters long.' }
+        error: { message: 'Password must be at least 8 characters long.' }
+      });
+    }
+
+    if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Password must contain at least one letter and at least one number.' }
       });
     }
 
@@ -501,7 +580,7 @@ export const memberRegister = async (req, res, next) => {
 export const verifyRegistrationOtp = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { email, otp_code } = req.body;
+    const { email, otp_code, purpose = 'registration' } = req.body;
 
     if (!email || !otp_code) {
       return res.status(400).json({
@@ -510,18 +589,18 @@ export const verifyRegistrationOtp = async (req, res, next) => {
       });
     }
 
-    // --- Find the latest OTP record for this email ---
+    // --- Find the latest OTP record for this email and purpose ---
     const otpResult = await client.query(
       `SELECT * FROM otp_verifications
-       WHERE email = $1 AND purpose = 'registration' AND verified = false
+       WHERE email = $1 AND purpose = $2 AND verified = false
        ORDER BY created_at DESC LIMIT 1`,
-      [email.toLowerCase()]
+      [email.toLowerCase(), purpose]
     );
 
     if (otpResult.rowCount === 0) {
       return res.status(400).json({
         success: false,
-        error: { message: 'No pending verification found for this email. Please register again.' }
+        error: { message: 'No pending verification found for this email. Please request a new code.' }
       });
     }
 
@@ -541,7 +620,7 @@ export const verifyRegistrationOtp = async (req, res, next) => {
       await client.query('DELETE FROM otp_verifications WHERE id = $1', [otpRecord.id]);
       return res.status(429).json({
         success: false,
-        error: { message: 'Too many failed attempts. Please register again and request a new code.' }
+        error: { message: 'Too many failed attempts. Please request a new code.' }
       });
     }
 
@@ -562,9 +641,36 @@ export const verifyRegistrationOtp = async (req, res, next) => {
       });
     }
 
-    // --- OTP is valid — Create user + member in a transaction ---
+    // --- OTP is valid ---
     const regData = otpRecord.registration_data;
 
+    if (purpose === 'password_reset') {
+      // Mark OTP as verified and clean up
+      await client.query(
+        'UPDATE otp_verifications SET verified = true WHERE id = $1',
+        [otpRecord.id]
+      );
+
+      await client.query(
+        'DELETE FROM otp_verifications WHERE email = $1 AND id != $2 AND purpose = $3',
+        [email.toLowerCase(), otpRecord.id, purpose]
+      );
+
+      // Generate a short-lived recovery token (JWT) valid for 15 minutes
+      const recoveryToken = jwt.sign(
+        { id: regData.user_id },
+        process.env.JWT_SECRET || 'coop_loan_monitoring_secret_key_2026_dev',
+        { expiresIn: '15m' }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'OTP verified successfully.',
+        token: recoveryToken
+      });
+    }
+
+    // --- Create user + member in a transaction (Registration flow) ---
     await client.query('BEGIN');
 
     // 1. Create user account
@@ -589,8 +695,8 @@ export const verifyRegistrationOtp = async (req, res, next) => {
 
     // 4. Clean up old OTPs for this email
     await client.query(
-      'DELETE FROM otp_verifications WHERE email = $1 AND id != $2',
-      [email.toLowerCase(), otpRecord.id]
+      'DELETE FROM otp_verifications WHERE email = $1 AND id != $2 AND purpose = $3',
+      [email.toLowerCase(), otpRecord.id, purpose]
     );
 
     await client.query('COMMIT');
@@ -615,12 +721,9 @@ export const verifyRegistrationOtp = async (req, res, next) => {
   }
 };
 
-// @desc    Resend OTP for pending registration
-// @route   POST /api/auth/resend-otp
-// @access  Public
 export const resendOtp = async (req, res, next) => {
   try {
-    const { email } = req.body;
+    const { email, purpose = 'registration' } = req.body;
 
     if (!email) {
       return res.status(400).json({
@@ -629,18 +732,18 @@ export const resendOtp = async (req, res, next) => {
       });
     }
 
-    // --- Find existing pending registration ---
+    // --- Find existing pending registration or password reset ---
     const existingResult = await query(
       `SELECT * FROM otp_verifications
-       WHERE email = $1 AND purpose = 'registration' AND verified = false
+       WHERE email = $1 AND purpose = $2 AND verified = false
        ORDER BY created_at DESC LIMIT 1`,
-      [email.toLowerCase()]
+      [email.toLowerCase(), purpose]
     );
 
     if (existingResult.rowCount === 0) {
       return res.status(400).json({
         success: false,
-        error: { message: 'No pending registration found for this email.' }
+        error: { message: `No pending ${purpose.replace('_', ' ')} found for this email.` }
       });
     }
 
@@ -669,7 +772,7 @@ export const resendOtp = async (req, res, next) => {
 
     // --- Send new OTP email ---
     const regData = existing.registration_data;
-    const emailResult = await sendOtpEmail(email.toLowerCase(), newOtpCode, regData?.first_name || '');
+    const emailResult = await sendOtpEmail(email.toLowerCase(), newOtpCode, regData?.first_name || '', purpose);
 
     const responsePayload = {
       success: true,

@@ -274,16 +274,36 @@ export default function RegisterPage() {
       setError('Please fill in all fields.');
       return;
     }
+    if (!/^[a-zA-Z\s'-]+$/.test(firstName)) {
+      setError('First Name must contain letters, spaces, hyphens, and apostrophes only, and cannot contain numbers or other special characters.');
+      return;
+    }
+    if (!/^[a-zA-Z\s'-]+$/.test(lastName)) {
+      setError('Last Name must contain letters, spaces, hyphens, and apostrophes only, and cannot contain numbers or other special characters.');
+      return;
+    }
     if (username.length < 3) {
       setError('Username must be at least 3 characters long.');
       return;
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    if (!/^[a-zA-Z]/.test(username)) {
+      setError('Username must begin with a letter.');
+      return;
+    }
+    if (/\s/.test(username)) {
+      setError('Username must be a single word (no spaces).');
+      return;
+    }
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(username)) {
       setError('Username can only contain letters, numbers, and underscores.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+      setError('Password must contain at least one letter and at least one number.');
       return;
     }
     if (password !== confirmPassword) {

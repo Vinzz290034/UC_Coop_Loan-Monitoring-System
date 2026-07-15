@@ -34,8 +34,10 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<User>;
   register: (username: string, password: string) => Promise<void>;
   memberRegister: (data: RegisterPayload) => Promise<{ email: string; _dev_otp?: string }>;
-  verifyOtp: (email: string, otp_code: string) => Promise<void>;
-  resendOtp: (email: string) => Promise<{ _dev_otp?: string }>;
+  verifyOtp: (email: string, otp_code: string, purpose?: string) => Promise<any>;
+  resendOtp: (email: string, purpose?: string) => Promise<{ _dev_otp?: string }>;
+  forgotPassword: (username: string) => Promise<{ email: string; _dev_otp?: string }>;
+  resetPassword: (token: string, newPassword: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -157,9 +159,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Member self-registration — Step 2: verify OTP
-  const verifyOtp = async (email: string, otp_code: string): Promise<void> => {
+  const verifyOtp = async (email: string, otp_code: string, purpose = 'registration'): Promise<any> => {
     try {
-      await api.post('/auth/verify-otp', { email, otp_code });
+      const response = await api.post('/auth/verify-otp', { email, otp_code, purpose });
+      return response.data;
     } catch (error: any) {
       const message = error.response?.data?.error?.message || error.response?.data?.message || 'Verification failed.';
       throw new Error(message);
@@ -167,14 +170,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Resend OTP for pending registration
-  const resendOtp = async (email: string): Promise<{ _dev_otp?: string }> => {
+  const resendOtp = async (email: string, purpose = 'registration'): Promise<{ _dev_otp?: string }> => {
     try {
-      const response = await api.post('/auth/resend-otp', { email });
+      const response = await api.post('/auth/resend-otp', { email, purpose });
       return {
         _dev_otp: response.data._dev_otp,
       };
     } catch (error: any) {
       const message = error.response?.data?.error?.message || error.response?.data?.message || 'Failed to resend code.';
+      throw new Error(message);
+    }
+  };
+
+  // Initiate password recovery / forgot password
+  const forgotPassword = async (username: string): Promise<{ email: string; _dev_otp?: string }> => {
+    try {
+      const response = await api.post('/auth/forgot-password', { username });
+      return {
+        email: response.data.email,
+        _dev_otp: response.data._dev_otp,
+      };
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.response?.data?.message || 'Failed to initiate password reset.';
+      throw new Error(message);
+    }
+  };
+
+  // Reset password using recovery token
+  const resetPassword = async (token: string, newPassword: string): Promise<void> => {
+    try {
+      await api.post('/auth/reset-password', { token, newPassword });
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.response?.data?.message || 'Failed to reset password.';
       throw new Error(message);
     }
   };
@@ -200,6 +227,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         memberRegister,
         verifyOtp,
         resendOtp,
+        forgotPassword,
+        resetPassword,
         logout,
         isAuthenticated: !!user,
       }}

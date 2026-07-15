@@ -41,7 +41,11 @@ function createTransporter() {
 /**
  * Build a professional HTML email template for OTP delivery.
  */
-function buildOtpEmailHtml(otpCode, recipientName) {
+function buildOtpEmailHtml(otpCode, recipientName, purpose = 'registration') {
+  const purposeText = purpose === 'password_reset' 
+    ? 'Your one-time verification code for password reset is:' 
+    : 'Your one-time verification code for account registration is:';
+
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -67,7 +71,7 @@ function buildOtpEmailHtml(otpCode, recipientName) {
             Hello${recipientName ? ` ${recipientName}` : ''},
           </p>
           <p style="margin:0 0 24px;font-size:14px;color:#525252;line-height:1.6;">
-            Your one-time verification code for account registration is:
+            ${purposeText}
           </p>
 
           <!-- OTP Code Box -->
@@ -108,15 +112,23 @@ function buildOtpEmailHtml(otpCode, recipientName) {
  * @param {string} toEmail - Recipient email address
  * @param {string} otpCode - 6-digit OTP code
  * @param {string} [recipientName] - Optional name for personalization
+ * @param {string} [purpose] - Purpose of OTP ('registration' or 'password_reset')
  * @returns {Promise<{success: boolean, devMode: boolean}>}
  */
-export async function sendOtpEmail(toEmail, otpCode, recipientName = '') {
+export async function sendOtpEmail(toEmail, otpCode, recipientName = '', purpose = 'registration') {
   const transporter = createTransporter();
+  const emailSubject = purpose === 'password_reset'
+    ? 'Reset Your Password — SynCo'
+    : 'Your Verification Code — SynCo';
+
+  const plainText = purpose === 'password_reset'
+    ? `Your SynCo password reset verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`
+    : `Your SynCo verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`;
 
   if (!transporter) {
     // Development fallback — log OTP to console
     console.log('═══════════════════════════════════════════');
-    console.log('  📧 DEV MODE — Email OTP (not sent)');
+    console.log(`  📧 DEV MODE — Email OTP for ${purpose} (not sent)`);
     console.log(`  To:   ${toEmail}`);
     console.log(`  OTP:  ${otpCode}`);
     console.log('═══════════════════════════════════════════');
@@ -127,9 +139,9 @@ export async function sendOtpEmail(toEmail, otpCode, recipientName = '') {
   const mailOptions = {
     from: `"SynCo" <${process.env.SMTP_USER}>`,
     to: toEmail,
-    subject: 'Your Verification Code — SynCo',
-    html: buildOtpEmailHtml(otpCode, recipientName),
-    text: `Your SynCo verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`,
+    subject: emailSubject,
+    html: buildOtpEmailHtml(otpCode, recipientName, purpose),
+    text: plainText,
   };
 
   try {
