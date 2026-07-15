@@ -25,9 +25,20 @@ export default function AboutPage() {
               <Target className="w-5 h-5" />
             </div>
             <h2 className="font-headline text-lg font-bold">Our Mission</h2>
-            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              To uplift the economic and social well-being of cooperative members by providing secure, high-yield deposit accounts, accessible credit products, and financial literacy opportunities inside our campus network.
+
+            <p className="font-body space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
+              The Cooperative commits to:
             </p>
+
+            <ul className="list-disc pl-5 space-y-1 font-body text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              <li>Alleviate the members' financial standing.</li>
+              <li>Increase its financial capability.</li>
+              <li>
+                Engage in social responsibility through active cooperation among
+                stakeholders.
+              </li>
+            </ul>
+
           </div>
 
           <div className="p-6 bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl space-y-4 shadow-sm">
@@ -36,7 +47,7 @@ export default function AboutPage() {
             </div>
             <h2 className="font-headline text-lg font-bold">Our Vision</h2>
             <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              To be the leading, most trusted digital cooperative platform for the University of Cebu academic community, driving financial independence, administrative transparency, and social development.
+              The University of Cebu-Maritime Education and Training Center Employees Credit Cooperative envisions to be one of the leading school cooperatives in Cebu City.
             </p>
           </div>
         </section>

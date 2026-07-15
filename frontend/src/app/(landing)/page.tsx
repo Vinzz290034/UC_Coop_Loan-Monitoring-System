@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Lock,
   CheckCircle2,
+  Calculator, PiggyBank, Clock
 } from 'lucide-react';
 // ── Shared layout components ────────────────────────────────────────────────
 import LandingNavbar from '@/components/LandingNavbar';
@@ -123,7 +124,7 @@ export default function LandingPage() {
               {/* Trust badge */}
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 text-primary dark:text-secondary text-xs font-bold font-label tracking-wide">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary dark:bg-secondary animate-pulse" />
-                Trusted by 75,000+ Institutional Users
+                Trusted by 15,000+ Active Cooperative Members
               </div>
 
               {/* Headline */}
@@ -131,24 +132,24 @@ export default function LandingPage() {
                 <span className="text-on-surface dark:text-white">Elevate Your</span>
                 <br />
                 <span
-                  className="text-transparent bg-clip-text"
+                  className="text-4xl sm:text-5xl lg:text-6xl text-transparent bg-clip-text"
                   style={{ backgroundImage: 'linear-gradient(135deg, #047857 0%, #34D399 60%, #059669 100%)' }}
                 >
-                  Financial Edge
+                  Financial Growth
                 </span>
               </h1>
 
               {/* Sub-copy */}
               <p className="text-on-surface/65 dark:text-neutral-400 font-body text-lg max-w-lg leading-relaxed">
-                Institutional-grade automated finance tools for high-performance lenders. Manage liquidity, automate risk, and scale with absolute precision.
+                Transparent online loan applications, secure share capital tracking, and automatic monthly amortization schedules build for your peace.
               </p>
 
               {/* Feature pills */}
               <div className="flex flex-wrap gap-2.5">
                 {[
-                  { icon: <Lock className="w-3.5 h-3.5" />, label: 'Bank-grade Security' },
-                  { icon: <TrendingUp className="w-3.5 h-3.5" />, label: 'Real-time Analytics' },
-                  { icon: <Zap className="w-3.5 h-3.5" />, label: 'Instant Settlement' },
+                  { icon: <Lock className="w-3.5 h-3.5" />, label: 'Automated Computation' },
+                  { icon: <TrendingUp className="w-3.5 h-3.5" />, label: 'Online Loan Tracking' },
+                  { icon: <Zap className="w-3.5 h-3.5" />, label: 'Secured Share Capital' },
                 ].map(f => (
                   <div key={f.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-neutral-800/80 border border-outline-variant/50 text-on-surface/70 dark:text-neutral-300 text-xs font-semibold shadow-sm">
                     <span className="text-primary dark:text-secondary">{f.icon}</span>
@@ -238,9 +239,9 @@ export default function LandingPage() {
               {/* Stats */}
               <div className="flex gap-10 items-center">
                 {[
-                  { value: '75K+', label: 'Active Institutional Users' },
-                  { value: '92%', label: 'Instant Approval Rate' },
-                  { value: '$2.4B', label: 'Capital Managed' },
+                  { value: '15K+', label: 'Active Cooperative Members' },
+                  { value: '95%', label: 'Loan Recovery Rate' },
+                  { value: '₱24.5M', label: 'Cooperative Funds Under Management' },
                 ].map((stat, i) => (
                   <div key={i} className={`text-center md:text-left ${i > 0 ? 'pl-10 border-l border-outline-variant/40 dark:border-neutral-700' : ''}`}>
                     <div className="font-headline text-3xl md:text-4xl font-extrabold text-primary dark:text-secondary">{stat.value}</div>
@@ -251,9 +252,9 @@ export default function LandingPage() {
 
               {/* Trusted by logos */}
               <div className="flex flex-col items-center md:items-end gap-2">
-                <div className="text-[10px] font-bold text-neutral-400 tracking-widest uppercase">Trusted by</div>
+                <div className="text-[10px] font-bold text-neutral-400 tracking-widest uppercase">Affiliated:</div>
                 <div className="flex flex-wrap justify-center gap-6 opacity-40 dark:opacity-30">
-                  {['FINTECH CORP', 'GLOBAL BANK', 'EQUITY PLUS', 'FLOW PARTNERS'].map(b => (
+                  {['UC METC', 'NATCCO COOP FEDERATION', 'LGU UNION BANK'].map(b => (
                     <span key={b} className="font-headline text-sm font-extrabold tracking-tighter text-on-surface dark:text-white">{b}</span>
                   ))}
                 </div>
@@ -272,14 +273,14 @@ export default function LandingPage() {
             <div className="text-center mb-20 space-y-4">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary text-xs font-bold font-label border border-primary/15 dark:border-secondary/15">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Built for Institutions
+                Built for Cooperatives
               </div>
               <h2 className="font-headline text-4xl md:text-5xl font-extrabold text-on-surface dark:text-white leading-tight">
                 The Strategic Choice for<br />
-                <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg, #047857 0%, #34D399 100%)' }}>Modern Lenders</span>
+                <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg, #047857 0%, #34D399 100%)' }}>Modern Members</span>
               </h2>
               <p className="font-body text-base text-on-surface/60 dark:text-neutral-400 max-w-xl mx-auto leading-relaxed">
-                Our architecture is built on four pillars of institutional excellence, ensuring your capital is always optimized.
+                Our system is built on four pillars of cooperative excellence, ensuring your capital and credit needs are always optimized.
               </p>
             </div>
 
@@ -287,8 +288,8 @@ export default function LandingPage() {
               {/* Left pillars */}
               <div className="space-y-14 md:text-right">
                 {[
-                  { icon: <Shield className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Security', desc: 'Bank-grade encryption for every micro-transaction and data packet.' },
-                  { icon: <ShieldCheck className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Safety', desc: 'Multi-layered protocol protection against automated market volatility.' },
+                  { icon: <CreditCard className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Credit Assistance', desc: 'Access multiple loan types: Regular, STL, and Product loans.' },
+                  { icon: <Calculator className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Smart Computation', desc: 'Instant interest calculation with diminishing or flat-rate logic.' },
                 ].map(p => (
                   <div key={p.title} className="group space-y-2.5 md:items-end flex flex-col">
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 dark:bg-primary/15 border border-primary/20 shadow-sm group-hover:scale-110 group-hover:shadow-md group-hover:shadow-primary/20 transition-all duration-300">
@@ -326,7 +327,7 @@ export default function LandingPage() {
                     <div className="flex items-center justify-between px-2">
                       <div className="space-y-1">
                         <div className="h-2.5 w-16 bg-neutral-800 rounded" />
-                        <div className="text-white font-extrabold text-xl font-headline">$84,210</div>
+                        <div className="text-white font-extrabold text-xl font-headline">₱24,210</div>
                       </div>
                       <div className="text-emerald-400 text-xs font-bold bg-emerald-400/10 px-2.5 py-1 rounded-full border border-emerald-400/20">+4.2%</div>
                     </div>
@@ -347,8 +348,8 @@ export default function LandingPage() {
               {/* Right pillars */}
               <div className="space-y-14">
                 {[
-                  { icon: <Fingerprint className="text-tertiary w-6 h-6" />, color: 'tertiary', title: 'Authentication', desc: 'Biometric and hardware-key support for institutional access controls.' },
-                  { icon: <Building2 className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Account', desc: 'Unified management for primary and sub-custodial lending pools.' },
+                  { icon: <PiggyBank className="text-tertiary w-6 h-6" />, color: 'tertiary', title: 'Savings Programs', desc: 'High-yield timed deposits, revolving funds, and secure accumulated share capital.' },
+                  { icon: <Clock className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Real-Time Tracking', desc: 'Monitor payment histories, due dates, and printable transaction receipts.' },
                 ].map(p => (
                   <div key={p.title} className="group space-y-2.5">
                     <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl ${p.color === 'tertiary' ? 'bg-tertiary/10 border-tertiary/20' : 'bg-primary/10 dark:bg-primary/15 border-primary/20'} border shadow-sm group-hover:scale-110 group-hover:shadow-md transition-all duration-300`}>
@@ -372,7 +373,7 @@ export default function LandingPage() {
                 <Award className="w-3.5 h-3.5" />
                 Platform Capabilities
               </div>
-              <h2 className="font-headline text-4xl font-extrabold text-on-surface dark:text-white">Everything you need to scale</h2>
+              <h2 className="font-headline text-4xl font-extrabold text-on-surface dark:text-white">Everything you need to grow</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -384,16 +385,16 @@ export default function LandingPage() {
                   <div className="w-11 h-11 rounded-2xl bg-primary/12 dark:bg-primary/20 flex items-center justify-center border border-primary/20">
                     <Award className="text-primary dark:text-secondary w-5 h-5" />
                   </div>
-                  <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white">Earn Rewards</h3>
+                  <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white">Earn Dividends</h3>
                   <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400 leading-relaxed">
-                    Maximize your yield with automated reinvestment protocols.
+                    Build your share capital account to earn competitive annual dividends.
                   </p>
                 </div>
                 <div className="mt-8 relative z-10">
                   <div className="h-28 w-full bg-gradient-to-br from-primary/10 to-secondary/10 dark:from-primary/15 dark:to-secondary/10 rounded-2xl flex items-center justify-center border border-primary/15">
                     <div className="text-center">
-                      <div className="text-primary dark:text-secondary font-headline text-3xl font-extrabold">+4.2%</div>
-                      <div className="text-primary/60 dark:text-secondary/60 text-xs font-bold mt-0.5">Annual Percentage Yield</div>
+                      <div className="text-primary dark:text-secondary font-headline text-3xl font-extrabold">+5.0%</div>
+                      <div className="text-primary/60 dark:text-secondary/60 text-xs font-bold mt-0.5">Target Dividend Yield</div>
                     </div>
                   </div>
                 </div>
@@ -408,13 +409,12 @@ export default function LandingPage() {
                   </div>
                   <h3 className="font-headline text-2xl font-bold">Always Protected</h3>
                   <p className="text-neutral-400 font-body text-sm leading-relaxed">
-                    Our real-time dashboard monitors global market swings 24/7 to safeguard your principal capital.
-                  </p>
-                 <Link
-                    href="/login"
+                    Role-based access control (Admin, Staff, Accountant), data encryption, and comprehensive secure activity logs.</p>
+                  <Link
+                    href="/terms"
                     className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/25 hover:bg-white hover:text-neutral-950 transition-all font-label text-xs font-bold group/btn"
                   >
-                    View Dashboard
+                    View Security Policies
                     <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
                   </Link>
                 </div>
@@ -453,9 +453,9 @@ export default function LandingPage() {
                   <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center border border-white/20">
                     <TrendingUp className="w-5 h-5 text-white" />
                   </div>
-                  <h3 className="font-headline text-xl font-bold">No Volatility</h3>
+                  <h3 className="font-headline text-xl font-bold">No Hidden Charges</h3>
                   <p className="text-white/75 font-body text-sm leading-relaxed">
-                    Smart-hedging technology that neutralizes downside risk instantly.
+                    View your outstanding balance, principal splits, and amortizations clearly.
                   </p>
                 </div>
                 <div className="w-1/2 flex justify-center relative z-10">
@@ -482,9 +482,9 @@ export default function LandingPage() {
                       <Zap className="w-5 h-5 text-primary dark:text-secondary" />
                     </div>
                     <div className="space-y-1">
-                      <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white">Get paid faster</h3>
+                      <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white">Faster Loan Disbursement</h3>
                       <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400">
-                        Instant settlement on all enterprise-level transactions.
+                        Approved loans are tracked automatically for lightning-fast cash release.
                       </p>
                     </div>
                   </div>
@@ -493,11 +493,11 @@ export default function LandingPage() {
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center font-extrabold text-white text-sm shadow-md shadow-primary/30 flex-shrink-0">L</div>
                     <div className="flex-1 min-w-0">
                       <div className="text-[10px] font-bold text-neutral-400 tracking-wide">SynCo</div>
-                      <div className="text-sm font-bold text-on-surface dark:text-white truncate">Payment Received: $12,450.00</div>
+                      <div className="text-sm font-bold text-on-surface dark:text-white truncate">Disbursement Ready: ₱50,000.00</div>
                     </div>
                     <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                       <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <div className="text-[10px] font-semibold text-neutral-400">Now</div>
+                      <div className="text-[10px] font-semibold text-neutral-400">OK</div>
                     </div>
                   </div>
                 </div>

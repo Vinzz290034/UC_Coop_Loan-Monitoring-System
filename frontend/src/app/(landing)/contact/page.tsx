@@ -48,7 +48,7 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <h4 className="font-bold">Physical Address</h4>
-                  <p className="text-neutral-600 dark:text-neutral-400">UC-METC Campus Administration Bldg, Mambaling, Cebu City, Philippines</p>
+                  <p className="text-neutral-600 dark:text-neutral-400">UC-METC Campus Administration Bldg, Alumno, Mambaling, Cebu City, Philippines</p>
                 </div>
               </div>
 
@@ -58,7 +58,7 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <h4 className="font-bold">Contact Number</h4>
-                  <p className="text-neutral-600 dark:text-neutral-400">+63 (032) 261-7741 (Local 104)</p>
+                  <p className="text-neutral-600 dark:text-neutral-400">+63 (032) 410-8811 (Local 104)</p>
                 </div>
               </div>
 
@@ -68,7 +68,7 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <h4 className="font-bold">Email Address</h4>
-                  <p className="text-neutral-600 dark:text-neutral-400">coop-support@lendflow.net</p>
+                  <p className="text-neutral-600 dark:text-neutral-400">ucmetc.ecc@gmail.com</p>
                 </div>
               </div>
             </div>
