@@ -174,78 +174,73 @@ export const getMe = async (req, res, next) => {
 // @access  Public
 export const forgotPassword = async (req, res, next) => {
   try {
-    const { username } = req.body;
+    const { email } = req.body;
 
-    if (!username) {
+    if (!email) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Please provide your account username.' }
+        error: { message: 'Please provide your registered email address.' }
       });
     }
 
-    // 1. Locate user via username
-    const userResult = await query(
-      'SELECT id, username, role, password_hash FROM users WHERE username = $1',
-      [username.toLowerCase()]
+    // Basic email format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide a valid email address.' }
+      });
+    }
+
+    // 1. Locate member & user via email address
+    const memberUserResult = await query(
+      `SELECT u.id, u.username, u.role, u.password_hash, m.first_name, m.email
+       FROM members m
+       JOIN users u ON m.user_id = u.id
+       WHERE LOWER(m.email) = $1`,
+      [email.toLowerCase()]
     );
 
-    if (userResult.rowCount === 0) {
-      // Security Practice: Return a generic message or allow user to know they can try again.
-      // But per A3, we restrict password resets to registered members. Let's return a generic success/friendly message
-      // so it doesn't leak usernames, or let's be descriptive. Let's return error if user doesn't exist, or just standard:
+    if (memberUserResult.rowCount === 0) {
       return res.status(400).json({
         success: false,
-        error: { message: 'No registered member account matches this username.' }
+        error: { message: 'No account is associated with the provided email address.' }
       });
     }
 
-    const user = userResult.rows[0];
+    const account = memberUserResult.rows[0];
 
     // Safety Verification Check: Don't process requests if account portal is frozen
-    if (user.password_hash && user.password_hash.startsWith('PORTAL_FROZEN_')) {
+    if (account.password_hash && account.password_hash.startsWith('PORTAL_FROZEN_')) {
       return res.status(403).json({
         success: false,
         error: { message: 'This portal account is currently locked or frozen. Contact management.' }
       });
     }
 
-    // A3: Only allow password resets for member accounts with registered emails
-    if (user.role !== 'member') {
+    // A3/Verification check: Only allow resets for member accounts with registered emails
+    if (account.role !== 'member') {
       return res.status(400).json({
         success: false,
         error: { message: 'Password reset is only available for member accounts with registered emails.' }
       });
     }
 
-    // 2. Resolve communication channel (Fetch email based on role)
-    const memberResult = await query(
-      'SELECT first_name, email FROM members WHERE user_id = $1',
-      [user.id]
-    );
+    const recoveryEmail = account.email;
 
-    if (memberResult.rowCount === 0 || !memberResult.rows[0].email) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'No registered email found for this user.' }
-      });
-    }
-
-    const member = memberResult.rows[0];
-    const recoveryEmail = member.email;
-
-    // 3. Generate OTP
+    // 2. Generate OTP
     const otpCode = generateOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // 4. Invalidate any previous OTPs for this email and purpose
+    // 3. Invalidate any previous OTPs for this email and purpose
     await query(
       'DELETE FROM otp_verifications WHERE email = $1 AND purpose = $2',
       [recoveryEmail.toLowerCase(), 'password_reset']
     );
 
-    // 5. Store OTP + user data
+    // 4. Store OTP + user data
     const resetData = {
-      user_id: user.id,
+      user_id: account.id,
     };
 
     await query(
@@ -254,8 +249,8 @@ export const forgotPassword = async (req, res, next) => {
       [recoveryEmail.toLowerCase(), otpCode, 'password_reset', JSON.stringify(resetData), expiresAt]
     );
 
-    // 6. Send OTP email
-    const emailResult = await sendOtpEmail(recoveryEmail.toLowerCase(), otpCode, member.first_name, 'password_reset');
+    // 5. Send OTP email
+    const emailResult = await sendOtpEmail(recoveryEmail.toLowerCase(), otpCode, account.first_name, 'password_reset');
 
     const responsePayload = {
       success: true,

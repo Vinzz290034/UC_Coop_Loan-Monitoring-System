@@ -36,7 +36,7 @@ interface AuthContextType {
   memberRegister: (data: RegisterPayload) => Promise<{ email: string; _dev_otp?: string }>;
   verifyOtp: (email: string, otp_code: string, purpose?: string) => Promise<any>;
   resendOtp: (email: string, purpose?: string) => Promise<{ _dev_otp?: string }>;
-  forgotPassword: (username: string) => Promise<{ email: string; _dev_otp?: string }>;
+  forgotPassword: (email: string) => Promise<{ email: string; _dev_otp?: string }>;
   resetPassword: (token: string, newPassword: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -183,9 +183,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Initiate password recovery / forgot password
-  const forgotPassword = async (username: string): Promise<{ email: string; _dev_otp?: string }> => {
+  const forgotPassword = async (email: string): Promise<{ email: string; _dev_otp?: string }> => {
     try {
-      const response = await api.post('/auth/forgot-password', { username });
+      const response = await api.post('/auth/forgot-password', { email });
       return {
         email: response.data.email,
         _dev_otp: response.data._dev_otp,

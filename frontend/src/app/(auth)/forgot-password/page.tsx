@@ -218,7 +218,6 @@ export default function ForgotPasswordPage() {
   const [step, setStep] = useState(1);
 
   // Form Fields
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [otpValue, setOtpValue] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -258,19 +257,26 @@ export default function ForgotPasswordPage() {
     return `${min}:${sec.toString().padStart(2, '0')}`;
   };
 
-  // Step 1: Submit Username
+  // Step 1: Submit Email
   const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!username) {
-      setError('Please enter your username.');
+    if (!email) {
+      setError('Please enter your registered email address.');
+      return;
+    }
+
+    // Basic email regex format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address.');
       return;
     }
 
     setSubmitting(true);
     try {
-      const result = await forgotPassword(username);
+      const result = await forgotPassword(email);
       setEmail(result.email);
       setDevOtp(result._dev_otp || null);
       setResendCooldown(60);
@@ -386,7 +392,7 @@ export default function ForgotPasswordPage() {
         <div className="glass-card rounded-3xl p-8 md:p-10 border border-outline-variant/70 shadow-2xl bg-white/95 dark:bg-neutral-900/95">
           <StepIndicator currentStep={step} />
 
-          {/* ═══════════════════ STEP 1: Username Check ═══════════════════ */}
+          {/* ═══════════════════ STEP 1: Email Check ═══════════════════ */}
           {step === 1 && (
             <>
               <header className="mb-6">
@@ -394,7 +400,7 @@ export default function ForgotPasswordPage() {
                   Forgot Password?
                 </h2>
                 <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
-                  Enter your username below. We will send a verification code to your registered email.
+                  Enter your email address below. We will send a verification code to your registered email.
                 </p>
               </header>
 
@@ -407,21 +413,21 @@ export default function ForgotPasswordPage() {
                 )}
 
                 <div className="space-y-1.5">
-                  <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reset-username">
-                    Username
+                  <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reset-email">
+                    Email Address
                   </label>
                   <div className="relative group">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">
-                      <UserIcon className="w-5 h-5" />
+                      <Mail className="w-5 h-5" />
                     </span>
                     <input
-                      type="text"
-                      id="reset-username"
+                      type="email"
+                      id="reset-email"
                       required
-                      autoComplete="username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Enter username"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="member@email.com"
                       className="w-full pl-12 pr-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
                     />
                   </div>
