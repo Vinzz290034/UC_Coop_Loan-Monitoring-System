@@ -1,7 +1,5 @@
-'use client';
-
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   CreditCard,
   Wallet,
@@ -28,8 +26,6 @@ import LandingNavbar from '@/components/LandingNavbar';
 import LandingFooter from '@/components/LandingFooter';
 
 export default function LandingPage() {
-  const router = useRouter();
-
   return (
     <div className="bg-background dark:bg-surface-container-low text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
 
@@ -163,19 +159,19 @@ export default function LandingPage() {
 
               {/* CTAs */}
               <div className="flex flex-wrap gap-4 pt-2">
-                <button
-                  onClick={() => router.push('/login')}
+                <Link
+                  href="/login"
                   className="group flex items-center gap-2 px-8 py-4 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold shadow-xl shadow-primary/30 dark:shadow-secondary/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/35 transition-all duration-300 active:scale-95"
                 >
                   Get Started Free
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </button>
-                <button
-                  onClick={() => router.push('/login')}
+                </Link>
+                <Link
+                  href="/login"
                   className="flex items-center gap-2 px-8 py-4 rounded-full bg-white/80 dark:bg-neutral-800/60 backdrop-blur border border-outline-variant/60 dark:border-neutral-700 text-on-surface dark:text-white font-label text-sm font-bold hover:bg-white dark:hover:bg-neutral-700/80 hover:shadow-lg transition-all duration-300 active:scale-95"
                 >
                   View Live Demo
-                </button>
+                </Link>
               </div>
             </div>
 
@@ -414,13 +410,13 @@ export default function LandingPage() {
                   <p className="text-neutral-400 font-body text-sm leading-relaxed">
                     Our real-time dashboard monitors global market swings 24/7 to safeguard your principal capital.
                   </p>
-                  <button
-                    onClick={() => router.push('/login')}
+                 <Link
+                    href="/login"
                     className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/25 hover:bg-white hover:text-neutral-950 transition-all font-label text-xs font-bold group/btn"
                   >
                     View Dashboard
                     <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
-                  </button>
+                  </Link>
                 </div>
                 {/* Mock dashboard panel */}
                 <div className="absolute right-[-8%] bottom-[-12%] w-[55%] h-[130%] rotate-[-8deg] transition-all group-hover:rotate-0 group-hover:right-[-4%] duration-700 hidden md:block">
@@ -531,19 +527,19 @@ export default function LandingPage() {
                   Connect SynCo to your existing CRM, accounting software, and treasury systems with our enterprise-grade API.
                 </p>
                 <div className="flex flex-wrap gap-4">
-                  <button
-                    onClick={() => router.push('/login')}
+                  <Link
+                    href="/login"
                     className="flex items-center gap-2 px-6 py-3 bg-white text-primary font-label text-sm font-bold rounded-full shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-95 transition-all"
                   >
                     Explore Docs
                     <ArrowRight className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => router.push('/login')}
+                  </Link>
+                  <Link
+                    href="/login"
                     className="px-6 py-3 bg-white/12 text-white font-label text-sm font-bold rounded-full border border-white/20 hover:bg-white/20 active:scale-95 transition-all backdrop-blur"
                   >
                     Get API Keys
-                  </button>
+                  </Link>
                 </div>
               </div>
 

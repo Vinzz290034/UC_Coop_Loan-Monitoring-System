@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import CountdownTimer from '@/components/CountdownTimer';
+import { AuthProvider } from '@/context/AuthContext';
 import { BreadcrumbProvider, useBreadcrumb } from '@/context/BreadcrumbContext';
 
 function DashboardLayoutContent({
@@ -239,6 +240,20 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  return (
+    <AuthProvider>
+      <BreadcrumbProvider>
+        <DashboardLayoutInner>{children}</DashboardLayoutInner>
+      </BreadcrumbProvider>
+    </AuthProvider>
+  );
+}
+
+function DashboardLayoutInner({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { loading } = useAuth();
 
   if (loading) {
@@ -252,10 +267,6 @@ export default function DashboardLayout({
     );
   }
 
-  return (
-    <BreadcrumbProvider>
-      <DashboardLayoutContent>{children}</DashboardLayoutContent>
-    </BreadcrumbProvider>
-  );
+  return <DashboardLayoutContent>{children}</DashboardLayoutContent>;
 }
 

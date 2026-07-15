@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import LandingNavbar from '@/components/LandingNavbar';
 import LandingFooter from '@/components/LandingFooter';
