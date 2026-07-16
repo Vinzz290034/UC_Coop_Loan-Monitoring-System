@@ -88,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         '/',
         '/login',
         '/register',
+        '/forgot-password',
         '/terms',
         '/privacy',
         '/about',

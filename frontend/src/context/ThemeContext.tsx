@@ -7,6 +7,7 @@ type Theme = 'light' | 'dark';
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
+  setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -50,10 +51,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(next);
   };
 
+  const setThemeDirectly = (next: Theme) => {
+    setTheme(next);
+    applyTheme(next);
+  };
+
   // No visibility gate needed — the beforeInteractive script in root layout
   // prevents FOUC before React even hydrates.
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme: setThemeDirectly }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
@@ -21,9 +21,13 @@ import {
   Cpu,
   UserCog,
   ScrollText,
+  MessageSquare,
+  Bell,
+  Settings,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import CountdownTimer from '@/components/CountdownTimer';
+import NotificationBell from '@/components/NotificationBell';
 import { AuthProvider } from '@/context/AuthContext';
 import { BreadcrumbProvider, useBreadcrumb } from '@/context/BreadcrumbContext';
 
@@ -34,6 +38,7 @@ function DashboardLayoutContent({
 }) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const { breadcrumbLabels } = useBreadcrumb();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -82,6 +87,18 @@ function DashboardLayoutContent({
       allowed: isAdminOrManager,
     },
     {
+      name: 'Messages',
+      path: '/dashboard/messages',
+      icon: MessageSquare,
+      allowed: isAdminOrManager,
+    },
+    {
+      name: 'Notifications',
+      path: '/dashboard/notifications',
+      icon: Bell,
+      allowed: true,
+    },
+    {
       name: 'Users',
       path: '/dashboard/users',
       icon: UserCog,
@@ -125,9 +142,13 @@ function DashboardLayoutContent({
           </button>
         </div>
 
-        {/* User Summary profile card */}
+        {/* User Summary profile card — clickable, navigates to profile */}
         <div className="p-4 border-b border-outline-variant/40">
-          <div className="flex items-center gap-3 bg-surface-container-low dark:bg-surface-container-high/60 p-2.5 rounded-2xl">
+          <button
+            onClick={() => router.push('/dashboard/profile')}
+            className="w-full flex items-center gap-3 bg-surface-container-low dark:bg-surface-container-high/60 p-2.5 rounded-2xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-colors cursor-pointer text-left"
+            title="View Profile"
+          >
             <div className="w-9 h-9 rounded-full bg-primary/20 dark:bg-secondary/20 flex items-center justify-center text-primary dark:text-secondary">
               <User className="w-5 h-5" />
             </div>
@@ -144,11 +165,11 @@ function DashboardLayoutContent({
                 </div>
               </div>
             )}
-          </div>
+          </button>
         </div>
 
         {/* Menu List */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {menuItems
             .filter((item) => item.allowed)
             .map((item) => {
@@ -171,8 +192,22 @@ function DashboardLayoutContent({
             })}
         </nav>
 
-        {/* Log Out button */}
-        <div className="p-4 border-t border-outline-variant/40 space-y-3">
+        {/* Bottom Section: Settings + Log Out */}
+        <div className="p-4 border-t border-outline-variant/40 space-y-1">
+          {/* Settings Link */}
+          <Link
+            href="/dashboard/settings"
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              pathname === '/dashboard/settings'
+                ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 dark:hover:bg-neutral/10'
+            }`}
+            title="Settings"
+          >
+            <Settings className="w-5 h-5 flex-shrink-0" />
+            {!sidebarCollapsed && <span className="font-body">Settings</span>}
+          </Link>
+
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-3 py-2.5 text-neutral-600 dark:text-neutral-400 hover:bg-tertiary/10 hover:text-tertiary rounded-xl text-sm font-semibold transition-colors active:scale-95"
@@ -221,6 +256,8 @@ function DashboardLayoutContent({
                 })}
               </span>
             </div>
+
+            <NotificationBell />
 
             <ThemeToggle />
           </div>

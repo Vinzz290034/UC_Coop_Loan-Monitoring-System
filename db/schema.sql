@@ -188,6 +188,19 @@ CREATE TABLE contact_messages (
     resolved_at TIMESTAMP WITH TIME ZONE
 );
 
+-- 15. Notifications (Role-based notification system)
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role_target VARCHAR(50),
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    reference_id UUID,
+    is_read BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance optimization on critical query pathways
 CREATE INDEX idx_members_user_id ON members(user_id);
 CREATE INDEX idx_share_capital_member ON share_capital_transactions(member_id);
@@ -200,3 +213,6 @@ CREATE INDEX idx_loan_payments_loan ON loan_payments(loan_id);
 CREATE INDEX idx_payment_allocations_payment ON loan_payment_allocations(loan_payment_id);
 CREATE INDEX idx_payment_allocations_schedule ON loan_payment_allocations(repayment_schedule_id);
 CREATE INDEX idx_contact_messages_created_at ON contact_messages(created_at);
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_role_target ON notifications(role_target);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at);

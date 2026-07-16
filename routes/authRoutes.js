@@ -14,7 +14,10 @@ import {
   deleteUser,
   submitContactMessage,       // Added
   getContactMessages,         // Added
-  updateContactMessageStatus  // Added
+  updateContactMessageStatus, // Added
+  replyToContactMessage,      // Added — Reply to contact inquiries
+  updateProfile,              // Added — Self-service profile update
+  changePassword              // Added — Self-service password change
 } from '../controllers/authController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -43,6 +46,8 @@ router.post('/contact', submitContactMessage); // Public landing page submission
 // Protected Personal Profile Route
 // ==========================================
 router.get('/me', protect, getMe);
+router.put('/me/profile', protect, updateProfile);
+router.put('/me/password', protect, changePassword);
 
 // ==========================================
 // Admin & Manager Protected Routes
@@ -53,6 +58,7 @@ router.post('/register', protect, restrictTo('admin', 'manager'), register);
 // Manage contact messages (inquiries)
 router.get('/contact-messages', protect, restrictTo('admin', 'manager'), getContactMessages);
 router.put('/contact-messages/:id', protect, restrictTo('admin', 'manager'), updateContactMessageStatus);
+router.post('/contact-messages/:id/reply', protect, restrictTo('admin', 'manager'), replyToContactMessage);
 
 // ==========================================
 // Admin Only User Management (Full CRUD)
@@ -62,4 +68,4 @@ router.get('/users/:id', protect, restrictTo('admin'), getUserById);
 router.put('/users/:id', protect, restrictTo('admin'), updateUser);
 router.delete('/users/:id', protect, restrictTo('admin'), deleteUser);
 
-export default router;
+export default router;

@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pool, { query } from '../config/db.js';
-import { generateOtp, sendOtpEmail } from '../services/emailService.js';
+import { generateOtp, sendOtpEmail, sendContactReply } from '../services/emailService.js';
 
 // Helper to sign JWT token
 const signToken = (id) => {
@@ -144,15 +144,14 @@ export const getMe = async (req, res, next) => {
   try {
     const user = req.user;
 
+    // Fetch linked member/profile for ALL roles (admin/manager may also have one)
     let memberProfile = null;
-    if (user.role === 'member') {
-      const memberResult = await query(
-        'SELECT id, first_name, last_name, middle_name, email, phone, status FROM members WHERE user_id = $1',
-        [user.id]
-      );
-      if (memberResult.rowCount > 0) {
-        memberProfile = memberResult.rows[0];
-      }
+    const memberResult = await query(
+      'SELECT id, first_name, last_name, middle_name, email, phone, address, date_of_birth, status FROM members WHERE user_id = $1',
+      [user.id]
+    );
+    if (memberResult.rowCount > 0) {
+      memberProfile = memberResult.rows[0];
     }
 
     res.status(200).json({
@@ -161,6 +160,7 @@ export const getMe = async (req, res, next) => {
         id: user.id,
         username: user.username,
         role: user.role,
+        created_at: user.created_at,
         profile: memberProfile
       }
     });
@@ -1070,11 +1070,30 @@ export const submitContactMessage = async (req, res, next) => {
     `;
 
     const result = await query(insertQuery, [cleanName, cleanEmail, cleanContent]);
+    const newMessage = result.rows[0];
+
+    // --- Create notifications for admin and manager roles ---
+    try {
+      const truncatedMsg = cleanContent.length > 100 ? cleanContent.slice(0, 100) + '...' : cleanContent;
+      await query(
+        `INSERT INTO notifications (role_target, type, title, message, reference_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        ['admin', 'contact_message', 'New Contact Message', `From ${cleanName}: ${truncatedMsg}`, newMessage.id]
+      );
+      await query(
+        `INSERT INTO notifications (role_target, type, title, message, reference_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        ['manager', 'contact_message', 'New Contact Message', `From ${cleanName}: ${truncatedMsg}`, newMessage.id]
+      );
+    } catch (notifError) {
+      // Non-critical: don't fail the contact submission if notification insert fails
+      console.error('Failed to create contact message notification:', notifError.message);
+    }
 
     res.status(201).json({
       success: true,
       message: 'Your inquiry has been submitted successfully. We will get back to you soon!',
-      data: result.rows[0]
+      data: newMessage
     });
   } catch (error) {
     next(error);
@@ -1194,6 +1213,241 @@ export const updateContactMessageStatus = async (req, res, next) => {
       success: true,
       message: `Message marked as ${status} successfully.`,
       data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ==========================================
+// Reply to Contact Message
+// ==========================================
+
+// @desc    Reply to a contact message and mark as resolved
+// @route   POST /api/auth/contact-messages/:id/reply
+// @access  Protected (Admin, Manager)
+export const replyToContactMessage = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reply_content } = req.body;
+
+    if (!reply_content || reply_content.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide reply content.' }
+      });
+    }
+
+    // Fetch the original message
+    const messageResult = await query(
+      'SELECT id, full_name, email, message_content, status FROM contact_messages WHERE id = $1',
+      [id]
+    );
+
+    if (messageResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Message not found.' }
+      });
+    }
+
+    const message = messageResult.rows[0];
+
+    // Send reply email
+    await sendContactReply(message.email, message.full_name, reply_content.trim());
+
+    // Update message status to resolved
+    const updateResult = await query(
+      `UPDATE contact_messages
+       SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING id, full_name, email, status, created_at, resolved_at`,
+      [id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Reply sent and message marked as resolved.',
+      data: updateResult.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ==========================================
+// Self-Service Profile Management
+// ==========================================
+
+// @desc    Update own profile information
+// @route   PUT /api/auth/me/profile
+// @access  Protected (All roles)
+export const updateProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { first_name, last_name, middle_name, email, phone, address, date_of_birth } = req.body;
+
+    // Validate required fields
+    if (!first_name || !last_name) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'First name and last name are required.' }
+      });
+    }
+
+    // Validate email format if provided
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Please provide a valid email address.' }
+        });
+      }
+
+      // Check email uniqueness (exclude own profile)
+      const emailCheck = await query(
+        'SELECT id FROM members WHERE email = $1 AND user_id != $2',
+        [email.toLowerCase(), userId]
+      );
+      if (emailCheck.rowCount > 0) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'This email address is already in use by another account.' }
+        });
+      }
+    }
+
+    // Check if a member profile already exists for this user
+    const existingMember = await query(
+      'SELECT id FROM members WHERE user_id = $1',
+      [userId]
+    );
+
+    let result;
+    if (existingMember.rowCount > 0) {
+      // Update existing member profile
+      result = await query(
+        `UPDATE members SET
+           first_name = $1,
+           last_name = $2,
+           middle_name = $3,
+           email = $4,
+           phone = $5,
+           address = $6,
+           date_of_birth = $7,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $8
+         RETURNING id, first_name, last_name, middle_name, email, phone, address, date_of_birth, status`,
+        [
+          first_name.trim(),
+          last_name.trim(),
+          middle_name?.trim() || null,
+          email?.toLowerCase() || null,
+          phone?.trim() || null,
+          address?.trim() || null,
+          date_of_birth || null,
+          userId
+        ]
+      );
+    } else {
+      // Create a new member profile for this user (admin/manager without one)
+      result = await query(
+        `INSERT INTO members (user_id, first_name, last_name, middle_name, email, phone, address, date_of_birth, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')
+         RETURNING id, first_name, last_name, middle_name, email, phone, address, date_of_birth, status`,
+        [
+          userId,
+          first_name.trim(),
+          last_name.trim(),
+          middle_name?.trim() || null,
+          email?.toLowerCase() || null,
+          phone?.trim() || null,
+          address?.trim() || null,
+          date_of_birth || null
+        ]
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully.',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Email address is already in use.' }
+      });
+    }
+    next(error);
+  }
+};
+
+// @desc    Change own password
+// @route   PUT /api/auth/me/password
+// @access  Protected (All roles)
+export const changePassword = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide both your current password and a new password.' }
+      });
+    }
+
+    // Validate new password strength
+    if (new_password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'New password must be at least 8 characters long.' }
+      });
+    }
+    if (!/[a-zA-Z]/.test(new_password) || !/\d/.test(new_password)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'New password must contain at least one letter and at least one number.' }
+      });
+    }
+
+    // Fetch current password hash
+    const userResult = await query(
+      'SELECT password_hash FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'User not found.' }
+      });
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(current_password, userResult.rows[0].password_hash);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Current password is incorrect.' }
+      });
+    }
+
+    // Hash new password and save
+    const salt = await bcrypt.genSalt(10);
+    const newHash = await bcrypt.hash(new_password, salt);
+
+    await query(
+      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newHash, userId]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully.'
     });
   } catch (error) {
     next(error);
