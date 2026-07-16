@@ -1022,3 +1022,180 @@ export const deleteUser = async (req, res, next) => {
     client.release();
   }
 };
+
+// ==========================================
+// Contact Messages (Inquiries Management)
+// ==========================================
+
+// @desc    Submit a contact / inquiry message
+// @route   POST /api/auth/contact
+// @access  Public
+export const submitContactMessage = async (req, res, next) => {
+  try {
+    const { full_name, email, message_content } = req.body;
+
+    // --- Input Validation ---
+    if (!full_name || !email || !message_content) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide your full name, email, and message content.' }
+      });
+    }
+
+    const cleanName = full_name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanContent = message_content.trim();
+
+    // Basic email format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide a valid email address.' }
+      });
+    }
+
+    if (cleanContent.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Message content must be at least 10 characters long.' }
+      });
+    }
+
+    // --- Save to Database ---
+    const insertQuery = `
+      INSERT INTO contact_messages (full_name, email, message_content)
+      VALUES ($1, $2, $3)
+      RETURNING id, full_name, email, status, created_at
+    `;
+
+    const result = await query(insertQuery, [cleanName, cleanEmail, cleanContent]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Your inquiry has been submitted successfully. We will get back to you soon!',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all contact messages (with filtering)
+// @route   GET /api/auth/contact-messages
+// @access  Protected (Admin, Manager)
+export const getContactMessages = async (req, res, next) => {
+  try {
+    const { status, search } = req.query;
+
+    let queryText = `
+      SELECT id, full_name, email, message_content, status, created_at, resolved_at
+      FROM contact_messages
+      WHERE 1=1
+    `;
+    const queryParams = [];
+    let paramIndex = 1;
+
+    // Filter by status (unread, read, resolved)
+    if (status) {
+      if (!['unread', 'read', 'resolved'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Invalid status filter applied.' }
+        });
+      }
+      queryText += ` AND status = $${paramIndex}`;
+      queryParams.push(status);
+      paramIndex++;
+    }
+
+    // Optional Search across Full Name, Email or Content
+    if (search) {
+      queryText += ` AND (
+        full_name ILIKE $${paramIndex} OR
+        email ILIKE $${paramIndex} OR
+        message_content ILIKE $${paramIndex}
+      )`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Order by newest inquiries first (Utilizes the idx_contact_messages_created_at index)
+    queryText += ' ORDER BY created_at DESC';
+
+    const result = await query(queryText, queryParams);
+
+    res.status(200).json({
+      success: true,
+      count: result.rowCount,
+      data: result.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update status of a contact message (e.g. read, resolved)
+// @route   PUT /api/auth/contact-messages/:id
+// @access  Protected (Admin, Manager)
+export const updateContactMessageStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide the new message status.' }
+      });
+    }
+
+    if (!['unread', 'read', 'resolved'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Status must be unread, read, or resolved.' }
+      });
+    }
+
+    // Check if the record exists
+    const messageCheck = await query('SELECT id FROM contact_messages WHERE id = $1', [id]);
+    if (messageCheck.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Message not found.' }
+      });
+    }
+
+    // Update state. If status is 'resolved', log the resolved_at timestamp.
+    let updateQuery = '';
+    let params = [];
+
+    if (status === 'resolved') {
+      updateQuery = `
+        UPDATE contact_messages
+        SET status = $1, resolved_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING id, full_name, email, status, created_at, resolved_at
+      `;
+      params = [status, id];
+    } else {
+      updateQuery = `
+        UPDATE contact_messages
+        SET status = $1, resolved_at = NULL
+        WHERE id = $2
+        RETURNING id, full_name, email, status, created_at, resolved_at
+      `;
+      params = [status, id];
+    }
+
+    const result = await query(updateQuery, params);
+
+    res.status(200).json({
+      success: true,
+      message: `Message marked as ${status} successfully.`,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
