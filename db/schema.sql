@@ -2,6 +2,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Drop tables if they exist to allow clean recreations
+DROP TABLE IF EXISTS contact_messages CASCADE;
 DROP TABLE IF EXISTS loan_payment_allocations CASCADE;
 DROP TABLE IF EXISTS loan_payments CASCADE;
 DROP TABLE IF EXISTS repayment_schedules CASCADE;
@@ -176,6 +177,17 @@ CREATE TABLE loan_payment_allocations (
     CHECK (principal_allocated + interest_allocated > 0)
 );
 
+-- 14. Contact Messages (Public system communications)
+CREATE TABLE contact_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name VARCHAR(150) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    message_content TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'unread' CHECK (status IN ('unread', 'read', 'resolved')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP WITH TIME ZONE
+);
+
 -- Indexes for performance optimization on critical query pathways
 CREATE INDEX idx_members_user_id ON members(user_id);
 CREATE INDEX idx_share_capital_member ON share_capital_transactions(member_id);
@@ -187,3 +199,4 @@ CREATE INDEX idx_repayment_schedules_due ON repayment_schedules(due_date);
 CREATE INDEX idx_loan_payments_loan ON loan_payments(loan_id);
 CREATE INDEX idx_payment_allocations_payment ON loan_payment_allocations(loan_payment_id);
 CREATE INDEX idx_payment_allocations_schedule ON loan_payment_allocations(repayment_schedule_id);
+CREATE INDEX idx_contact_messages_created_at ON contact_messages(created_at);
