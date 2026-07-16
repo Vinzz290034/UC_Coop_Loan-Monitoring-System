@@ -4,6 +4,7 @@ import React, { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
+import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { useBreadcrumb } from '@/context/BreadcrumbContext';
 import { SkeletonCard } from '@/components/ui/Skeleton';
@@ -207,9 +208,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   if (error || !member) {
     return (
       <div className="space-y-4">
-        <Link href="/dashboard/members" className="inline-flex items-center gap-1 text-sm font-semibold text-neutral-600 dark:text-neutral-400 hover:text-primary">
-          <ArrowLeft className="w-4 h-4" /> Back to members
-        </Link>
+        <BackButton href="/dashboard/members">Back to members</BackButton>
         <div className="p-6 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-3xl">
           <h4 className="font-bold flex items-center gap-2">
             <AlertTriangle className="w-5 h-5" /> Retrieval Failed
@@ -225,14 +224,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   return (
     <div className="space-y-6">
       {/* Navigation */}
-      <div>
-        <Link
-          href="/dashboard/members"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:text-primary dark:hover:text-secondary transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Members Ledger
-        </Link>
-      </div>
+        <BackButton href="/dashboard/members">Back to Members Ledger</BackButton>
 
       {/* Main Details Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">

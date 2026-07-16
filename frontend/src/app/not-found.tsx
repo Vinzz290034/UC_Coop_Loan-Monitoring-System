@@ -2,8 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Home, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, Home } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import BackButton from '@/components/BackButton';
 
 export default function NotFound() {
   return (
@@ -26,12 +27,7 @@ export default function NotFound() {
         </div>
 
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <button
-            onClick={() => window.history.back()}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 transition-all active:scale-95"
-          >
-            <ArrowLeft className="w-4 h-4" /> Go Back
-          </button>
+          <BackButton className="w-full sm:w-auto">Go Back</BackButton>
           
           <Link
             href="/"

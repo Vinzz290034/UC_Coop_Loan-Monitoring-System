@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
+import BackButton from '@/components/BackButton';
 import SearchInput from '@/components/SearchInput';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import {
@@ -184,13 +185,7 @@ export default function MembersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-xs font-extrabold text-neutral-500 hover:text-primary dark:hover:text-secondary transition-all"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to System Dashboard
-        </Link>
+        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
 
       {/* Header and Exporter */}

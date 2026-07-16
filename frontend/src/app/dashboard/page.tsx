@@ -41,6 +41,11 @@ export default function OverviewPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [tomorrowStr, setTomorrowStr] = useState('');
+  useEffect(() => {
+    setTomorrowStr(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+  }, []);
+
   // Member-specific data
   const [memberMetrics, setMemberMetrics] = useState<any>(null);
 
@@ -745,7 +750,7 @@ export default function OverviewPage() {
                           <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Select Date:</label>
                           <input
                             type="date"
-                            min={new Date(Date.now() + 86400000).toISOString().split('T')[0]} // Min is tomorrow
+                            min={tomorrowStr} // Min is tomorrow
                             value={appointmentDate}
                             onChange={(e) => setAppointmentDate(e.target.value)}
                             className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent focus:outline-none focus:border-primary text-base font-medium"

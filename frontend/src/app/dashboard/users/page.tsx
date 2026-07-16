@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import BackButton from '@/components/BackButton';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import {
   Users,
@@ -423,6 +424,10 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+      </div>
+
       {/* Page Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>

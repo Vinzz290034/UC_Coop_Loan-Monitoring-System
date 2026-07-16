@@ -1,6 +1,4 @@
 import React from 'react';
-import LandingNavbar from '@/components/LandingNavbar';
-import LandingFooter from '@/components/LandingFooter';
 import Link from 'next/link';
 import { ArrowRight, UserPlus, FileCheck, ShieldCheck } from 'lucide-react';
 
@@ -27,9 +25,7 @@ export default function HowItWorksPage() {
   ];
 
   return (
-    <div className="bg-background dark:bg-surface-container-low text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
-      <LandingNavbar activeIndex={2} />
-
+    <>
       <main className="pt-28 pb-16 max-w-5xl mx-auto px-6 space-y-16">
         <header className="text-center space-y-4">
           <h1 className="font-headline text-4xl font-extrabold text-primary dark:text-secondary">
@@ -80,8 +76,6 @@ export default function HowItWorksPage() {
           </div>
         </section>
       </main>
-
-      <LandingFooter />
-    </div>
+    </>
   );
 }

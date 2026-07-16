@@ -1,13 +1,9 @@
 import React from 'react';
-import LandingNavbar from '@/components/LandingNavbar';
-import LandingFooter from '@/components/LandingFooter';
 import { Award, Compass, History, Target, Users, Scale, Eye, Heart, Sparkles } from 'lucide-react';
 
 export default function AboutPage() {
   return (
-    <div className="bg-background dark:bg-surface-container-low text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
-      <LandingNavbar activeIndex={3} />
-
+    <>
       <main className="pt-28 pb-16 max-w-4xl mx-auto px-6 space-y-12">
         <header className="text-center space-y-4">
           <h1 className="font-headline text-4xl font-extrabold text-primary dark:text-secondary">
@@ -31,7 +27,7 @@ export default function AboutPage() {
             </p>
 
             <ul className="list-disc pl-5 space-y-1 font-body text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              <li>Alleviate the members' financial standing.</li>
+              <li>Alleviate the members&apos; financial standing.</li>
               <li>Increase its financial capability.</li>
               <li>
                 Engage in social responsibility through active cooperation among
@@ -154,8 +150,6 @@ export default function AboutPage() {
           </p>
         </section>
       </main>
-
-      <LandingFooter />
-    </div>
+    </>
   );
 }

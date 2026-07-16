@@ -14,6 +14,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import BackButton from '@/components/BackButton';
 import Link from 'next/link';
 
 // ─── Floating Peso / Currency Symbols ─────────────────────────────────────────
@@ -240,13 +241,7 @@ export default function LoginPage() {
       <AuthBackground />
 
       <header className="absolute top-6 left-6 right-6 flex items-center justify-between z-20">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 px-4 py-2 border-2 border-neutral-300 dark:border-neutral-700 rounded-full text-xs font-extrabold text-on-surface dark:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 shadow-sm"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Home
-        </Link>
+        <BackButton href="/">Back to Home</BackButton>
         <ThemeToggle />
       </header>
 
