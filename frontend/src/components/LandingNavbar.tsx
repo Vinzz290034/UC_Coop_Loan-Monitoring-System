@@ -2,15 +2,9 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Building2, Menu, X } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { Menu, X } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
-
-// ── Props ─────────────────────────────────────────────────────────────────────
-interface LandingNavbarProps {
-  /** Index of the currently active nav item (0 = Personal, etc.). -1 = none. */
-  activeIndex?: number;
-}
 
 // ── Nav items config ──────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -21,9 +15,14 @@ const NAV_ITEMS = [
   { name: 'Contact', path: '/contact' },
 ] as const;
 
-export default function LandingNavbar({ activeIndex = -1 }: LandingNavbarProps) {
+export default function LandingNavbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  /** Determine if a nav item is active based on the current pathname. */
+  const isActive = (itemPath: string) =>
+    itemPath === '/' ? pathname === '/' : pathname.startsWith(itemPath);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/75 dark:bg-neutral-950/65 backdrop-blur-xl border-b border-outline-variant/20 shadow-sm shadow-black/5 transition-colors duration-200">
@@ -37,11 +36,11 @@ export default function LandingNavbar({ activeIndex = -1 }: LandingNavbarProps) 
 
         {/* ── Desktop nav ───────────────────────────────────────────── */}
         <nav className="hidden md:flex items-center gap-1" aria-label="Main navigation">
-          {NAV_ITEMS.map((item, i) => (
+          {NAV_ITEMS.map((item) => (
             <Link
               key={item.name}
               href={item.path}
-              className={`px-4 py-2 rounded-full font-body text-sm font-semibold transition-all ${i === activeIndex
+              className={`px-4 py-2 rounded-full font-body text-sm font-semibold transition-all ${isActive(item.path)
                 ? 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary'
                 : 'text-on-surface/70 dark:text-neutral-300 hover:text-primary dark:hover:text-secondary hover:bg-primary/5 dark:hover:bg-secondary/5'
                 }`}
@@ -82,12 +81,12 @@ export default function LandingNavbar({ activeIndex = -1 }: LandingNavbarProps) 
       {/* ── Mobile menu ─────────────────────────────────────────────── */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-white/95 dark:bg-neutral-950/95 backdrop-blur-xl border-b border-outline-variant/30 px-6 py-5 flex flex-col gap-2">
-          {NAV_ITEMS.map((item, i) => (
+          {NAV_ITEMS.map((item) => (
             <Link
               key={item.name}
               href={item.path}
               onClick={() => setMobileMenuOpen(false)}
-              className={`font-body text-sm py-2.5 px-4 rounded-xl font-semibold transition-colors ${i === activeIndex
+              className={`font-body text-sm py-2.5 px-4 rounded-xl font-semibold transition-colors ${isActive(item.path)
                 ? 'text-primary dark:text-secondary bg-primary/8 dark:bg-secondary/8'
                 : 'text-on-surface/80 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
                 }`}
@@ -106,3 +105,4 @@ export default function LandingNavbar({ activeIndex = -1 }: LandingNavbarProps) 
     </header>
   );
 }
+

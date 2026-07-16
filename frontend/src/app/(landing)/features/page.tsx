@@ -1,6 +1,4 @@
 import React from 'react';
-import LandingNavbar from '@/components/LandingNavbar';
-import LandingFooter from '@/components/LandingFooter';
 import { ShieldCheck, Users, PiggyBank, Banknote, CalendarDays, FileSpreadsheet } from 'lucide-react';
 
 export default function FeaturesPage() {
@@ -38,9 +36,7 @@ export default function FeaturesPage() {
   ];
 
   return (
-    <div className="bg-background dark:bg-surface-container-low text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
-      <LandingNavbar activeIndex={1} />
-
+    <>
       <main className="pt-28 pb-16 max-w-5xl mx-auto px-6 space-y-12">
         <header className="text-center space-y-4">
           <h1 className="font-headline text-4xl font-extrabold text-primary dark:text-secondary">
@@ -78,8 +74,6 @@ export default function FeaturesPage() {
           </div>
         </section>
       </main>
-
-      <LandingFooter />
-    </div>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import Link from 'next/link';
 import {
   CreditCard,
@@ -22,17 +22,10 @@ import {
   CheckCircle2,
   Calculator, PiggyBank, Clock
 } from 'lucide-react';
-// ── Shared layout components ────────────────────────────────────────────────
-import LandingNavbar from '@/components/LandingNavbar';
-import LandingFooter from '@/components/LandingFooter';
 
 export default function LandingPage() {
   return (
-    <div className="bg-background dark:bg-surface-container-low text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
-
-      {/* ── Shared top navigation (see components/LandingNavbar.tsx) ── */}
-      <LandingNavbar activeIndex={0} />
-
+    <>
       <main className="pt-20">
 
         {/* ── Hero Section ─────────────────────────────────────────── */}
@@ -563,11 +556,6 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
-
-      {/* ── Shared footer (see components/LandingFooter.tsx) ──────── */}
-      <LandingFooter />
-    </div>
+    </>
   );
 }
-
-

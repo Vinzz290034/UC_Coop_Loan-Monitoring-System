@@ -23,28 +23,26 @@ function applyTheme(theme: Theme) {
   localStorage.setItem('theme', theme);
 }
 
+/**
+ * Read the saved theme synchronously from localStorage.
+ * Falls back to 'light' if nothing is saved or on the server.
+ */
+function getInitialTheme(): Theme {
+  if (typeof window === 'undefined') return 'light';
+  const saved = localStorage.getItem('theme');
+  return saved === 'dark' ? 'dark' : 'light';
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('light');
-  const [mounted, setMounted] = useState(false);
+  // Lazy initializer reads localStorage synchronously — no extra render cycle.
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
+  // Ensure the DOM class is in sync on first client mount.
+  // The root layout's beforeInteractive script already handles the initial
+  // paint, so this is just a safety net for the React state <-> DOM sync.
   useEffect(() => {
-    // Always start as light mode on first visit or when no preference is saved.
-    // Only honour a previously saved 'dark' choice if the user explicitly toggled it.
-    const saved = localStorage.getItem('theme') as Theme | null;
-    const initial: Theme = saved === 'dark' ? 'dark' : 'light';
-
-    // Ensure the class is in sync immediately (no flash)
-    if (initial === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-
-    // Persist so subsequent navigations are consistent
-    localStorage.setItem('theme', initial);
-    setTheme(initial);
-    setMounted(true);
-  }, []);
+    applyTheme(theme);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleTheme = () => {
     const next: Theme = theme === 'light' ? 'dark' : 'light';
@@ -52,10 +50,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(next);
   };
 
-  // Prevent hydration mismatch: render children invisible until client mounts
+  // No visibility gate needed — the beforeInteractive script in root layout
+  // prevents FOUC before React even hydrates.
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {mounted ? children : <div style={{ visibility: 'hidden' }}>{children}</div>}
+      {children}
     </ThemeContext.Provider>
   );
 }
@@ -67,3 +66,4 @@ export function useTheme() {
   }
   return context;
 }
+

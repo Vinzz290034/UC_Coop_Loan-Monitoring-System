@@ -34,8 +34,7 @@ import {
   CheckCircle2,
   ChevronUp,
 } from 'lucide-react';
-import LandingNavbar from '@/components/LandingNavbar';
-import LandingFooter from '@/components/LandingFooter';
+
 
 // ── Section data ──────────────────────────────────────────────────────────────
 // Each entry maps to one <section> in the body.
@@ -226,11 +225,7 @@ export default function PrivacyPage() {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return (
-    <div className="bg-background dark:bg-neutral-950 text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
-
-      {/* ── Shared navigation ──────────────────────────────────────── */}
-      {/* activeIndex={-1} so no nav item appears "selected" on legal pages */}
-      <LandingNavbar activeIndex={-1} />
+    <>
 
       <main className="pt-24 pb-24">
         <div className="max-w-5xl mx-auto px-6 md:px-12">
@@ -417,9 +412,6 @@ export default function PrivacyPage() {
         </div>
       </main>
 
-      {/* ── Shared footer with Privacy highlighted ──────────────────── */}
-      <LandingFooter activeLegal="privacy" />
-
       {/* ── Back to top FAB ─────────────────────────────────────────── */}
       {showBackToTop && (
         <button
@@ -430,6 +422,6 @@ export default function PrivacyPage() {
           <ChevronUp className="w-5 h-5" />
         </button>
       )}
-    </div>
+    </>
   );
 }

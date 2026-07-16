@@ -34,8 +34,7 @@ import {
   CalendarDays,
   Mail,
 } from 'lucide-react';
-import LandingNavbar from '@/components/LandingNavbar';
-import LandingFooter from '@/components/LandingFooter';
+
 
 // ── Table of Contents config ──────────────────────────────────────────────────
 const TOC_ITEMS = [
@@ -86,10 +85,7 @@ export default function TermsPage() {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return (
-    <div className="bg-background dark:bg-neutral-950 text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
-
-      {/* ── Shared navigation ──────────────────────────────────────── */}
-      <LandingNavbar activeIndex={-1} />
+    <>
 
       <main className="pt-24 pb-24">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
@@ -380,8 +376,6 @@ export default function TermsPage() {
         </div>
       </main>
 
-      {/* ── Shared footer with Terms highlighted ────────────────────── */}
-      <LandingFooter activeLegal="terms" />
 
       {/* ── Back to top FAB ─────────────────────────────────────────── */}
       {showBackToTop && (
@@ -393,7 +387,7 @@ export default function TermsPage() {
           <ChevronUp className="w-5 h-5" />
         </button>
       )}
-    </div>
+    </>
   );
 }
 
