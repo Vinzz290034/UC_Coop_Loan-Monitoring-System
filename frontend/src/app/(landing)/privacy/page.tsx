@@ -18,6 +18,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import BackButton from '@/components/BackButton';
 import {
   ArrowLeft,
   ShieldCheck,
@@ -230,14 +231,7 @@ export default function PrivacyPage() {
       <main className="pt-24 pb-24">
         <div className="max-w-5xl mx-auto px-6 md:px-12">
 
-          {/* ── Back button ─────────────────────────────────────────── */}
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface/60 dark:text-neutral-400 hover:text-primary dark:hover:text-secondary transition-colors mb-10 group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            Back to Home
-          </Link>
+          <BackButton href="/" className="mb-10">Back to Home</BackButton>
 
           {/* ── Hero header ─────────────────────────────────────────── */}
           <div className="mb-16 space-y-6">
