@@ -242,6 +242,10 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+.font-brandname {
+  font-family: 'Montserrat', sans-serif;
+}
+
 h1,
 h2,
 h3,

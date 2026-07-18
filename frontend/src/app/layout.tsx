@@ -3,7 +3,6 @@ import "./globals.css";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
-import Script from "next/script"; // Imported Next.js Script component
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -23,16 +22,15 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
       <head>
-        {/* Next.js optimized blocking script to prevent Flash of Unstyled Content (FOUC) */}
-        <Script
+        {/* Standard blocking inline script to prevent Flash of Unstyled Content (FOUC) */}
+        <script
           id="theme-initializer"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
                 try {
                   var saved = localStorage.getItem('theme');
-                  if (saved === 'dark') {
+                  if (saved === 'light') {
                     document.documentElement.classList.add('dark');
                   } else {
                     document.documentElement.classList.remove('dark');
