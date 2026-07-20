@@ -17,6 +17,7 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import auditRoutes from './routes/auditRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import calendarRoutes from './routes/calendarRoutes.js';
 
 dotenv.config();
 
@@ -82,6 +83,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/calendar', calendarRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

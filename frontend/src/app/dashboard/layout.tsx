@@ -57,6 +57,12 @@ function DashboardLayoutContent({
       allowed: true,
     },
     {
+      name: 'Calendar',
+      path: '/dashboard/calendar',
+      icon: Calendar,
+      allowed: true,
+    },
+    {
       name: 'Members',
       path: '/dashboard/members',
       icon: Users,
