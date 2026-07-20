@@ -10,6 +10,16 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+
+  // Rewrite /api/auth/contact to your Express backend port (e.g., 5000)
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:5000/api/:path*', // Change 5000 to your backend's actual port if different
+      },
+    ];
+  },
 };
 
 export default nextConfig;
