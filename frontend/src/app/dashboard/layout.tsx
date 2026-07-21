@@ -46,6 +46,12 @@ function DashboardLayoutContent({
     return null;
   }
 
+  const getAvatarUrl = (path?: string | null) => {
+    if (!path) return null;
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace('/api', '');
+    return `${baseUrl}${path}`;
+  };
+
   // Navigation Links based on role
   const isAdminOrManager = user.role === 'admin' || user.role === 'manager';
 
@@ -155,8 +161,16 @@ function DashboardLayoutContent({
             className="w-full flex items-center gap-3 bg-surface-container-low dark:bg-surface-container-high/60 p-2.5 rounded-2xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-colors cursor-pointer text-left"
             title="View Profile"
           >
-            <div className="w-9 h-9 rounded-full bg-primary/20 dark:bg-secondary/20 flex items-center justify-center text-primary dark:text-secondary">
-              <User className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-primary/20 dark:bg-secondary/20 flex items-center justify-center text-primary dark:text-secondary">
+              {user.profile_picture_url ? (
+                <img
+                  src={getAvatarUrl(user.profile_picture_url) || ''}
+                  alt={user.username}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <User className="w-5 h-5" />
+              )}
             </div>
             {!sidebarCollapsed && (
               <div className="min-w-0 flex-1">

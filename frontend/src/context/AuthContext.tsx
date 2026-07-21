@@ -8,6 +8,7 @@ export interface User {
   id: number;
   username: string;
   role: 'admin' | 'manager' | 'member';
+  profile_picture_url?: string | null;
   profile?: {
     id: number;
     first_name: string;
@@ -40,6 +41,7 @@ interface AuthContextType {
   resetPassword: (token: string, newPassword: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  updateUser: (updatedFields: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -217,6 +219,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   }
 
+  const updateUser = (updatedFields: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const newUser = { ...prev, ...updatedFields };
+      localStorage.setItem('user', JSON.stringify(newUser));
+      return newUser;
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -232,6 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resetPassword,
         logout,
         isAuthenticated: !!user,
+        updateUser,
       }}
     >
       {children}

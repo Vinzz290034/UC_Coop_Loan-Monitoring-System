@@ -22,7 +22,7 @@ export const protect = async (req, res, next) => {
 
     // Fetch user from DB to ensure they still exist and check latest data
     const userResult = await query(
-      'SELECT id, username, role, created_at FROM users WHERE id = $1',
+      'SELECT id, username, role, profile_picture_url, created_at FROM users WHERE id = $1',
       [decoded.id]
     );
 

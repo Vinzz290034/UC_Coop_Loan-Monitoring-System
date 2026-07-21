@@ -17,9 +17,11 @@ import {
   updateContactMessageStatus, // Added
   replyToContactMessage,      // Added — Reply to contact inquiries
   updateProfile,              // Added — Self-service profile update
-  changePassword              // Added — Self-service password change
+  changePassword,             // Added — Self-service password change
+  updateAvatar                // Added — Self-service avatar update
 } from '../controllers/authController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
+import { uploadAvatar } from '../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
@@ -48,6 +50,7 @@ router.post('/contact', submitContactMessage); // Public landing page submission
 router.get('/me', protect, getMe);
 router.put('/me/profile', protect, updateProfile);
 router.put('/me/password', protect, changePassword);
+router.put('/me/avatar', protect, uploadAvatar, updateAvatar);
 
 // ==========================================
 // Admin & Manager Protected Routes

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
@@ -19,6 +19,8 @@ import {
   EyeOff,
   Loader2,
   Edit3,
+  Camera,
+  X,
 } from 'lucide-react';
 
 function PasswordStrength({ password }: { password: string }) {
@@ -60,7 +62,89 @@ function PasswordStrength({ password }: { password: string }) {
 }
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Avatar upload states
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
+  const getAvatarUrl = (path?: string | null) => {
+    if (!path) return null;
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace('/api', '');
+    return `${baseUrl}${path}`;
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarError(null);
+    setAvatarSuccess(null);
+
+    // Validate size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError('Image size must be less than 2MB.');
+      return;
+    }
+
+    // Validate type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setAvatarError('Only JPEG, PNG, and WebP images are allowed.');
+      return;
+    }
+
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadAvatar = async () => {
+    if (!selectedFile) return;
+
+    setAvatarUploading(true);
+    setAvatarError(null);
+    setAvatarSuccess(null);
+
+    const formData = new FormData();
+    formData.append('avatar', selectedFile);
+
+    try {
+      const res = await api.put('/auth/me/avatar', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (res.data.success) {
+        updateUser({ profile_picture_url: res.data.profile_picture_url });
+        setAvatarSuccess('Profile picture updated successfully!');
+        setSelectedFile(null);
+        setAvatarPreview(null);
+        setTimeout(() => setAvatarSuccess(null), 4000);
+      }
+    } catch (err: any) {
+      setAvatarError(err.response?.data?.error?.message || 'Failed to upload profile picture.');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleCancelAvatar = () => {
+    setSelectedFile(null);
+    setAvatarPreview(null);
+    setAvatarError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   // Profile form state
   const [firstName, setFirstName] = useState('');
@@ -194,23 +278,101 @@ export default function ProfilePage() {
 
       {/* Profile Header */}
       <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl p-6">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/70 dark:from-secondary dark:to-secondary/70 flex items-center justify-center text-white dark:text-neutral-950 shadow-lg">
-            <User className="w-8 h-8" />
+        <div className="flex flex-col sm:flex-row items-center gap-6">
+          {/* Avatar upload container */}
+          <div className="relative group w-20 h-20 rounded-2xl overflow-hidden shadow-lg border border-outline-variant/30 flex-shrink-0 bg-neutral-100 dark:bg-neutral-800">
+            {avatarPreview ? (
+              <img
+                src={avatarPreview}
+                alt="Avatar preview"
+                className="w-full h-full object-cover"
+              />
+            ) : user.profile_picture_url ? (
+              <img
+                src={getAvatarUrl(user.profile_picture_url) || ''}
+                alt={displayName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-primary to-primary/70 dark:from-secondary dark:to-secondary/70 flex items-center justify-center text-white dark:text-neutral-950">
+                <User className="w-10 h-10" />
+              </div>
+            )}
+
+            {/* Hover overlay */}
+            <button
+              disabled={avatarUploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 cursor-pointer"
+            >
+              <Camera className="w-5 h-5" />
+              <span>Change</span>
+            </button>
+
+            {/* Hidden File Input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+            />
           </div>
-          <div className="flex-1">
-            <h1 className="font-headline text-xl font-extrabold text-on-surface dark:text-white">
-              {displayName}
-            </h1>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary text-[10px] font-bold uppercase">
-                <Shield className="w-3 h-3" />
-                {user.role}
-              </span>
-              <span className="text-[11px] text-neutral-500 dark:text-neutral-400 font-semibold">
-                @{user.username}
-              </span>
+
+          <div className="flex-1 text-center sm:text-left space-y-2">
+            <div>
+              <h1 className="font-headline text-xl font-extrabold text-on-surface dark:text-white">
+                {displayName}
+              </h1>
+              <div className="flex items-center justify-center sm:justify-start gap-3 mt-1">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary text-[10px] font-bold uppercase">
+                  <Shield className="w-3 h-3" />
+                  {user.role}
+                </span>
+                <span className="text-[11px] text-neutral-500 dark:text-neutral-400 font-semibold">
+                  @{user.username}
+                </span>
+              </div>
             </div>
+
+            {/* Save/Cancel Controls */}
+            {avatarPreview && (
+              <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
+                <button
+                  onClick={handleUploadAvatar}
+                  disabled={avatarUploading}
+                  className="px-3 py-1.5 rounded-lg bg-primary dark:bg-secondary text-white dark:text-neutral-950 text-xs font-bold hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {avatarUploading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      Save Picture
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleCancelAvatar}
+                  disabled={avatarUploading}
+                  className="px-3 py-1.5 rounded-lg bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs font-bold hover:bg-neutral-300 dark:hover:bg-neutral-700 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Alert messages */}
+            {avatarError && (
+              <p className="text-[10px] text-tertiary font-bold">{avatarError}</p>
+            )}
+            {avatarSuccess && (
+              <p className="text-[10px] text-primary dark:text-secondary font-bold">{avatarSuccess}</p>
+            )}
           </div>
         </div>
       </div>

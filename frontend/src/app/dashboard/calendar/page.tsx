@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useBreadcrumb } from '@/context/BreadcrumbContext';
+import BackButton from '@/components/BackButton';
 import api from '@/lib/api';
 import {
   ChevronLeft,
@@ -66,7 +67,7 @@ export default function CalendarPage() {
   const [selectedDayEvents, setSelectedDayEvents] = useState<CalendarEvent[]>([]);
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [showDayModal, setShowDayModal] = useState(false);
-  
+
   // Event Management States (Admin/Manager only)
   const [isManaging, setIsManaging] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -115,7 +116,7 @@ export default function CalendarPage() {
   // Helpers for calendar rendering
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayIndex = new Date(year, month, 1).getDay();
-  
+
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -148,7 +149,7 @@ export default function CalendarPage() {
   const handleDayClick = (dayNum: number) => {
     const clickedDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
     const dayEvents = events.filter(evt => evt.event_date === clickedDateStr);
-    
+
     setSelectedDateStr(clickedDateStr);
     setSelectedDayEvents(dayEvents);
     setShowDayModal(true);
@@ -178,9 +179,9 @@ export default function CalendarPage() {
         if (res.data && res.data.success) {
           await fetchEvents();
           // Update active events list for modal
-          const updatedEvents = events.map(evt => 
-            evt.id === editingEventId 
-              ? { ...evt, ...formFields } 
+          const updatedEvents = events.map(evt =>
+            evt.id === editingEventId
+              ? { ...evt, ...formFields }
               : evt
           );
           setSelectedDayEvents(updatedEvents.filter(evt => evt.event_date === selectedDateStr));
@@ -201,7 +202,7 @@ export default function CalendarPage() {
           setIsManaging(false);
         }
       }
-      
+
       // Reset input form titles
       setFormFields(prev => ({
         ...prev,
@@ -292,7 +293,7 @@ export default function CalendarPage() {
 
   // Generate calendar grid array
   const calendarCells = [];
-  
+
   // Previous Month's trailing days
   const prevMonthDate = new Date(year, month, 0);
   const prevMonthDays = prevMonthDate.getDate();
@@ -328,6 +329,10 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+      </div>
+
       {/* Header Widget */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm transition-all">
         <div>
@@ -497,29 +502,27 @@ export default function CalendarPage() {
               <div className="grid grid-cols-7 gap-1 md:gap-2 select-none">
                 {calendarCells.map((cell, idx) => {
                   const dayEvents = getFilteredEventsForDate(cell.dateStr);
-                  
+
                   return (
                     <div
                       key={idx}
                       onClick={() => handleDayClick(cell.dayNum)}
-                      className={`min-h-[72px] md:min-h-[96px] p-1.5 md:p-2 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer relative group ${
-                        cell.isCurrentMonth
-                          ? 'bg-surface dark:bg-surface-container-high/40 hover:bg-primary/5 dark:hover:bg-secondary/5 border-outline-variant/30 dark:border-outline-variant/10'
-                          : 'bg-neutral-50 dark:bg-neutral-950/20 text-neutral-400 border-outline-variant/15 dark:border-outline-variant/5 hover:opacity-75'
-                      } ${cell.isToday ? 'ring-2 ring-primary dark:ring-secondary ring-offset-2 dark:ring-offset-neutral-900' : ''}`}
+                      className={`min-h-[72px] md:min-h-[96px] p-1.5 md:p-2 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer relative group ${cell.isCurrentMonth
+                        ? 'bg-surface dark:bg-surface-container-high/40 hover:bg-primary/5 dark:hover:bg-secondary/5 border-outline-variant/30 dark:border-outline-variant/10'
+                        : 'bg-neutral-50 dark:bg-neutral-950/20 text-neutral-400 border-outline-variant/15 dark:border-outline-variant/5 hover:opacity-75'
+                        } ${cell.isToday ? 'ring-2 ring-primary dark:ring-secondary ring-offset-2 dark:ring-offset-neutral-900' : ''}`}
                     >
                       {/* Day Number */}
                       <div className="flex justify-between items-center">
                         <span
-                          className={`text-xs font-black p-1 rounded-lg ${
-                            cell.isToday
-                              ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-black'
-                              : 'text-neutral-700 dark:text-neutral-300'
-                          }`}
+                          className={`text-xs font-black p-1 rounded-lg ${cell.isToday
+                            ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-black'
+                            : 'text-neutral-700 dark:text-neutral-300'
+                            }`}
                         >
                           {cell.dayNum}
                         </span>
-                        
+
                         {cell.isToday && (
                           <span className="text-[9px] uppercase tracking-wider text-primary dark:text-secondary font-black hidden md:inline-flex items-center gap-0.5">
                             <Sparkles className="w-2.5 h-2.5 animate-pulse" />
@@ -729,8 +732,8 @@ export default function CalendarPage() {
                           value={formFields.type}
                           onChange={e => {
                             const val = e.target.value as CalendarEvent['type'];
-                            setFormFields(prev => ({ 
-                              ...prev, 
+                            setFormFields(prev => ({
+                              ...prev,
                               type: val,
                               status: val === 'office_duty' ? 'open' : 'active'
                             }));

@@ -1,7 +1,13 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import pool, { query } from '../config/db.js';
 import { generateOtp, sendOtpEmail, sendContactReply } from '../services/emailService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Helper to sign JWT token
 const signToken = (id) => {
@@ -29,7 +35,7 @@ export const login = async (req, res, next) => {
 
     // Check if user exists (by username or member email)
     const userResult = await query(
-      `SELECT u.id, u.username, u.password_hash, u.role 
+      `SELECT u.id, u.username, u.password_hash, u.role, u.profile_picture_url 
        FROM users u 
        LEFT JOIN members m ON m.user_id = u.id 
        WHERE u.username = $1 OR m.email = $1`,
@@ -79,6 +85,7 @@ export const login = async (req, res, next) => {
         id: user.id,
         username: user.username,
         role: user.role,
+        profile_picture_url: user.profile_picture_url,
         profile: memberProfile
       }
     });
@@ -160,6 +167,7 @@ export const getMe = async (req, res, next) => {
         id: user.id,
         username: user.username,
         role: user.role,
+        profile_picture_url: user.profile_picture_url,
         created_at: user.created_at,
         profile: memberProfile
       }
@@ -1448,6 +1456,60 @@ export const changePassword = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Password changed successfully.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update profile picture (avatar)
+// @route   PUT /api/auth/me/avatar
+// @access  Protected
+export const updateAvatar = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No file uploaded or invalid file type.' }
+      });
+    }
+
+    // Get old profile picture url to clean up disk space
+    const userResult = await query(
+      'SELECT profile_picture_url FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rowCount > 0 && userResult.rows[0].profile_picture_url) {
+      const oldUrl = userResult.rows[0].profile_picture_url;
+      // Extract filename from URL (e.g. /uploads/avatars/filename.png)
+      const filename = path.basename(oldUrl);
+      const oldPath = path.join(__dirname, '../uploads/avatars', filename);
+
+      // Verify and remove file
+      if (fs.existsSync(oldPath)) {
+        try {
+          fs.unlinkSync(oldPath);
+        } catch (err) {
+          console.error('Failed to delete old avatar file:', err);
+        }
+      }
+    }
+
+    // Store relative URL path
+    const fileUrl = `/uploads/avatars/${req.file.filename}`;
+
+    await query(
+      'UPDATE users SET profile_picture_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [fileUrl, userId]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Avatar updated successfully.',
+      profile_picture_url: fileUrl
     });
   } catch (error) {
     next(error);
