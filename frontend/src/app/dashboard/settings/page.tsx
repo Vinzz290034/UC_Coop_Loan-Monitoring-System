@@ -82,8 +82,8 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Appearance */}
-      <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl overflow-hidden">
+      {/* Appearance is redundant since it is already visible on the header.*/}
+      {/* <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center gap-2.5">
           <Sun className="w-4 h-4 text-primary dark:text-secondary" />
           <h2 className="font-headline text-sm font-bold text-on-surface dark:text-white">Appearance</h2>
@@ -127,7 +127,7 @@ export default function SettingsPage() {
             })}
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Notification Preferences */}
       <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl overflow-hidden">
