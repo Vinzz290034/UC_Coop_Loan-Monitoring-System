@@ -124,7 +124,7 @@ export default function NotificationsPage() {
   const grouped = groupByDate(notifications);
 
   return (
-    <div className="space-y-6 mx-auto">
+    <div className="space-y-6 mx-auto animate-micro-elevate">
       <div>
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>

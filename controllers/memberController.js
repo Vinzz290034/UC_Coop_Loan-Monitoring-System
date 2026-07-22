@@ -372,9 +372,8 @@ export const getMemberDashboardSummary = async (req, res, next) => {
     // Run parallel summary aggregations across financial ledgers
     const summaryQuery = `
       SELECT
-        -- Share Capital Balance
-        COALESCE((SELECT SUM(CASE WHEN UPPER(transaction_type) = 'CREDIT' THEN amount ELSE -amount END) 
-                  FROM share_capital_transactions WHERE member_id = $1), 0) as share_capital_balance,
+        -- Share Capital Balance (latest completed balance)
+        COALESCE((SELECT balance_after FROM share_capital_transactions WHERE member_id = $1 AND status = 'completed' ORDER BY transaction_date DESC LIMIT 1), 0) as share_capital_balance,
         
         -- Fixed Deposit Balance
         COALESCE((SELECT SUM(principal_amount) FROM fixed_deposits WHERE member_id = $1 AND status = 'active'), 0) as fixed_deposit_balance,

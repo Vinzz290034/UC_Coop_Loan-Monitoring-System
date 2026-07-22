@@ -343,7 +343,7 @@ export default function LoansPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-micro-elevate">
       <div>
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
@@ -702,8 +702,8 @@ export default function LoansPage() {
 
       {/* MODAL 1: CREATE LOAN PRODUCT */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
             <button
               onClick={() => setIsProductModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral/10 text-neutral-600 dark:text-neutral-400 transition-colors"
@@ -817,8 +817,8 @@ export default function LoansPage() {
 
       {/* MODAL 2: APPLY FOR LOAN */}
       {isApplyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
             <button
               onClick={() => setIsApplyModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral/10 text-neutral-600 dark:text-neutral-400 transition-colors"
@@ -904,8 +904,8 @@ export default function LoansPage() {
 
       {/* MODAL 3: RECORD REPAYMENT */}
       {isRepaymentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
             <button
               onClick={() => setIsRepaymentModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral/10 text-neutral-600 dark:text-neutral-400 transition-colors"

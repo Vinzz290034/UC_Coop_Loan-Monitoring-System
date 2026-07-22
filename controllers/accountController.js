@@ -13,13 +13,18 @@ export const postShareCapitalTransaction = async (req, res, next) => {
     let { member_id, transaction_type, amount, remarks } = req.body;
 
     if (req.user.role === 'member') {
-      if (!req.user.profile?.id) {
-        return res.status(400).json({
-          success: false,
-          error: { message: 'Authenticated user session is not linked to a member profile.' }
-        });
+      member_id = req.user.profile?.id;
+      if (!member_id) {
+        const memLookup = await client.query('SELECT id FROM members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+        if (memLookup.rowCount > 0) {
+          member_id = memLookup.rows[0].id;
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: { message: 'Authenticated user session is not linked to a member profile.' }
+          });
+        }
       }
-      member_id = req.user.profile.id;
       if (transaction_type !== 'credit') {
         return res.status(400).json({
           success: false,
@@ -63,7 +68,7 @@ export const postShareCapitalTransaction = async (req, res, next) => {
 
     // Get latest transaction to calculate cumulative balance
     const latestTx = await client.query(
-      'SELECT balance_after FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC, id DESC LIMIT 1',
+      'SELECT balance_after FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC LIMIT 1',
       [member_id]
     );
 
@@ -86,18 +91,22 @@ export const postShareCapitalTransaction = async (req, res, next) => {
       newBalance -= parseFloat(amount);
     }
 
+    const initialStatus = req.user.role === 'member' ? 'pending_payment' : 'completed';
+    const postBalance = initialStatus === 'completed' ? newBalance : currentBalance;
+
     // Write transaction record
     const insertTx = `
-      INSERT INTO share_capital_transactions (member_id, transaction_type, amount, balance_after, remarks)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO share_capital_transactions (member_id, transaction_type, amount, balance_after, remarks, status)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
     const result = await client.query(insertTx, [
       member_id,
       transaction_type,
       amount,
-      newBalance,
-      remarks || `${transaction_type === 'credit' ? 'Equity contribution' : 'Equity withdrawal'}`
+      postBalance,
+      remarks || `${transaction_type === 'credit' ? 'Equity contribution' : 'Equity withdrawal'}`,
+      initialStatus
     ]);
 
     await client.query('COMMIT');
@@ -133,11 +142,16 @@ export const getShareCapital = async (req, res, next) => {
     }
 
     const txs = await query(
-      'SELECT * FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC, id DESC',
+      'SELECT * FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC',
       [memberId]
     );
 
-    const balance = txs.rowCount > 0 ? parseFloat(txs.rows[0].balance_after) : 0;
+    const completedTx = await query(
+      "SELECT balance_after FROM share_capital_transactions WHERE member_id = $1 AND status = 'completed' ORDER BY transaction_date DESC LIMIT 1",
+      [memberId]
+    );
+
+    const balance = completedTx.rowCount > 0 ? parseFloat(completedTx.rows[0].balance_after) : 0;
 
     res.status(200).json({
       success: true,
@@ -162,13 +176,18 @@ export const createFixedDeposit = async (req, res, next) => {
     let { member_id, principal_amount, interest_rate, duration_months } = req.body;
 
     if (req.user.role === 'member') {
-      if (!req.user.profile?.id) {
-        return res.status(400).json({
-          success: false,
-          error: { message: 'Authenticated user session is not linked to a member profile.' }
-        });
+      member_id = req.user.profile?.id;
+      if (!member_id) {
+        const memLookup = await client.query('SELECT id FROM members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+        if (memLookup.rowCount > 0) {
+          member_id = memLookup.rows[0].id;
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: { message: 'Authenticated user session is not linked to a member profile.' }
+          });
+        }
       }
-      member_id = req.user.profile.id;
     }
 
     if (!member_id || !principal_amount || !interest_rate || !duration_months) {
@@ -194,10 +213,13 @@ export const createFixedDeposit = async (req, res, next) => {
     const maturityDate = new Date();
     maturityDate.setMonth(maturityDate.getMonth() + parseInt(duration_months, 10));
 
+    // Member placements start as 'pending_payment' until office cash payment is confirmed
+    const initialStatus = req.user.role === 'member' ? 'pending_payment' : 'active';
+
     // 1. Insert fixed deposit registry item
     const insertFD = `
       INSERT INTO fixed_deposits (member_id, principal_amount, interest_rate, placement_date, maturity_date, status)
-      VALUES ($1, $2, $3, $4, $5, 'active')
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
     const fdResult = await client.query(insertFD, [
@@ -205,17 +227,20 @@ export const createFixedDeposit = async (req, res, next) => {
       principal_amount,
       interest_rate,
       placementDate.toISOString().split('T')[0],
-      maturityDate.toISOString().split('T')[0]
+      maturityDate.toISOString().split('T')[0],
+      initialStatus
     ]);
 
     const newFD = fdResult.rows[0];
 
-    // 2. Post initial deposit transaction log
-    const insertFDTx = `
-      INSERT INTO fixed_deposit_transactions (fixed_deposit_id, transaction_type, amount)
-      VALUES ($1, 'deposit', $2)
-    `;
-    await client.query(insertFDTx, [newFD.id, principal_amount]);
+    // 2. If already active (admin created), post initial deposit transaction log
+    if (initialStatus === 'active') {
+      const insertFDTx = `
+        INSERT INTO fixed_deposit_transactions (fixed_deposit_id, transaction_type, amount)
+        VALUES ($1, 'deposit', $2)
+      `;
+      await client.query(insertFDTx, [newFD.id, principal_amount]);
+    }
 
     await client.query('COMMIT');
 
@@ -251,11 +276,14 @@ export const getFixedDeposits = async (req, res, next) => {
 
     const result = await query(
       `SELECT fd.*, 
-       COALESCE(json_agg(fdt.* ORDER BY fdt.transaction_date DESC) FILTER (WHERE fdt.id IS NOT NULL), '[]') as transactions
+       COALESCE(
+         (SELECT json_agg(fdt.* ORDER BY fdt.transaction_date DESC) 
+          FROM fixed_deposit_transactions fdt 
+          WHERE fdt.fixed_deposit_id = fd.id), 
+         '[]'::json
+       ) as transactions
        FROM fixed_deposits fd
-       LEFT JOIN fixed_deposit_transactions fdt ON fd.id = fdt.fixed_deposit_id
        WHERE fd.member_id = $1
-       GROUP BY fd.id
        ORDER BY fd.created_at DESC`,
       [memberId]
     );
@@ -454,11 +482,14 @@ export const getInvestments = async (req, res, next) => {
 
     const result = await query(
       `SELECT i.*, 
-       COALESCE(json_agg(it.* ORDER BY it.transaction_date DESC) FILTER (WHERE it.id IS NOT NULL), '[]') as transactions
+       COALESCE(
+         (SELECT json_agg(it.* ORDER BY it.transaction_date DESC) 
+          FROM investment_transactions it 
+          WHERE it.investment_id = i.id), 
+         '[]'::json
+       ) as transactions
        FROM investments i
-       LEFT JOIN investment_transactions it ON i.id = it.investment_id
        WHERE i.member_id = $1
-       GROUP BY i.id
        ORDER BY i.created_at DESC`,
       [memberId]
     );
@@ -469,5 +500,140 @@ export const getInvestments = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+// ==========================================
+// 4. ADMIN OFFICE CASH PAYMENT APPROVAL QUEUE
+// ==========================================
+
+// @desc    Get all pending member capital & investment placements
+// @route   GET /api/accounts/pending-placements
+// @access  Protected (Admin, Manager)
+export const getPendingPlacements = async (req, res, next) => {
+  try {
+    const fixedDeposits = await query(
+      `SELECT fd.id, fd.member_id, fd.principal_amount as amount, fd.interest_rate, fd.placement_date, fd.status, fd.created_at,
+              'fixed_deposit' as placement_type,
+              m.id as member_no, m.first_name, m.last_name, m.email, m.phone
+       FROM fixed_deposits fd
+       JOIN members m ON fd.member_id = m.id
+       WHERE fd.status = 'pending_payment'
+       ORDER BY fd.created_at DESC`
+    );
+
+    const shareCapital = await query(
+      `SELECT sct.id, sct.member_id, sct.amount, sct.transaction_date as placement_date, sct.status, sct.remarks, sct.transaction_date as created_at,
+              'share_capital' as placement_type,
+              m.id as member_no, m.first_name, m.last_name, m.email, m.phone
+       FROM share_capital_transactions sct
+       JOIN members m ON sct.member_id = m.id
+       WHERE sct.status = 'pending_payment'
+       ORDER BY sct.transaction_date DESC`
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        fixed_deposits: fixedDeposits.rows,
+        share_capital: shareCapital.rows,
+        all_pending: [...fixedDeposits.rows, ...shareCapital.rows]
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Approve and confirm office cash payment for a placement
+// @route   PUT /api/accounts/confirm-placement/:type/:id
+// @access  Protected (Admin, Manager)
+export const confirmPlacementPayment = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { type, id } = req.params;
+
+    await client.query('BEGIN');
+
+    if (type === 'fixed-deposit') {
+      const fdCheck = await client.query('SELECT * FROM fixed_deposits WHERE id = $1 FOR UPDATE', [id]);
+      if (fdCheck.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ success: false, error: { message: 'Fixed deposit placement not found.' } });
+      }
+
+      const fd = fdCheck.rows[0];
+      if (fd.status !== 'pending_payment') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, error: { message: `Placement is already ${fd.status}.` } });
+      }
+
+      // Activate placement
+      await client.query("UPDATE fixed_deposits SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
+
+      // Post deposit transaction log
+      await client.query(
+        "INSERT INTO fixed_deposit_transactions (fixed_deposit_id, transaction_type, amount) VALUES ($1, 'deposit', $2)",
+        [id, fd.principal_amount]
+      );
+
+      // Create notification for member user
+      const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [fd.member_id]);
+      if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
+        await client.query(
+          `INSERT INTO notifications (user_id, title, message, type)
+           VALUES ($1, 'Fixed Deposit Cash Payment Received', $2, 'account')`,
+          [memUserRes.rows[0].user_id, `Your cash payment of ₱${parseFloat(fd.principal_amount).toLocaleString()} for Fixed Deposit has been received and activated at the Coop Office.`]
+        );
+      }
+
+    } else if (type === 'share-capital') {
+      const scCheck = await client.query('SELECT * FROM share_capital_transactions WHERE id = $1 FOR UPDATE', [id]);
+      if (scCheck.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ success: false, error: { message: 'Share capital placement not found.' } });
+      }
+
+      const sc = scCheck.rows[0];
+
+      // Get latest completed balance
+      const latestTx = await client.query(
+        "SELECT balance_after FROM share_capital_transactions WHERE member_id = $1 AND status = 'completed' ORDER BY transaction_date DESC LIMIT 1",
+        [sc.member_id]
+      );
+      let currBal = 0;
+      if (latestTx.rowCount > 0) {
+        currBal = parseFloat(latestTx.rows[0].balance_after);
+      }
+      const newBal = currBal + parseFloat(sc.amount);
+
+      // Mark transaction completed & credit balance
+      await client.query("UPDATE share_capital_transactions SET status = 'completed', balance_after = $1 WHERE id = $2", [newBal, id]);
+
+      // Create notification for member user
+      const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [sc.member_id]);
+      if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
+        await client.query(
+          `INSERT INTO notifications (user_id, title, message, type)
+           VALUES ($1, 'Share Capital Payment Received', $2, 'account')`,
+          [memUserRes.rows[0].user_id, `Your cash payment of ₱${parseFloat(sc.amount).toLocaleString()} for Share Capital deposit has been received and credited at the Coop Office.`]
+        );
+      }
+    } else {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: { message: 'Invalid placement type.' } });
+    }
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      message: 'Office cash payment verified successfully. Member account updated.'
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
   }
 };

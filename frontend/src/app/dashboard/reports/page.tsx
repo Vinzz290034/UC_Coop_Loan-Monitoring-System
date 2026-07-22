@@ -157,7 +157,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-micro-elevate">
       <div>
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>

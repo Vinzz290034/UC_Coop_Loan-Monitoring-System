@@ -64,7 +64,7 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="space-y-6 mx-auto">
+    <div className="space-y-6 mx-auto animate-micro-elevate">
       <div>
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>

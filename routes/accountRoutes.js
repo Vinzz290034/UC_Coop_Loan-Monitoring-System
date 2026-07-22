@@ -6,7 +6,9 @@ import {
   getFixedDeposits,
   createInvestment,
   postInvestmentTransaction,
-  getInvestments
+  getInvestments,
+  getPendingPlacements,
+  confirmPlacementPayment
 } from '../controllers/accountController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -38,5 +40,12 @@ router.route('/investments/:id/transactions')
 
 router.route('/investments/:memberId')
   .get(getInvestments);
+
+// 4. Pending placements & office cash payment confirmation
+router.route('/pending-placements')
+  .get(restrictTo('admin', 'manager'), getPendingPlacements);
+
+router.route('/confirm-placement/:type/:id')
+  .put(restrictTo('admin', 'manager'), confirmPlacementPayment);
 
 export default router;

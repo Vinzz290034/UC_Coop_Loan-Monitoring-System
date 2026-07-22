@@ -271,7 +271,7 @@ export default function ProfilePage() {
   const displayName = firstName && lastName ? `${firstName} ${lastName}` : user.username;
 
   return (
-    <div className="space-y-6 mx-auto">
+    <div className="space-y-6 mx-auto animate-micro-elevate">
       <div>
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>

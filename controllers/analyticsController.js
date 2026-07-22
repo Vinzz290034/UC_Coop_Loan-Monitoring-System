@@ -33,8 +33,12 @@ export const getDashboardSummary = async (req, res, next) => {
         (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status IN ('disbursed', 'fully_paid', 'defaulted')) as total_capital_ever_deployed,
         
         -- Share capital totals
-        (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE -amount END), 0) 
-         FROM share_capital_transactions) as total_share_capital,
+        (SELECT COALESCE(SUM(b.bal), 0) FROM (
+           SELECT DISTINCT ON (member_id) balance_after as bal 
+           FROM share_capital_transactions 
+           WHERE status = 'completed' 
+           ORDER BY member_id, transaction_date DESC
+        ) b) as total_share_capital,
 
         -- Fixed deposit totals
         (SELECT COALESCE(SUM(principal_amount), 0) FROM fixed_deposits WHERE status = 'active') as total_active_fixed_deposits,

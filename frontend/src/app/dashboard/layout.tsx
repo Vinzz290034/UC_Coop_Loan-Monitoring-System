@@ -250,24 +250,34 @@ function DashboardLayoutContent({
       {/* Main Panel */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Top Header */}
-        <header className="h-20 bg-white dark:bg-surface-container-low border-b border-outline-variant/65 flex items-center justify-between px-6 py-6 md:px-8 z-30">
+        <header className="sticky top-0 h-20 bg-white/80 dark:bg-surface-container-low/85 backdrop-blur-xl border-b border-outline-variant/50 flex items-center justify-between px-6 md:px-8 z-30 transition-colors shadow-2xs">
+          {/* Left Title Badge & Live Status Node */}
           <div className="flex items-center gap-3">
-            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white capitalize">
-              {pathname === '/dashboard'
-                ? 'System Dashboard'
-                : pathname
-                  .split('/')
-                  .slice(2)
-                  .map((segment) => breadcrumbLabels[segment] || segment)
-                  .join(' / ')}
-            </h2>
+            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-2xl bg-surface-container-low/90 dark:bg-surface-container-high/60 border border-outline-variant/40 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/60 dark:bg-secondary/60 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary dark:bg-secondary"></span>
+              </span>
+              <h2 className="font-headline text-sm md:text-base font-extrabold text-on-surface dark:text-white capitalize tracking-tight">
+                {pathname === '/dashboard'
+                  ? 'System Dashboard'
+                  : pathname
+                    .split('/')
+                    .slice(2)
+                    .map((segment) => breadcrumbLabels[segment] || segment)
+                    .join(' / ')}
+              </h2>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral/5 dark:bg-neutral/10 border border-outline-variant/30 text-xs text-neutral-600 dark:text-neutral-300">
-              <Calendar className="w-3.5 h-3.5" />
-              <span className="font-mono font-semibold">
+          {/* Right Action Control Bar */}
+          <div className="flex items-center gap-2.5 p-1.5 rounded-full bg-neutral-500/5 dark:bg-neutral-400/5 border border-outline-variant/40 shadow-2xs">
+            {/* Live Date Badge */}
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-surface-container-low border border-outline-variant/30 text-xs font-semibold text-neutral-700 dark:text-neutral-300 shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+              <span className="font-mono text-[11px] tracking-wide">
                 {new Date().toLocaleDateString('en-US', {
+                  weekday: 'short',
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',
@@ -275,9 +285,19 @@ function DashboardLayoutContent({
               </span>
             </div>
 
-            <NotificationBell />
+            <div className="h-4 w-px bg-outline-variant/40 hidden sm:block" />
 
-            <ThemeToggle />
+            {/* Notification Bell */}
+            <div className="flex items-center justify-center">
+              <NotificationBell />
+            </div>
+
+            <div className="h-4 w-px bg-outline-variant/40" />
+
+            {/* Theme Toggle */}
+            <div className="flex items-center justify-center">
+              <ThemeToggle />
+            </div>
           </div>
         </header>
 

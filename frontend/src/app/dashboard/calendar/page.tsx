@@ -568,8 +568,8 @@ export default function CalendarPage() {
 
       {/* Day Events Details Modal */}
       {showDayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-surface-container bg-surface rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden border border-outline-variant/60 flex flex-col max-h-[90vh]">
+        <div key={selectedDateStr || 'day-modal'} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-modal-backdrop">
+          <div key={`card-${selectedDateStr || 'day-modal'}`} className="bg-white dark:bg-surface-container bg-surface rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden border border-outline-variant/60 flex flex-col max-h-[90vh] animate-modal-pop">
             {/* Modal Header */}
             <div className="p-5 border-b border-outline-variant/50 flex justify-between items-center bg-primary/5 dark:bg-secondary/5">
               <div>

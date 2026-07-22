@@ -34,8 +34,81 @@ import {
   WalletCards,
   Lock,
   Info,
+  Target,
+  Award,
+  Sparkles,
+  PhoneCall,
+  Mail,
+  CalendarDays,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+
+interface DropdownOption {
+  value: string;
+  label: string;
+}
+
+function AnimatedSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Select option'
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options: DropdownOption[];
+  placeholder?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find((opt) => opt.value === value);
+
+  return (
+    <div className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 rounded-2xl border border-outline-variant/65 bg-white dark:bg-surface-container-high text-on-surface dark:text-white font-bold text-sm flex items-center justify-between shadow-xs hover:border-primary/60 dark:hover:border-secondary/60 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+      >
+        <span>{selectedOption ? selectedOption.label : placeholder}</span>
+        <ChevronDown className={`w-4 h-4 text-neutral-500 transition-transform duration-250 ${isOpen ? 'rotate-180 text-primary dark:text-secondary' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <>
+          {/* Backdrop blur/overlay to dismiss on outside click */}
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+
+          {/* Animated Options Menu */}
+          <div className="absolute top-full left-0 right-0 mt-1.5 z-50 p-1.5 bg-white dark:bg-surface-container-high border border-outline-variant/60 rounded-2xl shadow-xl space-y-1 animate-dropdown-pop max-h-56 overflow-y-auto">
+            {options.map((option) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-extrabold'
+                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  }`}
+                >
+                  <span>{option.label}</span>
+                  {isSelected && <Check className="w-4 h-4 text-primary dark:text-secondary" />}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function OverviewPage() {
   const { user } = useAuth();
@@ -290,8 +363,13 @@ export default function OverviewPage() {
 
     return (
       <div className="space-y-8">
+        {/* Header Greeting */}
         <div>
-          <h1 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary mb-2">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Verified Member Session</span>
+          </div>
+          <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
             Welcome back, {memberMetrics?.full_name || user.username}!
           </h1>
           <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
@@ -336,7 +414,7 @@ export default function OverviewPage() {
             {/* Apply for Loan */}
             <button
               onClick={openLoanModal}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
             >
               <div className="space-y-1">
                 <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
@@ -362,7 +440,7 @@ export default function OverviewPage() {
                 setSuccessData(null);
                 setModalError(null);
               }}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
             >
               <div className="space-y-1">
                 <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
@@ -388,7 +466,7 @@ export default function OverviewPage() {
                 setSuccessData(null);
                 setModalError(null);
               }}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
             >
               <div className="space-y-1">
                 <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
@@ -409,42 +487,135 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        {/* Active Loan Account Section */}
-        <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-          <div className="space-y-2">
-            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Active Loan Account</h2>
-            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-              Your ongoing active repayment obligations and outstanding balance matrix.
-            </p>
-            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-surface dark:bg-surface-container-high border border-outline-variant text-[11px] font-bold text-neutral-600 dark:text-neutral-400">
-              <CheckCircle2 className="w-3.5 h-3.5 text-secondary" />
-              {loans.active_count} Active Debt Contracts
+        {/* Member Equity & Investment Goal Milestone Card */}
+        <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary">
+                <Award className="w-3.5 h-3.5" />
+                <span>Co-op Equity & Investment Milestone</span>
+              </div>
+              <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white pt-1">
+                Member Investment Goal & Dividend Tracker
+              </h3>
+              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+                Track your target capital placements. Reaching your goal notifies the Coop Office for call/email payout options.
+              </p>
             </div>
+
+            <button
+              onClick={() => {
+                setActiveModal('investment');
+                setWizardStep(1);
+                setSuccessData(null);
+                setModalError(null);
+              }}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer self-start sm:self-auto"
+            >
+              <Coins className="w-4 h-4" />
+              <span>Add Capital Placement +</span>
+            </button>
           </div>
 
-          <div className="p-4 rounded-2xl bg-neutral/5 dark:bg-neutral/10 flex flex-col justify-center">
-            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Original Principal</span>
-            <div className="font-headline text-lg font-extrabold text-on-surface dark:text-white mt-1">
-              {formatCurrency(loans.original_principal)}
-            </div>
-            <span className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-1">Borrowed Loan volume</span>
-          </div>
+          {/* Progress Bar & Target Math */}
+          {(() => {
+            const currentEquity = balances.share_capital || 0;
+            const milestoneTarget = currentEquity < 10000 ? 10000 : currentEquity < 25000 ? 25000 : currentEquity < 50000 ? 50000 : currentEquity < 100000 ? 100000 : (Math.ceil(currentEquity / 50000) + 1) * 50000;
+            const progressPercent = Math.min(100, Math.round((currentEquity / milestoneTarget) * 100));
+            const estAnnualDividend = currentEquity * 0.065;
+            const isGoalReached = progressPercent >= 100;
 
-          <div className="p-4 rounded-2xl bg-tertiary/10 border border-tertiary/20 flex flex-col justify-center">
-            <span className="text-[10px] font-bold text-tertiary uppercase font-label">Outstanding Balance</span>
-            <div className="font-headline text-2xl font-extrabold text-tertiary mt-1">
-              {formatCurrency(loans.outstanding_balance)}
-            </div>
-            <span className="text-[10px] text-tertiary/85 mt-1">Remaining payment principal</span>
-          </div>
+            return (
+              <div className="space-y-5">
+                {/* Progress labels */}
+                <div className="flex justify-between items-end text-xs font-bold">
+                  <div className="space-y-0.5">
+                    <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Accumulated Equity Capital</span>
+                    <div className="font-headline text-lg font-extrabold text-primary dark:text-secondary">
+                      {formatCurrency(currentEquity)}
+                    </div>
+                  </div>
+                  <div className="text-right space-y-0.5">
+                    <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Target Milestone Goal</span>
+                    <div className="font-headline text-base font-bold text-on-surface dark:text-white">
+                      {formatCurrency(milestoneTarget)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Visual Progress Bar */}
+                <div className="relative w-full h-3.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden p-0.5 border border-outline-variant/30">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all duration-1000 ease-out shadow-xs"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+
+                {/* Call/Email Notification Banner when goal is reached or in progress */}
+                {isGoalReached ? (
+                  <div className="p-4 bg-primary/10 border border-primary/30 rounded-2xl flex items-start gap-3 text-xs text-primary dark:text-secondary font-semibold">
+                    <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-primary dark:text-secondary" />
+                    <div>
+                      <strong className="block text-sm font-bold">🎉 Milestone Goal Reached!</strong>
+                      Our Cooperative Officers have been notified. A staff member will reach out via <span className="underline font-extrabold font-mono">Phone Call</span> or <span className="underline font-extrabold font-mono">Email</span> regarding your total investment payout or rollover options.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-neutral-50 dark:bg-surface-container-high/40 border border-outline-variant/50 rounded-2xl flex items-center justify-between flex-wrap gap-3 text-xs text-neutral-600 dark:text-neutral-300">
+                    <div className="flex items-center gap-2">
+                      <PhoneCall className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                      <Mail className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                      <span><strong>Officer Contact Protocol:</strong> Once your investment hits 100%, a staff will call or email you.</span>
+                    </div>
+                    <span className="font-mono text-[11px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/15 px-2.5 py-1 rounded-full">
+                      {100 - progressPercent}% remaining to goal
+                    </span>
+                  </div>
+                )}
+
+                {/* Dynamic Milestone & Annual General Assembly Dividend Highlights */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                      <Target className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Milestone Status</span>
+                      <span className="text-xs font-extrabold text-on-surface dark:text-white">{progressPercent}% Completed</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Est. Annual Dividend</span>
+                      <span className="text-xs font-extrabold text-primary dark:text-secondary">{formatCurrency(estAnnualDividend)} / yr</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                      <CalendarDays className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Dividend Payout</span>
+                      <span className="text-xs font-extrabold text-on-surface dark:text-white">Annual General Assembly</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ======================================================== */}
         {/* TRANSACTIONS MODAL OVERLAYS (ELDERLY ACCESSIBLE DESIGN) */}
         {/* ======================================================== */}
         {activeModal && (
-          <div className="fixed inset-0 bg-neutral-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div key={activeModal} className="fixed inset-0 bg-neutral-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-modal-backdrop">
+            <div key={`${activeModal}-${wizardStep}`} className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-modal-pop">
               {/* Header */}
               <div className="px-6 py-5 border-b border-outline-variant/40 flex justify-between items-center bg-surface-container-low dark:bg-surface-container-high/40">
                 <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white capitalize">
@@ -716,15 +887,15 @@ export default function OverviewPage() {
                             </div>
                             <div className="space-y-2">
                               <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Duration Term:</label>
-                              <select
+                              <AnimatedSelect
                                 value={fdDuration}
-                                onChange={(e) => setFdDuration(e.target.value)}
-                                className="w-full px-3 py-2 border border-outline-variant/65 rounded-xl bg-transparent focus:outline-none"
-                              >
-                                <option value="6">6 Months Placement</option>
-                                <option value="12">12 Months (1 Year)</option>
-                                <option value="24">24 Months (2 Years)</option>
-                              </select>
+                                onChange={setFdDuration}
+                                options={[
+                                  { value: '6', label: '6 Months Placement' },
+                                  { value: '12', label: '12 Months (1 Year)' },
+                                  { value: '24', label: '24 Months (2 Years)' }
+                                ]}
+                              />
                             </div>
                           </div>
                         )}
@@ -792,16 +963,16 @@ export default function OverviewPage() {
                         {/* Purpose Selection */}
                         <div className="space-y-2">
                           <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Purpose of Consultation:</label>
-                          <select
+                          <AnimatedSelect
                             value={appointmentPurpose}
-                            onChange={(e) => setAppointmentPurpose(e.target.value)}
-                            className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent focus:outline-none focus:border-primary text-base font-medium"
-                          >
-                            <option value="Loan Application Consultation">Discuss a Loan Application</option>
-                            <option value="Fixed Deposit Account Placement">Open a new Fixed Deposit</option>
-                            <option value="Capital Placement Deposit">Share Capital Deposit</option>
-                            <option value="General Inquiry">General Cooperative Inquiry</option>
-                          </select>
+                            onChange={setAppointmentPurpose}
+                            options={[
+                              { value: 'Loan Application Consultation', label: 'Discuss a Loan Application' },
+                              { value: 'Fixed Deposit Account Placement', label: 'Open a new Fixed Deposit' },
+                              { value: 'Capital Placement Deposit', label: 'Share Capital Deposit' },
+                              { value: 'General Inquiry', label: 'General Cooperative Inquiry' }
+                            ]}
+                          />
                         </div>
 
                         {/* Date Selection */}

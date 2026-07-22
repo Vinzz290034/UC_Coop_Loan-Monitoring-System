@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
@@ -15,12 +16,22 @@ import {
   History,
   AlertTriangle,
   X,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Clock,
+  CheckCircle2,
+  FileText,
+  Printer,
+  Receipt
 } from 'lucide-react';
 
 export default function AccountingPage() {
   const { user } = useAuth();
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [activeTab, setActiveTab] = useState<'share' | 'investment'>('share');
 
@@ -30,6 +41,7 @@ export default function AccountingPage() {
 
   // Ledgers loading/states
   const [shareData, setShareData] = useState<any>(null);
+  const [fixedDepositData, setFixedDepositData] = useState<any[]>([]);
   const [investmentData, setInvestmentData] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -40,6 +52,7 @@ export default function AccountingPage() {
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
   const [isInvTxModalOpen, setIsInvTxModalOpen] = useState(false);
   const [selectedInvId, setSelectedInvId] = useState<number | null>(null);
+  const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
 
   // Form Fields: Share Capital
   const [shareTxType, setShareTxType] = useState<'credit' | 'debit'>('credit');
@@ -78,6 +91,38 @@ export default function AccountingPage() {
     loadMembers();
   }, [isAdminOrManager]);
 
+  // Pending office payment placements queue (Admin/Manager)
+  const [pendingPlacements, setPendingPlacements] = useState<any[]>([]);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  const loadPendingPlacements = useCallback(async () => {
+    if (!isAdminOrManager) return;
+    try {
+      const res = await api.get('/accounts/pending-placements');
+      setPendingPlacements(res.data.data?.all_pending || []);
+    } catch (err) {
+      console.error('Error fetching pending placements:', err);
+    }
+  }, [isAdminOrManager]);
+
+  useEffect(() => {
+    loadPendingPlacements();
+  }, [loadPendingPlacements]);
+
+  const handleConfirmPayment = async (type: string, id: string) => {
+    try {
+      setConfirmingId(id);
+      const endpointType = type === 'fixed_deposit' ? 'fixed-deposit' : 'share-capital';
+      await api.put(`/accounts/confirm-placement/${endpointType}/${id}`);
+      await loadPendingPlacements();
+      await loadLedgerData();
+    } catch (err: any) {
+      alert(err.response?.data?.error?.message || 'Error confirming cash payment.');
+    } finally {
+      setConfirmingId(null);
+    }
+  };
+
   // Set default member for member role
   useEffect(() => {
     if (user && user.role === 'member' && user.profile?.id) {
@@ -85,7 +130,7 @@ export default function AccountingPage() {
     }
   }, [user]);
 
-  // Main data loader
+  // Main data loader (fetches all ledgers for selected member)
   const loadLedgerData = useCallback(async () => {
     if (!selectedMemberId) return;
 
@@ -93,20 +138,22 @@ export default function AccountingPage() {
       setLoading(true);
       setError(null);
 
-      if (activeTab === 'share') {
-        const res = await api.get(`/accounts/share-capital/${selectedMemberId}`);
-        setShareData(res.data);
-      } else if (activeTab === 'investment') {
-        const res = await api.get(`/accounts/investments/${selectedMemberId}`);
-        setInvestmentData(res.data.data || []);
-      }
+      const [shareRes, fdRes, invRes] = await Promise.all([
+        api.get(`/accounts/share-capital/${selectedMemberId}`),
+        api.get(`/accounts/fixed-deposits/${selectedMemberId}`),
+        api.get(`/accounts/investments/${selectedMemberId}`)
+      ]);
+
+      setShareData(shareRes.data);
+      setFixedDepositData(fdRes.data.data || []);
+      setInvestmentData(invRes.data.data || []);
     } catch (err: any) {
       console.error('Error fetching ledger details:', err);
       setError(err.response?.data?.message || 'Error occurred while fetching accounts.');
     } finally {
       setLoading(false);
     }
-  }, [selectedMemberId, activeTab]);
+  }, [selectedMemberId]);
 
   useEffect(() => {
     loadLedgerData();
@@ -205,7 +252,7 @@ export default function AccountingPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-micro-elevate">
       <div>
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
@@ -262,6 +309,110 @@ export default function AccountingPage() {
         </div>
       )}
 
+      {/* Pending Office Cash Payment Queue for Admins */}
+      {isAdminOrManager && pendingPlacements.length > 0 && (
+        <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-6 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-primary dark:text-secondary">
+              <Clock className="w-5 h-5" />
+              <h3 className="font-headline text-base font-extrabold">Pending Member Placements & Office Payments ({pendingPlacements.length})</h3>
+            </div>
+            <span className="text-xs font-bold text-neutral-500 bg-white dark:bg-surface-container-high px-3 py-1 rounded-full border border-outline-variant/40">Awaiting In-Person Office Cash Payment</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pendingPlacements.map((p) => (
+              <div key={p.id} className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-2xl flex items-center justify-between gap-4 shadow-xs hover:border-primary/40 transition-all">
+                <div className="space-y-1 text-xs">
+                  <span className="font-bold text-on-surface dark:text-white block text-sm">
+                    {p.first_name} {p.last_name} <span className="font-mono text-xs text-neutral-500 font-normal">({p.member_no})</span>
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="uppercase font-mono px-2 py-0.5 rounded-full bg-primary/10 dark:bg-secondary/15 text-[10px] font-extrabold text-primary dark:text-secondary">
+                      {p.placement_type === 'fixed_deposit' ? 'Fixed Deposit' : 'Share Capital'}
+                    </span>
+                    <span className="font-extrabold text-primary dark:text-secondary text-sm">₱{parseFloat(p.amount).toLocaleString()}</span>
+                  </div>
+                  <span className="text-[10px] text-neutral-400 block font-mono">
+                    Phone: {p.phone || 'N/A'} • Submitted: {new Date(p.created_at || p.placement_date).toLocaleDateString()}
+                  </span>
+                </div>
+
+                <button
+                  disabled={confirmingId === p.id}
+                  onClick={() => handleConfirmPayment(p.placement_type, p.id)}
+                  className="px-4 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs rounded-2xl hover:opacity-90 transition-all shadow-md active:scale-95 cursor-pointer whitespace-nowrap disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{confirmingId === p.id ? 'Approving...' : 'Confirm Office Payment'}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Member Pending Office Payment Placements */}
+      {(!isAdminOrManager || selectedMemberId) && (() => {
+        const pendingFixed = (investmentData || []).filter((inv: any) => inv.status === 'pending_payment');
+        const pendingShare = (shareData?.transactions || []).filter((tx: any) => tx.status === 'pending_payment');
+        const allMemberPending = [
+          ...pendingFixed.map((inv: any) => ({
+            id: inv.id,
+            type: 'fixed_deposit',
+            title: 'Fixed Deposit Placement',
+            amount: inv.principal_amount,
+            date: inv.created_at || inv.placement_date,
+            details: `${(inv.interest_rate * 100).toFixed(1)}% Yield`
+          })),
+          ...pendingShare.map((tx: any) => ({
+            id: tx.id,
+            type: 'share_capital',
+            title: 'Share Capital Placement',
+            amount: tx.amount,
+            date: tx.transaction_date,
+            details: tx.remarks || 'Equity Contribution'
+          }))
+        ];
+
+        if (allMemberPending.length === 0) return null;
+
+        return (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-6 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                <Clock className="w-5 h-5" />
+                <h3 className="font-headline text-base font-extrabold">My Pending Placements & Payment Slips ({allMemberPending.length})</h3>
+              </div>
+              <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-white dark:bg-surface-container-high px-3 py-1 rounded-full border border-amber-500/30">Awaiting Office Cash Payment</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {allMemberPending.map((item) => (
+                <div key={item.id} className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-2xl flex items-center justify-between gap-4 shadow-xs hover:border-amber-500/50 transition-all">
+                  <div className="space-y-1 text-xs">
+                    <span className="font-bold text-on-surface dark:text-white block text-sm">{item.title}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-primary dark:text-secondary text-sm">₱{parseFloat(item.amount).toLocaleString()}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">Pending Payment</span>
+                    </div>
+                    <span className="text-[10px] text-neutral-400 block font-mono">Date: {new Date(item.date).toLocaleDateString()}</span>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedReceipt(item)}
+                    className="px-4 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs rounded-2xl hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    <Receipt className="w-4 h-4" />
+                    <span>View Payment Slip</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Tabs */}
       <div className="flex border-b border-outline-variant/50">
         <button
@@ -280,7 +431,7 @@ export default function AccountingPage() {
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
             }`}
         >
-          Cooperative Investments
+          Fixed Deposits & Investment History
         </button>
       </div>
 
@@ -360,96 +511,157 @@ export default function AccountingPage() {
             </div>
           )}
 
-          {/* TAB 2: INVESTMENTS */}
+          {/* TAB 2: FIXED DEPOSITS & INVESTMENT HISTORY */}
           {activeTab === 'investment' && (
-            <div className="space-y-6">
-              {investmentData.length === 0 ? (
-                <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
-                  <Coins className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
-                  <h3 className="font-headline font-bold text-on-surface dark:text-white">No Portfolios Found</h3>
-                  <p className="text-xs text-neutral-600 dark:text-neutral-400">No cooperative investments created for this member.</p>
+            <div className="space-y-8">
+              {/* SECTION 1: FIXED DEPOSITS HISTORY */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <History className="w-5 h-5 text-primary dark:text-secondary" />
+                    <h3 className="font-headline text-lg font-extrabold text-on-surface dark:text-white">
+                      Fixed Deposits & Timed Placements ({fixedDepositData.length})
+                    </h3>
+                  </div>
+                  <span className="text-xs text-neutral-500 font-mono">Annual Dividend & Fixed Rate Yields</span>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {investmentData.map((inv) => (
-                    <div key={inv.id} className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-6">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-headline font-bold text-base text-on-surface dark:text-white">{inv.investment_name}</h4>
-                          <span className="text-[10px] text-neutral-600 dark:text-neutral-400">Account ID: #{inv.id}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {isAdminOrManager && (
-                            <button
-                              onClick={() => {
-                                setSelectedInvId(inv.id);
-                                setIsInvTxModalOpen(true);
-                              }}
-                              className="px-3 py-1 bg-primary/10 hover:bg-primary/20 text-primary dark:text-secondary rounded-full text-[10px] font-bold transition-all active:scale-95"
-                            >
-                              Post Transact
-                            </button>
-                          )}
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
-                            Active
-                          </span>
-                        </div>
-                      </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 border-t border-outline-variant/40 pt-4 text-xs font-body">
-                        <div>
-                          <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Invested Principal</span>
-                          <p className="font-headline text-sm font-extrabold text-neutral-600 dark:text-neutral-400 mt-0.5">
-                            {formatCurrency(parseFloat(inv.principal_amount))}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Current Bal</span>
-                          <p className="font-headline text-base font-extrabold text-primary dark:text-secondary mt-0.5">
-                            {formatCurrency(parseFloat(inv.current_balance))}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Cumulative Dividends</span>
-                          <p className="font-headline text-sm font-extrabold text-amber-500 mt-0.5">
-                            {formatCurrency(parseFloat(inv.interest_yield))}
-                          </p>
-                        </div>
-                      </div>
+                {fixedDepositData.length === 0 ? (
+                  <div className="p-8 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60 text-center space-y-2">
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400 font-bold">No Fixed Deposit Placements booked yet.</p>
+                    <p className="text-[11px] text-neutral-500">Initiate a Fixed Deposit placement from your main dashboard to earn high annual interest yields.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {fixedDepositData.map((fd) => (
+                      <div key={fd.id} className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-4 hover:border-primary/40 transition-all">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <span className="text-[10px] font-mono font-bold text-neutral-400 block uppercase">Placement Ref #{fd.id}</span>
+                            <h4 className="font-headline font-bold text-base text-on-surface dark:text-white">
+                              {formatCurrency(parseFloat(fd.principal_amount))}
+                            </h4>
+                          </div>
 
-                      {/* Transactions History inside card */}
-                      <div className="border-t border-outline-variant/40 pt-4">
-                        <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 font-label block mb-2">Ledger Transacts Log</span>
-                        <div className="border border-outline-variant/50 rounded-2xl overflow-hidden max-h-40 overflow-y-auto">
-                          <table className="w-full text-left border-collapse text-[10px] font-mono">
-                            <tbody className="divide-y divide-outline-variant/30">
-                              {inv.transactions?.length === 0 ? (
-                                <tr>
-                                  <td className="p-3 text-center text-neutral-600 dark:text-neutral-400 italic">No transactions booked.</td>
-                                </tr>
-                              ) : (
-                                inv.transactions?.map((t: any) => (
-                                  <tr key={t.id} className="hover:bg-neutral/5">
-                                    <td className="p-2.5 font-sans text-neutral-600 dark:text-neutral-400">{new Date(t.transaction_date).toLocaleDateString()}</td>
-                                    <td className="p-2.5 font-bold capitalize">
-                                      {t.transaction_type === 'yield_payout' ? (
-                                        <span className="text-amber-500">Dividend Payout</span>
-                                      ) : t.transaction_type === 'deposit' ? (
-                                        <span className="text-primary">Capital In</span>
-                                      ) : (
-                                        <span className="text-tertiary">Capital Out</span>
-                                      )}
-                                    </td>
-                                    <td className="p-2.5 font-bold text-right">{formatCurrency(parseFloat(t.amount))}</td>
-                                  </tr>
-                                ))
-                              )}
-                            </tbody>
-                          </table>
+                          <div className="flex flex-col items-end gap-1">
+                            {fd.status === 'pending_payment' ? (
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                  Pending Office Payment
+                                </span>
+                                <button
+                                  onClick={() => setSelectedReceipt({
+                                    id: fd.id.toString(),
+                                    type: 'fixed_deposit',
+                                    title: 'Fixed Deposit Placement',
+                                    amount: fd.principal_amount,
+                                    date: fd.created_at || fd.placement_date,
+                                    details: `${(fd.interest_rate * 100).toFixed(1)}% Interest Yield`
+                                  })}
+                                  className="px-2.5 py-0.5 bg-primary/10 hover:bg-primary/20 text-primary dark:text-secondary rounded-full text-[10px] font-extrabold cursor-pointer"
+                                >
+                                  Slip
+                                </button>
+                              </div>
+                            ) : fd.status === 'active' ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary dark:text-secondary">
+                                Active Placement
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                Matured
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 border-t border-outline-variant/40 pt-3 text-xs font-body">
+                          <div>
+                            <span className="text-[10px] text-neutral-400 uppercase font-bold">Interest Rate Yield</span>
+                            <p className="font-mono font-extrabold text-primary dark:text-secondary">
+                              {(parseFloat(fd.interest_rate) * 100).toFixed(1)}% p.a.
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-neutral-400 uppercase font-bold">Placement Date</span>
+                            <p className="font-mono text-neutral-600 dark:text-neutral-400">
+                              {new Date(fd.placement_date).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-neutral-400 uppercase font-bold">Maturity Date</span>
+                            <p className="font-mono text-neutral-600 dark:text-neutral-400">
+                              {new Date(fd.maturity_date).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-neutral-400 uppercase font-bold">Estimated Yield</span>
+                            <p className="font-mono font-bold text-amber-500">
+                              +{formatCurrency(parseFloat(fd.principal_amount) * parseFloat(fd.interest_rate))}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 2: COOPERATIVE BACKING PORTFOLIOS */}
+              {investmentData.length > 0 && (
+                <div className="space-y-4 pt-4 border-t border-outline-variant/40">
+                  <h3 className="font-headline text-lg font-extrabold text-on-surface dark:text-white">
+                    Cooperative Investment Portfolios ({investmentData.length})
+                  </h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {investmentData.map((inv) => (
+                      <div key={inv.id} className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-6">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-headline font-bold text-base text-on-surface dark:text-white">{inv.investment_name}</h4>
+                            <span className="text-[10px] text-neutral-600 dark:text-neutral-400">Account ID: #{inv.id}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isAdminOrManager && (
+                              <button
+                                onClick={() => {
+                                  setSelectedInvId(inv.id);
+                                  setIsInvTxModalOpen(true);
+                                }}
+                                className="px-3 py-1 bg-primary/10 hover:bg-primary/20 text-primary dark:text-secondary rounded-full text-[10px] font-bold transition-all active:scale-95"
+                              >
+                                Post Transact
+                              </button>
+                            )}
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
+                              Active
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 border-t border-outline-variant/40 pt-4 text-xs font-body">
+                          <div>
+                            <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Invested Principal</span>
+                            <p className="font-headline text-sm font-extrabold text-neutral-600 dark:text-neutral-400 mt-0.5">
+                              {formatCurrency(parseFloat(inv.principal_amount))}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Current Bal</span>
+                            <p className="font-headline text-base font-extrabold text-primary dark:text-secondary mt-0.5">
+                              {formatCurrency(parseFloat(inv.current_balance))}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Cumulative Dividends</span>
+                            <p className="font-headline text-sm font-extrabold text-amber-500 mt-0.5">
+                              {formatCurrency(parseFloat(inv.interest_yield))}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -458,9 +670,9 @@ export default function AccountingPage() {
       )}
 
       {/* MODAL 1: BOOK SHARE CAPITAL TRANSACTION */}
-      {isShareModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
+      {isShareModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
             <button
               onClick={() => setIsShareModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral/10 text-neutral-600 dark:text-neutral-400 transition-colors"
@@ -531,13 +743,14 @@ export default function AccountingPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL 2: CREATE INVESTMENT */}
-      {isInvModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
+      {isInvModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
             <button
               onClick={() => setIsInvModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral/10 text-neutral-600 dark:text-neutral-400 transition-colors"
@@ -597,13 +810,14 @@ export default function AccountingPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* MODAL 4: POST INVESTMENT TRANSACTION */}
-      {isInvTxModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
+      {/* MODAL 3: POST INVESTMENT TRANSACTION */}
+      {isInvTxModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
             <button
               onClick={() => {
                 setIsInvTxModalOpen(false);
@@ -670,7 +884,97 @@ export default function AccountingPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL 4: PAYMENT SLIP VOUCHER RECEIPT */}
+      {selectedReceipt && mounted && createPortal(
+        <div
+          key={`payment-slip-modal-${selectedReceipt.id}`}
+          className="fixed inset-0 z-[100] bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-modal-backdrop"
+        >
+          <div
+            key={`payment-slip-card-${selectedReceipt.id}`}
+            className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-[28px] w-full max-w-[480px] shadow-2xl overflow-hidden animate-modal-pop relative"
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-outline-variant/40 flex justify-between items-center bg-surface-container-low dark:bg-surface-container-high/40">
+              <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white">
+                Official Placement Payment Slip
+              </h3>
+              <button
+                onClick={() => setSelectedReceipt(null)}
+                className="p-1.5 rounded-full hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <span className="text-xl font-bold font-mono leading-none">&times;</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {/* Reference Header Tag */}
+              <div className="p-3 bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-2xl flex items-center justify-between">
+                <span className="text-xs font-bold text-primary dark:text-secondary uppercase font-label">Tracking Code</span>
+                <span className="font-mono font-extrabold text-xs text-on-surface dark:text-white bg-white dark:bg-surface-container-high px-2.5 py-0.5 rounded-lg border border-outline-variant/40">
+                  #{selectedReceipt.id.toString().slice(0, 8).toUpperCase()}
+                </span>
+              </div>
+
+              {/* Details Card */}
+              <div className="p-4 border border-outline-variant/60 rounded-2xl space-y-2.5 text-xs font-body bg-white dark:bg-surface-container-low">
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500 font-semibold">Member Account:</span>
+                  <span className="text-on-surface dark:text-white font-extrabold text-xs">
+                    {user?.profile?.first_name ? `${user.profile.first_name} ${user.profile.last_name}` : (shareData?.member ? `${shareData.member.first_name} ${shareData.member.last_name}` : (members.find((m: any) => m.id.toString() === selectedMemberId) ? `${members.find((m: any) => m.id.toString() === selectedMemberId).first_name} ${members.find((m: any) => m.id.toString() === selectedMemberId).last_name}` : 'John Doe'))}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500 font-semibold">Placement Type:</span>
+                  <span className="text-on-surface dark:text-white font-bold text-xs">{selectedReceipt.title}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500 font-semibold">Placement Amount:</span>
+                  <span className="text-primary dark:text-secondary font-extrabold text-sm">₱{parseFloat(selectedReceipt.amount).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500 font-semibold">Status:</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full text-[10px]">Pending Cash Payment</span>
+                </div>
+                <div className="flex justify-between items-center text-[10px] text-neutral-400 font-mono pt-1.5 border-t border-outline-variant/30">
+                  <span>Date Issued:</span>
+                  <span>{new Date(selectedReceipt.date).toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Cashier Notice */}
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                <strong className="block font-bold text-xs">📢 Office Cashier Instructions:</strong>
+                <p className="text-[11px] leading-relaxed">Present this payment slip to the UC METC Cooperative Office Cashier. Staff will issue your official receipt (OR) and activate your balance immediately.</p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="w-full py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-headline font-bold text-xs shadow-md hover:opacity-90 transition-opacity cursor-pointer text-center flex items-center justify-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Payment Slip</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedReceipt(null)}
+                  className="w-full py-2 bg-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-white font-bold text-xs transition-colors cursor-pointer text-center"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
