@@ -4,6 +4,11 @@ import path from "path";
 const nextConfig: NextConfig = {
   /* config options here */
 
+  // Enable package import optimization to prevent dev server lag from heavy icon & chart libraries
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'recharts', '@base-ui/react', 'tw-animate-css'],
+  },
+
   // The project has two package-lock.json files (backend root + frontend).
   // Turbopack auto-detection picks the wrong one, so we pin it explicitly
   // to this directory (frontend/) — NOT the parent.

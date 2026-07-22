@@ -83,7 +83,7 @@ export default function ContactPage() {
                 </div>
                 <div>
                   <h4 className="font-bold">Physical Address</h4>
-                  <p className="text-neutral-600 dark:text-neutral-400">UC-METC Campus Administration Bldg, Alumno, Mambaling, Cebu City, Philippines</p>
+                  <p className="text-neutral-600 dark:text-neutral-400">Alumnos Mambaling, Cebu City, Philippines</p>
                 </div>
               </div>
 

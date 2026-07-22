@@ -26,7 +26,6 @@ import {
   Settings,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
-import CountdownTimer from '@/components/CountdownTimer';
 import NotificationBell from '@/components/NotificationBell';
 import { AuthProvider } from '@/context/AuthContext';
 import { BreadcrumbProvider, useBreadcrumb } from '@/context/BreadcrumbContext';
@@ -199,6 +198,7 @@ function DashboardLayoutContent({
                 <Link
                   key={item.path}
                   href={item.path}
+                  prefetch={false}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive
                     ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
                     : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 dark:hover:bg-neutral/10 hover:text-on-surface dark:hover:text-white'
@@ -217,6 +217,7 @@ function DashboardLayoutContent({
           {/* Settings Link */}
           <Link
             href="/dashboard/settings"
+            prefetch={false}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               pathname === '/dashboard/settings'
                 ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
@@ -263,9 +264,6 @@ function DashboardLayoutContent({
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Session countdown timer - updated to 900 seconds (15 minutes) */}
-            <CountdownTimer initialSeconds={900} onComplete={logout} />
-
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral/5 dark:bg-neutral/10 border border-outline-variant/30 text-xs text-neutral-600 dark:text-neutral-300">
               <Calendar className="w-3.5 h-3.5" />
               <span className="font-mono font-semibold">

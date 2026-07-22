@@ -11,24 +11,18 @@ import {
   TrendingUp,
   TrendingDown,
   Building,
-  PiggyBank,
   PlusCircle,
   History,
   AlertTriangle,
-  Calendar,
   X,
-  CreditCard,
-  Plus,
-  ArrowRightLeft,
-  Clock,
-  ArrowLeft
+  ArrowRightLeft
 } from 'lucide-react';
 
 export default function AccountingPage() {
   const { user } = useAuth();
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
-  const [activeTab, setActiveTab] = useState<'share' | 'fixed' | 'investment'>('share');
+  const [activeTab, setActiveTab] = useState<'share' | 'investment'>('share');
 
   // Member selection
   const [members, setMembers] = useState<any[]>([]);
@@ -36,7 +30,6 @@ export default function AccountingPage() {
 
   // Ledgers loading/states
   const [shareData, setShareData] = useState<any>(null);
-  const [fixedData, setFixedData] = useState<any[]>([]);
   const [investmentData, setInvestmentData] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -44,7 +37,6 @@ export default function AccountingPage() {
 
   // Modals state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isFixedModalOpen, setIsFixedModalOpen] = useState(false);
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
   const [isInvTxModalOpen, setIsInvTxModalOpen] = useState(false);
   const [selectedInvId, setSelectedInvId] = useState<number | null>(null);
@@ -55,13 +47,6 @@ export default function AccountingPage() {
   const [shareRemarks, setShareRemarks] = useState('');
   const [shareSubmitting, setShareSubmitting] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
-
-  // Form Fields: Fixed Deposit
-  const [fdPrincipal, setFdPrincipal] = useState('');
-  const [fdInterestRate, setFdInterestRate] = useState('');
-  const [fdDuration, setFdDuration] = useState('');
-  const [fdSubmitting, setFdSubmitting] = useState(false);
-  const [fdError, setFdError] = useState<string | null>(null);
 
   // Form Fields: Create Investment
   const [invName, setInvName] = useState('');
@@ -111,9 +96,6 @@ export default function AccountingPage() {
       if (activeTab === 'share') {
         const res = await api.get(`/accounts/share-capital/${selectedMemberId}`);
         setShareData(res.data);
-      } else if (activeTab === 'fixed') {
-        const res = await api.get(`/accounts/fixed-deposits/${selectedMemberId}`);
-        setFixedData(res.data.data || []);
       } else if (activeTab === 'investment') {
         const res = await api.get(`/accounts/investments/${selectedMemberId}`);
         setInvestmentData(res.data.data || []);
@@ -157,36 +139,6 @@ export default function AccountingPage() {
       setShareError(err.response?.data?.error?.message || err.response?.data?.message || 'Share transaction failed.');
     } finally {
       setShareSubmitting(false);
-    }
-  };
-
-  const handleFixedSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedMemberId || !fdPrincipal || !fdInterestRate || !fdDuration) {
-      setFdError('Please fill out all placement fields.');
-      return;
-    }
-
-    setFdError(null);
-    setFdSubmitting(true);
-
-    try {
-      await api.post('/accounts/fixed-deposits', {
-        member_id: parseInt(selectedMemberId, 10),
-        principal_amount: parseFloat(fdPrincipal),
-        interest_rate: parseFloat(fdInterestRate) / 100, // convert percentage
-        duration_months: parseInt(fdDuration, 10)
-      });
-
-      setFdPrincipal('');
-      setFdInterestRate('');
-      setFdDuration('');
-      setIsFixedModalOpen(false);
-      loadLedgerData();
-    } catch (err: any) {
-      setFdError(err.response?.data?.error?.message || err.response?.data?.message || 'Fixed placement failed.');
-    } finally {
-      setFdSubmitting(false);
     }
   };
 
@@ -278,15 +230,6 @@ export default function AccountingPage() {
                 Book Share Tx
               </button>
             )}
-            {activeTab === 'fixed' && (
-              <button
-                onClick={() => setIsFixedModalOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                FD Placement
-              </button>
-            )}
             {activeTab === 'investment' && (
               <button
                 onClick={() => setIsInvModalOpen(true)}
@@ -329,15 +272,6 @@ export default function AccountingPage() {
             }`}
         >
           Share Capital Ledger
-        </button>
-        <button
-          onClick={() => setActiveTab('fixed')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all ${activeTab === 'fixed'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-            }`}
-        >
-          Fixed Deposit Registry
         </button>
         <button
           onClick={() => setActiveTab('investment')}
@@ -426,65 +360,7 @@ export default function AccountingPage() {
             </div>
           )}
 
-          {/* TAB 2: FIXED DEPOSIT REGISTRY */}
-          {activeTab === 'fixed' && (
-            <div className="space-y-6">
-              {fixedData.length === 0 ? (
-                <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
-                  <PiggyBank className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
-                  <h3 className="font-headline font-bold text-on-surface dark:text-white">No Placements Found</h3>
-                  <p className="text-xs text-neutral-600 dark:text-neutral-400">No fixed deposit placements recorded for this member.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {fixedData.map((fd) => (
-                    <div key={fd.id} className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 font-label">Timed Placement</span>
-                          <h4 className="font-headline font-bold text-lg text-primary dark:text-secondary mt-0.5">
-                            {formatCurrency(parseFloat(fd.principal_amount))}
-                          </h4>
-                        </div>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${fd.status === 'active' ? 'bg-primary/10 text-primary' : 'bg-neutral/15 text-neutral-600 dark:text-neutral-400'
-                          }`}>
-                          {fd.status}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/40 pt-4 text-xs font-body">
-                        <div>
-                          <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Maturity Yield</span>
-                          <p className="font-headline font-extrabold text-on-surface dark:text-white mt-0.5">
-                            {(parseFloat(fd.interest_rate) * 100).toFixed(2)}% p.a.
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Duration</span>
-                          <p className="font-headline font-extrabold text-on-surface dark:text-white mt-0.5">
-                            {fd.duration_months} Months
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-outline-variant/40 pt-4 text-[11px] text-neutral-600 dark:text-neutral-400 space-y-1">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
-                          <span>Maturity Date: {new Date(fd.maturity_date).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
-                          <span>Started: {new Date(fd.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 3: INVESTMENTS */}
+          {/* TAB 2: INVESTMENTS */}
           {activeTab === 'investment' && (
             <div className="space-y-6">
               {investmentData.length === 0 ? (
@@ -658,87 +534,7 @@ export default function AccountingPage() {
         </div>
       )}
 
-      {/* MODAL 2: FIXED DEPOSIT PLACEMENT */}
-      {isFixedModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
-            <button
-              onClick={() => setIsFixedModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral/10 text-neutral-600 dark:text-neutral-400 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-4">New Fixed Deposit Placement</h2>
-
-            {fdError && (
-              <div className="p-3 mb-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2">
-                <AlertTriangle className="w-4.5 h-4.5 flex-shrink-0" />
-                <span>{fdError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleFixedSubmit} className="space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="font-label text-neutral-600 dark:text-neutral-400 px-1">Principal Deposit Amount (₱) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={fdPrincipal}
-                  onChange={(e) => setFdPrincipal(e.target.value)}
-                  placeholder="e.g. 50000"
-                  className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="font-label text-neutral-600 dark:text-neutral-400 px-1">Annual Yield Rate (%) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={fdInterestRate}
-                    onChange={(e) => setFdInterestRate(e.target.value)}
-                    placeholder="e.g. 5.5"
-                    className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="font-label text-neutral-600 dark:text-neutral-400 px-1">Duration (Months) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={fdDuration}
-                    onChange={(e) => setFdDuration(e.target.value)}
-                    placeholder="e.g. 12"
-                    className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsFixedModalOpen(false)}
-                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={fdSubmitting}
-                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-60"
-                >
-                  {fdSubmitting ? 'Creating Placement...' : 'Open Registry placement'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: CREATE INVESTMENT */}
+      {/* MODAL 2: CREATE INVESTMENT */}
       {isInvModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">

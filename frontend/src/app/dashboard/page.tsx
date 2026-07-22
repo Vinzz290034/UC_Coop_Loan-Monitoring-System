@@ -31,6 +31,9 @@ import {
   CalendarCheck,
   User as UserIcon,
   RefreshCw,
+  WalletCards,
+  Lock,
+  Info,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -72,7 +75,8 @@ export default function OverviewPage() {
   const [loanAmount, setLoanAmount] = useState<number>(0);
 
   // Investment Form States
-  const [investmentType, setInvestmentType] = useState<'capital' | 'fixed_deposit'>('capital');
+  const [investmentType, setInvestmentType] = useState<'payday' | 'fixed_deposit'>('payday');
+  const [paydayCycle, setPaydayCycle] = useState<'15' | '30'>('15');
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
   const [fdDuration, setFdDuration] = useState<string>('12'); // months
 
@@ -219,11 +223,11 @@ export default function OverviewPage() {
       setSubmitting(true);
       setModalError(null);
       let res;
-      if (investmentType === 'capital') {
+      if (investmentType === 'payday') {
         res = await api.post('/accounts/share-capital', {
           transaction_type: 'credit',
           amount: amount,
-          remarks: 'Member Share Capital Placement'
+          remarks: `Every Payday Placement (${paydayCycle} Days)`
         });
       } else {
         res = await api.post('/accounts/fixed-deposits', {
@@ -235,6 +239,7 @@ export default function OverviewPage() {
       setSuccessData({
         ...res.data.data,
         type: investmentType,
+        payday_cycle: paydayCycle,
         amount: amount,
         reference_code: `TXN-${Math.floor(100000 + Math.random() * 900000)}`
       });
@@ -297,11 +302,29 @@ export default function OverviewPage() {
         {/* Account Balances Section */}
         <div className="space-y-4">
           <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Account Balances</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <KpiCard label="Share Capital" value={formatCurrency(balances.share_capital)} icon={Building} description="Cumulative equity contributions" />
-            <KpiCard label="Fixed Deposit" value={formatCurrency(balances.fixed_deposits)} icon={PiggyBank} description="High-yield timed placements" />
-            <KpiCard label="MyCooP Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Member-backed investment portfolios" />
-            <KpiCard label="Total Net Assets" value={formatCurrency(balances.total_assets)} icon={ShieldCheck} variant="primary" description="Total non-loan asset valuation" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <KpiCard 
+              label="Share Capital" 
+              value={formatCurrency(balances.share_capital)} 
+              icon={Building} 
+              href="/dashboard/accounting"
+              description="Cumulative equity contributions" 
+            />
+            <KpiCard 
+              label="Loan Balance" 
+              value={formatCurrency(loans.outstanding_balance)} 
+              icon={Banknote} 
+              variant="primary" 
+              href="/dashboard/loans"
+              description="Total active credit balance due" 
+            />
+            <KpiCard 
+              label="Active Credit Lines" 
+              value={`${loans.active_count} ${loans.active_count === 1 ? 'Active Loan' : 'Active Loans'}`} 
+              icon={FileCheck} 
+              href="/dashboard/loans"
+              description="Disbursed accounts in good standing" 
+            />
           </div>
         </div>
 
@@ -612,15 +635,15 @@ export default function OverviewPage() {
                           <div className="grid grid-cols-2 gap-4">
                             <button
                               type="button"
-                              onClick={() => setInvestmentType('capital')}
-                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'capital'
+                              onClick={() => setInvestmentType('payday')}
+                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'payday'
                                 ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
                                 : 'border-outline-variant/65'
                                 }`}
                             >
                               <Building className="w-6 h-6 mx-auto mb-2 text-neutral-600 dark:text-neutral-300" />
-                              <span className="font-bold text-sm block">Share Capital</span>
-                              <span className="text-[10px] text-neutral-500 block mt-0.5">Coop equity shares</span>
+                              <span className="font-bold text-sm block">Every Payday</span>
+                              <span className="text-[10px] text-neutral-500 block mt-0.5">Payday savings placement</span>
                             </button>
 
                             <button
@@ -637,6 +660,40 @@ export default function OverviewPage() {
                             </button>
                           </div>
                         </div>
+
+                        {/* Every Payday Sub-Category Options */}
+                        {investmentType === 'payday' && (
+                          <div className="space-y-2 p-4 border border-outline-variant/50 rounded-2xl bg-neutral/5">
+                            <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider block">
+                              Select Payday Sub-Category:
+                            </label>
+                            <div className="grid grid-cols-2 gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setPaydayCycle('15')}
+                                className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center cursor-pointer ${paydayCycle === '15'
+                                  ? 'border-primary bg-primary text-white dark:bg-secondary dark:text-neutral-950 font-bold shadow-md'
+                                  : 'border-outline-variant/65 bg-white dark:bg-surface-container-high text-on-surface dark:text-white hover:border-neutral/40'
+                                  }`}
+                              >
+                                <span className="text-sm font-bold">15 Days</span>
+                                <span className="text-[10px] opacity-80 font-normal">Semi-Monthly Payday</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setPaydayCycle('30')}
+                                className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center cursor-pointer ${paydayCycle === '30'
+                                  ? 'border-primary bg-primary text-white dark:bg-secondary dark:text-neutral-950 font-bold shadow-md'
+                                  : 'border-outline-variant/65 bg-white dark:bg-surface-container-high text-on-surface dark:text-white hover:border-neutral/40'
+                                  }`}
+                              >
+                                <span className="text-sm font-bold">30 Days</span>
+                                <span className="text-[10px] opacity-80 font-normal">Monthly Payday</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Amount Input */}
                         <div className="space-y-2">
@@ -694,7 +751,9 @@ export default function OverviewPage() {
                         <div className="p-5 border border-dashed border-outline-variant rounded-2xl bg-neutral/5 text-left space-y-2.5 max-w-sm mx-auto">
                           <div className="flex justify-between text-xs">
                             <span className="text-neutral-500 font-bold uppercase">Transaction Type:</span>
-                            <span className="font-bold uppercase text-primary">{successData.type === 'capital' ? 'Share Capital' : 'Fixed Deposit'}</span>
+                            <span className="font-bold uppercase text-primary">
+                              {successData.type === 'payday' ? `Every Payday (${successData.payday_cycle || '15'} Days)` : 'Fixed Deposit'}
+                            </span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-neutral-500 font-bold uppercase">Payment Code:</span>

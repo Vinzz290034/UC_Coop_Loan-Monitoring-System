@@ -202,6 +202,31 @@ CREATE TABLE notifications (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 16. Appointments Table
+CREATE TABLE appointments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    purpose VARCHAR(255) NOT NULL,
+    appointment_date DATE NOT NULL,
+    time_slot VARCHAR(50) NOT NULL CHECK (time_slot IN ('morning', 'afternoon')),
+    status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 17. Calendar Events Table
+CREATE TABLE calendar_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    event_date DATE NOT NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('announcement', 'payment_deadline', 'office_duty', 'holiday', 'special_schedule')),
+    status VARCHAR(50) DEFAULT 'open',
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance optimization on critical query pathways
 CREATE INDEX idx_members_user_id ON members(user_id);
 CREATE INDEX idx_share_capital_member ON share_capital_transactions(member_id);
@@ -217,3 +242,6 @@ CREATE INDEX idx_contact_messages_created_at ON contact_messages(created_at);
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_role_target ON notifications(role_target);
 CREATE INDEX idx_notifications_created_at ON notifications(created_at);
+CREATE INDEX idx_appointments_member ON appointments(member_id);
+CREATE INDEX idx_calendar_events_date ON calendar_events(event_date);
+CREATE INDEX idx_calendar_events_type ON calendar_events(type);
