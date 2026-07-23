@@ -254,21 +254,21 @@ export default function MembersPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                    <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">FullName</th>
-                    <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Email Address</th>
-                    <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Phone Contacts</th>
-                    <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
-                    <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Join Date</th>
-                    <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Actions</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">FullName</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Email Address</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Phone Contacts</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Join Date</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/40 font-body text-sm text-on-surface dark:text-white/95">
                   {currentItems.map((member) => (
                     <tr key={member.id} className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
-                      <td className="px-6 py-4 font-semibold">
+                      <td className="px-4 sm:px-6 py-4 font-semibold">
                         {member.last_name}, {member.first_name} {member.middle_name ? `${member.middle_name.charAt(0)}.` : ''}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
                         {member.email ? (
                           <span className="flex items-center gap-1 text-xs">
                             <Mail className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
@@ -278,7 +278,7 @@ export default function MembersPage() {
                           <span className="text-neutral-400 font-mono text-xs">N/A</span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 sm:px-6 py-4 hidden lg:table-cell">
                         {member.phone ? (
                           <span className="flex items-center gap-1 text-xs">
                             <Phone className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
@@ -288,14 +288,14 @@ export default function MembersPage() {
                           <span className="text-neutral-400 font-mono text-xs">N/A</span>
                         )}
                       </td>
-                      <td className="px-6 py-4">{getStatusBadge(member.status)}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 sm:px-6 py-4">{getStatusBadge(member.status)}</td>
+                      <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
                         <span className="flex items-center gap-1 text-xs text-neutral-600 dark:text-neutral-400">
                           <Calendar className="w-3.5 h-3.5" />
                           {new Date(member.created_at).toLocaleDateString()}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-4 sm:px-6 py-4 text-right">
                         <Link
                           href={`/dashboard/members/${member.id}`}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95"

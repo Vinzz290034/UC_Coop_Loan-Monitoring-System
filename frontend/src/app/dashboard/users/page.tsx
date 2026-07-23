@@ -112,7 +112,7 @@ function CreateAccountModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-modal-backdrop">
-      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-modal-pop">
+      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-[calc(100vw-2rem)] sm:w-full max-w-md overflow-hidden animate-modal-pop">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-outline-variant/40">
           <div>

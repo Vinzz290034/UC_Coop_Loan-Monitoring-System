@@ -167,20 +167,20 @@ export default function AuditTrailPage() {
   return (
     <div className="space-y-6 animate-micro-elevate">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white flex items-center gap-3">
-            <ScrollText className="w-8 h-8 text-primary dark:text-secondary" />
+          <h1 className="font-headline text-2xl sm:text-3xl font-extrabold text-on-surface dark:text-white flex items-center gap-3">
+            <ScrollText className="w-7 h-7 sm:w-8 sm:h-8 text-primary dark:text-secondary flex-shrink-0" />
             Audit Trail
           </h1>
-          <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+          <p className="font-body text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 mt-1">
             Immutable chronological log of all system actions and administrative operations
           </p>
         </div>
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 text-xs font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 text-xs font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 cursor-pointer self-start sm:self-auto"
         >
           <Download className="w-4 h-4" />
           {exporting ? 'Exporting...' : 'Export Excel'}
@@ -189,8 +189,8 @@ export default function AuditTrailPage() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl p-4 shadow-sm">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[200px]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          <div className="sm:col-span-2 lg:col-span-1">
             <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase mb-1 block">Search</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
@@ -366,7 +366,7 @@ export default function AuditTrailPage() {
 
       {/* Pagination */}
       {pagination.total_pages > 1 && (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             onClick={() => fetchLogs(pagination.page - 1)}
             disabled={pagination.page <= 1}

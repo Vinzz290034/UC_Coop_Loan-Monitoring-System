@@ -292,7 +292,7 @@ export default function AccountingPage() {
 
       {/* Member Selection for Admins */}
       {isAdminOrManager && (
-        <div className="flex items-center gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm max-w-md">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm max-w-md">
           <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 whitespace-nowrap font-label">Auditing Member:</label>
           <select
             value={selectedMemberId}
@@ -413,11 +413,11 @@ export default function AccountingPage() {
         );
       })()}
 
-      {/* Tabs */}
-      <div className="flex border-b border-outline-variant/50">
+      {/* Tabs — horizontally scrollable on mobile */}
+      <div className="flex border-b border-outline-variant/50 overflow-x-auto">
         <button
           onClick={() => setActiveTab('share')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all ${activeTab === 'share'
+          className={`px-4 sm:px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${activeTab === 'share'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
             }`}
@@ -426,7 +426,7 @@ export default function AccountingPage() {
         </button>
         <button
           onClick={() => setActiveTab('investment')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all ${activeTab === 'investment'
+          className={`px-4 sm:px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${activeTab === 'investment'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
             }`}
@@ -471,11 +471,11 @@ export default function AccountingPage() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
-                        <th className="px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Tx Date</th>
-                        <th className="px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Tx Type</th>
-                        <th className="px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amount</th>
-                        <th className="px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Valuation After</th>
-                        <th className="px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Remarks</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Tx Date</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Tx Type</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amount</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Valuation After</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Remarks</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
@@ -486,8 +486,8 @@ export default function AccountingPage() {
                       ) : (
                         shareData.transactions?.map((tx: any) => (
                           <tr key={tx.id} className="hover:bg-neutral/5">
-                            <td className="px-6 py-3 font-mono">{new Date(tx.transaction_date).toLocaleString()}</td>
-                            <td className="px-6 py-3">
+                            <td className="px-4 sm:px-6 py-3 font-mono">{new Date(tx.transaction_date).toLocaleDateString()}</td>
+                            <td className="px-4 sm:px-6 py-3">
                               {tx.transaction_type === 'credit' ? (
                                 <span className="inline-flex items-center gap-1 text-primary font-bold">
                                   <TrendingUp className="w-3.5 h-3.5" /> Deposit
@@ -498,9 +498,9 @@ export default function AccountingPage() {
                                 </span>
                               )}
                             </td>
-                            <td className="px-6 py-3 font-bold">{formatCurrency(parseFloat(tx.amount))}</td>
-                            <td className="px-6 py-3 font-mono font-bold text-neutral-600 dark:text-neutral-400">{formatCurrency(parseFloat(tx.balance_after))}</td>
-                            <td className="px-6 py-3 text-neutral-600 dark:text-neutral-400">{tx.remarks}</td>
+                            <td className="px-4 sm:px-6 py-3 font-bold">{formatCurrency(parseFloat(tx.amount))}</td>
+                            <td className="px-4 sm:px-6 py-3 font-mono font-bold text-neutral-600 dark:text-neutral-400 hidden sm:table-cell">{formatCurrency(parseFloat(tx.balance_after))}</td>
+                            <td className="px-4 sm:px-6 py-3 text-neutral-600 dark:text-neutral-400 hidden md:table-cell">{tx.remarks}</td>
                           </tr>
                         ))
                       )}
@@ -516,10 +516,10 @@ export default function AccountingPage() {
             <div className="space-y-8">
               {/* SECTION 1: FIXED DEPOSITS HISTORY */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <History className="w-5 h-5 text-primary dark:text-secondary" />
-                    <h3 className="font-headline text-lg font-extrabold text-on-surface dark:text-white">
+                    <History className="w-5 h-5 text-primary dark:text-secondary flex-shrink-0" />
+                    <h3 className="font-headline text-base sm:text-lg font-extrabold text-on-surface dark:text-white">
                       Fixed Deposits & Timed Placements ({fixedDepositData.length})
                     </h3>
                   </div>

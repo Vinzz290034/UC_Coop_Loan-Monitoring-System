@@ -180,8 +180,8 @@ export default function ReportsPage() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-outline-variant/50">
+      {/* Tabs — horizontally scrollable on mobile */}
+      <div className="flex border-b border-outline-variant/50 overflow-x-auto">
         {[
           { key: 'disbursement', label: 'Disbursement Reports' },
           { key: 'monitoring', label: 'Loan Portfolio Status' },
@@ -190,7 +190,7 @@ export default function ReportsPage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as any)}
-            className={`px-5 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer ${
+            className={`px-4 sm:px-5 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === tab.key
                 ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
                 : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
@@ -237,27 +237,27 @@ export default function ReportsPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Principal Disbursed</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Rate</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Term</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Disbursed Date</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Maturity Date</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Loan Product</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Principal Disbursed</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Interest Rate</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Term</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Disbursed Date</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Maturity Date</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
                     {currentItems.map((row: any, index: number) => (
                       <tr key={index} className="hover:bg-neutral/5">
-                        <td className="px-6 py-3.5 font-semibold">{row.member_name}</td>
-                        <td className="px-6 py-3.5 text-primary dark:text-secondary font-semibold">{row.product_name}</td>
-                        <td className="px-6 py-3.5 font-bold">{formatCurrency(row.principal_amount)}</td>
-                        <td className="px-6 py-3.5 font-mono">{row.interest_rate}</td>
-                        <td className="px-6 py-3.5">{row.term_months} months</td>
-                        <td className="px-6 py-3.5 font-mono text-neutral-600 dark:text-neutral-400">{row.disbursed_at}</td>
-                        <td className="px-6 py-3.5 font-mono text-neutral-600 dark:text-neutral-400">{row.maturity_date}</td>
-                        <td className="px-6 py-3.5">{getStatusBadge(row.status)}</td>
+                        <td className="px-4 sm:px-6 py-3.5 font-semibold">{row.member_name}</td>
+                        <td className="px-4 sm:px-6 py-3.5 text-primary dark:text-secondary font-semibold hidden sm:table-cell">{row.product_name}</td>
+                        <td className="px-4 sm:px-6 py-3.5 font-bold">{formatCurrency(row.principal_amount)}</td>
+                        <td className="px-4 sm:px-6 py-3.5 font-mono hidden md:table-cell">{row.interest_rate}</td>
+                        <td className="px-4 sm:px-6 py-3.5 hidden lg:table-cell">{row.term_months} months</td>
+                        <td className="px-4 sm:px-6 py-3.5 font-mono text-neutral-600 dark:text-neutral-400 hidden sm:table-cell">{row.disbursed_at}</td>
+                        <td className="px-4 sm:px-6 py-3.5 font-mono text-neutral-600 dark:text-neutral-400 hidden md:table-cell">{row.maturity_date}</td>
+                        <td className="px-4 sm:px-6 py-3.5">{getStatusBadge(row.status)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -345,7 +345,7 @@ export default function ReportsPage() {
 
           {/* Bordered Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
               <span className="font-body text-xs text-neutral-600 dark:text-neutral-400">
                 Displaying {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredRecords.length)} of {filteredRecords.length} records
               </span>

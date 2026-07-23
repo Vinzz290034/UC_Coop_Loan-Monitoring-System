@@ -142,7 +142,7 @@ export default function NotificationsPage() {
             Stay updated with system alerts and messages.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllAsRead}

@@ -1,11 +1,11 @@
-Be very specific for the code
-Be consistent with what have been made
-Be consistent with the UI theme
-Ask question for clarifications and understanding
-Add some informative comments for the code that's needed for the codebase and functionality
-Make use of the folder and file structure that is already made
-make sure to use all the codes that is already made
-make sure that it will work on both mobile and desktop screen (Be concise with the responsiveness [Desktop, Tablet, Mobile])
+- Be very specific for the code
+- Be consistent with what have been made
+- Be consistent with the UI theme
+- Ask question for clarifications and understanding
+- Add some informative comments for the code that's needed for the codebase and functionality
+- Make use of the folder and file structure that is already made
+- make sure to use all the codes that is already made
+- make sure that it will work on both mobile and desktop screen (Be concise with the responsiveness [Desktop, Tablet, Mobile])
 
 ```
 ## Development Guidelines
