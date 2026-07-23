@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
@@ -51,8 +52,11 @@ interface Loan {
   created_at: string;
 }
 
-export default function LoansPage() {
+function LoansPageContent() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get('status');
+
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
   const [activeTab, setActiveTab] = useState<'loans' | 'products'>('loans');
@@ -100,8 +104,14 @@ export default function LoansPage() {
   const [repaySubmitting, setRepaySubmitting] = useState(false);
   const [repayError, setRepayError] = useState<string | null>(null);
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState('');
+  // Filters — pre-populated from URL query if present
+  const [statusFilter, setStatusFilter] = useState(statusParam || '');
+
+  useEffect(() => {
+    if (statusParam !== null && statusParam !== undefined) {
+      setStatusFilter(statusParam);
+    }
+  }, [statusParam]);
 
   const fetchLoans = useCallback(async () => {
     try {
@@ -1003,5 +1013,13 @@ export default function LoansPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LoansPage() {
+  return (
+    <Suspense fallback={<SkeletonTable rows={5} cols={6} />}>
+      <LoansPageContent />
+    </Suspense>
   );
 }
