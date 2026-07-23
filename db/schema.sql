@@ -63,7 +63,8 @@ CREATE TABLE share_capital_transactions (
     amount NUMERIC(15, 2) NOT NULL CHECK (amount > 0),
     balance_after NUMERIC(15, 2) NOT NULL,
     transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    remarks TEXT
+    remarks TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'completed' CHECK (status IN ('pending_payment', 'completed', 'cancelled'))
 );
 
 -- 5. Fixed Deposit Registry
