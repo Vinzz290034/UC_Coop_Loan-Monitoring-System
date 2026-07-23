@@ -13,9 +13,12 @@ export interface User {
     id: number;
     first_name: string;
     last_name: string;
-    middle_name?: string;
-    email?: string;
-    phone?: string;
+    middle_name?: string | null;
+    age?: number | null;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    date_of_birth?: string | null;
     status: 'active' | 'suspended' | 'inactive';
   } | null;
 }
@@ -23,6 +26,10 @@ export interface User {
 interface RegisterPayload {
   first_name: string;
   last_name: string;
+  middle_name?: string;
+  date_of_birth?: string;
+  age?: number | string;
+  phone?: string;
   username: string;
   password: string;
   email: string;

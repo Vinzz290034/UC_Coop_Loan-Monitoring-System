@@ -150,6 +150,7 @@ export default function ProfilePage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
+  const [age, setAge] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -182,6 +183,7 @@ export default function ProfilePage() {
           setFirstName(profile.first_name || '');
           setLastName(profile.last_name || '');
           setMiddleName(profile.middle_name || '');
+          setAge(profile.age != null ? String(profile.age) : '');
           setEmail(profile.email || '');
           setPhone(profile.phone || '');
           setAddress(profile.address || '');
@@ -212,6 +214,7 @@ export default function ProfilePage() {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         middle_name: middleName.trim() || null,
+        age: age ? parseInt(age, 10) : null,
         email: email.trim() || null,
         phone: phone.trim() || null,
         address: address.trim() || null,
@@ -480,7 +483,21 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
+                    Age
+                  </label>
+                  <input
+                    type="number"
+                    min={18}
+                    max={120}
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    placeholder="e.g. 28"
+                    className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
+                  />
+                </div>
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
                     Date of Birth
@@ -495,7 +512,7 @@ export default function ProfilePage() {
                     />
                   </div>
                 </div>
-                <div className="space-y-1.5 sm:col-span-1">
+                <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
                     Address
                   </label>

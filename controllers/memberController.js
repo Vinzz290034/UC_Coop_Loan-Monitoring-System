@@ -7,7 +7,7 @@ import { exportToExcel } from '../services/reportExporter.js'; // Ensure this li
 export const createMember = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { first_name, last_name, middle_name, email, phone, address, date_of_birth, status, user_id } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status, user_id } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
@@ -16,22 +16,37 @@ export const createMember = async (req, res, next) => {
       });
     }
 
+    let computedAge = age ? parseInt(age, 10) : null;
+    if (!computedAge && date_of_birth) {
+      const birthDate = new Date(date_of_birth);
+      const today = new Date();
+      let calculated = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        calculated--;
+      }
+      if (!isNaN(calculated) && calculated >= 0) {
+        computedAge = calculated;
+      }
+    }
+
     // Start Transaction
     await client.query('BEGIN');
 
     // 1. Insert Member
     const insertMemberQuery = `
-      INSERT INTO members (first_name, last_name, middle_name, email, phone, address, date_of_birth, status, user_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO members (first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status, user_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
     const memberResult = await client.query(insertMemberQuery, [
-      first_name,
-      last_name,
-      middle_name || null,
-      email || null,
-      phone || null,
-      address || null,
+      first_name.trim(),
+      last_name.trim(),
+      middle_name?.trim() || null,
+      computedAge,
+      email?.toLowerCase() || null,
+      phone?.trim() || null,
+      address?.trim() || null,
       date_of_birth || null,
       status || 'active',
       user_id || null
@@ -73,35 +88,73 @@ export const createMember = async (req, res, next) => {
   }
 };
 
-// @desc    Get all member profiles (with filtering & search)
+// @desc    Get all member profiles (with filtering, search, & sorting)
 // @route   GET /api/members
 // @access  Protected (Admin, Manager)
 export const getAllMembers = async (req, res, next) => {
   try {
-    const { search, status } = req.query;
+    const { search, status, sortBy } = req.query;
 
-    let queryText = 'SELECT * FROM members WHERE 1=1';
+    let queryText = `
+      SELECT m.*, u.profile_picture_url
+      FROM members m
+      LEFT JOIN users u ON m.user_id = u.id
+      WHERE 1=1
+    `;
     const queryParams = [];
     let paramIndex = 1;
 
     if (status) {
-      queryText += ` AND status = $${paramIndex}`;
+      queryText += ` AND m.status = $${paramIndex}`;
       queryParams.push(status);
       paramIndex++;
     }
 
     if (search) {
       queryText += ` AND (
-        first_name ILIKE $${paramIndex} OR 
-        last_name ILIKE $${paramIndex} OR 
-        COALESCE(email, '') ILIKE $${paramIndex} OR
-        COALESCE(phone, '') ILIKE $${paramIndex}
+        m.first_name ILIKE $${paramIndex} OR 
+        m.last_name ILIKE $${paramIndex} OR 
+        COALESCE(m.middle_name, '') ILIKE $${paramIndex} OR
+        COALESCE(m.email, '') ILIKE $${paramIndex} OR
+        COALESCE(m.phone, '') ILIKE $${paramIndex}
       )`;
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
 
-    queryText += ' ORDER BY last_name ASC, first_name ASC';
+    // Dynamic sorting
+    switch (sortBy) {
+      case 'name_desc':
+      case 'name_z_a':
+        queryText += ' ORDER BY m.last_name DESC, m.first_name DESC';
+        break;
+      case 'age_asc':
+        queryText += ' ORDER BY COALESCE(m.age, 999) ASC, m.last_name ASC';
+        break;
+      case 'age_desc':
+        queryText += ' ORDER BY COALESCE(m.age, 0) DESC, m.last_name ASC';
+        break;
+      case 'created_at_asc':
+      case 'oldest':
+        queryText += ' ORDER BY m.created_at ASC';
+        break;
+      case 'created_at_desc':
+      case 'newest':
+        queryText += ' ORDER BY m.created_at DESC';
+        break;
+      case 'status':
+        queryText += " ORDER BY CASE WHEN m.status = 'active' THEN 1 WHEN m.status = 'suspended' THEN 2 ELSE 3 END, m.last_name ASC";
+        break;
+      case 'updated_at_desc':
+      case 'updated':
+        queryText += ' ORDER BY m.updated_at DESC';
+        break;
+      case 'name_asc':
+      case 'name_a_z':
+      default:
+        queryText += ' ORDER BY m.last_name ASC, m.first_name ASC';
+        break;
+    }
 
     const result = await query(queryText, queryParams);
 
@@ -134,7 +187,13 @@ export const getMemberById = async (req, res, next) => {
     }
 
     // Fetch member
-    const memberResult = await query('SELECT * FROM members WHERE id = $1', [id]);
+    const memberResult = await query(
+      `SELECT m.*, u.profile_picture_url 
+       FROM members m 
+       LEFT JOIN users u ON m.user_id = u.id 
+       WHERE m.id = $1`,
+      [id]
+    );
     if (memberResult.rowCount === 0) {
       return res.status(404).json({
         success: false,
@@ -172,7 +231,7 @@ export const getMemberById = async (req, res, next) => {
 export const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { first_name, last_name, middle_name, email, phone, address, date_of_birth } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
@@ -181,20 +240,35 @@ export const updateMember = async (req, res, next) => {
       });
     }
 
+    let computedAge = age ? parseInt(age, 10) : null;
+    if (!computedAge && date_of_birth) {
+      const birthDate = new Date(date_of_birth);
+      const today = new Date();
+      let calculated = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        calculated--;
+      }
+      if (!isNaN(calculated) && calculated >= 0) {
+        computedAge = calculated;
+      }
+    }
+
     const updateQuery = `
       UPDATE members
-      SET first_name = $1, last_name = $2, middle_name = $3, email = $4, phone = $5, address = $6, date_of_birth = $7, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $8
+      SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $9
       RETURNING *
     `;
 
     const result = await query(updateQuery, [
-      first_name,
-      last_name,
-      middle_name || null,
-      email || null,
-      phone || null,
-      address || null,
+      first_name.trim(),
+      last_name.trim(),
+      middle_name?.trim() || null,
+      computedAge,
+      email?.toLowerCase() || null,
+      phone?.trim() || null,
+      address?.trim() || null,
       date_of_birth || null,
       id
     ]);
@@ -252,42 +326,30 @@ export const updateMemberStatus = async (req, res, next) => {
 
     const previousStatus = currentMemberResult.rows[0].status;
 
-    // Check if status is actually changing
+    // If status hasn't changed, return early
     if (previousStatus === status) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        success: false,
-        error: { message: `Member is already in ${status} status.` }
+      await client.query('COMMIT');
+      return res.status(200).json({
+        success: true,
+        message: `Member status is already ${status}.`
       });
     }
 
-    // 2. Update Member status
-    const updateStatusQuery = `
-      UPDATE members
-      SET status = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      RETURNING *
-    `;
-    const updatedMemberResult = await client.query(updateStatusQuery, [status, id]);
+    // 2. Update status
+    await client.query('UPDATE members SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [status, id]);
 
-    // 3. Create Status Audit Log
-    const insertLogQuery = `
-      INSERT INTO member_status_logs (member_id, previous_status, new_status, changed_by, remarks)
-      VALUES ($1, $2, $3, $4, $5)
-    `;
-    await client.query(insertLogQuery, [
-      id,
-      previousStatus,
-      status,
-      req.user.id,
-      remarks || `Status updated from ${previousStatus} to ${status}.`
-    ]);
+    // 3. Log status change
+    await client.query(
+      `INSERT INTO member_status_logs (member_id, previous_status, new_status, changed_by, remarks)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, previousStatus, status, req.user.id, remarks || null]
+    );
 
     await client.query('COMMIT');
 
     res.status(200).json({
       success: true,
-      data: updatedMemberResult.rows[0]
+      message: `Member status successfully updated from ${previousStatus} to ${status}.`
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -427,8 +489,7 @@ export const exportMembersReport = async (req, res, next) => {
   try {
     const { search, status } = req.query;
 
-    // Use a clone of your original listing logic
-    let queryText = 'SELECT id, first_name, last_name, email, phone, status, created_at FROM members WHERE 1=1';
+    let queryText = 'SELECT id, first_name, middle_name, last_name, age, email, phone, status, created_at FROM members WHERE 1=1';
     const queryParams = [];
     let paramIndex = 1;
 
@@ -439,7 +500,7 @@ export const exportMembersReport = async (req, res, next) => {
     }
 
     if (search) {
-      queryText += ` AND (first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR COALESCE(email, '') ILIKE $${paramIndex})`;
+      queryText += ` AND (first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR COALESCE(middle_name, '') ILIKE $${paramIndex} OR COALESCE(email, '') ILIKE $${paramIndex} OR COALESCE(phone, '') ILIKE $${paramIndex})`;
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
@@ -449,23 +510,23 @@ export const exportMembersReport = async (req, res, next) => {
 
     const formattedMembers = result.rows.map(row => ({
       ...row,
-      full_name: `${row.first_name} ${row.last_name}`,
+      full_name: `${row.last_name}, ${row.first_name}${row.middle_name ? ' ' + row.middle_name : ''}`,
+      age: row.age != null ? row.age : 'N/A',
+      phone: row.phone || 'N/A',
+      email: row.email || 'N/A',
       created_at: row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : 'N/A'
     }));
 
-    // Re-use your helper service from reportExporter.js
     const columns = [
       { header: 'Member ID', key: 'id', width: 15 },
-      { header: 'Full Name', key: 'full_name', width: 25 },
+      { header: 'Full Name', key: 'full_name', width: 28 },
+      { header: 'Age', key: 'age', width: 10 },
+      { header: 'Mobile/Contact Number', key: 'phone', width: 22 },
       { header: 'Email Address', key: 'email', width: 25 },
-      { header: 'Phone Number', key: 'phone', width: 18 },
       { header: 'Account Status', key: 'status', width: 15 },
       { header: 'Registration Date', key: 'created_at', width: 18 }
     ];
 
-    // Notice we import exportToExcel inside reportController. If you use it here, 
-    // remember to check if you need to add its import at the top of your file:
-    // import { exportToExcel } from '../services/reportExporter.js';
     return await exportToExcel(
       res,
       'Cooperative_Members_Directory',

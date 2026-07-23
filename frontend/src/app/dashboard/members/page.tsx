@@ -24,10 +24,12 @@ interface Member {
   first_name: string;
   last_name: string;
   middle_name?: string;
+  age?: number;
   email?: string;
   phone?: string;
   address?: string;
   date_of_birth?: string;
+  profile_picture_url?: string | null;
   status: 'active' | 'suspended' | 'inactive';
   created_at: string;
 }
@@ -37,9 +39,10 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Search and filter state
+  // Search, filter, and sort state
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sortBy, setSortBy] = useState('name_asc');
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -50,6 +53,7 @@ export default function MembersPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
+  const [ageInput, setAgeInput] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -59,6 +63,12 @@ export default function MembersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const getAvatarUrl = (path?: string | null) => {
+    if (!path) return null;
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace('/api', '');
+    return `${baseUrl}${path}`;
+  };
+
   const fetchMembers = useCallback(async () => {
     try {
       setLoading(true);
@@ -67,6 +77,7 @@ export default function MembersPage() {
       const params: any = {};
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
+      if (sortBy) params.sortBy = sortBy;
 
       const response = await api.get('/members', { params });
       setMembers(response.data.data || []);
@@ -77,7 +88,7 @@ export default function MembersPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter]);
+  }, [search, statusFilter, sortBy]);
 
   useEffect(() => {
     fetchMembers();
@@ -89,7 +100,6 @@ export default function MembersPage() {
 
   const handleExportExcel = async () => {
     try {
-      // Export report endpoint: /members/export/excel
       const response = await api.get('/members/export/excel', {
         responseType: 'blob'
       });
@@ -121,6 +131,7 @@ export default function MembersPage() {
         first_name: firstName,
         last_name: lastName,
         middle_name: middleName || undefined,
+        age: ageInput ? parseInt(ageInput, 10) : undefined,
         email: email || undefined,
         phone: phone || undefined,
         address: address || undefined,
@@ -133,6 +144,7 @@ export default function MembersPage() {
       setFirstName('');
       setLastName('');
       setMiddleName('');
+      setAgeInput('');
       setEmail('');
       setPhone('');
       setAddress('');
@@ -214,28 +226,48 @@ export default function MembersPage() {
         </div>
       </div>
 
-      {/* Filter Desk */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
-        <SearchInput placeholder="Search member by first name, last_name, email..." onSearch={handleSearch} />
+      {/* Filter & Sort Desk */}
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
+        <SearchInput placeholder="Search by name, middle name, email, phone..." onSearch={handleSearch} />
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Status Filter:</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full sm:w-40 px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-          >
-            <option value="">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="suspended">Suspended</option>
-            <option value="inactive">Inactive</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Sort By:</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+            >
+              <option value="name_asc">Name (A → Z)</option>
+              <option value="name_desc">Name (Z → A)</option>
+              <option value="age_asc">Age (Youngest → Oldest)</option>
+              <option value="age_desc">Age (Oldest → Youngest)</option>
+              <option value="created_at_desc">Registration (Newest → Oldest)</option>
+              <option value="created_at_asc">Registration (Oldest → Newest)</option>
+              <option value="status">Status (Active First)</option>
+              <option value="updated">Recently Updated</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Status:</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+            >
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Main Table */}
       {loading ? (
-        <SkeletonTable rows={itemsPerPage} cols={5} />
+        <SkeletonTable rows={itemsPerPage} cols={6} />
       ) : error ? (
         <div className="p-6 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-3xl flex items-center gap-3">
           <AlertTriangle className="w-6 h-6" />
@@ -254,9 +286,10 @@ export default function MembersPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">FullName</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Member Profile</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Age</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Mobile / Contact</th>
                     <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Email Address</th>
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Phone Contacts</th>
                     <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
                     <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Join Date</th>
                     <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Actions</th>
@@ -265,17 +298,35 @@ export default function MembersPage() {
                 <tbody className="divide-y divide-outline-variant/40 font-body text-sm text-on-surface dark:text-white/95">
                   {currentItems.map((member) => (
                     <tr key={member.id} className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
-                      <td className="px-4 sm:px-6 py-4 font-semibold">
-                        {member.last_name}, {member.first_name} {member.middle_name ? `${member.middle_name.charAt(0)}.` : ''}
+                      <td className="px-4 sm:px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-primary/10 dark:bg-secondary/10 flex items-center justify-center border border-outline-variant/40">
+                            {member.profile_picture_url ? (
+                              <img
+                                src={getAvatarUrl(member.profile_picture_url) || ''}
+                                alt={`${member.first_name} ${member.last_name}`}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="font-bold text-xs text-primary dark:text-secondary">
+                                {member.first_name?.[0]}{member.last_name?.[0]}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-bold text-on-surface dark:text-white">
+                              {member.last_name}, {member.first_name} {member.middle_name ? `${member.middle_name}` : ''}
+                            </div>
+                          </div>
+                        </div>
                       </td>
-                      <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
-                        {member.email ? (
-                          <span className="flex items-center gap-1 text-xs">
-                            <Mail className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
-                            {member.email}
+                      <td className="px-4 sm:px-6 py-4 font-semibold text-xs text-neutral-700 dark:text-neutral-300">
+                        {member.age != null ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 font-mono">
+                            {member.age} yrs
                           </span>
                         ) : (
-                          <span className="text-neutral-400 font-mono text-xs">N/A</span>
+                          <span className="text-neutral-400 font-mono">N/A</span>
                         )}
                       </td>
                       <td className="px-4 sm:px-6 py-4 hidden lg:table-cell">
@@ -283,6 +334,16 @@ export default function MembersPage() {
                           <span className="flex items-center gap-1 text-xs">
                             <Phone className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
                             {member.phone}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400 font-mono text-xs">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
+                        {member.email ? (
+                          <span className="flex items-center gap-1 text-xs">
+                            <Mail className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
+                            {member.email}
                           </span>
                         ) : (
                           <span className="text-neutral-400 font-mono text-xs">N/A</span>
@@ -396,8 +457,8 @@ export default function MembersPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5 col-span-1">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Middle Name</label>
                   <input
                     type="text"
@@ -407,7 +468,19 @@ export default function MembersPage() {
                     className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 col-span-1">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Age</label>
+                  <input
+                    type="number"
+                    min={18}
+                    max={120}
+                    value={ageInput}
+                    onChange={(e) => setAgeInput(e.target.value)}
+                    placeholder="e.g. 28"
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  />
+                </div>
+                <div className="space-y-1.5 col-span-1">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Date of Birth</label>
                   <input
                     type="date"

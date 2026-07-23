@@ -70,7 +70,7 @@ export const login = async (req, res, next) => {
     let memberProfile = null;
     if (user.role === 'member') {
       const memberResult = await query(
-        'SELECT id, first_name, last_name, middle_name, email, phone, status FROM members WHERE user_id = $1',
+        'SELECT id, first_name, last_name, middle_name, age, email, phone, status FROM members WHERE user_id = $1',
         [user.id]
       );
       if (memberResult.rowCount > 0) {
@@ -154,7 +154,7 @@ export const getMe = async (req, res, next) => {
     // Fetch linked member/profile for ALL roles (admin/manager may also have one)
     let memberProfile = null;
     const memberResult = await query(
-      'SELECT id, first_name, last_name, middle_name, email, phone, address, date_of_birth, status FROM members WHERE user_id = $1',
+      'SELECT id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status FROM members WHERE user_id = $1',
       [user.id]
     );
     if (memberResult.rowCount > 0) {
@@ -436,7 +436,7 @@ export const getAllUsers = async (req, res, next) => {
 // @access  Public
 export const memberRegister = async (req, res, next) => {
   try {
-    const { first_name, last_name, username, password, email } = req.body;
+    const { first_name, last_name, middle_name, date_of_birth, age, phone, username, password, email } = req.body;
 
     // --- Input validation ---
     if (!first_name || !last_name || !username || !password || !email) {
@@ -458,6 +458,51 @@ export const memberRegister = async (req, res, next) => {
         success: false,
         error: { message: 'Last name must contain letters, spaces, hyphens, and apostrophes only, and cannot contain numbers or special characters.' }
       });
+    }
+
+    if (middle_name && !/^[a-zA-Z\s'-]+$/.test(middle_name.trim())) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Middle name must contain letters, spaces, hyphens, and apostrophes only.' }
+      });
+    }
+
+    // --- Date of Birth & Age validation ---
+    let computedAge = age ? parseInt(age, 10) : null;
+    if (date_of_birth) {
+      const birthDate = new Date(date_of_birth);
+      const today = new Date();
+      if (isNaN(birthDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Please provide a valid date of birth.' }
+        });
+      }
+      if (birthDate > today) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Date of birth cannot be in the future.' }
+        });
+      }
+
+      // Calculate age from DOB
+      let calculated = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        calculated--;
+      }
+      if (!isNaN(calculated) && calculated >= 0) {
+        computedAge = calculated;
+      }
+    }
+
+    if (computedAge !== null) {
+      if (computedAge < 18 || computedAge > 120) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Member must be at least 18 years old.' }
+        });
+      }
     }
 
     if (username.length < 3) {
@@ -546,6 +591,10 @@ export const memberRegister = async (req, res, next) => {
     const registrationData = {
       first_name: first_name.trim(),
       last_name: last_name.trim(),
+      middle_name: middle_name ? middle_name.trim() : null,
+      date_of_birth: date_of_birth || null,
+      age: computedAge,
+      phone: phone ? phone.trim() : null,
       username: username.toLowerCase(),
       password_hash: passwordHash,
       email: email.toLowerCase(),
@@ -685,9 +734,18 @@ export const verifyRegistrationOtp = async (req, res, next) => {
 
     // 2. Create member profile linked to user
     await client.query(
-      `INSERT INTO members (user_id, first_name, last_name, email, status)
-       VALUES ($1, $2, $3, $4, 'active')`,
-      [newUser.id, regData.first_name, regData.last_name, regData.email]
+      `INSERT INTO members (user_id, first_name, last_name, middle_name, date_of_birth, age, phone, email, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')`,
+      [
+        newUser.id,
+        regData.first_name,
+        regData.last_name,
+        regData.middle_name || null,
+        regData.date_of_birth || null,
+        regData.age ? parseInt(regData.age, 10) : null,
+        regData.phone || null,
+        regData.email
+      ]
     );
 
     // 3. Mark OTP as verified and clean up
@@ -802,7 +860,7 @@ export const getUserById = async (req, res, next) => {
     const result = await query(
       `SELECT
          u.id, u.username, u.role, u.is_active, u.last_login_at, u.last_activity_at, u.created_at,
-         m.id as member_id, m.first_name, m.last_name, m.middle_name, m.email, m.phone, m.address, m.date_of_birth, m.status as member_status
+         m.id as member_id, m.first_name, m.last_name, m.middle_name, m.age, m.email, m.phone, m.address, m.date_of_birth, m.status as member_status
        FROM users u
        LEFT JOIN members m ON m.user_id = u.id
        WHERE u.id = $1`,
@@ -833,6 +891,7 @@ export const getUserById = async (req, res, next) => {
           first_name: row.first_name,
           last_name: row.last_name,
           middle_name: row.middle_name,
+          age: row.age,
           email: row.email,
           phone: row.phone,
           address: row.address,
@@ -1283,6 +1342,7 @@ export const replyToContactMessage = async (req, res, next) => {
   }
 };
 
+
 // ==========================================
 // Self-Service Profile Management
 // ==========================================
@@ -1293,7 +1353,7 @@ export const replyToContactMessage = async (req, res, next) => {
 export const updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { first_name, last_name, middle_name, email, phone, address, date_of_birth } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth } = req.body;
 
     // Validate required fields
     if (!first_name || !last_name) {
@@ -1326,6 +1386,20 @@ export const updateProfile = async (req, res, next) => {
       }
     }
 
+    let computedAge = age ? parseInt(age, 10) : null;
+    if (!computedAge && date_of_birth) {
+      const birthDate = new Date(date_of_birth);
+      const today = new Date();
+      let calculated = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        calculated--;
+      }
+      if (!isNaN(calculated) && calculated >= 0) {
+        computedAge = calculated;
+      }
+    }
+
     // Check if a member profile already exists for this user
     const existingMember = await query(
       'SELECT id FROM members WHERE user_id = $1',
@@ -1344,9 +1418,10 @@ export const updateProfile = async (req, res, next) => {
            phone = $5,
            address = $6,
            date_of_birth = $7,
+           age = $8,
            updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $8
-         RETURNING id, first_name, last_name, middle_name, email, phone, address, date_of_birth, status`,
+         WHERE user_id = $9
+         RETURNING id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status`,
         [
           first_name.trim(),
           last_name.trim(),
@@ -1355,20 +1430,22 @@ export const updateProfile = async (req, res, next) => {
           phone?.trim() || null,
           address?.trim() || null,
           date_of_birth || null,
+          computedAge,
           userId
         ]
       );
     } else {
       // Create a new member profile for this user (admin/manager without one)
       result = await query(
-        `INSERT INTO members (user_id, first_name, last_name, middle_name, email, phone, address, date_of_birth, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')
-         RETURNING id, first_name, last_name, middle_name, email, phone, address, date_of_birth, status`,
+        `INSERT INTO members (user_id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')
+         RETURNING id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status`,
         [
           userId,
           first_name.trim(),
           last_name.trim(),
           middle_name?.trim() || null,
+          computedAge,
           email?.toLowerCase() || null,
           phone?.trim() || null,
           address?.trim() || null,

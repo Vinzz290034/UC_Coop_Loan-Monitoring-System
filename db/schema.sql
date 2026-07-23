@@ -39,6 +39,7 @@ CREATE TABLE members (
     phone VARCHAR(50),
     address TEXT,
     date_of_birth DATE,
+    age INT,
     status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'inactive')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

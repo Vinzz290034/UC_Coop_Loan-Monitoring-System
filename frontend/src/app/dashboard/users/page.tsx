@@ -38,6 +38,8 @@ interface UserData {
     id: string;
     first_name: string;
     last_name: string;
+    middle_name?: string;
+    age?: number;
     email: string;
     phone: string;
     status: string;

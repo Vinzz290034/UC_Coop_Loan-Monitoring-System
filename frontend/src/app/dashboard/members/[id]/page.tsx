@@ -49,6 +49,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
+  const [age, setAge] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -62,6 +63,12 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   const [statusRemarks, setStatusRemarks] = useState('');
   const [statusError, setStatusError] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  const getAvatarUrl = (path?: string | null) => {
+    if (!path) return null;
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace('/api', '');
+    return `${baseUrl}${path}`;
+  };
 
   const fetchProfileAndBalances = async () => {
     try {
@@ -80,6 +87,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
       setFirstName(mData.first_name || '');
       setLastName(mData.last_name || '');
       setMiddleName(mData.middle_name || '');
+      setAge(mData.age != null ? String(mData.age) : '');
       setEmail(mData.email || '');
       setPhone(mData.phone || '');
       setAddress(mData.address || '');
@@ -121,6 +129,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
         first_name: firstName,
         last_name: lastName,
         middle_name: middleName || undefined,
+        age: age ? parseInt(age, 10) : undefined,
         email: email || undefined,
         phone: phone || undefined,
         address: address || undefined,
@@ -231,12 +240,20 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
         {/* Profile Card */}
         <div className="lg:col-span-1 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm space-y-6">
           <div className="flex flex-col items-center text-center space-y-3">
-            <div className="w-20 h-20 rounded-full bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary text-2xl font-bold font-headline border border-outline-variant/30">
-              {member.first_name.charAt(0)}{member.last_name.charAt(0)}
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary text-2xl font-bold font-headline border border-outline-variant/30">
+              {member.profile_picture_url ? (
+                <img
+                  src={getAvatarUrl(member.profile_picture_url) || ''}
+                  alt={`${member.first_name} ${member.last_name}`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{member.first_name.charAt(0)}{member.last_name.charAt(0)}</span>
+              )}
             </div>
             <div>
               <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">
-                {member.first_name} {member.middle_name || ''} {member.last_name}
+                {member.first_name} {member.middle_name ? `${member.middle_name} ` : ''}{member.last_name}
               </h2>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">Joined {new Date(member.created_at).toLocaleDateString()}</p>
             </div>
@@ -244,6 +261,10 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
           </div>
 
           <div className="border-t border-outline-variant/40 pt-6 space-y-4 text-xs font-body">
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-neutral-600 dark:text-neutral-400 w-16">Age:</span>
+              <span className="text-on-surface dark:text-white font-semibold">{member.age != null ? `${member.age} years old` : <span className="italic text-neutral-600 dark:text-neutral-400/50">Not set</span>}</span>
+            </div>
             <div className="flex items-center gap-3">
               <Mail className="w-4 h-4 text-neutral-600 dark:text-neutral-400 flex-shrink-0" />
               <span className="text-on-surface dark:text-white truncate">{member.email || <span className="italic text-neutral-600 dark:text-neutral-400/50">No email registered</span>}</span>
@@ -413,8 +434,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5 col-span-1">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Middle Name</label>
                   <input
                     type="text"
@@ -423,7 +444,19 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                     className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 col-span-1">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Age</label>
+                  <input
+                    type="number"
+                    min={18}
+                    max={120}
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    placeholder="e.g. 28"
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  />
+                </div>
+                <div className="space-y-1.5 col-span-1">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Date of Birth</label>
                   <input
                     type="date"
