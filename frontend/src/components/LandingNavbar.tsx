@@ -26,11 +26,11 @@ export default function LandingNavbar() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/75 dark:bg-neutral-950/65 backdrop-blur-xl border-b border-outline-variant/20 shadow-sm shadow-black/5 transition-colors duration-200">
-      <div className="flex justify-between items-center w-full px-6 md:px-12 max-w-7xl mx-auto h-20">
+      <div className="flex justify-between items-center w-full px-4 sm:px-6 md:px-12 max-w-7xl mx-auto h-20">
 
         {/* ── Logo ──────────────────────────────────────────────────── */}
-        <Link href="/" className="font-brandname text-2xl font-bold text-primary dark:text-secondary flex items-center gap-1 hover:opacity-90 transition-opacity">
-          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-14 h-14 object-contain" />
+        <Link href="/" className="font-brandname text-xl sm:text-2xl font-bold text-primary dark:text-secondary flex items-center gap-1 hover:opacity-90 transition-opacity">
+          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" />
           SynCo
         </Link>
 
@@ -51,17 +51,17 @@ export default function LandingNavbar() {
         </nav>
 
         {/* ── Actions ───────────────────────────────────────────────── */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <ThemeToggle />
           <button
             onClick={() => router.push('/login')}
-            className="hidden sm:inline-flex font-label text-sm font-bold px-5 py-2 rounded-full border-2 border-on-surface/20 dark:border-neutral-700 text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-all active:scale-95 cursor-pointer"
+            className="hidden sm:inline-flex font-label text-xs sm:text-sm font-bold px-4 sm:px-5 py-2 rounded-full border-2 border-on-surface/20 dark:border-neutral-700 text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-all active:scale-95 cursor-pointer"
           >
             Login
           </button>
           <button
             onClick={() => router.push('/register')}
-            className="font-label text-sm font-bold px-5 py-2.5 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-lg shadow-primary/25 dark:shadow-secondary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all active:scale-95 cursor-pointer"
+            className="font-label text-xs sm:text-sm font-bold px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-lg shadow-primary/25 dark:shadow-secondary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all active:scale-95 cursor-pointer"
           >
             Sign Up
           </button>
@@ -94,12 +94,20 @@ export default function LandingNavbar() {
               {item.name}
             </Link>
           ))}
-          <button
-            onClick={() => { setMobileMenuOpen(false); router.push('/login'); }}
-            className="mt-2 font-label text-sm w-full py-2.5 rounded-full text-center border border-primary/40 text-primary dark:text-secondary font-bold cursor-pointer"
-          >
-            Login
-          </button>
+          <div className="mt-3 pt-3 border-t border-outline-variant/20 flex flex-col gap-2">
+            <button
+              onClick={() => { setMobileMenuOpen(false); router.push('/login'); }}
+              className="font-label text-sm w-full py-2.5 rounded-full text-center border border-primary/40 text-primary dark:text-secondary font-bold cursor-pointer hover:bg-primary/5 transition-colors"
+            >
+              Login
+            </button>
+            {/* <button
+              onClick={() => { setMobileMenuOpen(false); router.push('/register'); }}
+              className="font-label text-sm w-full py-2.5 rounded-full text-center bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold shadow-md cursor-pointer hover:opacity-95 transition-opacity"
+            >
+              Sign Up
+            </button> */}
+          </div>
         </div>
       )}
     </header>

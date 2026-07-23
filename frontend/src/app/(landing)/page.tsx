@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import Link from 'next/link';
 import {
   CreditCard,
@@ -26,10 +26,10 @@ import {
 export default function LandingPage() {
   return (
     <>
-      <main className="pt-20">
+      <main className="pt-20 w-full overflow-x-clip">
 
         {/* ── Hero Section ─────────────────────────────────────────── */}
-        <section className="relative overflow-hidden py-28 md:py-36">
+        <section className="relative overflow-hidden py-16 sm:py-24 md:py-36">
 
           {/* Animated background */}
           <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
@@ -112,20 +112,20 @@ export default function LandingPage() {
           </div>
 
           {/* Hero content */}
-          <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
-            <div className="space-y-8">
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 md:px-12 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div className="space-y-6 sm:space-y-8">
               {/* Trust badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 text-primary dark:text-secondary text-xs font-bold font-label tracking-wide">
+              <div className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 text-primary dark:text-secondary text-[11px] sm:text-xs font-bold font-label tracking-wide">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary dark:bg-secondary animate-pulse" />
                 Trusted by 15,000+ Active Cooperative Members
               </div>
 
               {/* Headline */}
-              <h1 className="font-headline text-5xl sm:text-6xl lg:text-7xl leading-[1.08] font-extrabold tracking-tight">
+              <h1 className="font-headline text-4xl sm:text-6xl lg:text-7xl leading-[1.08] font-extrabold tracking-tight">
                 <span className="text-on-surface dark:text-white">Elevate Your</span>
                 <br />
                 <span
-                  className="text-4xl sm:text-5xl lg:text-6xl text-transparent bg-clip-text"
+                  className="text-3xl sm:text-5xl lg:text-6xl text-transparent bg-clip-text"
                   style={{ backgroundImage: 'linear-gradient(135deg, #047857 0%, #34D399 60%, #059669 100%)' }}
                 >
                   Financial Growth
@@ -133,8 +133,8 @@ export default function LandingPage() {
               </h1>
 
               {/* Sub-copy */}
-              <p className="text-on-surface/65 dark:text-neutral-400 font-body text-lg max-w-lg leading-relaxed">
-                Transparent online loan applications, secure share capital tracking, and automatic monthly amortization schedules build for your peace.
+              <p className="text-on-surface/65 dark:text-neutral-400 font-body text-base sm:text-lg max-w-lg leading-relaxed">
+                Transparent online loan applications, secure share capital tracking, and automatic monthly amortization schedules built for your peace of mind.
               </p>
 
               {/* Feature pills */}
@@ -152,17 +152,17 @@ export default function LandingPage() {
               </div>
 
               {/* CTAs */}
-              <div className="flex flex-wrap gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 pt-2">
                 <Link
                   href="/login"
-                  className="group flex items-center gap-2 px-8 py-4 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold shadow-xl shadow-primary/30 dark:shadow-secondary/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/35 transition-all duration-300 active:scale-95"
+                  className="group flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold shadow-xl shadow-primary/30 dark:shadow-secondary/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/35 transition-all duration-300 active:scale-95 text-center"
                 >
                   Get Started Free
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
                   href="/login"
-                  className="flex items-center gap-2 px-8 py-4 rounded-full bg-white/80 dark:bg-neutral-800/60 backdrop-blur border border-outline-variant/60 dark:border-neutral-700 text-on-surface dark:text-white font-label text-sm font-bold hover:bg-white dark:hover:bg-neutral-700/80 hover:shadow-lg transition-all duration-300 active:scale-95"
+                  className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-full bg-white/80 dark:bg-neutral-800/60 backdrop-blur border border-outline-variant/60 dark:border-neutral-700 text-on-surface dark:text-white font-label text-sm font-bold hover:bg-white dark:hover:bg-neutral-700/80 hover:shadow-lg transition-all duration-300 active:scale-95 text-center"
                 >
                   View Live Demo
                 </Link>
@@ -170,54 +170,54 @@ export default function LandingPage() {
             </div>
 
             {/* Floating visual */}
-            <div className="relative h-[500px] flex items-center justify-center">
+            <div className="relative h-[380px] sm:h-[450px] md:h-[500px] flex items-center justify-center scale-90 sm:scale-100 max-w-full overflow-hidden sm:overflow-visible">
               {/* Glow base */}
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-[420px] h-[420px] rounded-full bg-primary/12 dark:bg-secondary/8 blur-[90px]" />
+                <div className="w-[300px] sm:w-[420px] h-[300px] sm:h-[420px] rounded-full bg-primary/12 dark:bg-secondary/8 blur-[70px] sm:blur-[90px]" />
               </div>
 
               {/* Main card */}
               <div className="animate-float z-20 relative">
-                <div className="w-[320px] h-[190px] bg-gradient-to-tr from-primary via-emerald-500 to-secondary rounded-2xl shadow-2xl shadow-primary/40 relative overflow-hidden flex flex-col justify-between p-6 transform -rotate-6 border border-white/25">
+                <div className="w-[280px] sm:w-[320px] h-[170px] sm:h-[190px] bg-gradient-to-tr from-primary via-emerald-500 to-secondary rounded-2xl shadow-2xl shadow-primary/40 relative overflow-hidden flex flex-col justify-between p-5 sm:p-6 transform -rotate-6 border border-white/25">
                   {/* Sheen */}
                   <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-transparent rounded-2xl" />
                   <div className="flex justify-between items-start relative z-10">
-                    <CreditCard className="text-white w-9 h-9 drop-shadow" />
+                    <CreditCard className="text-white w-8 h-8 sm:w-9 sm:h-9 drop-shadow" />
                     <div className="flex flex-col items-end gap-1">
-                      <div className="w-12 h-7 bg-white/20 rounded-md backdrop-blur-sm border border-white/20" />
+                      <div className="w-10 sm:w-12 h-6 sm:h-7 bg-white/20 rounded-md backdrop-blur-sm border border-white/20" />
                       <div className="text-white/70 text-[9px] font-mono tracking-widest">VISA</div>
                     </div>
                   </div>
-                  <div className="text-white space-y-1.5 relative z-10">
+                  <div className="text-white space-y-1 sm:space-y-1.5 relative z-10">
                     <div className="text-[10px] opacity-75 tracking-[0.2em] font-mono font-semibold">LENDFLOW ELITE</div>
-                    <div className="font-mono text-base font-bold tracking-widest">•••• •••• •••• 8842</div>
+                    <div className="font-mono text-sm sm:text-base font-bold tracking-widest">•••• •••• •••• 8842</div>
                   </div>
                 </div>
               </div>
 
               {/* Wallet badge */}
-              <div className="absolute top-8 right-8 animate-float z-30" style={{ animationDelay: '1.2s' }}>
-                <div className="p-4 bg-white dark:bg-neutral-800 rounded-2xl shadow-2xl shadow-black/10 border border-outline-variant/30 backdrop-blur">
-                  <Wallet className="text-primary dark:text-secondary w-9 h-9" />
+              <div className="absolute top-4 right-2 sm:top-8 sm:right-8 animate-float z-30" style={{ animationDelay: '1.2s' }}>
+                <div className="p-3 sm:p-4 bg-white dark:bg-neutral-800 rounded-2xl shadow-2xl shadow-black/10 border border-outline-variant/30 backdrop-blur">
+                  <Wallet className="text-primary dark:text-secondary w-7 h-7 sm:w-9 sm:h-9" />
                 </div>
               </div>
 
               {/* Coins badge */}
-              <div className="absolute bottom-12 left-8 animate-float z-30" style={{ animationDelay: '2.2s' }}>
-                <div className="p-3.5 bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-black/10 border border-outline-variant/30">
-                  <Coins className="text-tertiary w-7 h-7" />
+              <div className="absolute bottom-8 left-2 sm:bottom-12 sm:left-8 animate-float z-30" style={{ animationDelay: '2.2s' }}>
+                <div className="p-3 sm:p-3.5 bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-black/10 border border-outline-variant/30">
+                  <Coins className="text-tertiary w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
               </div>
 
               {/* Live stat pop-up */}
-              <div className="absolute bottom-6 right-6 animate-float z-30" style={{ animationDelay: '0.5s' }}>
-                <div className="bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-black/10 border border-outline-variant/30 px-4 py-3 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-emerald-500" />
+              <div className="absolute bottom-4 right-2 sm:bottom-6 sm:right-6 animate-float z-30" style={{ animationDelay: '0.5s' }}>
+                <div className="bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-black/10 border border-outline-variant/30 px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                    <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
                   </div>
                   <div>
-                    <div className="text-[10px] text-neutral-400 font-semibold">Portfolio Return</div>
-                    <div className="text-sm font-extrabold text-emerald-500">+24.7% YTD</div>
+                    <div className="text-[9px] sm:text-[10px] text-neutral-400 font-semibold">Portfolio Return</div>
+                    <div className="text-xs sm:text-sm font-extrabold text-emerald-500">+24.7% YTD</div>
                   </div>
                 </div>
               </div>
@@ -227,28 +227,45 @@ export default function LandingPage() {
 
         {/* ── Metrics Bar ──────────────────────────────────────────── */}
         <section className="relative border-y border-outline-variant/40 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-6 md:px-12 py-10">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 py-8 sm:py-10">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-8 md:gap-10 w-full">
               {/* Stats */}
-              <div className="flex gap-10 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 md:gap-10 items-center w-full md:flex-1">
                 {[
                   { value: '15K+', label: 'Active Cooperative Members' },
                   { value: '95%', label: 'Loan Recovery Rate' },
                   { value: '₱24.5M', label: 'Cooperative Funds Under Management' },
                 ].map((stat, i) => (
-                  <div key={i} className={`text-center md:text-left ${i > 0 ? 'pl-10 border-l border-outline-variant/40 dark:border-neutral-700' : ''}`}>
-                    <div className="font-headline text-3xl md:text-4xl font-extrabold text-primary dark:text-secondary">{stat.value}</div>
-                    <div className="font-label text-xs text-on-surface/60 dark:text-neutral-400 font-semibold mt-1 whitespace-nowrap">{stat.label}</div>
+                  <div
+                    key={i}
+                    className={`text-center sm:text-left ${i > 0
+                        ? 'sm:pl-6 md:pl-10 sm:border-l border-outline-variant/40 dark:border-neutral-700'
+                        : ''
+                      }`}
+                  >
+                    <div className="font-headline text-3xl md:text-4xl font-extrabold text-primary dark:text-secondary">
+                      {stat.value}
+                    </div>
+                    <div className="font-label text-xs text-on-surface/60 dark:text-neutral-400 font-semibold mt-1">
+                      {stat.label}
+                    </div>
                   </div>
                 ))}
               </div>
 
               {/* Trusted by logos */}
-              <div className="flex flex-col items-center md:items-end gap-2">
-                <div className="text-[10px] font-bold text-neutral-400 tracking-widest uppercase">Affiliated:</div>
-                <div className="flex flex-wrap justify-center gap-6 opacity-40 dark:opacity-30">
-                  {['UC METC', 'NATCCO COOP FEDERATION', 'LGU UNION BANK'].map(b => (
-                    <span key={b} className="font-headline text-sm font-extrabold tracking-tighter text-on-surface dark:text-white">{b}</span>
+              <div className="flex flex-col items-center md:items-end gap-2 w-full md:w-auto md:ml-10">
+                <div className="text-[10px] font-bold text-neutral-400 tracking-widest uppercase">
+                  Affiliated:
+                </div>
+                <div className="flex flex-wrap justify-center gap-4 sm:gap-6 opacity-40 dark:opacity-30">
+                  {['UC METC', 'NATCCO COOP FEDERATION', 'LGU UNION BANK'].map((b) => (
+                    <span
+                      key={b}
+                      className="font-headline text-xs sm:text-sm font-extrabold tracking-tighter text-on-surface dark:text-white"
+                    >
+                      {b}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -257,45 +274,45 @@ export default function LandingPage() {
         </section>
 
         {/* ── Strategic Choice ─────────────────────────────────────── */}
-        <section className="py-28 bg-white dark:bg-neutral-950 relative overflow-hidden">
+        <section className="py-16 sm:py-24 md:py-28 bg-white dark:bg-neutral-950 relative overflow-hidden">
           {/* Subtle background tint */}
           <div className="absolute inset-0 bg-gradient-to-b from-primary/3 via-transparent to-transparent pointer-events-none" />
 
-          <div className="relative max-w-7xl mx-auto px-6 md:px-12">
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 md:px-12">
             {/* Section header */}
-            <div className="text-center mb-20 space-y-4">
+            <div className="text-center mb-12 sm:mb-20 space-y-3 sm:space-y-4">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary text-xs font-bold font-label border border-primary/15 dark:border-secondary/15">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Built for Cooperatives
               </div>
-              <h2 className="font-headline text-4xl md:text-5xl font-extrabold text-on-surface dark:text-white leading-tight">
+              <h2 className="font-headline text-3xl sm:text-4xl md:text-5xl font-extrabold text-on-surface dark:text-white leading-tight">
                 The Strategic Choice for<br />
                 <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg, #047857 0%, #34D399 100%)' }}>Modern Members</span>
               </h2>
-              <p className="font-body text-base text-on-surface/60 dark:text-neutral-400 max-w-xl mx-auto leading-relaxed">
+              <p className="font-body text-sm sm:text-base text-on-surface/60 dark:text-neutral-400 max-w-xl mx-auto leading-relaxed">
                 Our system is built on four pillars of cooperative excellence, ensuring your capital and credit needs are always optimized.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-16 items-center">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 lg:gap-16 items-center">
               {/* Left pillars */}
-              <div className="space-y-14 md:text-right">
+              <div className="space-y-8 sm:space-y-12 lg:space-y-14 lg:text-right">
                 {[
                   { icon: <CreditCard className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Credit Assistance', desc: 'Access multiple loan types: Regular, STL, and Product loans.' },
                   { icon: <Calculator className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Smart Computation', desc: 'Instant interest calculation with diminishing or flat-rate logic.' },
                 ].map(p => (
-                  <div key={p.title} className="group space-y-2.5 md:items-end flex flex-col">
+                  <div key={p.title} className="group space-y-2.5 flex flex-col items-center text-center sm:items-start sm:text-left lg:items-end lg:text-right">
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 dark:bg-primary/15 border border-primary/20 shadow-sm group-hover:scale-110 group-hover:shadow-md group-hover:shadow-primary/20 transition-all duration-300">
                       {p.icon}
                     </div>
                     <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">{p.title}</h3>
-                    <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400 leading-relaxed max-w-[220px]">{p.desc}</p>
+                    <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400 leading-relaxed max-w-xs">{p.desc}</p>
                   </div>
                 ))}
               </div>
 
               {/* Center phone mockup */}
-              <div className="relative flex justify-center">
+              <div className="relative flex justify-center scale-90 sm:scale-100">
                 {/* Glow */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="w-72 h-[500px] bg-primary/8 dark:bg-secondary/6 rounded-full blur-3xl" />
@@ -339,17 +356,17 @@ export default function LandingPage() {
               </div>
 
               {/* Right pillars */}
-              <div className="space-y-14">
+              <div className="space-y-8 sm:space-y-12 lg:space-y-14">
                 {[
                   { icon: <PiggyBank className="text-tertiary w-6 h-6" />, color: 'tertiary', title: 'Savings Programs', desc: 'High-yield timed deposits, revolving funds, and secure accumulated share capital.' },
                   { icon: <Clock className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Real-Time Tracking', desc: 'Monitor payment histories, due dates, and printable transaction receipts.' },
                 ].map(p => (
-                  <div key={p.title} className="group space-y-2.5">
+                  <div key={p.title} className="group space-y-2.5 flex flex-col items-center text-center sm:items-start sm:text-left">
                     <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl ${p.color === 'tertiary' ? 'bg-tertiary/10 border-tertiary/20' : 'bg-primary/10 dark:bg-primary/15 border-primary/20'} border shadow-sm group-hover:scale-110 group-hover:shadow-md transition-all duration-300`}>
                       {p.icon}
                     </div>
                     <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">{p.title}</h3>
-                    <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400 leading-relaxed max-w-[220px]">{p.desc}</p>
+                    <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400 leading-relaxed max-w-xs">{p.desc}</p>
                   </div>
                 ))}
               </div>
@@ -358,21 +375,21 @@ export default function LandingPage() {
         </section>
 
         {/* ── Bento Grid ───────────────────────────────────────────── */}
-        <section className="py-28 bg-neutral-50 dark:bg-neutral-900/40 relative overflow-hidden">
-          <div className="max-w-7xl mx-auto px-6 md:px-12">
+        <section className="py-16 sm:py-24 md:py-28 bg-neutral-50 dark:bg-neutral-900/40 relative overflow-hidden">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12">
             {/* Section header */}
-            <div className="text-center mb-14 space-y-3">
+            <div className="text-center mb-10 sm:mb-14 space-y-3">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-secondary/10 dark:bg-secondary/10 text-primary dark:text-secondary text-xs font-bold font-label border border-secondary/20">
                 <Award className="w-3.5 h-3.5" />
                 Platform Capabilities
               </div>
-              <h2 className="font-headline text-4xl font-extrabold text-on-surface dark:text-white">Everything you need to grow</h2>
+              <h2 className="font-headline text-3xl sm:text-4xl font-extrabold text-on-surface dark:text-white">Everything you need to grow</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
 
               {/* Card 1: Earn Rewards */}
-              <div className="md:col-span-4 group bg-white dark:bg-neutral-800/70 p-8 rounded-3xl border border-outline-variant/50 dark:border-neutral-700/60 flex flex-col justify-between hover:shadow-2xl hover:shadow-primary/8 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden">
+              <div className="md:col-span-6 lg:col-span-4 group bg-white dark:bg-neutral-800/70 p-6 sm:p-8 rounded-3xl border border-outline-variant/50 dark:border-neutral-700/60 flex flex-col justify-between hover:shadow-2xl hover:shadow-primary/8 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/3 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-3xl" />
                 <div className="space-y-3 relative z-10">
                   <div className="w-11 h-11 rounded-2xl bg-primary/12 dark:bg-primary/20 flex items-center justify-center border border-primary/20">
@@ -394,9 +411,9 @@ export default function LandingPage() {
               </div>
 
               {/* Card 2: Always Protected */}
-              <div className="md:col-span-8 bg-neutral-950 text-white p-8 rounded-3xl overflow-hidden relative group border border-neutral-800">
+              <div className="md:col-span-6 lg:col-span-8 bg-neutral-950 text-white p-6 sm:p-8 rounded-3xl overflow-hidden relative group border border-neutral-800">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-transparent to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="z-10 relative md:w-1/2 space-y-4">
+                <div className="z-10 relative lg:w-1/2 space-y-4">
                   <div className="w-11 h-11 rounded-2xl bg-white/10 flex items-center justify-center border border-white/15">
                     <Shield className="w-5 h-5 text-secondary" />
                   </div>
@@ -405,14 +422,14 @@ export default function LandingPage() {
                     Role-based access control (Admin, Staff, Accountant), data encryption, and comprehensive secure activity logs.</p>
                   <Link
                     href="/terms"
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/25 hover:bg-white hover:text-neutral-950 transition-all font-label text-xs font-bold group/btn"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/25 hover:bg-white hover:text-neutral-950 transition-all font-label text-xs font-bold group/btn"
                   >
                     View Security Policies
                     <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
                   </Link>
                 </div>
                 {/* Mock dashboard panel */}
-                <div className="absolute right-[-8%] bottom-[-12%] w-[55%] h-[130%] rotate-[-8deg] transition-all group-hover:rotate-0 group-hover:right-[-4%] duration-700 hidden md:block">
+                <div className="absolute right-[-8%] bottom-[-12%] w-[55%] h-[130%] rotate-[-8deg] transition-all group-hover:rotate-0 group-hover:right-[-4%] duration-700 hidden lg:block">
                   <div className="w-full h-full bg-neutral-900 border border-white/8 rounded-2xl p-5 shadow-2xl">
                     <div className="flex gap-2 mb-5">
                       <div className="w-2.5 h-2.5 rounded-full bg-red-400/80" />
@@ -440,10 +457,10 @@ export default function LandingPage() {
               </div>
 
               {/* Card 3: No Volatility */}
-              <div className="md:col-span-7 bg-gradient-to-br from-primary to-emerald-600 text-white p-8 rounded-3xl flex items-center gap-6 border border-white/10 shadow-lg shadow-primary/25 relative overflow-hidden group">
+              <div className="md:col-span-12 lg:col-span-7 bg-gradient-to-br from-primary to-emerald-600 text-white p-6 sm:p-8 rounded-3xl flex flex-col sm:flex-row items-center gap-6 border border-white/10 shadow-lg shadow-primary/25 relative overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <div className="w-1/2 space-y-3 relative z-10">
-                  <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center border border-white/20">
+                <div className="w-full sm:w-1/2 space-y-3 relative z-10 text-center sm:text-left">
+                  <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center border border-white/20 mx-auto sm:mx-0">
                     <TrendingUp className="w-5 h-5 text-white" />
                   </div>
                   <h3 className="font-headline text-xl font-bold">No Hidden Charges</h3>
@@ -451,7 +468,7 @@ export default function LandingPage() {
                     View your outstanding balance, principal splits, and amortizations clearly.
                   </p>
                 </div>
-                <div className="w-1/2 flex justify-center relative z-10">
+                <div className="w-full sm:w-1/2 flex justify-center relative z-10">
                   <div className="w-full h-24 bg-white/12 rounded-2xl flex items-center justify-center p-4 border border-white/20">
                     <svg className="w-full h-full text-white drop-shadow" viewBox="0 0 100 24">
                       <defs>
@@ -467,11 +484,11 @@ export default function LandingPage() {
               </div>
 
               {/* Card 4: Get Paid Faster */}
-              <div className="md:col-span-5 group bg-white dark:bg-neutral-800/70 p-8 rounded-3xl border border-outline-variant/50 dark:border-neutral-700/60 flex flex-col justify-center hover:shadow-2xl hover:shadow-primary/8 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden">
+              <div className="md:col-span-12 lg:col-span-5 group bg-white dark:bg-neutral-800/70 p-6 sm:p-8 rounded-3xl border border-outline-variant/50 dark:border-neutral-700/60 flex flex-col justify-center hover:shadow-2xl hover:shadow-primary/8 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-secondary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-3xl" />
                 <div className="relative z-10">
                   <div className="flex items-start gap-4 mb-6">
-                    <div className="w-11 h-11 rounded-2xl bg-primary/12 dark:bg-primary/20 flex items-center justify-center border border-primary/20">
+                    <div className="w-11 h-11 rounded-2xl bg-primary/12 dark:bg-primary/20 flex items-center justify-center border border-primary/20 flex-shrink-0">
                       <Zap className="w-5 h-5 text-primary dark:text-secondary" />
                     </div>
                     <div className="space-y-1">
@@ -482,11 +499,11 @@ export default function LandingPage() {
                     </div>
                   </div>
                   {/* Transaction notification */}
-                  <div className="p-4 bg-neutral-50 dark:bg-neutral-900/80 rounded-2xl flex items-center gap-3 border border-outline-variant/40 dark:border-neutral-700/50">
+                  <div className="p-3.5 sm:p-4 bg-neutral-50 dark:bg-neutral-900/80 rounded-2xl flex items-center gap-3 border border-outline-variant/40 dark:border-neutral-700/50">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center font-extrabold text-white text-sm shadow-md shadow-primary/30 flex-shrink-0">L</div>
                     <div className="flex-1 min-w-0">
                       <div className="text-[10px] font-bold text-neutral-400 tracking-wide">SynCo</div>
-                      <div className="text-sm font-bold text-on-surface dark:text-white truncate">Disbursement Ready: ₱50,000.00</div>
+                      <div className="text-xs sm:text-sm font-bold text-on-surface dark:text-white truncate">Disbursement Ready: ₱50,000.00</div>
                     </div>
                     <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                       <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -500,26 +517,26 @@ export default function LandingPage() {
         </section>
 
         {/* ── Integration CTA ──────────────────────────────────────── */}
-        <section className="py-28 bg-white dark:bg-neutral-950">
-          <div className="max-w-7xl mx-auto px-6 md:px-12">
-            <div className="relative bg-gradient-to-br from-primary via-emerald-600 to-secondary/90 rounded-[2.5rem] p-12 md:p-20 flex flex-col md:flex-row items-center gap-16 overflow-hidden border border-white/10 shadow-2xl shadow-primary/20">
+        <section className="py-16 sm:py-24 md:py-28 bg-white dark:bg-neutral-950">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12">
+            <div className="relative bg-gradient-to-br from-primary via-emerald-600 to-secondary/90 rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-12 md:p-16 lg:p-20 flex flex-col md:flex-row items-center gap-10 md:gap-16 overflow-hidden border border-white/10 shadow-2xl shadow-primary/20">
               {/* Decorative elements */}
               <div className="absolute -right-24 -bottom-24 w-96 h-96 border-[3px] border-white/8 rounded-full pointer-events-none" />
               <div className="absolute -right-6 -bottom-6 w-48 h-48 border-[3px] border-white/12 rounded-full pointer-events-none" />
               <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-transparent to-transparent pointer-events-none" />
 
-              <div className="md:w-1/2 z-10 space-y-6">
+              <div className="w-full md:w-1/2 z-10 space-y-5 sm:space-y-6 text-center md:text-left">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/15 border border-white/20 text-white text-xs font-bold font-label">
                   <Code className="w-3.5 h-3.5" />
                   Enterprise API
                 </div>
-                <h2 className="font-headline text-3xl md:text-4xl font-extrabold text-white leading-tight">
+                <h2 className="font-headline text-2xl sm:text-3xl md:text-4xl font-extrabold text-white leading-tight">
                   Seamless Integration<br />with your Stack
                 </h2>
-                <p className="text-white/75 font-body text-base max-w-md leading-relaxed">
+                <p className="text-white/75 font-body text-sm sm:text-base max-w-md mx-auto md:mx-0 leading-relaxed">
                   Connect SynCo to your existing CRM, accounting software, and treasury systems with our enterprise-grade API.
                 </p>
-                <div className="flex flex-wrap gap-4">
+                <div className="flex flex-wrap justify-center md:justify-start gap-3 sm:gap-4">
                   <Link
                     href="/login"
                     className="flex items-center gap-2 px-6 py-3 bg-white text-primary font-label text-sm font-bold rounded-full shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-95 transition-all"
@@ -536,17 +553,17 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="md:w-1/2 flex justify-center z-10">
-                <div className="grid grid-cols-3 gap-4 md:gap-5 transform rotate-6 hover:rotate-0 transition-transform duration-700">
+              <div className="w-full md:w-1/2 flex justify-center z-10">
+                <div className="grid grid-cols-3 gap-3 sm:gap-4 md:gap-5 transform rotate-3 sm:rotate-6 hover:rotate-0 transition-transform duration-700">
                   {[
-                    { icon: <Cloud className="w-7 h-7 text-white" />, glass: true },
-                    { icon: <Cpu className="w-7 h-7 text-primary" />, glass: false },
-                    { icon: <Database className="w-7 h-7 text-white" />, glass: true },
-                    { icon: <GitMerge className="w-7 h-7 text-indigo-500" />, glass: false },
-                    { icon: <Code className="w-7 h-7 text-white" />, glass: true },
-                    { icon: <Hexagon className="w-7 h-7 text-emerald-500" />, glass: false },
+                    { icon: <Cloud className="w-6 h-6 sm:w-7 sm:h-7 text-white" />, glass: true },
+                    { icon: <Cpu className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />, glass: false },
+                    { icon: <Database className="w-6 h-6 sm:w-7 sm:h-7 text-white" />, glass: true },
+                    { icon: <GitMerge className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-500" />, glass: false },
+                    { icon: <Code className="w-6 h-6 sm:w-7 sm:h-7 text-white" />, glass: true },
+                    { icon: <Hexagon className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-500" />, glass: false },
                   ].map((b, i) => (
-                    <div key={i} className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-xl hover:scale-110 transition-transform duration-200 cursor-default ${b.glass ? 'bg-white/12 backdrop-blur border border-white/20' : 'bg-white shadow-lg'}`}>
+                    <div key={i} className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center shadow-xl hover:scale-110 transition-transform duration-200 cursor-default ${b.glass ? 'bg-white/12 backdrop-blur border border-white/20' : 'bg-white shadow-lg'}`}>
                       {b.icon}
                     </div>
                   ))}
