@@ -116,9 +116,10 @@ function EditUserModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-neutral-500 hover:bg-neutral/10 transition-colors"
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+            aria-label="Close modal"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 

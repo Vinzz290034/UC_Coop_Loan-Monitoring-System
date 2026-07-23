@@ -292,7 +292,8 @@ export default function MessagesPage() {
                 <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">Message Details</h3>
                 <button
                   onClick={() => setSelectedMessage(null)}
-                  className="p-1 rounded-lg hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-400 cursor-pointer"
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  aria-label="Close message details"
                 >
                   <X className="w-4 h-4" />
                 </button>

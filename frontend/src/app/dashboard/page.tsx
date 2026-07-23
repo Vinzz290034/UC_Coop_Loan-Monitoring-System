@@ -42,6 +42,7 @@ import {
   CalendarDays,
   ChevronDown,
   Check,
+  X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -92,11 +93,10 @@ function AnimatedSelect({
                     onChange(option.value);
                     setIsOpen(false);
                   }}
-                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-extrabold'
-                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                  }`}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all cursor-pointer ${isSelected
+                    ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-extrabold'
+                    : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    }`}
                 >
                   <span>{option.label}</span>
                   {isSelected && <Check className="w-4 h-4 text-primary dark:text-secondary" />}
@@ -381,27 +381,27 @@ export default function OverviewPage() {
         <div className="space-y-4">
           <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Account Balances</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <KpiCard 
-              label="Share Capital" 
-              value={formatCurrency(balances.share_capital)} 
-              icon={Building} 
+            <KpiCard
+              label="Share Capital"
+              value={formatCurrency(balances.share_capital)}
+              icon={Building}
               href="/dashboard/accounting"
-              description="Cumulative equity contributions" 
+              description="Cumulative equity contributions"
             />
-            <KpiCard 
-              label="Loan Balance" 
-              value={formatCurrency(loans.outstanding_balance)} 
-              icon={Banknote} 
-              variant="primary" 
+            <KpiCard
+              label="Loan Balance"
+              value={formatCurrency(loans.outstanding_balance)}
+              icon={Banknote}
+              variant="primary"
               href="/dashboard/loans"
-              description="Total active credit balance due" 
+              description="Total active credit balance due"
             />
-            <KpiCard 
-              label="Active Credit Lines" 
-              value={`${loans.active_count} ${loans.active_count === 1 ? 'Active Loan' : 'Active Loans'}`} 
-              icon={FileCheck} 
+            <KpiCard
+              label="Active Credit Lines"
+              value={`${loans.active_count} ${loans.active_count === 1 ? 'Active Loan' : 'Active Loans'}`}
+              icon={FileCheck}
               href="/dashboard/loans"
-              description="Disbursed accounts in good standing" 
+              description="Disbursed accounts in good standing"
             />
           </div>
         </div>
@@ -625,9 +625,10 @@ export default function OverviewPage() {
                 </h3>
                 <button
                   onClick={closeModal}
-                  className="p-1.5 rounded-full hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  aria-label="Close modal"
                 >
-                  <span className="text-xl font-bold font-mono">&times;</span>
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
@@ -667,9 +668,9 @@ export default function OverviewPage() {
                                   setSelectedProduct(p);
                                   setLoanAmount(parseFloat(p.min_amount));
                                 }}
-                                className={`w-full p-4 rounded-2xl border text-left transition-all ${selectedProduct?.id === p.id
+                                className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer ${selectedProduct?.id === p.id
                                   ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
-                                  : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                                  : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 dark:hover:bg-neutral/10'
                                   }`}
                               >
                                 <div className="flex justify-between items-center">
@@ -807,7 +808,7 @@ export default function OverviewPage() {
                             <button
                               type="button"
                               onClick={() => setInvestmentType('payday')}
-                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'payday'
+                              className={`p-4 rounded-2xl border text-center transition-all cursor-pointer hover:border-primary/40 dark:hover:border-secondary/40 ${investmentType === 'payday'
                                 ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
                                 : 'border-outline-variant/65'
                                 }`}
@@ -820,7 +821,7 @@ export default function OverviewPage() {
                             <button
                               type="button"
                               onClick={() => setInvestmentType('fixed_deposit')}
-                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'fixed_deposit'
+                              className={`p-4 rounded-2xl border text-center transition-all cursor-pointer hover:border-primary/40 dark:hover:border-secondary/40 ${investmentType === 'fixed_deposit'
                                 ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
                                 : 'border-outline-variant/65'
                                 }`}

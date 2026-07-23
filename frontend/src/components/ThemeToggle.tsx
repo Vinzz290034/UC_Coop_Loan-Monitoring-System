@@ -21,7 +21,7 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="p-2.5 rounded-full hover:bg-neutral/10 dark:hover:bg-neutral/20 transition-all active:scale-90 flex items-center justify-center text-primary dark:text-secondary focus:outline-none"
+      className="w-10 h-10 rounded-full hover:bg-neutral/10 dark:hover:bg-neutral/20 transition-all active:scale-90 flex items-center justify-center text-primary dark:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
       title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
     >
       {theme === 'light' ? (

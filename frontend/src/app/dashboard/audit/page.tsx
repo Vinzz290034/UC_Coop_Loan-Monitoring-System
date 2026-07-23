@@ -282,7 +282,7 @@ export default function AuditTrailPage() {
             >
               <button
                 onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
-                className="w-full text-left p-4 hover:bg-neutral/5 dark:hover:bg-neutral/5 transition-colors"
+                className="w-full text-left p-4 hover:bg-neutral/5 dark:hover:bg-neutral/5 transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-3">
                   {/* Status Indicator */}
@@ -391,7 +391,7 @@ export default function AuditTrailPage() {
                 <button
                   key={pageNum}
                   onClick={() => fetchLogs(pageNum)}
-                  className={`w-9 h-9 rounded-xl text-xs font-bold transition-colors ${
+                  className={`w-9 h-9 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
                     pageNum === pagination.page
                       ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950'
                       : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5'
@@ -406,7 +406,7 @@ export default function AuditTrailPage() {
           <button
             onClick={() => fetchLogs(pagination.page + 1)}
             disabled={pagination.page >= pagination.total_pages}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl border border-outline-variant/50 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 disabled:opacity-30 transition-colors"
+            className="flex items-center gap-1 px-3 py-2 rounded-xl border border-outline-variant/50 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 disabled:opacity-30 transition-colors cursor-pointer"
           >
             Next <ChevronRight className="w-4 h-4" />
           </button>

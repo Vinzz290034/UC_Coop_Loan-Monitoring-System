@@ -173,7 +173,7 @@ export default function ReportsPage() {
         <button
           onClick={handleExportExcel}
           disabled={loading || records.length === 0}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all disabled:opacity-50 active:scale-95 self-start sm:self-center"
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all disabled:opacity-50 active:scale-95 self-start sm:self-center cursor-pointer"
         >
           <FileSpreadsheet className="w-4.5 h-4.5" />
           Download Excel Spreadsheet
@@ -190,7 +190,7 @@ export default function ReportsPage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as any)}
-            className={`px-5 py-3 font-headline text-sm font-bold border-b-2 transition-all ${
+            className={`px-5 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer ${
               activeTab === tab.key
                 ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
                 : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'

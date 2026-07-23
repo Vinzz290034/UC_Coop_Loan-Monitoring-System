@@ -112,7 +112,7 @@ export default function BillingPage() {
       <div className="flex border-b border-outline-variant/50">
         <button
           onClick={() => setActiveTab('due')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all ${
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === 'due'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
@@ -122,7 +122,7 @@ export default function BillingPage() {
         </button>
         <button
           onClick={() => setActiveTab('aging')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all ${
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === 'aging'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
