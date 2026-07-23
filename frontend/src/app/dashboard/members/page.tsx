@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import SearchInput from '@/components/SearchInput';
@@ -16,7 +17,10 @@ import {
   CheckCircle,
   Eye,
   FileSpreadsheet,
-  ArrowLeft
+  ArrowLeft,
+  Pencil,
+  Check,
+  Loader2,
 } from 'lucide-react';
 
 interface Member {
@@ -62,6 +66,128 @@ export default function MembersPage() {
   const [userId, setUserId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const router = useRouter();
+
+  // Inline editing state
+  const [editingCell, setEditingCell] = useState<{ memberId: number; field: string } | null>(null);
+  const [inlineData, setInlineData] = useState<any>({});
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // References for single vs double click & touch interactions
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartRef = useRef<number>(0);
+
+  const handleCellSingleClick = (memberId: number) => {
+    if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+    clickTimeoutRef.current = setTimeout(() => {
+      router.push(`/dashboard/members/${memberId}`);
+    }, 250);
+  };
+
+  const handleCellDoubleClick = (memberId: number, field: string, initialValues: any) => {
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+    }
+    setInlineError(null);
+    setEditingCell({ memberId, field });
+    setInlineData(initialValues);
+  };
+
+  const handleTouchStart = () => {
+    touchStartRef.current = Date.now();
+  };
+
+  const handleTouchEnd = (memberId: number, field: string, initialValues: any) => {
+    const duration = Date.now() - touchStartRef.current;
+    if (duration >= 450) {
+      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+      setInlineError(null);
+      setEditingCell({ memberId, field });
+      setInlineData(initialValues);
+    }
+  };
+
+  const handleSaveInline = async (memberId: number, field: string) => {
+    try {
+      setInlineSaving(true);
+      setInlineError(null);
+
+      let updatedFields: any = {};
+      if (field === 'status') {
+        const patchRes = await api.patch(`/members/${memberId}/status`, {
+          status: inlineData.status,
+          remarks: 'Updated status via directory table inline edit',
+        });
+        updatedFields = patchRes.data.data;
+      } else {
+        const targetMember = members.find((m) => m.id === memberId);
+        if (!targetMember) return;
+
+        const payload: any = {
+          first_name: targetMember.first_name,
+          last_name: targetMember.last_name,
+          middle_name: targetMember.middle_name || undefined,
+          age: targetMember.age || undefined,
+          email: targetMember.email || undefined,
+          phone: targetMember.phone || undefined,
+          address: targetMember.address || undefined,
+          date_of_birth: targetMember.date_of_birth ? targetMember.date_of_birth.split('T')[0] : undefined,
+        };
+
+        if (field === 'name') {
+          if (!inlineData.first_name || !inlineData.last_name) {
+            setInlineError('First and Last names are required.');
+            setInlineSaving(false);
+            return;
+          }
+          payload.first_name = inlineData.first_name.trim();
+          payload.last_name = inlineData.last_name.trim();
+          payload.middle_name = inlineData.middle_name ? inlineData.middle_name.trim() : undefined;
+        } else if (field === 'age') {
+          if (inlineData.date_of_birth) {
+            payload.date_of_birth = inlineData.date_of_birth;
+            const birthDate = new Date(inlineData.date_of_birth);
+            const today = new Date();
+            let calcAge = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) calcAge--;
+            payload.age = calcAge >= 0 ? calcAge : undefined;
+          } else if (inlineData.age) {
+            payload.age = parseInt(inlineData.age, 10);
+          }
+        } else if (field === 'phone') {
+          payload.phone = inlineData.phone ? inlineData.phone.trim() : undefined;
+        } else if (field === 'email') {
+          if (inlineData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inlineData.email)) {
+            setInlineError('Please enter a valid email address.');
+            setInlineSaving(false);
+            return;
+          }
+          payload.email = inlineData.email ? inlineData.email.trim() : undefined;
+        }
+
+        const putRes = await api.put(`/members/${memberId}`, payload);
+        updatedFields = putRes.data.data;
+      }
+
+      setMembers((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, ...updatedFields } : m))
+      );
+
+      setEditingCell(null);
+      setToastMessage('Member updated successfully!');
+      setTimeout(() => setToastMessage(null), 3500);
+    } catch (err: any) {
+      console.error('Inline save error:', err);
+      setInlineError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to update member.');
+    } finally {
+      setInlineSaving(false);
+    }
+  };
 
   const getAvatarUrl = (path?: string | null) => {
     if (!path) return null;
@@ -265,6 +391,19 @@ export default function MembersPage() {
         </div>
       </div>
 
+      {/* Feedback Toast */}
+      {toastMessage && (
+        <div className="p-4 bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 text-primary dark:text-secondary rounded-2xl flex items-center justify-between animate-fade-in text-xs font-bold shadow-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4" />
+            <span>{toastMessage}</span>
+          </div>
+          <button onClick={() => setToastMessage(null)} className="p-1 hover:bg-primary/10 rounded-full">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Main Table */}
       {loading ? (
         <SkeletonTable rows={itemsPerPage} cols={6} />
@@ -296,77 +435,341 @@ export default function MembersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/40 font-body text-sm text-on-surface dark:text-white/95">
-                  {currentItems.map((member) => (
-                    <tr key={member.id} className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
-                      <td className="px-4 sm:px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-primary/10 dark:bg-secondary/10 flex items-center justify-center border border-outline-variant/40">
-                            {member.profile_picture_url ? (
-                              <img
-                                src={getAvatarUrl(member.profile_picture_url) || ''}
-                                alt={`${member.first_name} ${member.last_name}`}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <span className="font-bold text-xs text-primary dark:text-secondary">
-                                {member.first_name?.[0]}{member.last_name?.[0]}
-                              </span>
-                            )}
-                          </div>
-                          <div>
-                            <div className="font-bold text-on-surface dark:text-white">
-                              {member.last_name}, {member.first_name} {member.middle_name ? `${member.middle_name}` : ''}
+                  {currentItems.map((member) => {
+                    const isEditingName = editingCell?.memberId === member.id && editingCell?.field === 'name';
+                    const isEditingAge = editingCell?.memberId === member.id && editingCell?.field === 'age';
+                    const isEditingPhone = editingCell?.memberId === member.id && editingCell?.field === 'phone';
+                    const isEditingEmail = editingCell?.memberId === member.id && editingCell?.field === 'email';
+                    const isEditingStatus = editingCell?.memberId === member.id && editingCell?.field === 'status';
+
+                    return (
+                      <tr key={member.id} className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
+                        {/* Member Profile Cell (Name) */}
+                        <td className="px-4 sm:px-6 py-4 relative group">
+                          {isEditingName ? (
+                            <div className="p-3 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10 animate-pop">
+                              <p className="text-[10px] uppercase font-bold text-primary dark:text-secondary">Edit Full Name</p>
+                              <div className="grid grid-cols-3 gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="First"
+                                  value={inlineData.first_name || ''}
+                                  onChange={(e) => setInlineData({ ...inlineData, first_name: e.target.value })}
+                                  className="px-2.5 py-1.5 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Middle"
+                                  value={inlineData.middle_name || ''}
+                                  onChange={(e) => setInlineData({ ...inlineData, middle_name: e.target.value })}
+                                  className="px-2.5 py-1.5 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Last"
+                                  value={inlineData.last_name || ''}
+                                  onChange={(e) => setInlineData({ ...inlineData, last_name: e.target.value })}
+                                  className="px-2.5 py-1.5 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                                />
+                              </div>
+                              {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
+                              <div className="flex items-center justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCell(null)}
+                                  className="px-2.5 py-1 text-xs text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={inlineSaving}
+                                  onClick={() => handleSaveInline(member.id, 'name')}
+                                  className="px-3 py-1 bg-primary text-white text-xs font-bold rounded-lg flex items-center gap-1 hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {inlineSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                  Save
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 sm:px-6 py-4 font-semibold text-xs text-neutral-700 dark:text-neutral-300">
-                        {member.age != null ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 font-mono">
-                            {member.age} yrs
+                          ) : (
+                            <div
+                              onClick={() => handleCellSingleClick(member.id)}
+                              onDoubleClick={() =>
+                                handleCellDoubleClick(member.id, 'name', {
+                                  first_name: member.first_name,
+                                  last_name: member.last_name,
+                                  middle_name: member.middle_name || '',
+                                })
+                              }
+                              onTouchStart={handleTouchStart}
+                              onTouchEnd={() =>
+                                handleTouchEnd(member.id, 'name', {
+                                  first_name: member.first_name,
+                                  last_name: member.last_name,
+                                  middle_name: member.middle_name || '',
+                                })
+                              }
+                              className="flex items-center gap-3 cursor-pointer group/cell"
+                              title="Double-click or long-press to edit inline"
+                            >
+                              <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-primary/10 dark:bg-secondary/10 flex items-center justify-center border border-outline-variant/40">
+                                {member.profile_picture_url ? (
+                                  <img
+                                    src={getAvatarUrl(member.profile_picture_url) || ''}
+                                    alt={`${member.first_name} ${member.last_name}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="font-bold text-xs text-primary dark:text-secondary">
+                                    {member.first_name?.[0]}{member.last_name?.[0]}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="font-bold text-on-surface dark:text-white group-hover/cell:text-primary dark:group-hover/cell:text-secondary transition-colors">
+                                  {member.last_name}, {member.first_name} {member.middle_name ? `${member.middle_name}` : ''}
+                                </div>
+                                <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                              </div>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Age / DOB Cell */}
+                        <td className="px-4 sm:px-6 py-4 font-semibold text-xs text-neutral-700 dark:text-neutral-300 relative">
+                          {isEditingAge ? (
+                            <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
+                              <p className="text-[10px] uppercase font-bold text-primary dark:text-secondary">Edit Date of Birth</p>
+                              <input
+                                type="date"
+                                max={new Date().toISOString().split('T')[0]}
+                                value={inlineData.date_of_birth || (member.date_of_birth ? member.date_of_birth.split('T')[0] : '')}
+                                onChange={(e) => setInlineData({ ...inlineData, date_of_birth: e.target.value })}
+                                className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                              />
+                              {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
+                              <div className="flex items-center gap-1 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCell(null)}
+                                  className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={inlineSaving}
+                                  onClick={() => handleSaveInline(member.id, 'age')}
+                                  className="p-1 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => handleCellSingleClick(member.id)}
+                              onDoubleClick={() =>
+                                handleCellDoubleClick(member.id, 'age', {
+                                  date_of_birth: member.date_of_birth ? member.date_of_birth.split('T')[0] : '',
+                                  age: member.age || '',
+                                })
+                              }
+                              onTouchStart={handleTouchStart}
+                              onTouchEnd={() =>
+                                handleTouchEnd(member.id, 'age', {
+                                  date_of_birth: member.date_of_birth ? member.date_of_birth.split('T')[0] : '',
+                                  age: member.age || '',
+                                })
+                              }
+                              className="cursor-pointer group/cell flex items-center gap-1.5"
+                              title="Double-click or long-press to edit inline"
+                            >
+                              {member.age != null ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 font-mono">
+                                  {member.age} yrs
+                                </span>
+                              ) : (
+                                <span className="text-neutral-400 font-mono">N/A</span>
+                              )}
+                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Mobile Cell */}
+                        <td className="px-4 sm:px-6 py-4 hidden lg:table-cell relative">
+                          {isEditingPhone ? (
+                            <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
+                              <input
+                                type="tel"
+                                placeholder="09123456789"
+                                value={inlineData.phone || ''}
+                                onChange={(e) => setInlineData({ ...inlineData, phone: e.target.value })}
+                                className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                              />
+                              {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCell(null)}
+                                  className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={inlineSaving}
+                                  onClick={() => handleSaveInline(member.id, 'phone')}
+                                  className="p-1 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => handleCellSingleClick(member.id)}
+                              onDoubleClick={() => handleCellDoubleClick(member.id, 'phone', { phone: member.phone || '' })}
+                              onTouchStart={handleTouchStart}
+                              onTouchEnd={() => handleTouchEnd(member.id, 'phone', { phone: member.phone || '' })}
+                              className="cursor-pointer group/cell flex items-center gap-1.5"
+                              title="Double-click or long-press to edit inline"
+                            >
+                              {member.phone ? (
+                                <span className="flex items-center gap-1 text-xs">
+                                  <Phone className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
+                                  {member.phone}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-400 font-mono text-xs">N/A</span>
+                              )}
+                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Email Cell */}
+                        <td className="px-4 sm:px-6 py-4 hidden md:table-cell relative">
+                          {isEditingEmail ? (
+                            <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
+                              <input
+                                type="email"
+                                placeholder="email@example.com"
+                                value={inlineData.email || ''}
+                                onChange={(e) => setInlineData({ ...inlineData, email: e.target.value })}
+                                className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                              />
+                              {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCell(null)}
+                                  className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={inlineSaving}
+                                  onClick={() => handleSaveInline(member.id, 'email')}
+                                  className="p-1 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => handleCellSingleClick(member.id)}
+                              onDoubleClick={() => handleCellDoubleClick(member.id, 'email', { email: member.email || '' })}
+                              onTouchStart={handleTouchStart}
+                              onTouchEnd={() => handleTouchEnd(member.id, 'email', { email: member.email || '' })}
+                              className="cursor-pointer group/cell flex items-center gap-1.5"
+                              title="Double-click or long-press to edit inline"
+                            >
+                              {member.email ? (
+                                <span className="flex items-center gap-1 text-xs">
+                                  <Mail className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
+                                  {member.email}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-400 font-mono text-xs">N/A</span>
+                              )}
+                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Status Cell */}
+                        <td className="px-4 sm:px-6 py-4 relative">
+                          {isEditingStatus ? (
+                            <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
+                              <select
+                                value={inlineData.status || member.status}
+                                onChange={(e) => setInlineData({ ...inlineData, status: e.target.value })}
+                                className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                              >
+                                <option value="active">Active</option>
+                                <option value="suspended">Suspended</option>
+                                <option value="inactive">Inactive</option>
+                              </select>
+                              {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCell(null)}
+                                  className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={inlineSaving}
+                                  onClick={() => handleSaveInline(member.id, 'status')}
+                                  className="p-1 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => handleCellSingleClick(member.id)}
+                              onDoubleClick={() => handleCellDoubleClick(member.id, 'status', { status: member.status })}
+                              onTouchStart={handleTouchStart}
+                              onTouchEnd={() => handleTouchEnd(member.id, 'status', { status: member.status })}
+                              className="cursor-pointer group/cell flex items-center gap-1.5"
+                              title="Double-click or long-press to edit inline"
+                            >
+                              {getStatusBadge(member.status)}
+                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Join Date Cell */}
+                        <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
+                          <span className="flex items-center gap-1 text-xs text-neutral-600 dark:text-neutral-400">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {new Date(member.created_at).toLocaleDateString()}
                           </span>
-                        ) : (
-                          <span className="text-neutral-400 font-mono">N/A</span>
-                        )}
-                      </td>
-                      <td className="px-4 sm:px-6 py-4 hidden lg:table-cell">
-                        {member.phone ? (
-                          <span className="flex items-center gap-1 text-xs">
-                            <Phone className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
-                            {member.phone}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-400 font-mono text-xs">N/A</span>
-                        )}
-                      </td>
-                      <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
-                        {member.email ? (
-                          <span className="flex items-center gap-1 text-xs">
-                            <Mail className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
-                            {member.email}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-400 font-mono text-xs">N/A</span>
-                        )}
-                      </td>
-                      <td className="px-4 sm:px-6 py-4">{getStatusBadge(member.status)}</td>
-                      <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
-                        <span className="flex items-center gap-1 text-xs text-neutral-600 dark:text-neutral-400">
-                          <Calendar className="w-3.5 h-3.5" />
-                          {new Date(member.created_at).toLocaleDateString()}
-                        </span>
-                      </td>
-                      <td className="px-4 sm:px-6 py-4 text-right">
-                        <Link
-                          href={`/dashboard/members/${member.id}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          View Profile
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+
+                        {/* Actions Cell */}
+                        <td className="px-4 sm:px-6 py-4 text-right">
+                          <Link
+                            href={`/dashboard/members/${member.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            View Profile
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -391,8 +794,8 @@ export default function MembersPage() {
                     key={idx}
                     onClick={() => setCurrentPage(idx + 1)}
                     className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors ${currentPage === idx + 1
-                        ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary'
-                        : 'border-outline-variant hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400'
+                      ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary'
+                      : 'border-outline-variant hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400'
                       }`}
                   >
                     {idx + 1}
