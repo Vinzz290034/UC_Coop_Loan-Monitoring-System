@@ -680,3 +680,84 @@ export const getLoanMetricsSummary = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Get loan history specific to logged-in user profile
+// @route   GET /api/loans/my-history
+// @access  Protected (Member)
+export const getMyLoanHistory = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Resolve member profile ID attached to current user
+    const memberResult = await query('SELECT id FROM members WHERE user_id = $1', [userId]);
+    if (memberResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'No member profile associated with this account.' }
+      });
+    }
+
+    const memberId = memberResult.rows[0].id;
+
+    // 2. Query member's loan history along with aggregate repayment totals
+    const historyQuery = `
+      SELECT 
+        l.id,
+        l.principal_amount,
+        l.interest_rate,
+        l.term_months,
+        l.amortization_type,
+        l.status,
+        l.disbursed_at,
+        l.maturity_date,
+        l.created_at,
+        lp.name AS product_name,
+        COALESCE(SUM(rs.principal_paid), 0) AS total_principal_paid,
+        COALESCE(SUM(rs.interest_paid), 0) AS total_interest_paid,
+        COALESCE(SUM(rs.total_due), 0) AS total_expected_repayment
+      FROM loans l
+      LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
+      LEFT JOIN repayment_schedules rs ON l.id = rs.loan_id
+      WHERE l.member_id = $1
+      GROUP BY l.id, lp.name
+      ORDER BY l.created_at DESC
+    `;
+
+    const historyResult = await query(historyQuery, [memberId]);
+
+    // 3. Format repayment metrics per loan
+    const formattedHistory = historyResult.rows.map((loan) => {
+      const principalPaid = parseFloat(loan.total_principal_paid);
+      const interestPaid = parseFloat(loan.total_interest_paid);
+      const totalPaid = principalPaid + interestPaid;
+      const principal = parseFloat(loan.principal_amount);
+
+      return {
+        id: loan.id,
+        product_name: loan.product_name,
+        principal_amount: principal,
+        interest_rate: parseFloat(loan.interest_rate),
+        term_months: parseInt(loan.term_months, 10),
+        amortization_type: loan.amortization_type,
+        status: loan.status,
+        disbursed_at: loan.disbursed_at,
+        maturity_date: loan.maturity_date,
+        created_at: loan.created_at,
+        repayment_summary: {
+          total_paid: Math.round(totalPaid * 100) / 100,
+          principal_paid: Math.round(principalPaid * 100) / 100,
+          interest_paid: Math.round(interestPaid * 100) / 100,
+          outstanding_principal: Math.max(0, Math.round((principal - principalPaid) * 100) / 100)
+        }
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: formattedHistory.length,
+      data: formattedHistory
+    });
+  } catch (error) {
+    next(error);
+  }
+};

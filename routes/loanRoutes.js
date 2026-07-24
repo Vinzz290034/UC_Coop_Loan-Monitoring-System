@@ -8,7 +8,9 @@ import {
   getLoanById,
   postRepayment,
   rejectLoanApplication,
-  getLoanMetricsSummary
+  getLoanMetricsSummary,
+  previewAmortizationSchedule,
+  getMyLoanHistory
 } from '../controllers/loanController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -17,12 +19,42 @@ const router = express.Router();
 // Apply auth protection to all loan routes
 router.use(protect);
 
-// 1. Loan Products Registry
+// ==========================================
+// 1. LOAN PRODUCTS REGISTRY
+// ==========================================
 router.route('/products')
   .post(restrictTo('admin', 'manager'), createLoanProduct)
   .get(getLoanProducts);
 
-// 2. Loan Applications & Listings
+// ==========================================
+// 2. AMORTIZATION PREVIEW & CALCULATIONS
+// ==========================================
+// Placed before /:id routes to avoid route collision
+router.post('/preview-schedule', previewAmortizationSchedule);
+
+// ==========================================
+// 3. LOAN METRICS & REPORTING
+// ==========================================
+// Placed before /:id routes to avoid route collision
+router.route('/metrics/summary')
+  .get(restrictTo('admin', 'manager'), getLoanMetricsSummary);
+
+// ==========================================
+// 4. REPAYMENTS
+// ==========================================
+router.route('/repayments')
+  .post(restrictTo('admin', 'manager'), postRepayment);
+
+// ==========================================
+// 5. MEMBER SPECIFIC HISTORY
+// ==========================================
+// Placed before /:id routes to avoid route collision
+router.route('/my-history')
+  .get(restrictTo('member'), getMyLoanHistory);
+
+// ==========================================
+// 6. LOAN APPLICATIONS & LISTINGS
+// ==========================================
 router.route('/')
   .post(restrictTo('admin', 'manager', 'member'), applyForLoan)
   .get(getLoans);
@@ -30,19 +62,13 @@ router.route('/')
 router.route('/:id')
   .get(getLoanById);
 
-// 3. Disbursement Action
+// ==========================================
+// 7. LOAN ACTIONS (DISBURSE & REJECT)
+// ==========================================
 router.route('/:id/disburse')
   .post(restrictTo('admin', 'manager'), disburseLoan);
 
-// 4. Repayments
-router.route('/repayments')
-  .post(restrictTo('admin', 'manager'), postRepayment);
-  
 router.route('/:id/reject')
-  .patch(restrictTo('admin', 'manager'), rejectLoanApplication); // Injected active routing path
-
-// 5. Loan Metrics & Reporting
-router.route('/metrics/summary')
-  .get(restrictTo('admin', 'manager'), getLoanMetricsSummary);
+  .patch(restrictTo('admin', 'manager'), rejectLoanApplication);
 
 export default router;
