@@ -9,7 +9,9 @@ import {
   postRepayment,
   rejectLoanApplication,
   getLoanMetricsSummary,
-  previewAmortizationSchedule
+  previewAmortizationSchedule,
+  getMyLoanHistory
+
 } from '../controllers/loanController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -45,6 +47,15 @@ router.route('/repayments')
   .post(restrictTo('admin', 'manager'), postRepayment);
 
 // ==========================================
+
+// 5. MEMBER SPECIFIC HISTORY
+// ==========================================
+// Placed before /:id routes to avoid route collision
+router.route('/my-history')
+  .get(restrictTo('member'), getMyLoanHistory);
+
+// ==========================================
+// 6. LOAN APPLICATIONS & LISTING
 // 5. LOAN APPLICATIONS & LISTINGS
 // ==========================================
 router.route('/')
@@ -55,7 +66,10 @@ router.route('/:id')
   .get(getLoanById);
 
 // ==========================================
+// 7. LOAN ACTIONS (DISBURSE & REJECT)
+
 // 6. LOAN ACTIONS (DISBURSE & REJECT)
+
 // ==========================================
 router.route('/:id/disburse')
   .post(restrictTo('admin', 'manager'), disburseLoan);
