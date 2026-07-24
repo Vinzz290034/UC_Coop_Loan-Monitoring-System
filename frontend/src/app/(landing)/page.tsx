@@ -239,8 +239,8 @@ export default function LandingPage() {
                   <div
                     key={i}
                     className={`text-center sm:text-left ${i > 0
-                        ? 'sm:pl-6 md:pl-10 sm:border-l border-outline-variant/40 dark:border-neutral-700'
-                        : ''
+                      ? 'sm:pl-6 md:pl-10 sm:border-l border-outline-variant/40 dark:border-neutral-700'
+                      : ''
                       }`}
                   >
                     <div className="font-headline text-3xl md:text-4xl font-extrabold text-primary dark:text-secondary">
@@ -502,7 +502,7 @@ export default function LandingPage() {
                   <div className="p-3.5 sm:p-4 bg-neutral-50 dark:bg-neutral-900/80 rounded-2xl flex items-center gap-3 border border-outline-variant/40 dark:border-neutral-700/50">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center font-extrabold text-white text-sm shadow-md shadow-primary/30 flex-shrink-0">L</div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-bold text-neutral-400 tracking-wide">SynCo</div>
+                      <div className="text-[10px] font-bold text-neutral-400 tracking-wide">Coop Sync</div>
                       <div className="text-xs sm:text-sm font-bold text-on-surface dark:text-white truncate">Disbursement Ready: ₱50,000.00</div>
                     </div>
                     <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
@@ -534,7 +534,7 @@ export default function LandingPage() {
                   Seamless Integration<br />with your Stack
                 </h2>
                 <p className="text-white/75 font-body text-sm sm:text-base max-w-md mx-auto md:mx-0 leading-relaxed">
-                  Connect SynCo to your existing CRM, accounting software, and treasury systems with our enterprise-grade API.
+                  Connect Coop Sync to your existing CRM, accounting software, and treasury systems with our enterprise-grade API.
                 </p>
                 <div className="flex flex-wrap justify-center md:justify-start gap-3 sm:gap-4">
                   <Link

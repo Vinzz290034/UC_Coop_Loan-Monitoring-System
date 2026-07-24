@@ -26,8 +26,8 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
           {/* Brand column */}
           <div className="md:col-span-2 space-y-5">
             <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity w-fit">
-              <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-8 h-8 object-contain" />
-              <span className="font-brandname text-lg font-extrabold text-primary dark:text-secondary">SynCo</span>
+              <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-8 h-8 object-contain" />
+              <span className="font-brandname text-lg font-extrabold text-primary dark:text-secondary">Coop Sync</span>
             </Link>
             <p className="font-body text-xs text-neutral-500 dark:text-neutral-500 max-w-xs leading-relaxed">
               Institutional excellence in automated finance. Empowering the next generation of lenders with precision and reliability.
@@ -76,7 +76,7 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
         {/* ── Bottom bar ──────────────────────────────────────────── */}
         <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-neutral-400">
           <div className="flex flex-col gap-1.5 text-left w-full sm:w-auto">
-            <div>© 2026 SynCo. All rights reserved.</div>
+            <div>© 2026 Coop Sync. All rights reserved.</div>
             <div className="text-[10px] text-neutral-500 flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-primary dark:text-secondary" />
               Engineered &amp; Maintained by{' '}

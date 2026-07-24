@@ -42,8 +42,8 @@ function createTransporter() {
  * Build a professional HTML email template for OTP delivery.
  */
 function buildOtpEmailHtml(otpCode, recipientName, purpose = 'registration') {
-  const purposeText = purpose === 'password_reset' 
-    ? 'Your one-time verification code for password reset is:' 
+  const purposeText = purpose === 'password_reset'
+    ? 'Your one-time verification code for password reset is:'
     : 'Your one-time verification code for account registration is:';
 
   return `
@@ -58,7 +58,7 @@ function buildOtpEmailHtml(otpCode, recipientName, purpose = 'registration') {
         <!-- Header -->
         <div style="background:linear-gradient(135deg,#047857 0%,#059669 100%);padding:32px 24px;text-align:center;">
           <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">
-            SynCo
+            Coop Sync
           </h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:11px;text-transform:uppercase;letter-spacing:2px;font-weight:700;">
             UC Cooperative Loan Monitoring
@@ -94,7 +94,7 @@ function buildOtpEmailHtml(otpCode, recipientName, purpose = 'registration') {
         <!-- Footer -->
         <div style="background:#fafafa;padding:16px 24px;border-top:1px solid #e5e5e5;text-align:center;">
           <p style="margin:0;font-size:11px;color:#a3a3a3;">
-            &copy; ${new Date().getFullYear()} SynCo &mdash; UC COOP Loan Monitoring System
+            &copy; ${new Date().getFullYear()} Coop Sync &mdash; UC COOP Loan Monitoring System
           </p>
         </div>
       </div>
@@ -118,12 +118,12 @@ function buildOtpEmailHtml(otpCode, recipientName, purpose = 'registration') {
 export async function sendOtpEmail(toEmail, otpCode, recipientName = '', purpose = 'registration') {
   const transporter = createTransporter();
   const emailSubject = purpose === 'password_reset'
-    ? 'Reset Your Password — SynCo'
-    : 'Your Verification Code — SynCo';
+    ? 'Reset Your Password — Coop Sync'
+    : 'Your Verification Code — Coop Sync';
 
   const plainText = purpose === 'password_reset'
-    ? `Your SynCo password reset verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`
-    : `Your SynCo verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`;
+    ? `Your Coop Sync password reset verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`
+    : `Your Coop Sync verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`;
 
   if (!transporter) {
     // Development fallback — log OTP to console
@@ -137,7 +137,7 @@ export async function sendOtpEmail(toEmail, otpCode, recipientName = '', purpose
 
   // Production: send real email
   const mailOptions = {
-    from: `"SynCo" <${process.env.SMTP_USER}>`,
+    from: `"Coop Sync" <${process.env.SMTP_USER}>`,
     to: toEmail,
     subject: emailSubject,
     html: buildOtpEmailHtml(otpCode, recipientName, purpose),
@@ -170,7 +170,7 @@ function buildContactReplyHtml(recipientName, replyContent) {
         <!-- Header -->
         <div style="background:linear-gradient(135deg,#047857 0%,#059669 100%);padding:32px 24px;text-align:center;">
           <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">
-            SynCo
+            Coop Sync
           </h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:11px;text-transform:uppercase;letter-spacing:2px;font-weight:700;">
             UC Cooperative — Support Response
@@ -199,7 +199,7 @@ function buildContactReplyHtml(recipientName, replyContent) {
         <!-- Footer -->
         <div style="background:#fafafa;padding:16px 24px;border-top:1px solid #e5e5e5;text-align:center;">
           <p style="margin:0;font-size:11px;color:#a3a3a3;">
-            &copy; ${new Date().getFullYear()} SynCo &mdash; UC COOP Loan Monitoring System
+            &copy; ${new Date().getFullYear()} Coop Sync &mdash; UC COOP Loan Monitoring System
           </p>
         </div>
       </div>
@@ -230,11 +230,11 @@ export async function sendContactReply(toEmail, recipientName, replyContent) {
   }
 
   const mailOptions = {
-    from: `"SynCo Support" <${process.env.SMTP_USER}>`,
+    from: `"Coop Sync Support" <${process.env.SMTP_USER}>`,
     to: toEmail,
-    subject: 'Re: Your Inquiry — SynCo Cooperative',
+    subject: 'Re: Your Inquiry — Coop Sync Cooperative',
     html: buildContactReplyHtml(recipientName, replyContent),
-    text: `Hello ${recipientName},\n\nThank you for reaching out. Here is our response:\n\n${replyContent}\n\nIf you have further questions, feel free to reply.\n\n— SynCo Support`,
+    text: `Hello ${recipientName},\n\nThank you for reaching out. Here is our response:\n\n${replyContent}\n\nIf you have further questions, feel free to reply.\n\n— Coop Sync Support`,
   };
 
   try {

@@ -162,17 +162,16 @@ function DashboardLayoutContent({
   const sidebarContent = (
     <>
       {/* Brand Banner */}
-      <div className={`h-20 border-b border-outline-variant/50 flex items-center justify-between flex-shrink-0 ${
-        isCollapsed ? 'px-3' : 'px-6'
-      }`}>
+      <div className={`h-20 border-b border-outline-variant/50 flex items-center justify-between flex-shrink-0 ${isCollapsed ? 'px-3' : 'px-6'
+        }`}>
         {/* Brand Logo & Name */}
         {(!sidebarCollapsed || mobileSidebarOpen) ? (
           <div className="font-brandname font-bold text-lg text-primary dark:text-secondary flex items-center gap-1.5">
-            <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-9 h-6 object-contain" />
-            <span>SynCo</span>
+            <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-9 h-6 object-contain" />
+            <span>Coop Sync</span>
           </div>
         ) : (
-          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-7 h-7 object-contain mx-auto" />
+          <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-7 h-7 object-contain mx-auto" />
         )}
 
         {/* Desktop collapse toggle — hidden on mobile */}
@@ -205,11 +204,10 @@ function DashboardLayoutContent({
       <div className={`border-b border-outline-variant/40 flex-shrink-0 ${isCollapsed ? 'p-2 flex justify-center' : 'p-4'}`}>
         <button
           onClick={() => router.push('/dashboard/profile')}
-          className={`flex items-center transition-all cursor-pointer ${
-            isCollapsed
+          className={`flex items-center transition-all cursor-pointer ${isCollapsed
               ? 'w-11 h-11 justify-center rounded-xl bg-surface-container-low dark:bg-surface-container-high/60 hover:bg-primary/10 dark:hover:bg-secondary/10'
               : 'w-full gap-3 bg-surface-container-low dark:bg-surface-container-high/60 p-2.5 rounded-2xl hover:bg-primary/5 dark:hover:bg-secondary/5 text-left'
-          }`}
+            }`}
           title={user.profile ? `${user.profile.first_name} ${user.profile.last_name}` : user.username}
           aria-label="View user profile"
         >
@@ -252,19 +250,16 @@ function DashboardLayoutContent({
                 key={item.path}
                 href={item.path}
                 prefetch={false}
-                className={`flex items-center transition-all ${
-                  isCollapsed
-                    ? `w-11 h-11 mx-auto justify-center rounded-xl ${
-                        isActive
-                          ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
-                          : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/10 dark:hover:bg-neutral/20 hover:text-on-surface dark:hover:text-white'
-                      }`
-                    : `gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold ${
-                        isActive
-                          ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
-                          : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 dark:hover:bg-neutral/10 hover:text-on-surface dark:hover:text-white'
-                      }`
-                }`}
+                className={`flex items-center transition-all ${isCollapsed
+                    ? `w-11 h-11 mx-auto justify-center rounded-xl ${isActive
+                      ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                      : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/10 dark:hover:bg-neutral/20 hover:text-on-surface dark:hover:text-white'
+                    }`
+                    : `gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold ${isActive
+                      ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                      : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 dark:hover:bg-neutral/10 hover:text-on-surface dark:hover:text-white'
+                    }`
+                  }`}
                 title={item.name}
                 aria-label={item.name}
               >
@@ -281,19 +276,16 @@ function DashboardLayoutContent({
         <Link
           href="/dashboard/settings"
           prefetch={false}
-          className={`flex items-center transition-all ${
-            isCollapsed
-              ? `w-11 h-11 mx-auto justify-center rounded-xl ${
-                  pathname === '/dashboard/settings'
-                    ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
-                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral/10 dark:hover:bg-neutral/20'
-                }`
-              : `w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold ${
-                  pathname === '/dashboard/settings'
-                    ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
-                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 dark:hover:bg-neutral/10'
-                }`
-          }`}
+          className={`flex items-center transition-all ${isCollapsed
+              ? `w-11 h-11 mx-auto justify-center rounded-xl ${pathname === '/dashboard/settings'
+                ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral/10 dark:hover:bg-neutral/20'
+              }`
+              : `w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold ${pathname === '/dashboard/settings'
+                ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 dark:hover:bg-neutral/10'
+              }`
+            }`}
           title="Settings"
           aria-label="Settings"
         >
@@ -304,11 +296,10 @@ function DashboardLayoutContent({
         {/* Log Out Button */}
         <button
           onClick={logout}
-          className={`flex items-center transition-all cursor-pointer ${
-            isCollapsed
+          className={`flex items-center transition-all cursor-pointer ${isCollapsed
               ? 'w-11 h-11 mx-auto justify-center rounded-xl text-neutral-600 dark:text-neutral-400 hover:bg-tertiary/10 hover:text-tertiary active:scale-95'
               : 'w-full gap-3 px-3 py-2.5 text-neutral-600 dark:text-neutral-400 hover:bg-tertiary/10 hover:text-tertiary rounded-xl text-sm font-semibold active:scale-95'
-          }`}
+            }`}
           title="Log Out"
           aria-label="Log Out"
         >
@@ -341,9 +332,8 @@ function DashboardLayoutContent({
 
       {/* Mobile drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-surface-container-low border-r border-outline-variant/65 flex flex-col transition-transform duration-300 ease-in-out md:hidden ${
-          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-surface-container-low border-r border-outline-variant/65 flex flex-col transition-transform duration-300 ease-in-out md:hidden ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
         aria-label="Mobile navigation"
       >
         {sidebarContent}
@@ -351,9 +341,8 @@ function DashboardLayoutContent({
 
       {/* ─── Desktop Sidebar (≥ md) ─── */}
       <aside
-        className={`hidden md:flex h-screen bg-white dark:bg-surface-container-low border-r border-outline-variant/65 flex-col overflow-x-hidden transition-all duration-300 ${
-          sidebarCollapsed ? 'w-20' : 'w-64'
-        }`}
+        className={`hidden md:flex h-screen bg-white dark:bg-surface-container-low border-r border-outline-variant/65 flex-col overflow-x-hidden transition-all duration-300 ${sidebarCollapsed ? 'w-20' : 'w-64'
+          }`}
         aria-label="Desktop navigation"
       >
         {sidebarContent}

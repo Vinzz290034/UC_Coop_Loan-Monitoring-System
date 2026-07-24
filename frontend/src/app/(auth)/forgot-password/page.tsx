@@ -374,9 +374,9 @@ export default function ForgotPasswordPage() {
 
       <main className="w-full max-w-md z-10 space-y-6 pt-16 py-10">
         <div className="text-center space-y-2 flex flex-col items-center">
-          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-20 h-10 object-contain mb-1" />
+          <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-20 h-10 object-contain mb-1" />
           <h1 className="font-brandname text-4xl font-bold text-primary dark:text-secondary tracking-tight">
-            SynCo
+            Coop Sync
           </h1>
           <p className="font-label text-xs font-extrabold text-on-surface/50 dark:text-neutral-400 uppercase tracking-widest">
             Reset Portal Password

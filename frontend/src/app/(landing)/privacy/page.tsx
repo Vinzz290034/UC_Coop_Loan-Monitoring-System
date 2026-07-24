@@ -48,7 +48,7 @@ const SECTIONS = [
     content: (
       <>
         <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed mb-4">
-          SynCo collects high-precision data necessary to provide sophisticated loan management
+          Coop Sync collects high-precision data necessary to provide sophisticated loan management
           services, including institutional identifiers, transactional history, and system health metrics.
         </p>
         {/* Two-column data type grid */}
@@ -82,7 +82,7 @@ const SECTIONS = [
     content: (
       <>
         <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed mb-4">
-          SynCo processes data to ensure the technological sophistication of our loan management
+          Coop Sync processes data to ensure the technological sophistication of our loan management
           environment. Our primary uses include:
         </p>
         <ul className="space-y-3">
@@ -140,7 +140,7 @@ const SECTIONS = [
     content: (
       <>
         <p className="text-on-surface/65 dark:text-neutral-400 leading-relaxed mb-6">
-          SynCo employs bank-grade AES-256 encryption for all data at rest and TLS 1.3 for
+          Coop Sync employs bank-grade AES-256 encryption for all data at rest and TLS 1.3 for
           data in transit. We maintain SOC 2 Type II compliance and undergo quarterly penetration
           testing by independent third-party cybersecurity firms.
         </p>
@@ -253,7 +253,7 @@ export default function PrivacyPage() {
             </h1>
 
             <p className="font-body text-lg text-on-surface/65 dark:text-neutral-400 max-w-2xl leading-relaxed">
-              At SynCo, we prioritize the absolute security of your institutional financial data.
+              At Coop Sync, we prioritize the absolute security of your institutional financial data.
               This policy outlines how we protect and manage your information with complete transparency.
             </p>
 
@@ -369,7 +369,7 @@ export default function PrivacyPage() {
             <a href="/privacy_hero.png" target="_blank" rel="noopener noreferrer" aria-label="View full image">
               <img
                 src="/privacy_hero.png"
-                alt="Minimalist corporate workspace with a laptop showing financial charts, representing SynCo's secure data environment"
+                alt="Minimalist corporate workspace with a laptop showing financial charts, representing Coop Sync's secure data environment"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />
               {/* Gradient overlay for readability */}

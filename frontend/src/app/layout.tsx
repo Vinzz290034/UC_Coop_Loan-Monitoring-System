@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: "SynCo | Cooperative Finance",
+  title: "Coop Sync | Cooperative Finance",
   description: "Institutional-grade automated finance and loan monitoring system for cooperatives.",
   icons: {
     icon: "logo.ico",

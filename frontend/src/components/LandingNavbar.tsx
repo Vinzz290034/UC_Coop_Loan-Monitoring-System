@@ -30,8 +30,8 @@ export default function LandingNavbar() {
 
         {/* ── Logo ──────────────────────────────────────────────────── */}
         <Link href="/" className="font-brandname text-xl sm:text-2xl font-bold text-primary dark:text-secondary flex items-center gap-1 hover:opacity-90 transition-opacity">
-          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" />
-          SynCo
+          <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" />
+          Coop Sync
         </Link>
 
         {/* ── Desktop nav ───────────────────────────────────────────── */}

@@ -301,7 +301,7 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/20">
               <p className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-1">Application</p>
-              <p className="text-xs font-bold text-on-surface dark:text-white">SynCo Loan Monitoring System</p>
+              <p className="text-xs font-bold text-on-surface dark:text-white">Coop Sync Loan Monitoring System</p>
             </div>
             <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/20">
               <p className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-1">Version</p>

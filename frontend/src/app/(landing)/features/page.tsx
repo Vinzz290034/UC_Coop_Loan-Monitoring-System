@@ -43,7 +43,7 @@ export default function FeaturesPage() {
             System Modules &amp; Capabilities
           </h1>
           <p className="font-body text-neutral-600 dark:text-neutral-400 max-w-xl mx-auto">
-            SynCo provides institutional-grade loan calculation algorithms and audit compliance tracing built for campus cooperatives.
+            Coop Sync provides institutional-grade loan calculation algorithms and audit compliance tracing built for campus cooperatives.
           </p>
         </header>
 
