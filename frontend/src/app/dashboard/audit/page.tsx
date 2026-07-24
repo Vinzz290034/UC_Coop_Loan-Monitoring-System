@@ -17,6 +17,7 @@ import {
   Clock,
   Globe,
   Monitor,
+  Info,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -185,6 +186,14 @@ export default function AuditTrailPage() {
           <Download className="w-4 h-4" />
           {exporting ? 'Exporting...' : 'Export Excel'}
         </button>
+      </div>
+
+      {/* Retention Policy Informational Notice */}
+      <div className="p-3 bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-xl flex items-center gap-2.5 text-xs text-neutral-600 dark:text-neutral-300">
+        <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+        <span>
+          <strong>Note:</strong> Audit trail records are automatically deleted after <strong>30 days</strong>.
+        </span>
       </div>
 
       {/* Filters */}

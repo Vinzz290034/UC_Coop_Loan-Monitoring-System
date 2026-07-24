@@ -16,7 +16,8 @@ import {
   Search,
   RefreshCw,
   Loader2,
-  Cpu
+  Cpu,
+  Info
 } from 'lucide-react';
 
 interface AccessLog {
@@ -188,6 +189,14 @@ export default function UserAccessHistoryTable({
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
+      </div>
+
+      {/* Retention Policy Informational Notice */}
+      <div className="p-3 bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-xl flex items-center gap-2.5 text-xs text-neutral-600 dark:text-neutral-300">
+        <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+        <span>
+          <strong>Note:</strong> Access history records are automatically deleted after <strong>30 days</strong>.
+        </span>
       </div>
 
       {/* Filter and Search controls */}
