@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import pool, { query } from '../config/db.js';
 import { generateOtp, sendOtpEmail, sendContactReply } from '../services/emailService.js';
+import { parseUserAgent, getClientIp } from '../utils/userAgentParser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,10 @@ export const login = async (req, res, next) => {
     const { username, usernameOrEmail, password } = req.body;
     const loginIdentifier = username || usernameOrEmail;
 
+    const userAgentRaw = req.headers['user-agent'] || '';
+    const ipAddress = getClientIp(req);
+    const { deviceType, browser, operatingSystem } = parseUserAgent(userAgentRaw);
+
     if (!loginIdentifier || !password) {
       return res.status(400).json({
         success: false,
@@ -43,6 +48,13 @@ export const login = async (req, res, next) => {
     );
 
     if (userResult.rowCount === 0) {
+      // Record failed login attempt (unknown user)
+      await query(
+        `INSERT INTO user_access_logs (user_id, username, login_at, ip_address, device_type, browser, operating_system, user_agent, status)
+         VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5, $6, $7, $8)`,
+        [null, loginIdentifier, ipAddress, deviceType, browser, operatingSystem, userAgentRaw, 'Failed Login']
+      );
+
       return res.status(401).json({
         success: false,
         error: { message: 'Invalid username or password.' }
@@ -54,11 +66,28 @@ export const login = async (req, res, next) => {
     // Check password
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
+      // Record failed login attempt (bad password)
+      await query(
+        `INSERT INTO user_access_logs (user_id, username, login_at, ip_address, device_type, browser, operating_system, user_agent, status)
+         VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5, $6, $7, $8)`,
+        [user.id, user.username, ipAddress, deviceType, browser, operatingSystem, userAgentRaw, 'Failed Login']
+      );
+
       return res.status(401).json({
         success: false,
         error: { message: 'Invalid username or password.' }
       });
     }
+
+    // Record successful login
+    const logResult = await query(
+      `INSERT INTO user_access_logs (user_id, username, login_at, ip_address, device_type, browser, operating_system, user_agent, status)
+       VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [user.id, user.username, ipAddress, deviceType, browser, operatingSystem, userAgentRaw, 'Success']
+    );
+
+    const accessLogId = logResult.rows[0]?.id;
 
     // Sign JWT
     const token = signToken(user.id);
@@ -81,6 +110,7 @@ export const login = async (req, res, next) => {
     res.status(200).json({
       success: true,
       token,
+      access_log_id: accessLogId,
       user: {
         id: user.id,
         username: user.username,
@@ -1587,6 +1617,135 @@ export const updateAvatar = async (req, res, next) => {
       success: true,
       message: 'Avatar updated successfully.',
       profile_picture_url: fileUrl
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Logout user and record logout timestamp and session duration
+// @route   POST /api/auth/logout
+// @access  Protected
+export const logout = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Find the latest active access log for this user where logout_at is null
+    const logResult = await query(
+      `SELECT id, login_at FROM user_access_logs
+       WHERE user_id = $1 AND logout_at IS NULL AND status = 'Success'
+       ORDER BY login_at DESC LIMIT 1`,
+      [userId]
+    );
+
+    if (logResult.rowCount > 0) {
+      const logId = logResult.rows[0].id;
+      const loginAt = new Date(logResult.rows[0].login_at).getTime();
+      const now = Date.now();
+      const sessionDurationSeconds = Math.max(0, Math.floor((now - loginAt) / 1000));
+
+      await query(
+        `UPDATE user_access_logs
+         SET logout_at = CURRENT_TIMESTAMP,
+             session_duration = $1,
+             status = 'Logged Out'
+         WHERE id = $2`,
+        [sessionDurationSeconds, logId]
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get user login & logout access history
+// @route   GET /api/auth/access-history
+// @access  Protected
+export const getUserAccessHistory = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, user_id, search, status } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
+    const offset = (pageNum - 1) * limitNum;
+
+    // Regular users can only access their own history. Admins can view specified user or all users.
+    let targetUserId = req.user.id;
+    if (req.user.role === 'admin' && user_id) {
+      targetUserId = user_id;
+    }
+
+    let whereClause = 'WHERE 1=1';
+    const queryParams = [];
+    let paramIndex = 1;
+
+    if (req.user.role !== 'admin' || user_id) {
+      whereClause += ` AND user_id = $${paramIndex}`;
+      queryParams.push(targetUserId);
+      paramIndex++;
+    }
+
+    if (status) {
+      whereClause += ` AND status = $${paramIndex}`;
+      queryParams.push(status);
+      paramIndex++;
+    }
+
+    if (search) {
+      whereClause += ` AND (
+        username ILIKE $${paramIndex} OR
+        ip_address ILIKE $${paramIndex} OR
+        browser ILIKE $${paramIndex} OR
+        operating_system ILIKE $${paramIndex} OR
+        device_type ILIKE $${paramIndex}
+      )`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Count total matching records
+    const countQuery = `SELECT COUNT(*) as total FROM user_access_logs ${whereClause}`;
+    const countResult = await query(countQuery, queryParams);
+    const totalRecords = parseInt(countResult.rows[0].total, 10);
+
+    // Fetch paginated results ordered from newest to oldest
+    const dataQuery = `
+      SELECT 
+        id,
+        user_id,
+        username,
+        login_at,
+        logout_at,
+        session_duration,
+        ip_address,
+        device_type,
+        browser,
+        operating_system,
+        user_agent,
+        status,
+        created_at
+      FROM user_access_logs
+      ${whereClause}
+      ORDER BY login_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    const dataResult = await query(dataQuery, [...queryParams, limitNum, offset]);
+
+    res.status(200).json({
+      success: true,
+      data: dataResult.rows,
+      pagination: {
+        totalRecords,
+        currentPage: pageNum,
+        totalPages: Math.ceil(totalRecords / limitNum),
+        limit: limitNum
+      }
     });
   } catch (error) {
     next(error);

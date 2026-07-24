@@ -216,14 +216,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  function logout() {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+  async function logout() {
+    try {
+      if (token) {
+        await api.post('/auth/logout').catch(() => {});
+      }
+    } catch (err) {
+      // Ignore network errors during logout
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+      setToken(null);
+      setUser(null);
+      router.push('/login');
     }
-    setToken(null);
-    setUser(null);
-    router.push('/login');
   }
 
   const updateUser = (updatedFields: Partial<User>) => {

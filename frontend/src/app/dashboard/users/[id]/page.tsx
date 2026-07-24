@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useBreadcrumb } from '@/context/BreadcrumbContext';
+import UserAccessHistoryTable from '@/components/UserAccessHistoryTable';
 
 // ─── Edit User Modal ──────────────────────────────────────────────────────────
 function EditUserModal({
@@ -613,6 +614,9 @@ export default function UserDetailPage() {
           </div>
         )}
       </div>
+
+      {/* User Login & Logout History */}
+      <UserAccessHistoryTable userId={userId} title={`${userData.username}'s Login & Logout History`} />
 
       {/* Modals */}
       <EditUserModal

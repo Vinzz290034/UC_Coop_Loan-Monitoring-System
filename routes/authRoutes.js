@@ -18,7 +18,9 @@ import {
   replyToContactMessage,      // Added — Reply to contact inquiries
   updateProfile,              // Added — Self-service profile update
   changePassword,             // Added — Self-service password change
-  updateAvatar                // Added — Self-service avatar update
+  updateAvatar,               // Added — Self-service avatar update
+  logout,                     // Added — User logout event tracking
+  getUserAccessHistory        // Added — User access history (login/logout logs)
 } from '../controllers/authController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 import { uploadAvatar } from '../middleware/uploadMiddleware.js';
@@ -45,12 +47,14 @@ router.post('/resend-otp', resendOtp);
 router.post('/contact', submitContactMessage); // Public landing page submission
 
 // ==========================================
-// Protected Personal Profile Route
+// Protected Personal Profile & Access History Routes
 // ==========================================
 router.get('/me', protect, getMe);
 router.put('/me/profile', protect, updateProfile);
 router.put('/me/password', protect, changePassword);
 router.put('/me/avatar', protect, uploadAvatar, updateAvatar);
+router.post('/logout', protect, logout);
+router.get('/access-history', protect, getUserAccessHistory);
 
 // ==========================================
 // Admin & Manager Protected Routes

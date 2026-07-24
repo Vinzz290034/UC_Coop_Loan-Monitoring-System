@@ -157,24 +157,30 @@ function DashboardLayoutContent({
   ];
 
   /* Shared sidebar content — rendered identically in both desktop sidebar and mobile drawer */
+  const isCollapsed = sidebarCollapsed && !mobileSidebarOpen;
+
   const sidebarContent = (
     <>
       {/* Brand Banner */}
-      <div className="h-20 border-b border-outline-variant/50 flex items-center justify-between px-6 flex-shrink-0">
-        {/* On mobile sidebar: always show full brand. On desktop: respect collapse state. */}
-        {(!sidebarCollapsed || mobileSidebarOpen) && (
-          <div className="font-brandname font-bold text-lg text-primary dark:text-secondary flex items-center gap-1">
-            <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-10 h-5 object-contain" />
-            SynCo
+      <div className={`h-20 border-b border-outline-variant/50 flex items-center justify-between flex-shrink-0 ${
+        isCollapsed ? 'px-3' : 'px-6'
+      }`}>
+        {/* Brand Logo & Name */}
+        {(!sidebarCollapsed || mobileSidebarOpen) ? (
+          <div className="font-brandname font-bold text-lg text-primary dark:text-secondary flex items-center gap-1.5">
+            <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-9 h-6 object-contain" />
+            <span>SynCo</span>
           </div>
+        ) : (
+          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-7 h-7 object-contain mx-auto" />
         )}
-        {sidebarCollapsed && !mobileSidebarOpen && (
-          <img src="/SynCo_logo.png" alt="SynCo Logo" className="w-6 h-6 object-contain mx-auto" />
-        )}
+
         {/* Desktop collapse toggle — hidden on mobile */}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="p-1 rounded bg-surface hover:bg-neutral/10 dark:hover:bg-neutral/20 border border-outline-variant/50 hidden md:block text-neutral-600 dark:text-neutral-400 cursor-pointer"
+          className="p-1 rounded bg-surface hover:bg-neutral/10 dark:hover:bg-neutral/20 border border-outline-variant/50 hidden md:flex items-center justify-center text-neutral-600 dark:text-neutral-400 transition-colors cursor-pointer"
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {sidebarCollapsed ? (
             <ChevronRight className="w-4 h-4" />
@@ -182,6 +188,7 @@ function DashboardLayoutContent({
             <ChevronLeft className="w-4 h-4" />
           )}
         </button>
+
         {/* Mobile close button — visible only on mobile sidebar */}
         {mobileSidebarOpen && (
           <button
@@ -195,11 +202,16 @@ function DashboardLayoutContent({
       </div>
 
       {/* User Summary profile card — clickable, navigates to profile */}
-      <div className="p-4 border-b border-outline-variant/40 flex-shrink-0">
+      <div className={`border-b border-outline-variant/40 flex-shrink-0 ${isCollapsed ? 'p-2 flex justify-center' : 'p-4'}`}>
         <button
           onClick={() => router.push('/dashboard/profile')}
-          className="w-full flex items-center gap-3 bg-surface-container-low dark:bg-surface-container-high/60 p-2.5 rounded-2xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-colors cursor-pointer text-left"
-          title="View Profile"
+          className={`flex items-center transition-all cursor-pointer ${
+            isCollapsed
+              ? 'w-11 h-11 justify-center rounded-xl bg-surface-container-low dark:bg-surface-container-high/60 hover:bg-primary/10 dark:hover:bg-secondary/10'
+              : 'w-full gap-3 bg-surface-container-low dark:bg-surface-container-high/60 p-2.5 rounded-2xl hover:bg-primary/5 dark:hover:bg-secondary/5 text-left'
+          }`}
+          title={user.profile ? `${user.profile.first_name} ${user.profile.last_name}` : user.username}
+          aria-label="View user profile"
         >
           <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-primary/20 dark:bg-secondary/20 flex items-center justify-center text-primary dark:text-secondary">
             {user.profile_picture_url ? (
@@ -212,8 +224,7 @@ function DashboardLayoutContent({
               <User className="w-5 h-5" />
             )}
           </div>
-          {/* Always show user info in mobile drawer; on desktop respect collapse */}
-          {(!sidebarCollapsed || mobileSidebarOpen) && (
+          {!isCollapsed && (
             <div className="min-w-0 flex-1">
               <h4 className="font-headline text-xs font-bold text-on-surface dark:text-white truncate">
                 {user.profile ? `${user.profile.first_name} ${user.profile.last_name}` : user.username}
@@ -230,7 +241,7 @@ function DashboardLayoutContent({
       </div>
 
       {/* Menu List */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className={`flex-1 py-4 space-y-1.5 overflow-y-auto overflow-x-hidden ${isCollapsed ? 'px-2' : 'px-3'}`}>
         {menuItems
           .filter((item) => item.allowed)
           .map((item) => {
@@ -241,46 +252,71 @@ function DashboardLayoutContent({
                 key={item.path}
                 href={item.path}
                 prefetch={false}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive
-                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
-                  : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 dark:hover:bg-neutral/10 hover:text-on-surface dark:hover:text-white'
-                  }`}
+                className={`flex items-center transition-all ${
+                  isCollapsed
+                    ? `w-11 h-11 mx-auto justify-center rounded-xl ${
+                        isActive
+                          ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                          : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/10 dark:hover:bg-neutral/20 hover:text-on-surface dark:hover:text-white'
+                      }`
+                    : `gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold ${
+                        isActive
+                          ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                          : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 dark:hover:bg-neutral/10 hover:text-on-surface dark:hover:text-white'
+                      }`
+                }`}
                 title={item.name}
+                aria-label={item.name}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                {/* Always show labels in mobile drawer; on desktop respect collapse */}
-                {(!sidebarCollapsed || mobileSidebarOpen) && <span className="font-body">{item.name}</span>}
+                {!isCollapsed && <span className="font-body text-sm font-semibold">{item.name}</span>}
               </Link>
             );
           })}
       </nav>
 
       {/* Bottom Section: Settings + Log Out */}
-      <div className="p-4 border-t border-outline-variant/40 space-y-1 flex-shrink-0">
+      <div className={`border-t border-outline-variant/40 space-y-1.5 flex-shrink-0 ${isCollapsed ? 'p-2' : 'p-4'}`}>
         {/* Settings Link */}
         <Link
           href="/dashboard/settings"
           prefetch={false}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${pathname === '/dashboard/settings'
-            ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
-            : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 dark:hover:bg-neutral/10'
-            }`}
+          className={`flex items-center transition-all ${
+            isCollapsed
+              ? `w-11 h-11 mx-auto justify-center rounded-xl ${
+                  pathname === '/dashboard/settings'
+                    ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral/10 dark:hover:bg-neutral/20'
+                }`
+              : `w-full gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold ${
+                  pathname === '/dashboard/settings'
+                    ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md'
+                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 dark:hover:bg-neutral/10'
+                }`
+          }`}
           title="Settings"
+          aria-label="Settings"
         >
           <Settings className="w-5 h-5 flex-shrink-0" />
-          {(!sidebarCollapsed || mobileSidebarOpen) && <span className="font-body">Settings</span>}
+          {!isCollapsed && <span className="font-body text-sm font-semibold">Settings</span>}
         </Link>
 
+        {/* Log Out Button */}
         <button
           onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-neutral-600 dark:text-neutral-400 hover:bg-tertiary/10 hover:text-tertiary rounded-xl text-sm font-semibold transition-colors active:scale-95 cursor-pointer"
+          className={`flex items-center transition-all cursor-pointer ${
+            isCollapsed
+              ? 'w-11 h-11 mx-auto justify-center rounded-xl text-neutral-600 dark:text-neutral-400 hover:bg-tertiary/10 hover:text-tertiary active:scale-95'
+              : 'w-full gap-3 px-3 py-2.5 text-neutral-600 dark:text-neutral-400 hover:bg-tertiary/10 hover:text-tertiary rounded-xl text-sm font-semibold active:scale-95'
+          }`}
           title="Log Out"
+          aria-label="Log Out"
         >
           <LogOut className="w-5 h-5 flex-shrink-0" />
-          {(!sidebarCollapsed || mobileSidebarOpen) && <span className="font-body">Log Out</span>}
+          {!isCollapsed && <span className="font-body text-sm font-semibold">Log Out</span>}
         </button>
 
-        {(!sidebarCollapsed || mobileSidebarOpen) && (
+        {!isCollapsed && (
           <div className="pt-2 text-center text-[10px] text-neutral-500 dark:text-neutral-400 font-bold border-t border-outline-variant/20 flex items-center justify-center gap-1.5 select-none">
             <Cpu className="w-3.5 h-3.5 text-primary dark:text-secondary animate-pulse" />
             <span>By KADT Solutions</span>
@@ -315,7 +351,7 @@ function DashboardLayoutContent({
 
       {/* ─── Desktop Sidebar (≥ md) ─── */}
       <aside
-        className={`hidden md:flex h-screen bg-white dark:bg-surface-container-low border-r border-outline-variant/65 flex-col transition-all duration-300 ${
+        className={`hidden md:flex h-screen bg-white dark:bg-surface-container-low border-r border-outline-variant/65 flex-col overflow-x-hidden transition-all duration-300 ${
           sidebarCollapsed ? 'w-20' : 'w-64'
         }`}
         aria-label="Desktop navigation"

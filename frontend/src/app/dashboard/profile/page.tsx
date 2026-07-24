@@ -22,6 +22,7 @@ import {
   Camera,
   X,
 } from 'lucide-react';
+import UserAccessHistoryTable from '@/components/UserAccessHistoryTable';
 
 function PasswordStrength({ password }: { password: string }) {
   if (!password) return null;
@@ -662,6 +663,9 @@ export default function ProfilePage() {
           </div>
         </form>
       </div>
+
+      {/* User Login & Logout History */}
+      <UserAccessHistoryTable />
     </div>
   );
 }
