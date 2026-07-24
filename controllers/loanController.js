@@ -681,6 +681,7 @@ export const getLoanMetricsSummary = async (req, res, next) => {
   }
 };
 
+
 // @desc    Get loan history specific to logged-in user profile
 // @route   GET /api/loans/my-history
 // @access  Protected (Member)
@@ -756,6 +757,62 @@ export const getMyLoanHistory = async (req, res, next) => {
       success: true,
       count: formattedHistory.length,
       data: formattedHistory
+      });
+  } catch (error) {
+    next(error);
+  }
+};
+// =========================================
+// 4. AMORTIZATION PREVIEW & CALCULATIONS
+// ==========================================
+
+// @desc    Preview amortization schedule using calculationCore (Flat Rate vs Diminishing Balance)
+// @route   POST /api/loans/preview-schedule
+// @access  Protected
+export const previewAmortizationSchedule = async (req, res, next) => {
+  try {
+    const { principal_amount, interest_rate, term_months, amortization_type, start_date } = req.body;
+
+    if (!principal_amount || interest_rate === undefined || !term_months || !amortization_type) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Missing required parameters: principal_amount, interest_rate, term_months, amortization_type.' }
+      });
+    }
+
+    const principal = parseFloat(principal_amount);
+    const rate = parseFloat(interest_rate);
+    const term = parseInt(term_months, 10);
+    const startDate = start_date || new Date();
+
+    let schedule = [];
+    if (amortization_type === 'diminishing_balance') {
+      schedule = calculateDiminishingBalance(principal, rate, term, startDate);
+    } else if (amortization_type === 'flat_rate') {
+      schedule = calculateFlatRate(principal, rate, term, startDate);
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid amortization_type. Must be "flat_rate" or "diminishing_balance".' }
+      });
+    }
+
+    // Summarize monetization totals directly from calculationCore's generated schedule
+    const totalInterest = schedule.reduce((sum, item) => sum + item.interest_due, 0);
+    const totalPrincipal = schedule.reduce((sum, item) => sum + item.principal_due, 0);
+    const totalRepayment = totalPrincipal + totalInterest;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        principal_amount: principal,
+        total_interest: Math.round(totalInterest * 100) / 100,
+        total_repayment: Math.round(totalRepayment * 100) / 100,
+        term_months: term,
+        amortization_type,
+        schedule
+      }
+
     });
   } catch (error) {
     next(error);

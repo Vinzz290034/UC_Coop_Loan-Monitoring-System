@@ -20,6 +20,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import BackButton from '@/components/BackButton';
 import {
   ArrowLeft,
   ArrowRight,
@@ -34,8 +35,7 @@ import {
   CalendarDays,
   Mail,
 } from 'lucide-react';
-import LandingNavbar from '@/components/LandingNavbar';
-import LandingFooter from '@/components/LandingFooter';
+
 
 // ── Table of Contents config ──────────────────────────────────────────────────
 const TOC_ITEMS = [
@@ -86,22 +86,12 @@ export default function TermsPage() {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return (
-    <div className="bg-background dark:bg-neutral-950 text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
-
-      {/* ── Shared navigation ──────────────────────────────────────── */}
-      <LandingNavbar activeIndex={-1} />
+    <>
 
       <main className="pt-24 pb-24">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
 
-          {/* ── Back button ─────────────────────────────────────────── */}
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface/60 dark:text-neutral-400 hover:text-primary dark:hover:text-secondary transition-colors mb-10 group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            Back to Home
-          </Link>
+          <BackButton href="/" className="mb-10">Back to Home</BackButton>
 
           {/* ── Page header ─────────────────────────────────────────── */}
           <div className="mb-14 pb-8 border-b border-outline-variant/30 dark:border-neutral-800">
@@ -380,8 +370,6 @@ export default function TermsPage() {
         </div>
       </main>
 
-      {/* ── Shared footer with Terms highlighted ────────────────────── */}
-      <LandingFooter activeLegal="terms" />
 
       {/* ── Back to top FAB ─────────────────────────────────────────── */}
       {showBackToTop && (
@@ -393,7 +381,7 @@ export default function TermsPage() {
           <ChevronUp className="w-5 h-5" />
         </button>
       )}
-    </div>
+    </>
   );
 }
 

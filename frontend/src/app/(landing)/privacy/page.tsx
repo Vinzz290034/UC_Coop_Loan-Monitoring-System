@@ -18,6 +18,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import BackButton from '@/components/BackButton';
 import {
   ArrowLeft,
   ShieldCheck,
@@ -34,8 +35,7 @@ import {
   CheckCircle2,
   ChevronUp,
 } from 'lucide-react';
-import LandingNavbar from '@/components/LandingNavbar';
-import LandingFooter from '@/components/LandingFooter';
+
 
 // ── Section data ──────────────────────────────────────────────────────────────
 // Each entry maps to one <section> in the body.
@@ -226,23 +226,12 @@ export default function PrivacyPage() {
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return (
-    <div className="bg-background dark:bg-neutral-950 text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
-
-      {/* ── Shared navigation ──────────────────────────────────────── */}
-      {/* activeIndex={-1} so no nav item appears "selected" on legal pages */}
-      <LandingNavbar activeIndex={-1} />
+    <>
 
       <main className="pt-24 pb-24">
         <div className="max-w-5xl mx-auto px-6 md:px-12">
 
-          {/* ── Back button ─────────────────────────────────────────── */}
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface/60 dark:text-neutral-400 hover:text-primary dark:hover:text-secondary transition-colors mb-10 group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            Back to Home
-          </Link>
+          <BackButton href="/" className="mb-10">Back to Home</BackButton>
 
           {/* ── Hero header ─────────────────────────────────────────── */}
           <div className="mb-16 space-y-6">
@@ -417,9 +406,6 @@ export default function PrivacyPage() {
         </div>
       </main>
 
-      {/* ── Shared footer with Privacy highlighted ──────────────────── */}
-      <LandingFooter activeLegal="privacy" />
-
       {/* ── Back to top FAB ─────────────────────────────────────────── */}
       {showBackToTop && (
         <button
@@ -430,6 +416,6 @@ export default function PrivacyPage() {
           <ChevronUp className="w-5 h-5" />
         </button>
       )}
-    </div>
+    </>
   );
 }

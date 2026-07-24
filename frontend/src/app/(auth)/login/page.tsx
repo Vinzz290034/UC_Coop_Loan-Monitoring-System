@@ -14,6 +14,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import BackButton from '@/components/BackButton';
 import Link from 'next/link';
 
 // ─── Floating Peso / Currency Symbols ─────────────────────────────────────────
@@ -84,6 +85,8 @@ function AuthBackground() {
 // ─── Login Form ───────────────────────────────────────────────────────────────
 function LoginForm() {
   const { login } = useAuth();
+  const searchParams = useSearchParams();
+  const resetSuccess = searchParams.get('reset') === 'success';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -118,6 +121,13 @@ function LoginForm() {
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {resetSuccess && (
+          <div className="p-4 bg-primary/10 border border-primary/20 text-primary dark:text-secondary rounded-2xl text-xs font-bold flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-primary dark:text-secondary" />
+            <span>Your password has been successfully reset. Please log in with your new credentials.</span>
+          </div>
+        )}
+
         {error && (
           <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs font-bold flex items-center gap-2.5">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -177,22 +187,19 @@ function LoginForm() {
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40 dark:text-neutral-500 hover:text-primary dark:hover:text-secondary transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40 dark:text-neutral-500 hover:text-primary dark:hover:text-secondary transition-colors cursor-pointer"
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
           <div className="flex justify-end px-1 mt-1">
-            <button
-              type="button"
-              onClick={() => {
-                alert("Forgot Password request submitted. Automatic password reset options are currently pending administrative backend setup. Please contact support at coop-security@lendflow.net to manually restore your account access.");
-              }}
+            <Link
+              href="/forgot-password"
               className="text-xs text-primary dark:text-secondary font-bold hover:underline"
             >
               Forgot Password?
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -234,13 +241,7 @@ export default function LoginPage() {
       <AuthBackground />
 
       <header className="absolute top-6 left-6 right-6 flex items-center justify-between z-20">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 px-4 py-2 border-2 border-neutral-300 dark:border-neutral-700 rounded-full text-xs font-extrabold text-on-surface dark:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 shadow-sm"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Home
-        </Link>
+        <BackButton href="/">Back to Home</BackButton>
         <ThemeToggle />
       </header>
 

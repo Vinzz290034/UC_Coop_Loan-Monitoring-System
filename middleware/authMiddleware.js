@@ -22,7 +22,7 @@ export const protect = async (req, res, next) => {
 
     // Fetch user from DB to ensure they still exist and check latest data
     const userResult = await query(
-      'SELECT id, username, role, created_at FROM users WHERE id = $1',
+      'SELECT id, username, role, profile_picture_url, created_at FROM users WHERE id = $1',
       [decoded.id]
     );
 
@@ -35,6 +35,37 @@ export const protect = async (req, res, next) => {
 
     // Attach user payload to the request
     req.user = userResult.rows[0];
+
+    // Fetch associated member profile if available
+    const memberCheck = await query('SELECT * FROM members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+    if (memberCheck.rowCount > 0) {
+      req.user.profile = memberCheck.rows[0];
+    } else {
+      // Auto-create or link fallback member profile if role is member
+      if (req.user.role === 'member') {
+        const newMember = await query(
+          `INSERT INTO members (user_id, member_no, first_name, last_name, email, phone, status)
+           VALUES ($1, $2, $3, $4, $5, $6, 'active')
+           RETURNING *`,
+          [
+            req.user.id,
+            `MEM-${Math.floor(100000 + Math.random() * 900000)}`,
+            req.user.username.split('_')[0] || req.user.username,
+            req.user.username.split('_')[1] || 'Member',
+            `${req.user.username}@ucmetc.coop`,
+            '09170000000'
+          ]
+        );
+        req.user.profile = newMember.rows[0];
+      } else {
+        // For admin/manager fallback, get first active member ID if needed
+        const firstMember = await query('SELECT * FROM members ORDER BY created_at ASC LIMIT 1');
+        if (firstMember.rowCount > 0) {
+          req.user.profile = firstMember.rows[0];
+        }
+      }
+    }
+
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {

@@ -1,15 +1,9 @@
-'use client';
-
 import React from 'react';
-import LandingNavbar from '@/components/LandingNavbar';
-import LandingFooter from '@/components/LandingFooter';
-import { Award, Compass, History, Target } from 'lucide-react';
+import { Award, Compass, History, Target, Users, Scale, Eye, Heart, Sparkles } from 'lucide-react';
 
 export default function AboutPage() {
   return (
-    <div className="bg-background dark:bg-surface-container-low text-on-surface dark:text-neutral-100 transition-colors min-h-screen">
-      <LandingNavbar activeIndex={3} />
-
+    <>
       <main className="pt-28 pb-16 max-w-4xl mx-auto px-6 space-y-12">
         <header className="text-center space-y-4">
           <h1 className="font-headline text-4xl font-extrabold text-primary dark:text-secondary">
@@ -27,9 +21,20 @@ export default function AboutPage() {
               <Target className="w-5 h-5" />
             </div>
             <h2 className="font-headline text-lg font-bold">Our Mission</h2>
-            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              To uplift the economic and social well-being of cooperative members by providing secure, high-yield deposit accounts, accessible credit products, and financial literacy opportunities inside our campus network.
+
+            <p className="font-body space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
+              The Cooperative commits to:
             </p>
+
+            <ul className="list-disc pl-5 space-y-1 font-body text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              <li>Alleviate the members&apos; financial standing.</li>
+              <li>Increase its financial capability.</li>
+              <li>
+                Engage in social responsibility through active cooperation among
+                stakeholders.
+              </li>
+            </ul>
+
           </div>
 
           <div className="p-6 bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl space-y-4 shadow-sm">
@@ -38,8 +43,83 @@ export default function AboutPage() {
             </div>
             <h2 className="font-headline text-lg font-bold">Our Vision</h2>
             <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              To be the leading, most trusted digital cooperative platform for the University of Cebu academic community, driving financial independence, administrative transparency, and social development.
+              The University of Cebu-Maritime Education and Training Center Employees Credit Cooperative envisions to be one of the leading school cooperatives in Cebu City.
             </p>
+          </div>
+        </section>
+
+        {/* Core Values Section */}
+        <section className="p-8 bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl space-y-6 shadow-sm">
+          <h2 className="font-headline text-xl font-bold flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary dark:text-secondary" />
+            Our Core Values
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            {/* Unity */}
+            <div className="p-5 border border-outline-variant/40 rounded-2xl space-y-3 bg-neutral-50/50 dark:bg-neutral-900/50">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary dark:text-secondary">
+                <Users className="w-4 h-4" />
+              </div>
+              <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">UNITY</h3>
+              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                Collaborate activities at all times.
+              </p>
+            </div>
+
+            {/* Cooperation */}
+            <div className="p-5 border border-outline-variant/40 rounded-2xl space-y-3 bg-neutral-50/50 dark:bg-neutral-900/50">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary dark:text-secondary">
+                <Award className="w-4 h-4" />
+              </div>
+              <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">COOPERATION</h3>
+              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                Express enthusiasm, willingness and volunteerism.
+              </p>
+            </div>
+
+            {/* Motivation */}
+            <div className="p-5 border border-outline-variant/40 rounded-2xl space-y-3 bg-neutral-50/50 dark:bg-neutral-900/50">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary dark:text-secondary">
+                <Compass className="w-4 h-4" />
+              </div>
+              <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">MOTIVATION</h3>
+              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                Encourage members to invest and be socially responsible.
+              </p>
+            </div>
+
+            {/* Equity */}
+            <div className="p-5 border border-outline-variant/40 rounded-2xl space-y-3 bg-neutral-50/50 dark:bg-neutral-900/50">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary dark:text-secondary">
+                <Scale className="w-4 h-4" />
+              </div>
+              <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">EQUITY</h3>
+              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                Treat members justly and fairly.
+              </p>
+            </div>
+
+            {/* Transparency */}
+            <div className="p-5 border border-outline-variant/40 rounded-2xl space-y-3 bg-neutral-50/50 dark:bg-neutral-900/50">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary dark:text-secondary">
+                <Eye className="w-4 h-4" />
+              </div>
+              <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">TRANSPARENCY</h3>
+              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                Deal financially to members and other stakeholders with openness and honest.
+              </p>
+            </div>
+
+            {/* Compassion */}
+            <div className="p-5 border border-outline-variant/40 rounded-2xl space-y-3 bg-neutral-50/50 dark:bg-neutral-900/50">
+              <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary dark:text-secondary">
+                <Heart className="w-4 h-4" />
+              </div>
+              <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">COMPASSION</h3>
+              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                Manifest love and care towards the common goal.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -70,8 +150,6 @@ export default function AboutPage() {
           </p>
         </section>
       </main>
-
-      <LandingFooter />
-    </div>
+    </>
   );
 }

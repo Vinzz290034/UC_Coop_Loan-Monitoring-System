@@ -1,7 +1,14 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import pool, { query } from '../config/db.js';
-import { generateOtp, sendOtpEmail } from '../services/emailService.js';
+import { generateOtp, sendOtpEmail, sendContactReply } from '../services/emailService.js';
+import { parseUserAgent, getClientIp } from '../utils/userAgentParser.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Helper to sign JWT token
 const signToken = (id) => {
@@ -20,6 +27,10 @@ export const login = async (req, res, next) => {
     const { username, usernameOrEmail, password } = req.body;
     const loginIdentifier = username || usernameOrEmail;
 
+    const userAgentRaw = req.headers['user-agent'] || '';
+    const ipAddress = getClientIp(req);
+    const { deviceType, browser, operatingSystem } = parseUserAgent(userAgentRaw);
+
     if (!loginIdentifier || !password) {
       return res.status(400).json({
         success: false,
@@ -29,7 +40,7 @@ export const login = async (req, res, next) => {
 
     // Check if user exists (by username or member email)
     const userResult = await query(
-      `SELECT u.id, u.username, u.password_hash, u.role 
+      `SELECT u.id, u.username, u.password_hash, u.role, u.profile_picture_url 
        FROM users u 
        LEFT JOIN members m ON m.user_id = u.id 
        WHERE u.username = $1 OR m.email = $1`,
@@ -37,6 +48,13 @@ export const login = async (req, res, next) => {
     );
 
     if (userResult.rowCount === 0) {
+      // Record failed login attempt (unknown user)
+      await query(
+        `INSERT INTO user_access_logs (user_id, username, login_at, ip_address, device_type, browser, operating_system, user_agent, status)
+         VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5, $6, $7, $8)`,
+        [null, loginIdentifier, ipAddress, deviceType, browser, operatingSystem, userAgentRaw, 'Failed Login']
+      );
+
       return res.status(401).json({
         success: false,
         error: { message: 'Invalid username or password.' }
@@ -48,11 +66,28 @@ export const login = async (req, res, next) => {
     // Check password
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
+      // Record failed login attempt (bad password)
+      await query(
+        `INSERT INTO user_access_logs (user_id, username, login_at, ip_address, device_type, browser, operating_system, user_agent, status)
+         VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5, $6, $7, $8)`,
+        [user.id, user.username, ipAddress, deviceType, browser, operatingSystem, userAgentRaw, 'Failed Login']
+      );
+
       return res.status(401).json({
         success: false,
         error: { message: 'Invalid username or password.' }
       });
     }
+
+    // Record successful login
+    const logResult = await query(
+      `INSERT INTO user_access_logs (user_id, username, login_at, ip_address, device_type, browser, operating_system, user_agent, status)
+       VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [user.id, user.username, ipAddress, deviceType, browser, operatingSystem, userAgentRaw, 'Success']
+    );
+
+    const accessLogId = logResult.rows[0]?.id;
 
     // Sign JWT
     const token = signToken(user.id);
@@ -64,7 +99,7 @@ export const login = async (req, res, next) => {
     let memberProfile = null;
     if (user.role === 'member') {
       const memberResult = await query(
-        'SELECT id, first_name, last_name, middle_name, email, phone, status FROM members WHERE user_id = $1',
+        'SELECT id, first_name, last_name, middle_name, age, email, phone, status FROM members WHERE user_id = $1',
         [user.id]
       );
       if (memberResult.rowCount > 0) {
@@ -75,10 +110,12 @@ export const login = async (req, res, next) => {
     res.status(200).json({
       success: true,
       token,
+      access_log_id: accessLogId,
       user: {
         id: user.id,
         username: user.username,
         role: user.role,
+        profile_picture_url: user.profile_picture_url,
         profile: memberProfile
       }
     });
@@ -144,15 +181,14 @@ export const getMe = async (req, res, next) => {
   try {
     const user = req.user;
 
+    // Fetch linked member/profile for ALL roles (admin/manager may also have one)
     let memberProfile = null;
-    if (user.role === 'member') {
-      const memberResult = await query(
-        'SELECT id, first_name, last_name, middle_name, email, phone, status FROM members WHERE user_id = $1',
-        [user.id]
-      );
-      if (memberResult.rowCount > 0) {
-        memberProfile = memberResult.rows[0];
-      }
+    const memberResult = await query(
+      'SELECT id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status FROM members WHERE user_id = $1',
+      [user.id]
+    );
+    if (memberResult.rowCount > 0) {
+      memberProfile = memberResult.rows[0];
     }
 
     res.status(200).json({
@@ -161,6 +197,8 @@ export const getMe = async (req, res, next) => {
         id: user.id,
         username: user.username,
         role: user.role,
+        profile_picture_url: user.profile_picture_url,
+        created_at: user.created_at,
         profile: memberProfile
       }
     });
@@ -174,71 +212,96 @@ export const getMe = async (req, res, next) => {
 // @access  Public
 export const forgotPassword = async (req, res, next) => {
   try {
-    const { username } = req.body;
+    const { email } = req.body;
 
-    if (!username) {
+    if (!email) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Please provide your account username.' }
+        error: { message: 'Please provide your registered email address.' }
       });
     }
 
-    // 1. Locate user via username
-    const userResult = await query(
-      'SELECT id, username, role, password_hash FROM users WHERE username = $1',
-      [username]
+    // Basic email format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide a valid email address.' }
+      });
+    }
+
+    // 1. Locate member & user via email address
+    const memberUserResult = await query(
+      `SELECT u.id, u.username, u.role, u.password_hash, m.first_name, m.email
+       FROM members m
+       JOIN users u ON m.user_id = u.id
+       WHERE LOWER(m.email) = $1`,
+      [email.toLowerCase()]
     );
 
-    if (userResult.rowCount === 0) {
-      // Security Practice: Return a generic success to prevent account enumeration sweeps
-      return res.status(200).json({
-        success: true,
-        message: 'If an account matches those records, a recovery link has been dispatched.'
+    if (memberUserResult.rowCount === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No account is associated with the provided email address.' }
       });
     }
 
-    const user = userResult.rows[0];
+    const account = memberUserResult.rows[0];
 
     // Safety Verification Check: Don't process requests if account portal is frozen
-    if (user.password_hash && user.password_hash.startsWith('PORTAL_FROZEN_')) {
+    if (account.password_hash && account.password_hash.startsWith('PORTAL_FROZEN_')) {
       return res.status(403).json({
         success: false,
         error: { message: 'This portal account is currently locked or frozen. Contact management.' }
       });
     }
 
-    // 2. Resolve communication channel (Fetch email based on role)
-    let recoveryEmail = null;
-
-    if (user.role === 'member') {
-      const memberResult = await query(
-        'SELECT email FROM members WHERE user_id = $1',
-        [user.id]
-      );
-      if (memberResult.rowCount > 0) {
-        recoveryEmail = memberResult.rows[0].email;
-      }
-    } else {
-      // Fallback for system administrators/managers (defaults to an internal registry template or username fallback)
-      recoveryEmail = `${user.username}@cooperative-system.local`;
+    // A3/Verification check: Only allow resets for member accounts with registered emails
+    if (account.role !== 'member') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Password reset is only available for member accounts with registered emails.' }
+      });
     }
 
-    // 3. Generate a secure short-lived recovery token using the token signer utility
-    const recoveryToken = signToken(user.id);
+    const recoveryEmail = account.email;
 
-    // =========================================================================
-    // NOTIFICATION HOOK
-    // Place your production SMTP or SMS microservice integration worker here.
-    // Example: await sendEmail({ to: recoveryEmail, subject: 'Password Reset', token: recoveryToken });
-    // =========================================================================
+    // 2. Generate OTP
+    const otpCode = generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    res.status(200).json({
+    // 3. Invalidate any previous OTPs for this email and purpose
+    await query(
+      'DELETE FROM otp_verifications WHERE email = $1 AND purpose = $2',
+      [recoveryEmail.toLowerCase(), 'password_reset']
+    );
+
+    // 4. Store OTP + user data
+    const resetData = {
+      user_id: account.id,
+    };
+
+    await query(
+      `INSERT INTO otp_verifications (email, otp_code, purpose, registration_data, expires_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [recoveryEmail.toLowerCase(), otpCode, 'password_reset', JSON.stringify(resetData), expiresAt]
+    );
+
+    // 5. Send OTP email
+    const emailResult = await sendOtpEmail(recoveryEmail.toLowerCase(), otpCode, account.first_name, 'password_reset');
+
+    const responsePayload = {
       success: true,
-      message: 'If an account matches those records, a recovery link has been dispatched.',
-      // Included in development environment mode to make testing frontend flows simple:
-      _dev_recovery_email_target: recoveryEmail,
-      _dev_token_payload: recoveryToken
-    });
+      message: 'Verification code sent to your email. Please check your inbox.',
+      email: recoveryEmail.toLowerCase(),
+    };
+
+    // In dev mode, include OTP in response for testing
+    if (emailResult.devMode) {
+      responsePayload._dev_otp = otpCode;
+    }
+
+    res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -256,6 +319,20 @@ export const resetPassword = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: { message: 'Please provide both the validation token and your new password.' }
+      });
+    }
+
+    // Validate password strength policy (A2)
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Password must be at least 8 characters long.' }
+      });
+    }
+    if (!/[a-zA-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Password must contain at least one letter and at least one number.' }
       });
     }
 
@@ -389,7 +466,7 @@ export const getAllUsers = async (req, res, next) => {
 // @access  Public
 export const memberRegister = async (req, res, next) => {
   try {
-    const { first_name, last_name, username, password, email } = req.body;
+    const { first_name, last_name, middle_name, date_of_birth, age, phone, username, password, email } = req.body;
 
     // --- Input validation ---
     if (!first_name || !last_name || !username || !password || !email) {
@@ -399,6 +476,65 @@ export const memberRegister = async (req, res, next) => {
       });
     }
 
+    if (!/^[a-zA-Z\s'-]+$/.test(first_name)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'First name must contain letters, spaces, hyphens, and apostrophes only, and cannot contain numbers or special characters.' }
+      });
+    }
+
+    if (!/^[a-zA-Z\s'-]+$/.test(last_name)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Last name must contain letters, spaces, hyphens, and apostrophes only, and cannot contain numbers or special characters.' }
+      });
+    }
+
+    if (middle_name && !/^[a-zA-Z\s'-]+$/.test(middle_name.trim())) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Middle name must contain letters, spaces, hyphens, and apostrophes only.' }
+      });
+    }
+
+    // --- Date of Birth & Age validation ---
+    let computedAge = age ? parseInt(age, 10) : null;
+    if (date_of_birth) {
+      const birthDate = new Date(date_of_birth);
+      const today = new Date();
+      if (isNaN(birthDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Please provide a valid date of birth.' }
+        });
+      }
+      if (birthDate > today) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Date of birth cannot be in the future.' }
+        });
+      }
+
+      // Calculate age from DOB
+      let calculated = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        calculated--;
+      }
+      if (!isNaN(calculated) && calculated >= 0) {
+        computedAge = calculated;
+      }
+    }
+
+    if (computedAge !== null) {
+      if (computedAge < 18 || computedAge > 120) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Member must be at least 18 years old.' }
+        });
+      }
+    }
+
     if (username.length < 3) {
       return res.status(400).json({
         success: false,
@@ -406,17 +542,38 @@ export const memberRegister = async (req, res, next) => {
       });
     }
 
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    if (!/^[a-zA-Z]/.test(username)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username must begin with a letter.' }
+      });
+    }
+
+    if (/\s/.test(username)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username must be a single word (no spaces).' }
+      });
+    }
+
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(username)) {
       return res.status(400).json({
         success: false,
         error: { message: 'Username can only contain letters, numbers, and underscores.' }
       });
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Password must be at least 6 characters long.' }
+        error: { message: 'Password must be at least 8 characters long.' }
+      });
+    }
+
+    if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Password must contain at least one letter and at least one number.' }
       });
     }
 
@@ -464,6 +621,10 @@ export const memberRegister = async (req, res, next) => {
     const registrationData = {
       first_name: first_name.trim(),
       last_name: last_name.trim(),
+      middle_name: middle_name ? middle_name.trim() : null,
+      date_of_birth: date_of_birth || null,
+      age: computedAge,
+      phone: phone ? phone.trim() : null,
       username: username.toLowerCase(),
       password_hash: passwordHash,
       email: email.toLowerCase(),
@@ -501,7 +662,7 @@ export const memberRegister = async (req, res, next) => {
 export const verifyRegistrationOtp = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { email, otp_code } = req.body;
+    const { email, otp_code, purpose = 'registration' } = req.body;
 
     if (!email || !otp_code) {
       return res.status(400).json({
@@ -510,18 +671,18 @@ export const verifyRegistrationOtp = async (req, res, next) => {
       });
     }
 
-    // --- Find the latest OTP record for this email ---
+    // --- Find the latest OTP record for this email and purpose ---
     const otpResult = await client.query(
       `SELECT * FROM otp_verifications
-       WHERE email = $1 AND purpose = 'registration' AND verified = false
+       WHERE email = $1 AND purpose = $2 AND verified = false
        ORDER BY created_at DESC LIMIT 1`,
-      [email.toLowerCase()]
+      [email.toLowerCase(), purpose]
     );
 
     if (otpResult.rowCount === 0) {
       return res.status(400).json({
         success: false,
-        error: { message: 'No pending verification found for this email. Please register again.' }
+        error: { message: 'No pending verification found for this email. Please request a new code.' }
       });
     }
 
@@ -541,7 +702,7 @@ export const verifyRegistrationOtp = async (req, res, next) => {
       await client.query('DELETE FROM otp_verifications WHERE id = $1', [otpRecord.id]);
       return res.status(429).json({
         success: false,
-        error: { message: 'Too many failed attempts. Please register again and request a new code.' }
+        error: { message: 'Too many failed attempts. Please request a new code.' }
       });
     }
 
@@ -562,9 +723,36 @@ export const verifyRegistrationOtp = async (req, res, next) => {
       });
     }
 
-    // --- OTP is valid — Create user + member in a transaction ---
+    // --- OTP is valid ---
     const regData = otpRecord.registration_data;
 
+    if (purpose === 'password_reset') {
+      // Mark OTP as verified and clean up
+      await client.query(
+        'UPDATE otp_verifications SET verified = true WHERE id = $1',
+        [otpRecord.id]
+      );
+
+      await client.query(
+        'DELETE FROM otp_verifications WHERE email = $1 AND id != $2 AND purpose = $3',
+        [email.toLowerCase(), otpRecord.id, purpose]
+      );
+
+      // Generate a short-lived recovery token (JWT) valid for 15 minutes
+      const recoveryToken = jwt.sign(
+        { id: regData.user_id },
+        process.env.JWT_SECRET || 'coop_loan_monitoring_secret_key_2026_dev',
+        { expiresIn: '15m' }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'OTP verified successfully.',
+        token: recoveryToken
+      });
+    }
+
+    // --- Create user + member in a transaction (Registration flow) ---
     await client.query('BEGIN');
 
     // 1. Create user account
@@ -576,9 +764,18 @@ export const verifyRegistrationOtp = async (req, res, next) => {
 
     // 2. Create member profile linked to user
     await client.query(
-      `INSERT INTO members (user_id, first_name, last_name, email, status)
-       VALUES ($1, $2, $3, $4, 'active')`,
-      [newUser.id, regData.first_name, regData.last_name, regData.email]
+      `INSERT INTO members (user_id, first_name, last_name, middle_name, date_of_birth, age, phone, email, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')`,
+      [
+        newUser.id,
+        regData.first_name,
+        regData.last_name,
+        regData.middle_name || null,
+        regData.date_of_birth || null,
+        regData.age ? parseInt(regData.age, 10) : null,
+        regData.phone || null,
+        regData.email
+      ]
     );
 
     // 3. Mark OTP as verified and clean up
@@ -589,8 +786,8 @@ export const verifyRegistrationOtp = async (req, res, next) => {
 
     // 4. Clean up old OTPs for this email
     await client.query(
-      'DELETE FROM otp_verifications WHERE email = $1 AND id != $2',
-      [email.toLowerCase(), otpRecord.id]
+      'DELETE FROM otp_verifications WHERE email = $1 AND id != $2 AND purpose = $3',
+      [email.toLowerCase(), otpRecord.id, purpose]
     );
 
     await client.query('COMMIT');
@@ -615,12 +812,9 @@ export const verifyRegistrationOtp = async (req, res, next) => {
   }
 };
 
-// @desc    Resend OTP for pending registration
-// @route   POST /api/auth/resend-otp
-// @access  Public
 export const resendOtp = async (req, res, next) => {
   try {
-    const { email } = req.body;
+    const { email, purpose = 'registration' } = req.body;
 
     if (!email) {
       return res.status(400).json({
@@ -629,18 +823,18 @@ export const resendOtp = async (req, res, next) => {
       });
     }
 
-    // --- Find existing pending registration ---
+    // --- Find existing pending registration or password reset ---
     const existingResult = await query(
       `SELECT * FROM otp_verifications
-       WHERE email = $1 AND purpose = 'registration' AND verified = false
+       WHERE email = $1 AND purpose = $2 AND verified = false
        ORDER BY created_at DESC LIMIT 1`,
-      [email.toLowerCase()]
+      [email.toLowerCase(), purpose]
     );
 
     if (existingResult.rowCount === 0) {
       return res.status(400).json({
         success: false,
-        error: { message: 'No pending registration found for this email.' }
+        error: { message: `No pending ${purpose.replace('_', ' ')} found for this email.` }
       });
     }
 
@@ -669,7 +863,7 @@ export const resendOtp = async (req, res, next) => {
 
     // --- Send new OTP email ---
     const regData = existing.registration_data;
-    const emailResult = await sendOtpEmail(email.toLowerCase(), newOtpCode, regData?.first_name || '');
+    const emailResult = await sendOtpEmail(email.toLowerCase(), newOtpCode, regData?.first_name || '', purpose);
 
     const responsePayload = {
       success: true,
@@ -696,7 +890,7 @@ export const getUserById = async (req, res, next) => {
     const result = await query(
       `SELECT
          u.id, u.username, u.role, u.is_active, u.last_login_at, u.last_activity_at, u.created_at,
-         m.id as member_id, m.first_name, m.last_name, m.middle_name, m.email, m.phone, m.address, m.date_of_birth, m.status as member_status
+         m.id as member_id, m.first_name, m.last_name, m.middle_name, m.age, m.email, m.phone, m.address, m.date_of_birth, m.status as member_status
        FROM users u
        LEFT JOIN members m ON m.user_id = u.id
        WHERE u.id = $1`,
@@ -727,6 +921,7 @@ export const getUserById = async (req, res, next) => {
           first_name: row.first_name,
           last_name: row.last_name,
           middle_name: row.middle_name,
+          age: row.age,
           email: row.email,
           phone: row.phone,
           address: row.address,
@@ -922,5 +1117,637 @@ export const deleteUser = async (req, res, next) => {
     next(error);
   } finally {
     client.release();
+  }
+};
+
+// ==========================================
+// Contact Messages (Inquiries Management)
+// ==========================================
+
+// @desc    Submit a contact / inquiry message
+// @route   POST /api/auth/contact
+// @access  Public
+export const submitContactMessage = async (req, res, next) => {
+  try {
+    const { full_name, email, message_content } = req.body;
+
+    // --- Input Validation ---
+    if (!full_name || !email || !message_content) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide your full name, email, and message content.' }
+      });
+    }
+
+    const cleanName = full_name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanContent = message_content.trim();
+
+    // Basic email format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide a valid email address.' }
+      });
+    }
+
+    if (cleanContent.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Message content must be at least 10 characters long.' }
+      });
+    }
+
+    // --- Save to Database ---
+    const insertQuery = `
+      INSERT INTO contact_messages (full_name, email, message_content)
+      VALUES ($1, $2, $3)
+      RETURNING id, full_name, email, status, created_at
+    `;
+
+    const result = await query(insertQuery, [cleanName, cleanEmail, cleanContent]);
+    const newMessage = result.rows[0];
+
+    // --- Create notifications for admin and manager roles ---
+    try {
+      const truncatedMsg = cleanContent.length > 100 ? cleanContent.slice(0, 100) + '...' : cleanContent;
+      await query(
+        `INSERT INTO notifications (role_target, type, title, message, reference_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        ['admin', 'contact_message', 'New Contact Message', `From ${cleanName}: ${truncatedMsg}`, newMessage.id]
+      );
+      await query(
+        `INSERT INTO notifications (role_target, type, title, message, reference_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        ['manager', 'contact_message', 'New Contact Message', `From ${cleanName}: ${truncatedMsg}`, newMessage.id]
+      );
+    } catch (notifError) {
+      // Non-critical: don't fail the contact submission if notification insert fails
+      console.error('Failed to create contact message notification:', notifError.message);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Your inquiry has been submitted successfully. We will get back to you soon!',
+      data: newMessage
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all contact messages (with filtering)
+// @route   GET /api/auth/contact-messages
+// @access  Protected (Admin, Manager)
+export const getContactMessages = async (req, res, next) => {
+  try {
+    const { status, search } = req.query;
+
+    let queryText = `
+      SELECT id, full_name, email, message_content, status, created_at, resolved_at
+      FROM contact_messages
+      WHERE 1=1
+    `;
+    const queryParams = [];
+    let paramIndex = 1;
+
+    // Filter by status (unread, read, resolved)
+    if (status) {
+      if (!['unread', 'read', 'resolved'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Invalid status filter applied.' }
+        });
+      }
+      queryText += ` AND status = $${paramIndex}`;
+      queryParams.push(status);
+      paramIndex++;
+    }
+
+    // Optional Search across Full Name, Email or Content
+    if (search) {
+      queryText += ` AND (
+        full_name ILIKE $${paramIndex} OR
+        email ILIKE $${paramIndex} OR
+        message_content ILIKE $${paramIndex}
+      )`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Order by newest inquiries first (Utilizes the idx_contact_messages_created_at index)
+    queryText += ' ORDER BY created_at DESC';
+
+    const result = await query(queryText, queryParams);
+
+    res.status(200).json({
+      success: true,
+      count: result.rowCount,
+      data: result.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update status of a contact message (e.g. read, resolved)
+// @route   PUT /api/auth/contact-messages/:id
+// @access  Protected (Admin, Manager)
+export const updateContactMessageStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide the new message status.' }
+      });
+    }
+
+    if (!['unread', 'read', 'resolved'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Status must be unread, read, or resolved.' }
+      });
+    }
+
+    // Check if the record exists
+    const messageCheck = await query('SELECT id FROM contact_messages WHERE id = $1', [id]);
+    if (messageCheck.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Message not found.' }
+      });
+    }
+
+    // Update state. If status is 'resolved', log the resolved_at timestamp.
+    let updateQuery = '';
+    let params = [];
+
+    if (status === 'resolved') {
+      updateQuery = `
+        UPDATE contact_messages
+        SET status = $1, resolved_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING id, full_name, email, status, created_at, resolved_at
+      `;
+      params = [status, id];
+    } else {
+      updateQuery = `
+        UPDATE contact_messages
+        SET status = $1, resolved_at = NULL
+        WHERE id = $2
+        RETURNING id, full_name, email, status, created_at, resolved_at
+      `;
+      params = [status, id];
+    }
+
+    const result = await query(updateQuery, params);
+
+    res.status(200).json({
+      success: true,
+      message: `Message marked as ${status} successfully.`,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ==========================================
+// Reply to Contact Message
+// ==========================================
+
+// @desc    Reply to a contact message and mark as resolved
+// @route   POST /api/auth/contact-messages/:id/reply
+// @access  Protected (Admin, Manager)
+export const replyToContactMessage = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reply_content } = req.body;
+
+    if (!reply_content || reply_content.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide reply content.' }
+      });
+    }
+
+    // Fetch the original message
+    const messageResult = await query(
+      'SELECT id, full_name, email, message_content, status FROM contact_messages WHERE id = $1',
+      [id]
+    );
+
+    if (messageResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Message not found.' }
+      });
+    }
+
+    const message = messageResult.rows[0];
+
+    // Send reply email
+    await sendContactReply(message.email, message.full_name, reply_content.trim());
+
+    // Update message status to resolved
+    const updateResult = await query(
+      `UPDATE contact_messages
+       SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING id, full_name, email, status, created_at, resolved_at`,
+      [id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Reply sent and message marked as resolved.',
+      data: updateResult.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// ==========================================
+// Self-Service Profile Management
+// ==========================================
+
+// @desc    Update own profile information
+// @route   PUT /api/auth/me/profile
+// @access  Protected (All roles)
+export const updateProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth } = req.body;
+
+    // Validate required fields
+    if (!first_name || !last_name) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'First name and last name are required.' }
+      });
+    }
+
+    // Validate email format if provided
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Please provide a valid email address.' }
+        });
+      }
+
+      // Check email uniqueness (exclude own profile)
+      const emailCheck = await query(
+        'SELECT id FROM members WHERE email = $1 AND user_id != $2',
+        [email.toLowerCase(), userId]
+      );
+      if (emailCheck.rowCount > 0) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'This email address is already in use by another account.' }
+        });
+      }
+    }
+
+    let computedAge = age ? parseInt(age, 10) : null;
+    if (!computedAge && date_of_birth) {
+      const birthDate = new Date(date_of_birth);
+      const today = new Date();
+      let calculated = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        calculated--;
+      }
+      if (!isNaN(calculated) && calculated >= 0) {
+        computedAge = calculated;
+      }
+    }
+
+    // Check if a member profile already exists for this user
+    const existingMember = await query(
+      'SELECT id FROM members WHERE user_id = $1',
+      [userId]
+    );
+
+    let result;
+    if (existingMember.rowCount > 0) {
+      // Update existing member profile
+      result = await query(
+        `UPDATE members SET
+           first_name = $1,
+           last_name = $2,
+           middle_name = $3,
+           email = $4,
+           phone = $5,
+           address = $6,
+           date_of_birth = $7,
+           age = $8,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $9
+         RETURNING id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status`,
+        [
+          first_name.trim(),
+          last_name.trim(),
+          middle_name?.trim() || null,
+          email?.toLowerCase() || null,
+          phone?.trim() || null,
+          address?.trim() || null,
+          date_of_birth || null,
+          computedAge,
+          userId
+        ]
+      );
+    } else {
+      // Create a new member profile for this user (admin/manager without one)
+      result = await query(
+        `INSERT INTO members (user_id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')
+         RETURNING id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status`,
+        [
+          userId,
+          first_name.trim(),
+          last_name.trim(),
+          middle_name?.trim() || null,
+          computedAge,
+          email?.toLowerCase() || null,
+          phone?.trim() || null,
+          address?.trim() || null,
+          date_of_birth || null
+        ]
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully.',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Email address is already in use.' }
+      });
+    }
+    next(error);
+  }
+};
+
+// @desc    Change own password
+// @route   PUT /api/auth/me/password
+// @access  Protected (All roles)
+export const changePassword = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide both your current password and a new password.' }
+      });
+    }
+
+    // Validate new password strength
+    if (new_password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'New password must be at least 8 characters long.' }
+      });
+    }
+    if (!/[a-zA-Z]/.test(new_password) || !/\d/.test(new_password)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'New password must contain at least one letter and at least one number.' }
+      });
+    }
+
+    // Fetch current password hash
+    const userResult = await query(
+      'SELECT password_hash FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'User not found.' }
+      });
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(current_password, userResult.rows[0].password_hash);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Current password is incorrect.' }
+      });
+    }
+
+    // Hash new password and save
+    const salt = await bcrypt.genSalt(10);
+    const newHash = await bcrypt.hash(new_password, salt);
+
+    await query(
+      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newHash, userId]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update profile picture (avatar)
+// @route   PUT /api/auth/me/avatar
+// @access  Protected
+export const updateAvatar = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No file uploaded or invalid file type.' }
+      });
+    }
+
+    // Get old profile picture url to clean up disk space
+    const userResult = await query(
+      'SELECT profile_picture_url FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rowCount > 0 && userResult.rows[0].profile_picture_url) {
+      const oldUrl = userResult.rows[0].profile_picture_url;
+      // Extract filename from URL (e.g. /uploads/avatars/filename.png)
+      const filename = path.basename(oldUrl);
+      const oldPath = path.join(__dirname, '../uploads/avatars', filename);
+
+      // Verify and remove file
+      if (fs.existsSync(oldPath)) {
+        try {
+          fs.unlinkSync(oldPath);
+        } catch (err) {
+          console.error('Failed to delete old avatar file:', err);
+        }
+      }
+    }
+
+    // Store relative URL path
+    const fileUrl = `/uploads/avatars/${req.file.filename}`;
+
+    await query(
+      'UPDATE users SET profile_picture_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [fileUrl, userId]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Avatar updated successfully.',
+      profile_picture_url: fileUrl
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Logout user and record logout timestamp and session duration
+// @route   POST /api/auth/logout
+// @access  Protected
+export const logout = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Find the latest active access log for this user where logout_at is null
+    const logResult = await query(
+      `SELECT id, login_at FROM user_access_logs
+       WHERE user_id = $1 AND logout_at IS NULL AND status = 'Success'
+       ORDER BY login_at DESC LIMIT 1`,
+      [userId]
+    );
+
+    if (logResult.rowCount > 0) {
+      const logId = logResult.rows[0].id;
+      const loginAt = new Date(logResult.rows[0].login_at).getTime();
+      const now = Date.now();
+      const sessionDurationSeconds = Math.max(0, Math.floor((now - loginAt) / 1000));
+
+      await query(
+        `UPDATE user_access_logs
+         SET logout_at = CURRENT_TIMESTAMP,
+             session_duration = $1,
+             status = 'Logged Out'
+         WHERE id = $2`,
+        [sessionDurationSeconds, logId]
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get user login & logout access history
+// @route   GET /api/auth/access-history
+// @access  Protected
+export const getUserAccessHistory = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10, user_id, search, status } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
+    const offset = (pageNum - 1) * limitNum;
+
+    // Regular users can only access their own history. Admins can view specified user or all users.
+    let targetUserId = req.user.id;
+    if (req.user.role === 'admin' && user_id) {
+      targetUserId = user_id;
+    }
+
+    let whereClause = 'WHERE 1=1';
+    const queryParams = [];
+    let paramIndex = 1;
+
+    if (req.user.role !== 'admin' || user_id) {
+      whereClause += ` AND user_id = $${paramIndex}`;
+      queryParams.push(targetUserId);
+      paramIndex++;
+    }
+
+    if (status) {
+      whereClause += ` AND status = $${paramIndex}`;
+      queryParams.push(status);
+      paramIndex++;
+    }
+
+    if (search) {
+      whereClause += ` AND (
+        username ILIKE $${paramIndex} OR
+        ip_address ILIKE $${paramIndex} OR
+        browser ILIKE $${paramIndex} OR
+        operating_system ILIKE $${paramIndex} OR
+        device_type ILIKE $${paramIndex}
+      )`;
+      queryParams.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Count total matching records
+    const countQuery = `SELECT COUNT(*) as total FROM user_access_logs ${whereClause}`;
+    const countResult = await query(countQuery, queryParams);
+    const totalRecords = parseInt(countResult.rows[0].total, 10);
+
+    // Fetch paginated results ordered from newest to oldest
+    const dataQuery = `
+      SELECT 
+        id,
+        user_id,
+        username,
+        login_at,
+        logout_at,
+        session_duration,
+        ip_address,
+        device_type,
+        browser,
+        operating_system,
+        user_agent,
+        status,
+        created_at
+      FROM user_access_logs
+      ${whereClause}
+      ORDER BY login_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    const dataResult = await query(dataQuery, [...queryParams, limitNum, offset]);
+
+    res.status(200).json({
+      success: true,
+      data: dataResult.rows,
+      pagination: {
+        totalRecords,
+        currentPage: pageNum,
+        totalPages: Math.ceil(totalRecords / limitNum),
+        limit: limitNum
+      }
+    });
+  } catch (error) {
+    next(error);
   }
 };

@@ -41,7 +41,11 @@ function createTransporter() {
 /**
  * Build a professional HTML email template for OTP delivery.
  */
-function buildOtpEmailHtml(otpCode, recipientName) {
+function buildOtpEmailHtml(otpCode, recipientName, purpose = 'registration') {
+  const purposeText = purpose === 'password_reset' 
+    ? 'Your one-time verification code for password reset is:' 
+    : 'Your one-time verification code for account registration is:';
+
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -67,7 +71,7 @@ function buildOtpEmailHtml(otpCode, recipientName) {
             Hello${recipientName ? ` ${recipientName}` : ''},
           </p>
           <p style="margin:0 0 24px;font-size:14px;color:#525252;line-height:1.6;">
-            Your one-time verification code for account registration is:
+            ${purposeText}
           </p>
 
           <!-- OTP Code Box -->
@@ -108,15 +112,23 @@ function buildOtpEmailHtml(otpCode, recipientName) {
  * @param {string} toEmail - Recipient email address
  * @param {string} otpCode - 6-digit OTP code
  * @param {string} [recipientName] - Optional name for personalization
+ * @param {string} [purpose] - Purpose of OTP ('registration' or 'password_reset')
  * @returns {Promise<{success: boolean, devMode: boolean}>}
  */
-export async function sendOtpEmail(toEmail, otpCode, recipientName = '') {
+export async function sendOtpEmail(toEmail, otpCode, recipientName = '', purpose = 'registration') {
   const transporter = createTransporter();
+  const emailSubject = purpose === 'password_reset'
+    ? 'Reset Your Password — SynCo'
+    : 'Your Verification Code — SynCo';
+
+  const plainText = purpose === 'password_reset'
+    ? `Your SynCo password reset verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`
+    : `Your SynCo verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`;
 
   if (!transporter) {
     // Development fallback — log OTP to console
     console.log('═══════════════════════════════════════════');
-    console.log('  📧 DEV MODE — Email OTP (not sent)');
+    console.log(`  📧 DEV MODE — Email OTP for ${purpose} (not sent)`);
     console.log(`  To:   ${toEmail}`);
     console.log(`  OTP:  ${otpCode}`);
     console.log('═══════════════════════════════════════════');
@@ -127,9 +139,9 @@ export async function sendOtpEmail(toEmail, otpCode, recipientName = '') {
   const mailOptions = {
     from: `"SynCo" <${process.env.SMTP_USER}>`,
     to: toEmail,
-    subject: 'Your Verification Code — SynCo',
-    html: buildOtpEmailHtml(otpCode, recipientName),
-    text: `Your SynCo verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`,
+    subject: emailSubject,
+    html: buildOtpEmailHtml(otpCode, recipientName, purpose),
+    text: plainText,
   };
 
   try {
@@ -141,3 +153,97 @@ export async function sendOtpEmail(toEmail, otpCode, recipientName = '') {
     throw new Error('Failed to send verification email. Please try again later.');
   }
 }
+
+/**
+ * Build a professional HTML email template for contact inquiry replies.
+ */
+function buildContactReplyHtml(recipientName, replyContent) {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    </head>
+    <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:'Segoe UI',Roboto,Arial,sans-serif;">
+      <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#047857 0%,#059669 100%);padding:32px 24px;text-align:center;">
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">
+            SynCo
+          </h1>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:11px;text-transform:uppercase;letter-spacing:2px;font-weight:700;">
+            UC Cooperative — Support Response
+          </p>
+        </div>
+
+        <!-- Body -->
+        <div style="padding:32px 24px;">
+          <p style="margin:0 0 8px;font-size:15px;color:#1a1a1a;font-weight:600;">
+            Hello${recipientName ? ` ${recipientName}` : ''},
+          </p>
+          <p style="margin:0 0 16px;font-size:14px;color:#525252;line-height:1.6;">
+            Thank you for reaching out to us. Here is our response to your inquiry:
+          </p>
+
+          <!-- Reply Content Box -->
+          <div style="background:#f0fdf4;border-left:4px solid #047857;border-radius:8px;padding:16px 20px;margin:0 0 24px;">
+            <p style="margin:0;font-size:14px;color:#1a1a1a;line-height:1.7;white-space:pre-wrap;">${replyContent}</p>
+          </div>
+
+          <p style="margin:0;font-size:13px;color:#737373;line-height:1.5;">
+            If you have further questions, feel free to reply to this email or submit a new inquiry through our website.
+          </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background:#fafafa;padding:16px 24px;border-top:1px solid #e5e5e5;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#a3a3a3;">
+            &copy; ${new Date().getFullYear()} SynCo &mdash; UC COOP Loan Monitoring System
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Send a reply email to a contact inquiry sender.
+ *
+ * @param {string} toEmail - Recipient email address
+ * @param {string} recipientName - Contact sender's name
+ * @param {string} replyContent - The reply message content
+ * @returns {Promise<{success: boolean, devMode: boolean}>}
+ */
+export async function sendContactReply(toEmail, recipientName, replyContent) {
+  const transporter = createTransporter();
+
+  if (!transporter) {
+    console.log('═══════════════════════════════════════════');
+    console.log(`  📧 DEV MODE — Contact Reply (not sent)`);
+    console.log(`  To:   ${toEmail}`);
+    console.log(`  Name: ${recipientName}`);
+    console.log(`  Reply: ${replyContent.slice(0, 200)}`);
+    console.log('═══════════════════════════════════════════');
+    return { success: true, devMode: true };
+  }
+
+  const mailOptions = {
+    from: `"SynCo Support" <${process.env.SMTP_USER}>`,
+    to: toEmail,
+    subject: 'Re: Your Inquiry — SynCo Cooperative',
+    html: buildContactReplyHtml(recipientName, replyContent),
+    text: `Hello ${recipientName},\n\nThank you for reaching out. Here is our response:\n\n${replyContent}\n\nIf you have further questions, feel free to reply.\n\n— SynCo Support`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Contact reply sent successfully to ${toEmail}`);
+    return { success: true, devMode: false };
+  } catch (error) {
+    console.error(`❌ Failed to send contact reply to ${toEmail}:`, error.message);
+    throw new Error('Failed to send reply email. Please try again later.');
+  }
+}
+

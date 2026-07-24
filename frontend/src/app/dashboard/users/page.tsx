@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import BackButton from '@/components/BackButton';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import {
   Users,
@@ -37,6 +38,8 @@ interface UserData {
     id: string;
     first_name: string;
     last_name: string;
+    middle_name?: string;
+    age?: number;
     email: string;
     phone: string;
     status: string;
@@ -110,8 +113,8 @@ function CreateAccountModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-[calc(100vw-2rem)] sm:w-full max-w-md overflow-hidden animate-modal-pop">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-outline-variant/40">
           <div>
@@ -124,9 +127,10 @@ function CreateAccountModal({
           </div>
           <button
             onClick={handleClose}
-            className="p-2 rounded-xl text-neutral-500 hover:bg-neutral/10 transition-colors"
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+            aria-label="Close modal"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -255,8 +259,8 @@ function DeleteConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-modal-pop">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-tertiary/10 flex items-center justify-center">
             <Trash2 className="w-5 h-5 text-tertiary" />
@@ -422,7 +426,11 @@ export default function UsersPage() {
   if (user?.role !== 'admin') return null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-micro-elevate">
+      <div>
+        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+      </div>
+
       {/* Page Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>

@@ -2,6 +2,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Drop tables if they exist to allow clean recreations
+DROP TABLE IF EXISTS contact_messages CASCADE;
 DROP TABLE IF EXISTS loan_payment_allocations CASCADE;
 DROP TABLE IF EXISTS loan_payments CASCADE;
 DROP TABLE IF EXISTS repayment_schedules CASCADE;
@@ -22,6 +23,7 @@ CREATE TABLE users (
     username VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'manager', 'member')),
+    profile_picture_url VARCHAR(255) DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -37,6 +39,7 @@ CREATE TABLE members (
     phone VARCHAR(50),
     address TEXT,
     date_of_birth DATE,
+    age INT,
     status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'inactive')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -61,7 +64,8 @@ CREATE TABLE share_capital_transactions (
     amount NUMERIC(15, 2) NOT NULL CHECK (amount > 0),
     balance_after NUMERIC(15, 2) NOT NULL,
     transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    remarks TEXT
+    remarks TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'completed' CHECK (status IN ('pending_payment', 'completed', 'cancelled'))
 );
 
 -- 5. Fixed Deposit Registry
@@ -176,6 +180,55 @@ CREATE TABLE loan_payment_allocations (
     CHECK (principal_allocated + interest_allocated > 0)
 );
 
+-- 14. Contact Messages (Public system communications)
+CREATE TABLE contact_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name VARCHAR(150) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    message_content TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'unread' CHECK (status IN ('unread', 'read', 'resolved')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 15. Notifications (Role-based notification system)
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role_target VARCHAR(50),
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    reference_id UUID,
+    is_read BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. Appointments Table
+CREATE TABLE appointments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    purpose VARCHAR(255) NOT NULL,
+    appointment_date DATE NOT NULL,
+    time_slot VARCHAR(50) NOT NULL CHECK (time_slot IN ('morning', 'afternoon')),
+    status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 17. Calendar Events Table
+CREATE TABLE calendar_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    event_date DATE NOT NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('announcement', 'payment_deadline', 'office_duty', 'holiday', 'special_schedule')),
+    status VARCHAR(50) DEFAULT 'open',
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance optimization on critical query pathways
 CREATE INDEX idx_members_user_id ON members(user_id);
 CREATE INDEX idx_share_capital_member ON share_capital_transactions(member_id);
@@ -187,3 +240,10 @@ CREATE INDEX idx_repayment_schedules_due ON repayment_schedules(due_date);
 CREATE INDEX idx_loan_payments_loan ON loan_payments(loan_id);
 CREATE INDEX idx_payment_allocations_payment ON loan_payment_allocations(loan_payment_id);
 CREATE INDEX idx_payment_allocations_schedule ON loan_payment_allocations(repayment_schedule_id);
+CREATE INDEX idx_contact_messages_created_at ON contact_messages(created_at);
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_role_target ON notifications(role_target);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at);
+CREATE INDEX idx_appointments_member ON appointments(member_id);
+CREATE INDEX idx_calendar_events_date ON calendar_events(event_date);
+CREATE INDEX idx_calendar_events_type ON calendar_events(type);

@@ -4,6 +4,8 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { auditLogger, activityTracker } from './middleware/auditMiddleware.js';
 
@@ -16,10 +18,18 @@ import reportRoutes from './routes/reportRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import auditRoutes from './routes/auditRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+import calendarRoutes from './routes/calendarRoutes.js';
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
+
+// Serve uploads directory statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Security Middlewares
 app.use(helmet());
@@ -80,6 +90,8 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/calendar', calendarRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

@@ -31,8 +31,85 @@ import {
   CalendarCheck,
   User as UserIcon,
   RefreshCw,
+  WalletCards,
+  Lock,
+  Info,
+  Target,
+  Award,
+  Sparkles,
+  PhoneCall,
+  Mail,
+  CalendarDays,
+  ChevronDown,
+  Check,
+  X,
+  ArrowRight,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+
+interface DropdownOption {
+  value: string;
+  label: string;
+}
+
+function AnimatedSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Select option'
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options: DropdownOption[];
+  placeholder?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find((opt) => opt.value === value);
+
+  return (
+    <div className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 rounded-2xl border border-outline-variant/65 bg-white dark:bg-surface-container-high text-on-surface dark:text-white font-bold text-sm flex items-center justify-between shadow-xs hover:border-primary/60 dark:hover:border-secondary/60 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+      >
+        <span>{selectedOption ? selectedOption.label : placeholder}</span>
+        <ChevronDown className={`w-4 h-4 text-neutral-500 transition-transform duration-250 ${isOpen ? 'rotate-180 text-primary dark:text-secondary' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <>
+          {/* Backdrop blur/overlay to dismiss on outside click */}
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+
+          {/* Animated Options Menu */}
+          <div className="absolute top-full left-0 right-0 mt-1.5 z-50 p-1.5 bg-white dark:bg-surface-container-high border border-outline-variant/60 rounded-2xl shadow-xl space-y-1 animate-dropdown-pop max-h-56 overflow-y-auto">
+            {options.map((option) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.value);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-all cursor-pointer ${isSelected
+                    ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-extrabold'
+                    : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    }`}
+                >
+                  <span>{option.label}</span>
+                  {isSelected && <Check className="w-4 h-4 text-primary dark:text-secondary" />}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function OverviewPage() {
   const { user } = useAuth();
@@ -40,6 +117,11 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [tomorrowStr, setTomorrowStr] = useState('');
+  useEffect(() => {
+    setTomorrowStr(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+  }, []);
 
   // Member-specific data
   const [memberMetrics, setMemberMetrics] = useState<any>(null);
@@ -67,7 +149,8 @@ export default function OverviewPage() {
   const [loanAmount, setLoanAmount] = useState<number>(0);
 
   // Investment Form States
-  const [investmentType, setInvestmentType] = useState<'capital' | 'fixed_deposit'>('capital');
+  const [investmentType, setInvestmentType] = useState<'payday' | 'fixed_deposit'>('payday');
+  const [paydayCycle, setPaydayCycle] = useState<'15' | '30'>('15');
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
   const [fdDuration, setFdDuration] = useState<string>('12'); // months
 
@@ -214,11 +297,11 @@ export default function OverviewPage() {
       setSubmitting(true);
       setModalError(null);
       let res;
-      if (investmentType === 'capital') {
+      if (investmentType === 'payday') {
         res = await api.post('/accounts/share-capital', {
           transaction_type: 'credit',
           amount: amount,
-          remarks: 'Member Share Capital Placement'
+          remarks: `Every Payday Placement (${paydayCycle} Days)`
         });
       } else {
         res = await api.post('/accounts/fixed-deposits', {
@@ -230,6 +313,7 @@ export default function OverviewPage() {
       setSuccessData({
         ...res.data.data,
         type: investmentType,
+        payday_cycle: paydayCycle,
         amount: amount,
         reference_code: `TXN-${Math.floor(100000 + Math.random() * 900000)}`
       });
@@ -280,8 +364,13 @@ export default function OverviewPage() {
 
     return (
       <div className="space-y-8">
+        {/* Header Greeting */}
         <div>
-          <h1 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary mb-2">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Verified Member Session</span>
+          </div>
+          <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
             Welcome back, {memberMetrics?.full_name || user.username}!
           </h1>
           <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
@@ -292,11 +381,29 @@ export default function OverviewPage() {
         {/* Account Balances Section */}
         <div className="space-y-4">
           <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Account Balances</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <KpiCard label="Share Capital" value={formatCurrency(balances.share_capital)} icon={Building} description="Cumulative equity contributions" />
-            <KpiCard label="Fixed Deposit" value={formatCurrency(balances.fixed_deposits)} icon={PiggyBank} description="High-yield timed placements" />
-            <KpiCard label="MyCooP Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Member-backed investment portfolios" />
-            <KpiCard label="Total Net Assets" value={formatCurrency(balances.total_assets)} icon={ShieldCheck} variant="primary" description="Total non-loan asset valuation" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <KpiCard
+              label="Share Capital"
+              value={formatCurrency(balances.share_capital)}
+              icon={Building}
+              href="/dashboard/accounting"
+              description="Cumulative equity contributions"
+            />
+            <KpiCard
+              label="Loan Balance"
+              value={formatCurrency(loans.outstanding_balance)}
+              icon={Banknote}
+              variant="primary"
+              href="/dashboard/loans"
+              description="Total active credit balance due"
+            />
+            <KpiCard
+              label="Active Credit Lines"
+              value={`${loans.active_count} ${loans.active_count === 1 ? 'Active Loan' : 'Active Loans'}`}
+              icon={FileCheck}
+              href="/dashboard/loans"
+              description="Disbursed accounts in good standing"
+            />
           </div>
         </div>
 
@@ -308,7 +415,7 @@ export default function OverviewPage() {
             {/* Apply for Loan */}
             <button
               onClick={openLoanModal}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
             >
               <div className="space-y-1">
                 <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
@@ -334,7 +441,7 @@ export default function OverviewPage() {
                 setSuccessData(null);
                 setModalError(null);
               }}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
             >
               <div className="space-y-1">
                 <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
@@ -360,7 +467,7 @@ export default function OverviewPage() {
                 setSuccessData(null);
                 setModalError(null);
               }}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
             >
               <div className="space-y-1">
                 <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
@@ -381,42 +488,135 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        {/* Active Loan Account Section */}
-        <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-          <div className="space-y-2">
-            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Active Loan Account</h2>
-            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-              Your ongoing active repayment obligations and outstanding balance matrix.
-            </p>
-            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-surface dark:bg-surface-container-high border border-outline-variant text-[11px] font-bold text-neutral-600 dark:text-neutral-400">
-              <CheckCircle2 className="w-3.5 h-3.5 text-secondary" />
-              {loans.active_count} Active Debt Contracts
+        {/* Member Equity & Investment Goal Milestone Card */}
+        <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary">
+                <Award className="w-3.5 h-3.5" />
+                <span>Co-op Equity & Investment Milestone</span>
+              </div>
+              <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white pt-1">
+                Member Investment Goal & Dividend Tracker
+              </h3>
+              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+                Track your target capital placements. Reaching your goal notifies the Coop Office for call/email payout options.
+              </p>
             </div>
+
+            <button
+              onClick={() => {
+                setActiveModal('investment');
+                setWizardStep(1);
+                setSuccessData(null);
+                setModalError(null);
+              }}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer self-start sm:self-auto"
+            >
+              <Coins className="w-4 h-4" />
+              <span>Add Capital Placement +</span>
+            </button>
           </div>
 
-          <div className="p-4 rounded-2xl bg-neutral/5 dark:bg-neutral/10 flex flex-col justify-center">
-            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Original Principal</span>
-            <div className="font-headline text-lg font-extrabold text-on-surface dark:text-white mt-1">
-              {formatCurrency(loans.original_principal)}
-            </div>
-            <span className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-1">Borrowed Loan volume</span>
-          </div>
+          {/* Progress Bar & Target Math */}
+          {(() => {
+            const currentEquity = balances.share_capital || 0;
+            const milestoneTarget = currentEquity < 10000 ? 10000 : currentEquity < 25000 ? 25000 : currentEquity < 50000 ? 50000 : currentEquity < 100000 ? 100000 : (Math.ceil(currentEquity / 50000) + 1) * 50000;
+            const progressPercent = Math.min(100, Math.round((currentEquity / milestoneTarget) * 100));
+            const estAnnualDividend = currentEquity * 0.065;
+            const isGoalReached = progressPercent >= 100;
 
-          <div className="p-4 rounded-2xl bg-tertiary/10 border border-tertiary/20 flex flex-col justify-center">
-            <span className="text-[10px] font-bold text-tertiary uppercase font-label">Outstanding Balance</span>
-            <div className="font-headline text-2xl font-extrabold text-tertiary mt-1">
-              {formatCurrency(loans.outstanding_balance)}
-            </div>
-            <span className="text-[10px] text-tertiary/85 mt-1">Remaining payment principal</span>
-          </div>
+            return (
+              <div className="space-y-5">
+                {/* Progress labels */}
+                <div className="flex justify-between items-end text-xs font-bold">
+                  <div className="space-y-0.5">
+                    <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Accumulated Equity Capital</span>
+                    <div className="font-headline text-lg font-extrabold text-primary dark:text-secondary">
+                      {formatCurrency(currentEquity)}
+                    </div>
+                  </div>
+                  <div className="text-right space-y-0.5">
+                    <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Target Milestone Goal</span>
+                    <div className="font-headline text-base font-bold text-on-surface dark:text-white">
+                      {formatCurrency(milestoneTarget)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Visual Progress Bar */}
+                <div className="relative w-full h-3.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden p-0.5 border border-outline-variant/30">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all duration-1000 ease-out shadow-xs"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+
+                {/* Call/Email Notification Banner when goal is reached or in progress */}
+                {isGoalReached ? (
+                  <div className="p-4 bg-primary/10 border border-primary/30 rounded-2xl flex items-start gap-3 text-xs text-primary dark:text-secondary font-semibold">
+                    <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-primary dark:text-secondary" />
+                    <div>
+                      <strong className="block text-sm font-bold">🎉 Milestone Goal Reached!</strong>
+                      Our Cooperative Officers have been notified. A staff member will reach out via <span className="underline font-extrabold font-mono">Phone Call</span> or <span className="underline font-extrabold font-mono">Email</span> regarding your total investment payout or rollover options.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-neutral-50 dark:bg-surface-container-high/40 border border-outline-variant/50 rounded-2xl flex items-center justify-between flex-wrap gap-3 text-xs text-neutral-600 dark:text-neutral-300">
+                    <div className="flex items-center gap-2">
+                      <PhoneCall className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                      <Mail className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                      <span><strong>Officer Contact Protocol:</strong> Once your investment hits 100%, a staff will call or email you.</span>
+                    </div>
+                    <span className="font-mono text-[11px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/15 px-2.5 py-1 rounded-full">
+                      {100 - progressPercent}% remaining to goal
+                    </span>
+                  </div>
+                )}
+
+                {/* Dynamic Milestone & Annual General Assembly Dividend Highlights */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                      <Target className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Milestone Status</span>
+                      <span className="text-xs font-extrabold text-on-surface dark:text-white">{progressPercent}% Completed</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                      <TrendingUp className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Est. Annual Dividend</span>
+                      <span className="text-xs font-extrabold text-primary dark:text-secondary">{formatCurrency(estAnnualDividend)} / yr</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                      <CalendarDays className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Dividend Payout</span>
+                      <span className="text-xs font-extrabold text-on-surface dark:text-white">Annual General Assembly</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* ======================================================== */}
         {/* TRANSACTIONS MODAL OVERLAYS (ELDERLY ACCESSIBLE DESIGN) */}
         {/* ======================================================== */}
         {activeModal && (
-          <div className="fixed inset-0 bg-neutral-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div key={activeModal} className="fixed inset-0 bg-neutral-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-modal-backdrop">
+            <div key={`${activeModal}-${wizardStep}`} className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-modal-pop">
               {/* Header */}
               <div className="px-6 py-5 border-b border-outline-variant/40 flex justify-between items-center bg-surface-container-low dark:bg-surface-container-high/40">
                 <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white capitalize">
@@ -426,9 +626,10 @@ export default function OverviewPage() {
                 </h3>
                 <button
                   onClick={closeModal}
-                  className="p-1.5 rounded-full hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-colors cursor-pointer"
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  aria-label="Close modal"
                 >
-                  <span className="text-xl font-bold font-mono">&times;</span>
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
@@ -468,9 +669,9 @@ export default function OverviewPage() {
                                   setSelectedProduct(p);
                                   setLoanAmount(parseFloat(p.min_amount));
                                 }}
-                                className={`w-full p-4 rounded-2xl border text-left transition-all ${selectedProduct?.id === p.id
+                                className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer ${selectedProduct?.id === p.id
                                   ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
-                                  : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                                  : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 dark:hover:bg-neutral/10'
                                   }`}
                               >
                                 <div className="flex justify-between items-center">
@@ -607,21 +808,21 @@ export default function OverviewPage() {
                           <div className="grid grid-cols-2 gap-4">
                             <button
                               type="button"
-                              onClick={() => setInvestmentType('capital')}
-                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'capital'
+                              onClick={() => setInvestmentType('payday')}
+                              className={`p-4 rounded-2xl border text-center transition-all cursor-pointer hover:border-primary/40 dark:hover:border-secondary/40 ${investmentType === 'payday'
                                 ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
                                 : 'border-outline-variant/65'
                                 }`}
                             >
                               <Building className="w-6 h-6 mx-auto mb-2 text-neutral-600 dark:text-neutral-300" />
-                              <span className="font-bold text-sm block">Share Capital</span>
-                              <span className="text-[10px] text-neutral-500 block mt-0.5">Coop equity shares</span>
+                              <span className="font-bold text-sm block">Every Payday</span>
+                              <span className="text-[10px] text-neutral-500 block mt-0.5">Payday savings placement</span>
                             </button>
 
                             <button
                               type="button"
                               onClick={() => setInvestmentType('fixed_deposit')}
-                              className={`p-4 rounded-2xl border text-center transition-all ${investmentType === 'fixed_deposit'
+                              className={`p-4 rounded-2xl border text-center transition-all cursor-pointer hover:border-primary/40 dark:hover:border-secondary/40 ${investmentType === 'fixed_deposit'
                                 ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
                                 : 'border-outline-variant/65'
                                 }`}
@@ -632,6 +833,40 @@ export default function OverviewPage() {
                             </button>
                           </div>
                         </div>
+
+                        {/* Every Payday Sub-Category Options */}
+                        {investmentType === 'payday' && (
+                          <div className="space-y-2 p-4 border border-outline-variant/50 rounded-2xl bg-neutral/5">
+                            <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider block">
+                              Select Payday Sub-Category:
+                            </label>
+                            <div className="grid grid-cols-2 gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setPaydayCycle('15')}
+                                className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center cursor-pointer ${paydayCycle === '15'
+                                  ? 'border-primary bg-primary text-white dark:bg-secondary dark:text-neutral-950 font-bold shadow-md'
+                                  : 'border-outline-variant/65 bg-white dark:bg-surface-container-high text-on-surface dark:text-white hover:border-neutral/40'
+                                  }`}
+                              >
+                                <span className="text-sm font-bold">15 Days</span>
+                                <span className="text-[10px] opacity-80 font-normal">Semi-Monthly Payday</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setPaydayCycle('30')}
+                                className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center cursor-pointer ${paydayCycle === '30'
+                                  ? 'border-primary bg-primary text-white dark:bg-secondary dark:text-neutral-950 font-bold shadow-md'
+                                  : 'border-outline-variant/65 bg-white dark:bg-surface-container-high text-on-surface dark:text-white hover:border-neutral/40'
+                                  }`}
+                              >
+                                <span className="text-sm font-bold">30 Days</span>
+                                <span className="text-[10px] opacity-80 font-normal">Monthly Payday</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Amount Input */}
                         <div className="space-y-2">
@@ -654,15 +889,15 @@ export default function OverviewPage() {
                             </div>
                             <div className="space-y-2">
                               <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Duration Term:</label>
-                              <select
+                              <AnimatedSelect
                                 value={fdDuration}
-                                onChange={(e) => setFdDuration(e.target.value)}
-                                className="w-full px-3 py-2 border border-outline-variant/65 rounded-xl bg-transparent focus:outline-none"
-                              >
-                                <option value="6">6 Months Placement</option>
-                                <option value="12">12 Months (1 Year)</option>
-                                <option value="24">24 Months (2 Years)</option>
-                              </select>
+                                onChange={setFdDuration}
+                                options={[
+                                  { value: '6', label: '6 Months Placement' },
+                                  { value: '12', label: '12 Months (1 Year)' },
+                                  { value: '24', label: '24 Months (2 Years)' }
+                                ]}
+                              />
                             </div>
                           </div>
                         )}
@@ -689,7 +924,9 @@ export default function OverviewPage() {
                         <div className="p-5 border border-dashed border-outline-variant rounded-2xl bg-neutral/5 text-left space-y-2.5 max-w-sm mx-auto">
                           <div className="flex justify-between text-xs">
                             <span className="text-neutral-500 font-bold uppercase">Transaction Type:</span>
-                            <span className="font-bold uppercase text-primary">{successData.type === 'capital' ? 'Share Capital' : 'Fixed Deposit'}</span>
+                            <span className="font-bold uppercase text-primary">
+                              {successData.type === 'payday' ? `Every Payday (${successData.payday_cycle || '15'} Days)` : 'Fixed Deposit'}
+                            </span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-neutral-500 font-bold uppercase">Payment Code:</span>
@@ -728,16 +965,16 @@ export default function OverviewPage() {
                         {/* Purpose Selection */}
                         <div className="space-y-2">
                           <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Purpose of Consultation:</label>
-                          <select
+                          <AnimatedSelect
                             value={appointmentPurpose}
-                            onChange={(e) => setAppointmentPurpose(e.target.value)}
-                            className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent focus:outline-none focus:border-primary text-base font-medium"
-                          >
-                            <option value="Loan Application Consultation">Discuss a Loan Application</option>
-                            <option value="Fixed Deposit Account Placement">Open a new Fixed Deposit</option>
-                            <option value="Capital Placement Deposit">Share Capital Deposit</option>
-                            <option value="General Inquiry">General Cooperative Inquiry</option>
-                          </select>
+                            onChange={setAppointmentPurpose}
+                            options={[
+                              { value: 'Loan Application Consultation', label: 'Discuss a Loan Application' },
+                              { value: 'Fixed Deposit Account Placement', label: 'Open a new Fixed Deposit' },
+                              { value: 'Capital Placement Deposit', label: 'Share Capital Deposit' },
+                              { value: 'General Inquiry', label: 'General Cooperative Inquiry' }
+                            ]}
+                          />
                         </div>
 
                         {/* Date Selection */}
@@ -745,7 +982,7 @@ export default function OverviewPage() {
                           <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Select Date:</label>
                           <input
                             type="date"
-                            min={new Date(Date.now() + 86400000).toISOString().split('T')[0]} // Min is tomorrow
+                            min={tomorrowStr} // Min is tomorrow
                             value={appointmentDate}
                             onChange={(e) => setAppointmentDate(e.target.value)}
                             className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent focus:outline-none focus:border-primary text-base font-medium"
@@ -924,55 +1161,103 @@ export default function OverviewPage() {
 
       {/* Operational Status */}
       <div className="space-y-4">
-        <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Operational Status</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Operational Status</h2>
+          <span className="text-xs text-neutral-500 font-semibold hidden sm:inline">Click any card to filter view</span>
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <Users className="w-4 h-4 text-primary dark:text-secondary" />
-              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Total Members</span>
+          {/* Total Members -> Redirect to /dashboard/members */}
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard/members')}
+            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            title="Click to view Members Directory"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Total Members</span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
             <div className="flex items-center gap-2 mt-1.5 text-[10px]">
               <span className="flex items-center gap-0.5 text-green-600"><UserCheck className="w-3 h-3" />{ds.active_members || 0} active</span>
               <span className="flex items-center gap-0.5 text-neutral-500"><UserX className="w-3 h-3" />{ds.inactive_members || 0} inactive</span>
             </div>
-          </div>
+          </button>
 
-          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <Banknote className="w-4 h-4 text-primary dark:text-secondary" />
-              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Active Loans</span>
+          {/* Active Loans -> Redirect to /dashboard/loans?status=disbursed */}
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard/loans?status=disbursed')}
+            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            title="Click to view Active/Disbursed Loans"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Banknote className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Active Loans</span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.disbursed_loans || 0}</div>
-          </div>
+          </button>
 
-          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-4 h-4 text-amber-500" />
-              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Pending Approval</span>
+          {/* Pending Approval -> Redirect to /dashboard/loans?status=pending_approval */}
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard/loans?status=pending_approval')}
+            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-amber-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+            title="Click to view Pending Approval Loans"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Pending Approval</span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className={`font-headline text-xl font-extrabold ${(ds.pending_loans || 0) > 0 ? 'text-amber-500' : 'text-on-surface dark:text-white'}`}>
               {ds.pending_loans || 0}
             </div>
-          </div>
+          </button>
 
-          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
-              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Fully Paid</span>
+          {/* Fully Paid -> Redirect to /dashboard/loans?status=fully_paid */}
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard/loans?status=fully_paid')}
+            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-green-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+            title="Click to view Fully Paid Loans"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Fully Paid</span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className="font-headline text-xl font-extrabold text-green-600 dark:text-green-400">{ds.fully_paid_loans || 0}</div>
-          </div>
+          </button>
 
-          <div className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className="w-4 h-4 text-red-500" />
-              <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Defaulted</span>
+          {/* Defaulted -> Redirect to /dashboard/loans?status=defaulted */}
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard/loans?status=defaulted')}
+            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-red-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+            title="Click to view Defaulted Loans"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Defaulted</span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className={`font-headline text-xl font-extrabold ${(ds.defaulted_loans || 0) > 0 ? 'text-red-500' : 'text-on-surface dark:text-white'}`}>
               {ds.defaulted_loans || 0}
             </div>
-          </div>
+          </button>
         </div>
       </div>
 

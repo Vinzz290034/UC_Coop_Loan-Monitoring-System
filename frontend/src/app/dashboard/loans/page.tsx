@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
+import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { SkeletonTable, SkeletonCard } from '@/components/ui/Skeleton';
 import {
@@ -50,8 +52,11 @@ interface Loan {
   created_at: string;
 }
 
-export default function LoansPage() {
+function LoansPageContent() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get('status');
+
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
   const [activeTab, setActiveTab] = useState<'loans' | 'products'>('loans');
@@ -99,8 +104,14 @@ export default function LoansPage() {
   const [repaySubmitting, setRepaySubmitting] = useState(false);
   const [repayError, setRepayError] = useState<string | null>(null);
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState('');
+  // Filters — pre-populated from URL query if present
+  const [statusFilter, setStatusFilter] = useState(statusParam || '');
+
+  useEffect(() => {
+    if (statusParam !== null && statusParam !== undefined) {
+      setStatusFilter(statusParam);
+    }
+  }, [statusParam]);
 
   const fetchLoans = useCallback(async () => {
     try {
@@ -342,15 +353,9 @@ export default function LoansPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-micro-elevate">
       <div>
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-xs font-extrabold text-neutral-500 hover:text-primary dark:hover:text-secondary transition-all"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to System Dashboard
-        </Link>
+        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
 
       {/* Header and Actions */}
@@ -707,13 +712,14 @@ export default function LoansPage() {
 
       {/* MODAL 1: CREATE LOAN PRODUCT */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
             <button
               onClick={() => setIsProductModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral/10 text-neutral-600 dark:text-neutral-400 transition-colors"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+              aria-label="Close modal"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
             <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-4">Configure Loan Product</h2>
 
@@ -822,13 +828,14 @@ export default function LoansPage() {
 
       {/* MODAL 2: APPLY FOR LOAN */}
       {isApplyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
             <button
               onClick={() => setIsApplyModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral/10 text-neutral-600 dark:text-neutral-400 transition-colors"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+              aria-label="Close modal"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
             <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-4">Apply for Loan</h2>
 
@@ -909,13 +916,14 @@ export default function LoansPage() {
 
       {/* MODAL 3: RECORD REPAYMENT */}
       {isRepaymentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
             <button
               onClick={() => setIsRepaymentModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-neutral/10 text-neutral-600 dark:text-neutral-400 transition-colors"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+              aria-label="Close modal"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
             <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-4">Book Loan Repayment</h2>
 
@@ -1005,5 +1013,13 @@ export default function LoansPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LoansPage() {
+  return (
+    <Suspense fallback={<SkeletonTable rows={5} cols={6} />}>
+      <LoansPageContent />
+    </Suspense>
   );
 }

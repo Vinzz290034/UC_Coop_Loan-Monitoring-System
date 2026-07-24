@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import BackButton from '@/components/BackButton';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import KpiCard from '@/components/charts/KpiCard';
 import {
@@ -29,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { useBreadcrumb } from '@/context/BreadcrumbContext';
+import UserAccessHistoryTable from '@/components/UserAccessHistoryTable';
 
 // ─── Edit User Modal ──────────────────────────────────────────────────────────
 function EditUserModal({
@@ -101,8 +103,8 @@ function EditUserModal({
   if (!isOpen || !userData) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-modal-pop">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-outline-variant/40">
           <div>
@@ -115,9 +117,10 @@ function EditUserModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-neutral-500 hover:bg-neutral/10 transition-colors"
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+            aria-label="Close modal"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -288,8 +291,8 @@ function DeleteConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+      <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-modal-pop">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-tertiary/10 flex items-center justify-center">
             <Trash2 className="w-5 h-5 text-tertiary" />
@@ -460,9 +463,7 @@ export default function UserDetailPage() {
   if (error) {
     return (
       <div className="space-y-4">
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-primary transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
+        <BackButton>Back</BackButton>
         <div className="p-6 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-3xl">
           <h4 className="font-bold flex items-center gap-2"><AlertTriangle className="w-5 h-5" /> Error</h4>
           <p className="text-sm mt-1">{error}</p>
@@ -477,13 +478,7 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back button */}
-      <button
-        onClick={() => router.push('/dashboard/users')}
-        className="flex items-center gap-2 text-sm font-semibold text-neutral-600 dark:text-neutral-400 hover:text-primary dark:hover:text-secondary transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Users
-      </button>
+      <BackButton href="/dashboard/users">Back to Users</BackButton>
 
       {/* User Profile Card */}
       <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm">
@@ -619,6 +614,9 @@ export default function UserDetailPage() {
           </div>
         )}
       </div>
+
+      {/* User Login & Logout History */}
+      <UserAccessHistoryTable userId={userId} title={`${userData.username}'s Login & Logout History`} />
 
       {/* Modals */}
       <EditUserModal

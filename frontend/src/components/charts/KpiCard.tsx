@@ -1,6 +1,5 @@
-'use client';
-
 import React from 'react';
+import Link from 'next/link';
 import { LucideIcon } from 'lucide-react';
 
 interface KpiCardProps {
@@ -13,9 +12,20 @@ interface KpiCardProps {
     isPositive: boolean;
   };
   variant?: 'default' | 'primary' | 'warning' | 'danger';
+  href?: string;
+  onClick?: () => void;
 }
 
-export default function KpiCard({ label, value, icon: Icon, description, trend, variant = 'default' }: KpiCardProps) {
+export default function KpiCard({
+  label,
+  value,
+  icon: Icon,
+  description,
+  trend,
+  variant = 'default',
+  href,
+  onClick
+}: KpiCardProps) {
   const variants = {
     default: {
       card: 'bg-white dark:bg-surface-container-low border border-outline-variant/65',
@@ -40,14 +50,18 @@ export default function KpiCard({ label, value, icon: Icon, description, trend, 
   };
 
   const v = variants[variant];
+  const isInteractive = Boolean(href || onClick);
+  const interactiveClasses = isInteractive
+    ? 'hover:scale-[1.02] hover:shadow-md transition-all cursor-pointer group active:scale-[0.98]'
+    : '';
 
-  return (
-    <div className={`p-6 rounded-3xl shadow-sm ${v.card}`}>
+  const content = (
+    <div className={`p-6 rounded-3xl shadow-sm ${v.card} ${interactiveClasses}`}>
       <div className="flex items-center justify-between mb-4">
         <span className={`text-xs font-bold uppercase font-label ${variant === 'primary' ? 'opacity-90' : 'text-neutral-600 dark:text-neutral-400'}`}>
           {label}
         </span>
-        <div className={`p-2 rounded-xl ${v.icon}`}>
+        <div className={`p-2 rounded-xl ${v.icon} ${isInteractive ? 'group-hover:scale-110 transition-transform' : ''}`}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
@@ -66,4 +80,22 @@ export default function KpiCard({ label, value, icon: Icon, description, trend, 
       )}
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} prefetch={false} className="block no-underline">
+        {content}
+      </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="w-full text-left focus:outline-none">
+        {content}
+      </button>
+    );
+  }
+
+  return content;
 }

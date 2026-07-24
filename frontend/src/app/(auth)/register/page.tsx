@@ -13,12 +13,15 @@ import {
   CheckCircle2,
   UserPlus,
   Mail,
+  Phone,
+  Calendar,
   ShieldCheck,
   ArrowRight,
   RotateCw,
   Info,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import BackButton from '@/components/BackButton';
 import Link from 'next/link';
 
 // ─── Shared animated background (same as login page) ─────────────────────────
@@ -226,13 +229,32 @@ export default function RegisterPage() {
 
   // Step 1 — form fields
   const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [dob, setDob] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // Real-time calculated age from Date of Birth
+  const calculateAgeFromDob = (dobStr: string): number | null => {
+    if (!dobStr) return null;
+    const birthDate = new Date(dobStr);
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let computed = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      computed--;
+    }
+    return computed >= 0 ? computed : null;
+  };
+
+  const computedAge = calculateAgeFromDob(dob);
 
   // Step 2 — OTP
   const [otpValue, setOtpValue] = useState('');
@@ -271,19 +293,55 @@ export default function RegisterPage() {
     setError(null);
 
     if (!firstName || !lastName || !email || !username || !password || !confirmPassword) {
-      setError('Please fill in all fields.');
+      setError('Please fill in all required fields.');
       return;
+    }
+    if (!/^[a-zA-Z\s'-]+$/.test(firstName)) {
+      setError('First Name must contain letters, spaces, hyphens, and apostrophes only.');
+      return;
+    }
+    if (middleName && !/^[a-zA-Z\s'-]+$/.test(middleName)) {
+      setError('Middle Name must contain letters, spaces, hyphens, and apostrophes only.');
+      return;
+    }
+    if (!/^[a-zA-Z\s'-]+$/.test(lastName)) {
+      setError('Last Name must contain letters, spaces, hyphens, and apostrophes only.');
+      return;
+    }
+    if (dob) {
+      const birthDate = new Date(dob);
+      const today = new Date();
+      if (birthDate > today) {
+        setError('Date of Birth cannot be in the future.');
+        return;
+      }
+      if (computedAge !== null && computedAge < 18) {
+        setError('You must be at least 18 years old to register for an account.');
+        return;
+      }
     }
     if (username.length < 3) {
       setError('Username must be at least 3 characters long.');
       return;
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    if (!/^[a-zA-Z]/.test(username)) {
+      setError('Username must begin with a letter.');
+      return;
+    }
+    if (/\s/.test(username)) {
+      setError('Username must be a single word (no spaces).');
+      return;
+    }
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(username)) {
       setError('Username can only contain letters, numbers, and underscores.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+      setError('Password must contain at least one letter and at least one number.');
       return;
     }
     if (password !== confirmPassword) {
@@ -295,7 +353,11 @@ export default function RegisterPage() {
     try {
       const result = await memberRegister({
         first_name: firstName,
+        middle_name: middleName || undefined,
         last_name: lastName,
+        date_of_birth: dob || undefined,
+        age: computedAge ?? undefined,
+        phone: phone || undefined,
         username,
         password,
         email,
@@ -357,13 +419,7 @@ export default function RegisterPage() {
       <AuthBackground />
 
       <header className="absolute top-6 left-6 right-6 flex items-center justify-between z-20">
-        <Link
-          href="/login"
-          className="inline-flex items-center gap-2 px-4 py-2 border-2 border-neutral-300 dark:border-neutral-700 rounded-full text-xs font-extrabold text-on-surface dark:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 shadow-sm"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Login
-        </Link>
+        <BackButton href="/login">Back to Login</BackButton>
         <ThemeToggle />
       </header>
 
@@ -406,7 +462,7 @@ export default function RegisterPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-firstname">
-                      First Name
+                      First Name *
                     </label>
                     <input
                       type="text"
@@ -420,7 +476,7 @@ export default function RegisterPage() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-lastname">
-                      Last Name
+                      Last Name *
                     </label>
                     <input
                       type="text"
@@ -434,10 +490,73 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
+                {/* Middle Name & Date of Birth */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-middlename">
+                      Middle Name
+                    </label>
+                    <input
+                      type="text"
+                      id="reg-middlename"
+                      value={middleName}
+                      onChange={(e) => setMiddleName(e.target.value)}
+                      placeholder="Santos (Optional)"
+                      className="w-full px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-dob">
+                      Date of Birth
+                    </label>
+                    <div className="relative group">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">
+                        <Calendar className="w-4 h-4" />
+                      </span>
+                      <input
+                        type="date"
+                        id="reg-dob"
+                        max={new Date().toISOString().split('T')[0]}
+                        value={dob}
+                        onChange={(e) => setDob(e.target.value)}
+                        className="w-full pl-9 pr-3 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-xs font-semibold text-on-surface dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {computedAge !== null && (
+                  <div className="px-1 text-[11px] font-bold text-primary dark:text-secondary flex items-center gap-1.5">
+                    <span>Calculated Age:</span>
+                    <span className="px-2 py-0.5 rounded-full bg-primary/10 dark:bg-secondary/10 font-mono text-xs">
+                      {computedAge} years old
+                    </span>
+                  </div>
+                )}
+
+                {/* Mobile / Contact Number */}
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-phone">
+                    Mobile/Contact Number
+                  </label>
+                  <div className="relative group">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">
+                      <Phone className="w-5 h-5" />
+                    </span>
+                    <input
+                      type="tel"
+                      id="reg-phone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="09123456789"
+                      className="w-full pl-12 pr-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                    />
+                  </div>
+                </div>
+
                 {/* Email */}
                 <div className="space-y-1.5">
                   <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-email">
-                    Email Address
+                    Email Address *
                   </label>
                   <div className="relative group">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">

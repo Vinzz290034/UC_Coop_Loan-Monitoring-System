@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
+import BackButton from '@/components/BackButton';
 import { SkeletonTable, SkeletonCard } from '@/components/ui/Skeleton';
 import {
   CalendarCheck,
@@ -94,15 +95,9 @@ export default function BillingPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-micro-elevate">
       <div>
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-xs font-extrabold text-neutral-500 hover:text-primary dark:hover:text-secondary transition-all"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to System Dashboard
-        </Link>
+        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
 
       {/* Page Header */}
@@ -117,7 +112,7 @@ export default function BillingPage() {
       <div className="flex border-b border-outline-variant/50">
         <button
           onClick={() => setActiveTab('due')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all ${
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === 'due'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
@@ -127,7 +122,7 @@ export default function BillingPage() {
         </button>
         <button
           onClick={() => setActiveTab('aging')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all ${
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer ${
             activeTab === 'aging'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
@@ -227,35 +222,35 @@ export default function BillingPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-mono">Contract ID</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Inst #</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Remaining Due</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Maturity Date</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Contacts</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Loan Product</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-mono hidden md:table-cell">Contract ID</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Inst #</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Remaining Due</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Maturity Date</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Contacts</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
                     {dueList.map((row: any) => (
                       <tr key={row.schedule_id} className="hover:bg-neutral/5">
-                        <td className="px-6 py-4 font-semibold">
+                        <td className="px-4 sm:px-6 py-4 font-semibold">
                           {row.last_name}, {row.first_name}
                         </td>
-                        <td className="px-6 py-4 text-primary dark:text-secondary font-semibold">{row.product_name}</td>
-                        <td className="px-6 py-4 font-mono font-bold">#{row.loan_id}</td>
-                        <td className="px-6 py-4">Installment #{row.installment_number}</td>
-                        <td className="px-6 py-4 font-bold text-tertiary">
+                        <td className="px-4 sm:px-6 py-4 text-primary dark:text-secondary font-semibold hidden sm:table-cell">{row.product_name}</td>
+                        <td className="px-4 sm:px-6 py-4 font-mono font-bold hidden md:table-cell">#{row.loan_id}</td>
+                        <td className="px-4 sm:px-6 py-4 hidden lg:table-cell">Installment #{row.installment_number}</td>
+                        <td className="px-4 sm:px-6 py-4 font-bold text-tertiary">
                           {formatCurrency(parseFloat(row.amount_remaining))}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 sm:px-6 py-4">
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-neutral-600 dark:text-neutral-400">
                             <Clock className="w-3.5 h-3.5" />
                             {new Date(row.due_date).toLocaleDateString()}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-neutral-600 dark:text-neutral-400">
-                          <div className="flex flex-col gap-0.5 text-[10px]">
+                        <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
+                          <div className="space-y-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
                             {row.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {row.phone}</span>}
                             {row.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {row.email}</span>}
                           </div>

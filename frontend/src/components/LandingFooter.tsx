@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import Link from 'next/link';
 import { Building2, Globe, Mail, Cpu } from 'lucide-react';
@@ -20,10 +18,10 @@ const FOOTER_COLUMNS = [
 export default function LandingFooter({ activeLegal = null }: LandingFooterProps) {
   return (
     <footer className="bg-neutral-50 dark:bg-neutral-950 border-t border-outline-variant/30 dark:border-neutral-800">
-      <div className="max-w-7xl mx-auto px-6 md:px-12 pt-16 pb-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 pt-12 sm:pt-16 pb-10">
 
         {/* ── Main grid ───────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-10 border-b border-outline-variant/20 dark:border-neutral-800 pb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-8 md:gap-10 border-b border-outline-variant/20 dark:border-neutral-800 pb-12">
 
           {/* Brand column */}
           <div className="md:col-span-2 space-y-5">

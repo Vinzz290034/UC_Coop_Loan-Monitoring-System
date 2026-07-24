@@ -8,13 +8,17 @@ export interface User {
   id: number;
   username: string;
   role: 'admin' | 'manager' | 'member';
+  profile_picture_url?: string | null;
   profile?: {
     id: number;
     first_name: string;
     last_name: string;
-    middle_name?: string;
-    email?: string;
-    phone?: string;
+    middle_name?: string | null;
+    age?: number | null;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    date_of_birth?: string | null;
     status: 'active' | 'suspended' | 'inactive';
   } | null;
 }
@@ -22,6 +26,10 @@ export interface User {
 interface RegisterPayload {
   first_name: string;
   last_name: string;
+  middle_name?: string;
+  date_of_birth?: string;
+  age?: number | string;
+  phone?: string;
   username: string;
   password: string;
   email: string;
@@ -34,10 +42,13 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<User>;
   register: (username: string, password: string) => Promise<void>;
   memberRegister: (data: RegisterPayload) => Promise<{ email: string; _dev_otp?: string }>;
-  verifyOtp: (email: string, otp_code: string) => Promise<void>;
-  resendOtp: (email: string) => Promise<{ _dev_otp?: string }>;
+  verifyOtp: (email: string, otp_code: string, purpose?: string) => Promise<any>;
+  resendOtp: (email: string, purpose?: string) => Promise<{ _dev_otp?: string }>;
+  forgotPassword: (email: string) => Promise<{ email: string; _dev_otp?: string }>;
+  resetPassword: (token: string, newPassword: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  updateUser: (updatedFields: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -86,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         '/',
         '/login',
         '/register',
+        '/forgot-password',
         '/terms',
         '/privacy',
         '/about',
@@ -157,9 +169,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Member self-registration — Step 2: verify OTP
-  const verifyOtp = async (email: string, otp_code: string): Promise<void> => {
+  const verifyOtp = async (email: string, otp_code: string, purpose = 'registration'): Promise<any> => {
     try {
-      await api.post('/auth/verify-otp', { email, otp_code });
+      const response = await api.post('/auth/verify-otp', { email, otp_code, purpose });
+      return response.data;
     } catch (error: any) {
       const message = error.response?.data?.error?.message || error.response?.data?.message || 'Verification failed.';
       throw new Error(message);
@@ -167,9 +180,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Resend OTP for pending registration
-  const resendOtp = async (email: string): Promise<{ _dev_otp?: string }> => {
+  const resendOtp = async (email: string, purpose = 'registration'): Promise<{ _dev_otp?: string }> => {
     try {
-      const response = await api.post('/auth/resend-otp', { email });
+      const response = await api.post('/auth/resend-otp', { email, purpose });
       return {
         _dev_otp: response.data._dev_otp,
       };
@@ -179,14 +192,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+  // Initiate password recovery / forgot password
+  const forgotPassword = async (email: string): Promise<{ email: string; _dev_otp?: string }> => {
+    try {
+      const response = await api.post('/auth/forgot-password', { email });
+      return {
+        email: response.data.email,
+        _dev_otp: response.data._dev_otp,
+      };
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.response?.data?.message || 'Failed to initiate password reset.';
+      throw new Error(message);
     }
-    setToken(null);
-    setUser(null);
-    router.push('/login');
+  };
+
+  // Reset password using recovery token
+  const resetPassword = async (token: string, newPassword: string): Promise<void> => {
+    try {
+      await api.post('/auth/reset-password', { token, newPassword });
+    } catch (error: any) {
+      const message = error.response?.data?.error?.message || error.response?.data?.message || 'Failed to reset password.';
+      throw new Error(message);
+    }
+  };
+
+  async function logout() {
+    try {
+      if (token) {
+        await api.post('/auth/logout').catch(() => {});
+      }
+    } catch (err) {
+      // Ignore network errors during logout
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+      setToken(null);
+      setUser(null);
+      router.push('/login');
+    }
+  }
+
+  const updateUser = (updatedFields: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const newUser = { ...prev, ...updatedFields };
+      localStorage.setItem('user', JSON.stringify(newUser));
+      return newUser;
+    });
   };
 
   return (
@@ -200,8 +254,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         memberRegister,
         verifyOtp,
         resendOtp,
+        forgotPassword,
+        resetPassword,
         logout,
         isAuthenticated: !!user,
+        updateUser,
       }}
     >
       {children}
