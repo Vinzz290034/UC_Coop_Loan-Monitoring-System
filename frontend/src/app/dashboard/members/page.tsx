@@ -438,19 +438,19 @@ export default function MembersPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Member Profile</th>
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Age</th>
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden xl:table-cell">Sex / Gender</th>
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden xl:table-cell">Civil Status</th>
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Mobile / Contact</th>
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Email Address</th>
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Join Date</th>
-                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Actions</th>
+                  <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    <th className="px-5 py-3.5">Member Profile</th>
+                    <th className="px-4 py-3.5 text-center">Age</th>
+                    <th className="px-4 py-3.5 hidden xl:table-cell">Sex / Gender</th>
+                    <th className="px-4 py-3.5 hidden xl:table-cell">Civil Status</th>
+                    <th className="px-4 py-3.5 hidden lg:table-cell">Mobile / Contact</th>
+                    <th className="px-4 py-3.5 hidden md:table-cell">Email Address</th>
+                    <th className="px-4 py-3.5">Status</th>
+                    <th className="px-4 py-3.5 hidden sm:table-cell">Join Date</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-outline-variant/40 font-body text-sm text-on-surface dark:text-white/95">
+                <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
                   {currentItems.map((member) => {
                     const isEditingName = editingCell?.memberId === member.id && editingCell?.field === 'name';
                     const isEditingAge = editingCell?.memberId === member.id && editingCell?.field === 'age';
@@ -459,9 +459,9 @@ export default function MembersPage() {
                     const isEditingStatus = editingCell?.memberId === member.id && editingCell?.field === 'status';
 
                     return (
-                      <tr key={member.id} className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
+                      <tr key={member.id} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
                         {/* Member Profile Cell (Name) */}
-                        <td className="px-4 sm:px-6 py-4 relative group">
+                        <td className="px-5 py-3.5 relative group">
                           {isEditingName ? (
                             <div className="p-3 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10 animate-pop">
                               <p className="text-[10px] uppercase font-bold text-primary dark:text-secondary">Edit Full Name</p>
@@ -529,7 +529,7 @@ export default function MembersPage() {
                               className="flex items-center gap-3 cursor-pointer group/cell"
                               title="Double-click or long-press to edit inline"
                             >
-                              <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-primary/10 dark:bg-secondary/10 flex items-center justify-center border border-outline-variant/40">
+                              <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-primary/10 dark:bg-secondary/10 flex items-center justify-center border border-primary/20 dark:border-secondary/20 shadow-xs">
                                 {member.profile_picture_url ? (
                                   <img
                                     src={getAvatarUrl(member.profile_picture_url) || ''}
@@ -542,18 +542,18 @@ export default function MembersPage() {
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                <div className="font-bold text-on-surface dark:text-white group-hover/cell:text-primary dark:group-hover/cell:text-secondary transition-colors">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <div className="font-semibold text-on-surface dark:text-white group-hover/cell:text-primary dark:group-hover/cell:text-secondary transition-colors whitespace-nowrap">
                                   {member.last_name}, {member.first_name} {member.middle_name ? `${member.middle_name}` : ''}
                                 </div>
-                                <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                                <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0" />
                               </div>
                             </div>
                           )}
                         </td>
 
                         {/* Age / DOB Cell */}
-                        <td className="px-4 sm:px-6 py-4 font-semibold text-xs text-neutral-700 dark:text-neutral-300 relative">
+                        <td className="px-4 py-3.5 font-medium text-center relative">
                           {isEditingAge ? (
                             <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
                               <p className="text-[10px] uppercase font-bold text-primary dark:text-secondary">Edit Date of Birth</p>
@@ -565,7 +565,7 @@ export default function MembersPage() {
                                 className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
                               />
                               {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
-                              <div className="flex items-center gap-1 pt-1">
+                              <div className="flex items-center justify-center gap-1 pt-1">
                                 <button
                                   type="button"
                                   onClick={() => setEditingCell(null)}
@@ -599,15 +599,15 @@ export default function MembersPage() {
                                   age: member.age || '',
                                 })
                               }
-                              className="cursor-pointer group/cell flex items-center gap-1.5"
+                              className="cursor-pointer group/cell inline-flex items-center justify-center gap-1"
                               title="Double-click or long-press to edit inline"
                             >
                               {member.age != null ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 font-mono">
+                                <span className="dark:bg-neutral-800 font-mono text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">
                                   {member.age} yrs
                                 </span>
                               ) : (
-                                <span className="text-neutral-400 font-mono">N/A</span>
+                                <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
                               )}
                               <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
                             </div>
@@ -615,7 +615,7 @@ export default function MembersPage() {
                         </td>
 
                         {/* Sex/Gender Cell */}
-                        <td className="px-4 sm:px-6 py-4 hidden xl:table-cell relative font-semibold text-xs text-neutral-700 dark:text-neutral-300">
+                        <td className="px-4 py-3.5 hidden xl:table-cell relative font-medium">
                           {editingCell?.memberId === member.id && editingCell?.field === 'gender' ? (
                             <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
                               <select
@@ -655,14 +655,20 @@ export default function MembersPage() {
                               className="cursor-pointer group/cell flex items-center gap-1.5"
                               title="Double-click or long-press to edit inline"
                             >
-                              <span>{member.gender || <span className="text-neutral-400 font-mono">N/A</span>}</span>
+                              {member.gender ? (
+                                <span className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800/60 font-semibold text-neutral-700 dark:text-neutral-300 text-[11px]">
+                                  {member.gender}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
+                              )}
                               <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
                             </div>
                           )}
                         </td>
 
                         {/* Civil Status Cell */}
-                        <td className="px-4 sm:px-6 py-4 hidden xl:table-cell relative font-semibold text-xs text-neutral-700 dark:text-neutral-300">
+                        <td className="px-4 py-3.5 hidden xl:table-cell relative font-medium">
                           {editingCell?.memberId === member.id && editingCell?.field === 'civil_status' ? (
                             <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
                               <select
@@ -705,14 +711,20 @@ export default function MembersPage() {
                               className="cursor-pointer group/cell flex items-center gap-1.5"
                               title="Double-click or long-press to edit inline"
                             >
-                              <span>{member.civil_status || <span className="text-neutral-400 font-mono">N/A</span>}</span>
+                              {member.civil_status ? (
+                                <span className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800/60 font-semibold text-neutral-700 dark:text-neutral-300 text-[11px]">
+                                  {member.civil_status}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
+                              )}
                               <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
                             </div>
                           )}
                         </td>
 
                         {/* Mobile Cell */}
-                        <td className="px-4 sm:px-6 py-4 hidden lg:table-cell relative">
+                        <td className="px-4 py-3.5 hidden lg:table-cell relative">
                           {isEditingPhone ? (
                             <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
                               <input
@@ -751,12 +763,12 @@ export default function MembersPage() {
                               title="Double-click or long-press to edit inline"
                             >
                               {member.phone ? (
-                                <span className="flex items-center gap-1 text-xs">
-                                  <Phone className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
+                                <span className="flex items-center gap-1.5 font-mono text-[11px] text-neutral-700 dark:text-neutral-300">
+                                  <Phone className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
                                   {member.phone}
                                 </span>
                               ) : (
-                                <span className="text-neutral-400 font-mono text-xs">N/A</span>
+                                <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
                               )}
                               <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
                             </div>
@@ -764,7 +776,7 @@ export default function MembersPage() {
                         </td>
 
                         {/* Email Cell */}
-                        <td className="px-4 sm:px-6 py-4 hidden md:table-cell relative">
+                        <td className="px-4 py-3.5 hidden md:table-cell relative">
                           {isEditingEmail ? (
                             <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
                               <input
@@ -799,24 +811,24 @@ export default function MembersPage() {
                               onDoubleClick={() => handleCellDoubleClick(member.id, 'email', { email: member.email || '' })}
                               onTouchStart={handleTouchStart}
                               onTouchEnd={() => handleTouchEnd(member.id, 'email', { email: member.email || '' })}
-                              className="cursor-pointer group/cell flex items-center gap-1.5"
+                              className="cursor-pointer group/cell flex items-center gap-1.5 min-w-0"
                               title="Double-click or long-press to edit inline"
                             >
                               {member.email ? (
-                                <span className="flex items-center gap-1 text-xs">
-                                  <Mail className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
-                                  {member.email}
+                                <span className="flex items-center gap-1.5 text-[11px] text-neutral-700 dark:text-neutral-300 truncate">
+                                  <Mail className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
+                                  <span className="truncate">{member.email}</span>
                                 </span>
                               ) : (
-                                <span className="text-neutral-400 font-mono text-xs">N/A</span>
+                                <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
                               )}
-                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0" />
                             </div>
                           )}
                         </td>
 
                         {/* Status Cell */}
-                        <td className="px-4 sm:px-6 py-4 relative">
+                        <td className="px-4 py-3.5 relative">
                           {isEditingStatus ? (
                             <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
                               <select
@@ -863,18 +875,18 @@ export default function MembersPage() {
                         </td>
 
                         {/* Join Date Cell */}
-                        <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
-                          <span className="flex items-center gap-1 text-xs text-neutral-600 dark:text-neutral-400">
-                            <Calendar className="w-3.5 h-3.5" />
+                        <td className="px-4 py-3.5 hidden sm:table-cell whitespace-nowrap">
+                          <span className="flex items-center gap-1.5 text-[11px] text-neutral-600 dark:text-neutral-400">
+                            <Calendar className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
                             {new Date(member.created_at).toLocaleDateString()}
                           </span>
                         </td>
 
                         {/* Actions Cell */}
-                        <td className="px-4 sm:px-6 py-4 text-right">
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
                           <Link
                             href={`/dashboard/members/${member.id}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             View Profile
