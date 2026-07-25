@@ -29,6 +29,8 @@ interface Member {
   last_name: string;
   middle_name?: string;
   age?: number;
+  gender?: string;
+  civil_status?: string;
   email?: string;
   phone?: string;
   address?: string;
@@ -58,6 +60,8 @@ export default function MembersPage() {
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [ageInput, setAgeInput] = useState('');
+  const [genderInput, setGenderInput] = useState('');
+  const [civilStatusInput, setCivilStatusInput] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -132,6 +136,8 @@ export default function MembersPage() {
           last_name: targetMember.last_name,
           middle_name: targetMember.middle_name || undefined,
           age: targetMember.age || undefined,
+          gender: targetMember.gender || undefined,
+          civil_status: targetMember.civil_status || undefined,
           email: targetMember.email || undefined,
           phone: targetMember.phone || undefined,
           address: targetMember.address || undefined,
@@ -159,6 +165,10 @@ export default function MembersPage() {
           } else if (inlineData.age) {
             payload.age = parseInt(inlineData.age, 10);
           }
+        } else if (field === 'gender') {
+          payload.gender = inlineData.gender || undefined;
+        } else if (field === 'civil_status') {
+          payload.civil_status = inlineData.civil_status || undefined;
         } else if (field === 'phone') {
           payload.phone = inlineData.phone ? inlineData.phone.trim() : undefined;
         } else if (field === 'email') {
@@ -258,6 +268,8 @@ export default function MembersPage() {
         last_name: lastName,
         middle_name: middleName || undefined,
         age: ageInput ? parseInt(ageInput, 10) : undefined,
+        gender: genderInput || undefined,
+        civil_status: civilStatusInput || undefined,
         email: email || undefined,
         phone: phone || undefined,
         address: address || undefined,
@@ -271,6 +283,8 @@ export default function MembersPage() {
       setLastName('');
       setMiddleName('');
       setAgeInput('');
+      setGenderInput('');
+      setCivilStatusInput('');
       setEmail('');
       setPhone('');
       setAddress('');
@@ -427,6 +441,8 @@ export default function MembersPage() {
                   <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
                     <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Member Profile</th>
                     <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Age</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden xl:table-cell">Sex / Gender</th>
+                    <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden xl:table-cell">Civil Status</th>
                     <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Mobile / Contact</th>
                     <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Email Address</th>
                     <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
@@ -593,6 +609,103 @@ export default function MembersPage() {
                               ) : (
                                 <span className="text-neutral-400 font-mono">N/A</span>
                               )}
+                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Sex/Gender Cell */}
+                        <td className="px-4 sm:px-6 py-4 hidden xl:table-cell relative font-semibold text-xs text-neutral-700 dark:text-neutral-300">
+                          {editingCell?.memberId === member.id && editingCell?.field === 'gender' ? (
+                            <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
+                              <select
+                                value={inlineData.gender || member.gender || ''}
+                                onChange={(e) => setInlineData({ ...inlineData, gender: e.target.value })}
+                                className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                              >
+                                <option value="">Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                              </select>
+                              {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
+                              <div className="flex items-center gap-1 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCell(null)}
+                                  className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={inlineSaving}
+                                  onClick={() => handleSaveInline(member.id, 'gender')}
+                                  className="p-1 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => handleCellSingleClick(member.id)}
+                              onDoubleClick={() => handleCellDoubleClick(member.id, 'gender', { gender: member.gender || '' })}
+                              onTouchStart={handleTouchStart}
+                              onTouchEnd={() => handleTouchEnd(member.id, 'gender', { gender: member.gender || '' })}
+                              className="cursor-pointer group/cell flex items-center gap-1.5"
+                              title="Double-click or long-press to edit inline"
+                            >
+                              <span>{member.gender || <span className="text-neutral-400 font-mono">N/A</span>}</span>
+                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Civil Status Cell */}
+                        <td className="px-4 sm:px-6 py-4 hidden xl:table-cell relative font-semibold text-xs text-neutral-700 dark:text-neutral-300">
+                          {editingCell?.memberId === member.id && editingCell?.field === 'civil_status' ? (
+                            <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
+                              <select
+                                value={inlineData.civil_status || member.civil_status || ''}
+                                onChange={(e) => setInlineData({ ...inlineData, civil_status: e.target.value })}
+                                className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                              >
+                                <option value="">Select Status</option>
+                                <option value="Single">Single</option>
+                                <option value="Married">Married</option>
+                                <option value="Widowed">Widowed</option>
+                                <option value="Separated">Separated</option>
+                                <option value="Divorced">Divorced</option>
+                              </select>
+                              {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
+                              <div className="flex items-center gap-1 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCell(null)}
+                                  className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={inlineSaving}
+                                  onClick={() => handleSaveInline(member.id, 'civil_status')}
+                                  className="p-1 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50"
+                                >
+                                  {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => handleCellSingleClick(member.id)}
+                              onDoubleClick={() => handleCellDoubleClick(member.id, 'civil_status', { civil_status: member.civil_status || '' })}
+                              onTouchStart={handleTouchStart}
+                              onTouchEnd={() => handleTouchEnd(member.id, 'civil_status', { civil_status: member.civil_status || '' })}
+                              className="cursor-pointer group/cell flex items-center gap-1.5"
+                              title="Double-click or long-press to edit inline"
+                            >
+                              <span>{member.civil_status || <span className="text-neutral-400 font-mono">N/A</span>}</span>
                               <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
                             </div>
                           )}
@@ -891,6 +1004,36 @@ export default function MembersPage() {
                     onChange={(e) => setDob(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Sex / Gender</label>
+                  <select
+                    value={genderInput}
+                    onChange={(e) => setGenderInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Civil Status</label>
+                  <select
+                    value={civilStatusInput}
+                    onChange={(e) => setCivilStatusInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  >
+                    <option value="">Select Civil Status</option>
+                    <option value="Single">Single</option>
+                    <option value="Married">Married</option>
+                    <option value="Widowed">Widowed</option>
+                    <option value="Separated">Separated</option>
+                    <option value="Divorced">Divorced</option>
+                  </select>
                 </div>
               </div>
 

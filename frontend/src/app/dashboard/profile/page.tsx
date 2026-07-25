@@ -152,6 +152,8 @@ export default function ProfilePage() {
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [civilStatus, setCivilStatus] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -185,6 +187,8 @@ export default function ProfilePage() {
           setLastName(profile.last_name || '');
           setMiddleName(profile.middle_name || '');
           setAge(profile.age != null ? String(profile.age) : '');
+          setGender(profile.gender || '');
+          setCivilStatus(profile.civil_status || '');
           setEmail(profile.email || '');
           setPhone(profile.phone || '');
           setAddress(profile.address || '');
@@ -216,6 +220,8 @@ export default function ProfilePage() {
         last_name: lastName.trim(),
         middle_name: middleName.trim() || null,
         age: age ? parseInt(age, 10) : null,
+        gender: gender || null,
+        civil_status: civilStatus || null,
         email: email.trim() || null,
         phone: phone.trim() || null,
         address: address.trim() || null,
@@ -499,6 +505,40 @@ export default function ProfilePage() {
                     className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
+                    Sex / Gender
+                  </label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white"
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
+                    Civil Status
+                  </label>
+                  <select
+                    value={civilStatus}
+                    onChange={(e) => setCivilStatus(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white"
+                  >
+                    <option value="">Select Civil Status</option>
+                    <option value="Single">Single</option>
+                    <option value="Married">Married</option>
+                    <option value="Widowed">Widowed</option>
+                    <option value="Separated">Separated</option>
+                    <option value="Divorced">Divorced</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
                     Date of Birth

@@ -99,7 +99,7 @@ export const login = async (req, res, next) => {
     let memberProfile = null;
     if (user.role === 'member') {
       const memberResult = await query(
-        'SELECT id, first_name, last_name, middle_name, age, email, phone, status FROM members WHERE user_id = $1',
+        'SELECT id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, status FROM members WHERE user_id = $1',
         [user.id]
       );
       if (memberResult.rowCount > 0) {
@@ -184,7 +184,7 @@ export const getMe = async (req, res, next) => {
     // Fetch linked member/profile for ALL roles (admin/manager may also have one)
     let memberProfile = null;
     const memberResult = await query(
-      'SELECT id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status FROM members WHERE user_id = $1',
+      'SELECT id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status FROM members WHERE user_id = $1',
       [user.id]
     );
     if (memberResult.rowCount > 0) {
@@ -466,13 +466,27 @@ export const getAllUsers = async (req, res, next) => {
 // @access  Public
 export const memberRegister = async (req, res, next) => {
   try {
-    const { first_name, last_name, middle_name, date_of_birth, age, phone, username, password, email } = req.body;
+    const { first_name, last_name, middle_name, date_of_birth, age, gender, civil_status, phone, username, password, email } = req.body;
 
     // --- Input validation ---
     if (!first_name || !last_name || !username || !password || !email) {
       return res.status(400).json({
         success: false,
         error: { message: 'Please provide first name, last name, username, password, and email.' }
+      });
+    }
+
+    if (gender && !['Male', 'Female'].includes(gender)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid gender option. Must be Male or Female.' }
+      });
+    }
+
+    if (civil_status && !['Single', 'Married', 'Widowed', 'Separated', 'Divorced'].includes(civil_status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid civil status option.' }
       });
     }
 
@@ -624,6 +638,8 @@ export const memberRegister = async (req, res, next) => {
       middle_name: middle_name ? middle_name.trim() : null,
       date_of_birth: date_of_birth || null,
       age: computedAge,
+      gender: gender || null,
+      civil_status: civil_status || null,
       phone: phone ? phone.trim() : null,
       username: username.toLowerCase(),
       password_hash: passwordHash,
@@ -764,8 +780,8 @@ export const verifyRegistrationOtp = async (req, res, next) => {
 
     // 2. Create member profile linked to user
     await client.query(
-      `INSERT INTO members (user_id, first_name, last_name, middle_name, date_of_birth, age, phone, email, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')`,
+      `INSERT INTO members (user_id, first_name, last_name, middle_name, date_of_birth, age, gender, civil_status, phone, email, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')`,
       [
         newUser.id,
         regData.first_name,
@@ -773,6 +789,8 @@ export const verifyRegistrationOtp = async (req, res, next) => {
         regData.middle_name || null,
         regData.date_of_birth || null,
         regData.age ? parseInt(regData.age, 10) : null,
+        regData.gender || null,
+        regData.civil_status || null,
         regData.phone || null,
         regData.email
       ]
@@ -1383,13 +1401,27 @@ export const replyToContactMessage = async (req, res, next) => {
 export const updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status } = req.body;
 
     // Validate required fields
     if (!first_name || !last_name) {
       return res.status(400).json({
         success: false,
         error: { message: 'First name and last name are required.' }
+      });
+    }
+
+    if (gender && !['Male', 'Female'].includes(gender)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid gender option. Must be Male or Female.' }
+      });
+    }
+
+    if (civil_status && !['Single', 'Married', 'Widowed', 'Separated', 'Divorced'].includes(civil_status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid civil status option.' }
       });
     }
 
@@ -1449,9 +1481,11 @@ export const updateProfile = async (req, res, next) => {
            address = $6,
            date_of_birth = $7,
            age = $8,
+           gender = $9,
+           civil_status = $10,
            updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $9
-         RETURNING id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status`,
+         WHERE user_id = $11
+         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status`,
         [
           first_name.trim(),
           last_name.trim(),
@@ -1461,15 +1495,17 @@ export const updateProfile = async (req, res, next) => {
           address?.trim() || null,
           date_of_birth || null,
           computedAge,
+          gender || null,
+          civil_status || null,
           userId
         ]
       );
     } else {
       // Create a new member profile for this user (admin/manager without one)
       result = await query(
-        `INSERT INTO members (user_id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active')
-         RETURNING id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status`,
+        `INSERT INTO members (user_id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
+         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status`,
         [
           userId,
           first_name.trim(),
@@ -1479,7 +1515,9 @@ export const updateProfile = async (req, res, next) => {
           email?.toLowerCase() || null,
           phone?.trim() || null,
           address?.trim() || null,
-          date_of_birth || null
+          date_of_birth || null,
+          gender || null,
+          civil_status || null
         ]
       );
     }

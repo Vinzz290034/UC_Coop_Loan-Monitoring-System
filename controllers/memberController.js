@@ -7,12 +7,26 @@ import { exportToExcel } from '../services/reportExporter.js'; // Ensure this li
 export const createMember = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status, user_id } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, status, user_id } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
         success: false,
         error: { message: 'First name and last name are required.' }
+      });
+    }
+
+    if (gender && !['Male', 'Female'].includes(gender)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid gender option. Must be Male or Female.' }
+      });
+    }
+
+    if (civil_status && !['Single', 'Married', 'Widowed', 'Separated', 'Divorced'].includes(civil_status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid civil status option.' }
       });
     }
 
@@ -35,8 +49,8 @@ export const createMember = async (req, res, next) => {
 
     // 1. Insert Member
     const insertMemberQuery = `
-      INSERT INTO members (first_name, last_name, middle_name, age, email, phone, address, date_of_birth, status, user_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO members (first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, status, user_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `;
     const memberResult = await client.query(insertMemberQuery, [
@@ -48,6 +62,8 @@ export const createMember = async (req, res, next) => {
       phone?.trim() || null,
       address?.trim() || null,
       date_of_birth || null,
+      gender || null,
+      civil_status || null,
       status || 'active',
       user_id || null
     ]);
@@ -116,7 +132,9 @@ export const getAllMembers = async (req, res, next) => {
         m.last_name ILIKE $${paramIndex} OR 
         COALESCE(m.middle_name, '') ILIKE $${paramIndex} OR
         COALESCE(m.email, '') ILIKE $${paramIndex} OR
-        COALESCE(m.phone, '') ILIKE $${paramIndex}
+        COALESCE(m.phone, '') ILIKE $${paramIndex} OR
+        COALESCE(m.gender, '') ILIKE $${paramIndex} OR
+        COALESCE(m.civil_status, '') ILIKE $${paramIndex}
       )`;
       queryParams.push(`%${search}%`);
       paramIndex++;
@@ -231,12 +249,26 @@ export const getMemberById = async (req, res, next) => {
 export const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
         success: false,
         error: { message: 'First name and last name are required.' }
+      });
+    }
+
+    if (gender && !['Male', 'Female'].includes(gender)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid gender option. Must be Male or Female.' }
+      });
+    }
+
+    if (civil_status && !['Single', 'Married', 'Widowed', 'Separated', 'Divorced'].includes(civil_status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid civil status option.' }
       });
     }
 
@@ -256,8 +288,8 @@ export const updateMember = async (req, res, next) => {
 
     const updateQuery = `
       UPDATE members
-      SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $9
+      SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $11
       RETURNING *
     `;
 
@@ -270,6 +302,8 @@ export const updateMember = async (req, res, next) => {
       phone?.trim() || null,
       address?.trim() || null,
       date_of_birth || null,
+      gender || null,
+      civil_status || null,
       id
     ]);
 
@@ -489,7 +523,7 @@ export const exportMembersReport = async (req, res, next) => {
   try {
     const { search, status } = req.query;
 
-    let queryText = 'SELECT id, first_name, middle_name, last_name, age, email, phone, status, created_at FROM members WHERE 1=1';
+    let queryText = 'SELECT id, first_name, middle_name, last_name, age, gender, civil_status, email, phone, status, created_at FROM members WHERE 1=1';
     const queryParams = [];
     let paramIndex = 1;
 
@@ -500,7 +534,7 @@ export const exportMembersReport = async (req, res, next) => {
     }
 
     if (search) {
-      queryText += ` AND (first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR COALESCE(middle_name, '') ILIKE $${paramIndex} OR COALESCE(email, '') ILIKE $${paramIndex} OR COALESCE(phone, '') ILIKE $${paramIndex})`;
+      queryText += ` AND (first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR COALESCE(middle_name, '') ILIKE $${paramIndex} OR COALESCE(email, '') ILIKE $${paramIndex} OR COALESCE(phone, '') ILIKE $${paramIndex} OR COALESCE(gender, '') ILIKE $${paramIndex} OR COALESCE(civil_status, '') ILIKE $${paramIndex})`;
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
@@ -512,6 +546,8 @@ export const exportMembersReport = async (req, res, next) => {
       ...row,
       full_name: `${row.last_name}, ${row.first_name}${row.middle_name ? ' ' + row.middle_name : ''}`,
       age: row.age != null ? row.age : 'N/A',
+      gender: row.gender || 'N/A',
+      civil_status: row.civil_status || 'N/A',
       phone: row.phone || 'N/A',
       email: row.email || 'N/A',
       created_at: row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : 'N/A'
@@ -521,6 +557,8 @@ export const exportMembersReport = async (req, res, next) => {
       { header: 'Member ID', key: 'id', width: 15 },
       { header: 'Full Name', key: 'full_name', width: 28 },
       { header: 'Age', key: 'age', width: 10 },
+      { header: 'Sex / Gender', key: 'gender', width: 15 },
+      { header: 'Civil Status', key: 'civil_status', width: 15 },
       { header: 'Mobile/Contact Number', key: 'phone', width: 22 },
       { header: 'Email Address', key: 'email', width: 25 },
       { header: 'Account Status', key: 'status', width: 15 },

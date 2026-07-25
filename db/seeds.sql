@@ -16,7 +16,7 @@ ON CONFLICT (username) DO NOTHING;
 
 
 -- Seed Member Profile linked to the member user
-INSERT INTO members (id, user_id, first_name, last_name, middle_name, email, phone, address, date_of_birth, status)
+INSERT INTO members (id, user_id, first_name, last_name, middle_name, email, phone, address, date_of_birth, gender, civil_status, status)
 VALUES (
     '44444444-4444-4444-4444-444444444444', 
     '33333333-3333-3333-3333-333333333333', 
@@ -27,6 +27,8 @@ VALUES (
     '+639123456789', 
     '123 Mambaling Street, Cebu City', 
     '1990-01-15', 
+    'Male',
+    'Single',
     'active'
 )
 ON CONFLICT (email) DO NOTHING;

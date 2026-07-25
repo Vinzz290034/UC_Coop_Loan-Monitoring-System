@@ -40,6 +40,8 @@ CREATE TABLE members (
     address TEXT,
     date_of_birth DATE,
     age INT,
+    gender VARCHAR(20) CHECK (gender IN ('Male', 'Female') OR gender IS NULL),
+    civil_status VARCHAR(50) CHECK (civil_status IN ('Single', 'Married', 'Widowed', 'Separated', 'Divorced') OR civil_status IS NULL),
     status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'inactive')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
