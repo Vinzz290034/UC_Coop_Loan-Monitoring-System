@@ -12,11 +12,10 @@ const pool = new Pool({
   port: parseInt(process.env.DB_PORT || '5432', 10),
 });
 
-async function migrate() {
-  console.log('Connecting to database:', process.env.DB_NAME);
+export async function migrateCalendarEvents() {
+  console.log('[Migration] Checking calendar_events table...');
   const client = await pool.connect();
   try {
-    console.log('Creating calendar_events table...');
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS calendar_events (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -33,13 +32,18 @@ async function migrate() {
       CREATE INDEX IF NOT EXISTS idx_calendar_events_type ON calendar_events(type);
     `;
     await client.query(createTableQuery);
-    console.log('calendar_events table created successfully in the PostgreSQL database.');
+    console.log('[Migration] calendar_events table is ready.');
   } catch (error) {
-    console.error('Migration failed:', error);
+    console.error('[Migration] Failed to migrate calendar_events:', error);
+    throw error;
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
-migrate();
+// Allow direct execution
+if (import.meta.url === `file://${process.argv[1]}`) {
+  migrateCalendarEvents()
+    .then(() => pool.end())
+    .catch(() => pool.end());
+}

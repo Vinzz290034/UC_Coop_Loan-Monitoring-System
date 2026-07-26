@@ -176,13 +176,11 @@ export default function SupportPage() {
     }
   };
 
-  // Category options
+  // Category options aligned to team database check constraint
   const categoryOptions = [
     { value: 'general', label: 'General Inquiry' },
-    { value: 'account', label: 'Account Issue' },
-    { value: 'loan', label: 'Loan Concern' },
-    { value: 'billing', label: 'Billing & Payment' },
-    { value: 'technical', label: 'Technical / System Bug' },
+    { value: 'account', label: 'Account Concern' },
+    { value: 'loan', label: 'Loan Inquiry' },
   ];
 
   // Status summary counts

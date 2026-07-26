@@ -138,6 +138,8 @@ export default function MessagesPage() {
     }
   };
 
+  const replyPanelRef = React.useRef<HTMLDivElement>(null);
+
   const handleOpenMessage = async (msg: ContactMessage) => {
     setSelectedMessage(msg);
     setReplyContent('');
@@ -148,6 +150,11 @@ export default function MessagesPage() {
     if (msg.status === 'unread') {
       handleUpdateStatus(msg.id, 'read');
     }
+
+    // Smooth scroll to reply panel on mobile screens
+    setTimeout(() => {
+      replyPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const tabs = [

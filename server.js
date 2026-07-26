@@ -1,10 +1,13 @@
 import app from './app.js';
 import { initRetentionScheduler } from './services/retentionService.js';
+import { runMigrations } from './db/run_migrations.js';
 
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  // Run automated database migrations for schema integrity
+  await runMigrations();
   // Initialize background data retention scheduler (30-day log cleanup)
   initRetentionScheduler();
 });

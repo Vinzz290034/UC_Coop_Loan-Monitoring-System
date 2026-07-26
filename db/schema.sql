@@ -212,13 +212,25 @@ CREATE TABLE appointments (
     member_id UUID NOT NULL REFERENCES members(id) ON DELETE CASCADE,
     purpose VARCHAR(255) NOT NULL,
     appointment_date DATE NOT NULL,
-    time_slot VARCHAR(50) NOT NULL CHECK (time_slot IN ('morning', 'afternoon')),
-    status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled')),
+    time_slot VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 17. Calendar Events Table
+-- 17. Support Tickets Table
+CREATE TABLE support_tickets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    subject VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    category VARCHAR(50) DEFAULT 'general' CHECK (category IN ('loan', 'account', 'general')),
+    status VARCHAR(50) DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 18. Calendar Events Table
 CREATE TABLE calendar_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
@@ -247,5 +259,7 @@ CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_role_target ON notifications(role_target);
 CREATE INDEX idx_notifications_created_at ON notifications(created_at);
 CREATE INDEX idx_appointments_member ON appointments(member_id);
+CREATE INDEX idx_support_tickets_user ON support_tickets(user_id);
+CREATE INDEX idx_support_tickets_status ON support_tickets(status);
 CREATE INDEX idx_calendar_events_date ON calendar_events(event_date);
 CREATE INDEX idx_calendar_events_type ON calendar_events(type);
