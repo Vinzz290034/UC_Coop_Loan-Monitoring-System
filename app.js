@@ -20,6 +20,7 @@ import auditRoutes from './routes/auditRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import calendarRoutes from './routes/calendarRoutes.js';
+import supportRoutes from './routes/supportRoutes.js';
 
 dotenv.config();
 
@@ -92,6 +93,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/support', supportRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
