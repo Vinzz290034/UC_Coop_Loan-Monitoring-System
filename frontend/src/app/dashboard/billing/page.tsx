@@ -5,6 +5,7 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { SkeletonTable, SkeletonCard } from '@/components/ui/Skeleton';
+import LoanBillingLedgerModal from '@/components/billing/LoanBillingLedgerModal';
 import {
   CalendarCheck,
   AlertTriangle,
@@ -45,6 +46,13 @@ export default function BillingPage() {
   const [selectedTranche, setSelectedTranche] = useState<string>('tranche_30');
 
   const [error, setError] = useState<string | null>(null);
+
+  // Loan ledger modal state
+  const [selectedLoan, setSelectedLoan] = useState<{
+    loanId: string | number;
+    borrowerName?: string;
+    productName?: string;
+  } | null>(null);
 
   // Load Installments Due
   const loadDueBilling = useCallback(async () => {
@@ -233,7 +241,15 @@ export default function BillingPage() {
                   </thead>
                   <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
                     {dueList.map((row: any) => (
-                      <tr key={row.schedule_id} className="hover:bg-neutral/5">
+                      <tr
+                        key={row.schedule_id}
+                        className="hover:bg-neutral/5 cursor-pointer"
+                        onClick={() => setSelectedLoan({
+                          loanId: row.loan_id,
+                          borrowerName: `${row.last_name}, ${row.first_name}`,
+                          productName: row.product_name,
+                        })}
+                      >
                         <td className="px-4 sm:px-6 py-4 font-semibold">
                           {row.last_name}, {row.first_name}
                         </td>
@@ -361,7 +377,15 @@ export default function BillingPage() {
                         </tr>
                       ) : (
                         agingData.tranches?.[selectedTranche]?.items?.map((item: any) => (
-                          <tr key={item.loan_id} className="hover:bg-neutral/5">
+                          <tr
+                            key={item.loan_id}
+                            className="hover:bg-neutral/5 cursor-pointer"
+                            onClick={() => setSelectedLoan({
+                              loanId: item.loan_id,
+                              borrowerName: `${item.last_name}, ${item.first_name}`,
+                              productName: item.product_name,
+                            })}
+                          >
                             <td className="px-6 py-3 font-semibold">
                               {item.last_name}, {item.first_name}
                             </td>
@@ -380,6 +404,15 @@ export default function BillingPage() {
             </div>
           )}
         </div>
+      )}
+      {/* Loan Billing Ledger Modal */}
+      {selectedLoan && (
+        <LoanBillingLedgerModal
+          loanId={selectedLoan.loanId}
+          borrowerName={selectedLoan.borrowerName}
+          productName={selectedLoan.productName}
+          onClose={() => setSelectedLoan(null)}
+        />
       )}
     </div>
   );

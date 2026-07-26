@@ -18,6 +18,7 @@ import {
   Shield,
   Building2,
   Calendar,
+  CalendarClock,
   Cpu,
   UserCog,
   ScrollText,
@@ -26,6 +27,7 @@ import {
   Settings,
   Menu,
   X,
+  LifeBuoy,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
@@ -125,6 +127,12 @@ function DashboardLayoutContent({
       allowed: isAdminOrManager,
     },
     {
+      name: 'Appointments',
+      path: '/dashboard/appointments',
+      icon: CalendarClock,
+      allowed: true,
+    },
+    {
       name: 'Reports',
       path: '/dashboard/reports',
       icon: BarChart3,
@@ -135,6 +143,12 @@ function DashboardLayoutContent({
       path: '/dashboard/messages',
       icon: MessageSquare,
       allowed: isAdminOrManager,
+    },
+    {
+      name: 'Support Desk',
+      path: '/dashboard/support',
+      icon: LifeBuoy,
+      allowed: true,
     },
     {
       name: 'Notifications',

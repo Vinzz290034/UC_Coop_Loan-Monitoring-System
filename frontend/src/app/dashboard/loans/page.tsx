@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { SkeletonTable, SkeletonCard } from '@/components/ui/Skeleton';
+import LoanAmortizationCalculator from '@/components/loans/LoanAmortizationCalculator';
 import {
   Banknote,
   Percent,
@@ -59,7 +60,7 @@ function LoansPageContent() {
 
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
-  const [activeTab, setActiveTab] = useState<'loans' | 'products'>('loans');
+  const [activeTab, setActiveTab] = useState<'loans' | 'products' | 'calculator'>('loans');
   const [loans, setLoans] = useState<Loan[]>([]);
   const [products, setProducts] = useState<LoanProduct[]>([]);
   const [members, setMembers] = useState<any[]>([]); // for apply dropdown
@@ -387,10 +388,10 @@ function LoansPageContent() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-outline-variant/50">
+      <div className="flex border-b border-outline-variant/50 overflow-x-auto">
         <button
           onClick={() => setActiveTab('loans')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all ${activeTab === 'loans'
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'loans'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
             }`}
@@ -399,12 +400,21 @@ function LoansPageContent() {
         </button>
         <button
           onClick={() => setActiveTab('products')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all ${activeTab === 'products'
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'products'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
             }`}
         >
           Loan Products Registry
+        </button>
+        <button
+          onClick={() => setActiveTab('calculator')}
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'calculator'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+            }`}
+        >
+          Amortization Calculator
         </button>
       </div>
 
