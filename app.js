@@ -21,6 +21,7 @@ import appointmentRoutes from './routes/appointmentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import calendarRoutes from './routes/calendarRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
+import announcementRoutes from './routes/announcementRoutes.js';
 
 dotenv.config();
 
@@ -94,6 +95,7 @@ app.use('/api/appointments', appointmentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/announcements', announcementRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
