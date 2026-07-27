@@ -7,7 +7,8 @@ import {
   updateMemberStatus,
   deleteMember,
   getMemberDashboardSummary, // Imported summary function
-  exportMembersReport        // Imported exporter function
+  exportMembersReport,        // Imported exporter function
+  updateMemberGoal
 } from '../controllers/memberController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -31,6 +32,7 @@ router.patch('/:id/status', restrictTo('admin', 'manager'), updateMemberStatus);
 
 // Financial Dashboard & Reporting
 router.get('/:id/dashboard-summary', getMemberDashboardSummary);
+router.patch('/:id/milestone-goal', updateMemberGoal);
 // EXPORT ROUTE (Placed above /:id routes to avoid string parsing collisions)
 router.get('/export/excel', restrictTo('admin', 'manager'), exportMembersReport);
 

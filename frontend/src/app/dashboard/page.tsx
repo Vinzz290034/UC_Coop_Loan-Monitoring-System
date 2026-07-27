@@ -44,8 +44,84 @@ import {
   Check,
   X,
   ArrowRight,
+  Pencil,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+
+const LOAN_CATEGORIES = {
+  REGULAR: 'Regular Loans (Salary-based)',
+  MICRO: 'Short-Term / Micro Loans (Quick Release)',
+  PRODUCT: 'Product & Commodity Loans',
+  SPECIAL: 'Special & Assistance Loans',
+};
+
+const getProductCategory = (productName: string) => {
+  const name = productName.toLowerCase();
+  if (name.includes('salary') || name.includes('regular flat')) return LOAN_CATEGORIES.REGULAR;
+  if (name.includes('express') || name.includes('emergency') || name.includes('petty') || name.includes('utility') || name.includes('seasonal') || name.includes('occasion')) return LOAN_CATEGORIES.MICRO;
+  if (name.includes('laptop') || name.includes('electronics') || name.includes('appliances') || name.includes('motorcycle') || name.includes('vehicle') || name.includes('jewelry') || name.includes('commodities') || name.includes('groceries') || name.includes('furniture')) return LOAN_CATEGORIES.PRODUCT;
+  if (name.includes('calamity') || name.includes('mortuary') || name.includes('bereavement') || name.includes('project') || name.includes('entrepreneurial')) return LOAN_CATEGORIES.SPECIAL;
+  return 'Other Loans';
+};
+
+const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
+  'Standard Salary Deduction Loan': {
+    desc: 'Regular salary-based credit line with automatic payroll deduction.',
+    helper: 'Maximum cap is based on your paid-up Share Capital (CBU) balance.'
+  },
+  'Cash Express': {
+    desc: 'Ultra-fast cash release for urgent immediate funding needs.',
+    helper: 'Fixed amount of ₱7,000. Low processing overhead.'
+  },
+  'Emergency Loan': {
+    desc: 'Quick disbursement for medical bills, unexpected repairs, or family emergencies.',
+    helper: 'Fixed amount of ₱5,000. Requires minimal approval time.'
+  },
+  'Micro Advance / Petty Loan': {
+    desc: 'Minor cash advance to bridge short-term personal gaps.',
+    helper: 'Fixed amount of ₱3,000. Due on your next pay period.'
+  },
+  'Utility Bill Loan': {
+    desc: 'Direct payment voucher or advance to settle monthly home electricity, water, or internet bills.',
+    helper: 'Fixed amount of ₱3,000. Paid directly to utility providers.'
+  },
+  'Occasion / Seasonal Loan': {
+    desc: 'Assistance for holiday expenses, school opening tuition, and local traditional celebrations.',
+    helper: 'Maximum cap of ₱10,000. Short-term amortization.'
+  },
+  'Consumer Electronics / Laptop / Computer Loan': {
+    desc: 'Commodity loan for purchasing laptops, desktop PCs, tablets, or smartphones for remote work or online schooling.',
+    helper: '₱5,000 to ₱40,000. Voucher is issued directly to verified retail partners.'
+  },
+  'Appliances & Furniture Loan': {
+    desc: 'Financing for household appliances (refrigerators, washing machines) or home furniture additions.',
+    helper: '₱5,000 to ₱30,000. Low flat interest rates.'
+  },
+  'Motorcycle & Vehicle Loan': {
+    desc: 'Vehicle acquisition loan to purchase motorcycles, tricycles, or personal transport assets.',
+    helper: '₱20,000 to ₱120,000. The vehicle serves as collateral.'
+  },
+  'Jewelry / Valuables Loan': {
+    desc: 'Collateral-backed loan secured against verified physical jewelry and precious metal assets.',
+    helper: '₱5,000 to ₱50,000. Flexible redemption terms.'
+  },
+  'Essential Commodities (Rice & Store Grocery Vouchers)': {
+    desc: 'Voucher lines for cooperative consumer stores to acquire daily rice supplies and basic household groceries.',
+    helper: '₱1,000 to ₱5,000. Interest-free or low processing surcharge.'
+  },
+  'Calamity Loan (Typhoon/Flood/Disaster)': {
+    desc: 'Special low-interest emergency fund for members residing in government-declared calamity areas.',
+    helper: '₱5,000 to ₱20,000. Term-extensions available during active crises.'
+  },
+  'Mortuary / Bereavement Assistance Loan': {
+    desc: 'Immediate financial aid for funeral and bereavement expenses upon the passing of an immediate family member.',
+    helper: '₱5,000 to ₱15,000. Expedited processing within 24 hours.'
+  },
+  'Project / Entrepreneurial Loan': {
+    desc: 'Livelihood capital funding to start or scale micro-enterprises, sari-sari stores, or local agribusiness projects.',
+    helper: '₱10,000 to ₱150,000. Monthly diminishing balance amortization.'
+  }
+};
 
 interface DropdownOption {
   value: string;
@@ -146,13 +222,22 @@ export default function OverviewPage() {
   // Loan Form States
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedLoanCategory, setSelectedLoanCategory] = useState<string>('');
   const [loanAmount, setLoanAmount] = useState<number>(0);
+  const [coMakerName, setCoMakerName] = useState<string>('');
+  const [coMakerPhone, setCoMakerPhone] = useState<string>('');
 
   // Investment Form States
-  const [investmentType, setInvestmentType] = useState<'payday' | 'fixed_deposit'>('payday');
+  const [investmentType, setInvestmentType] = useState<'share_capital' | 'fixed_deposit' | 'payday'>('share_capital');
   const [paydayCycle, setPaydayCycle] = useState<'15' | '30'>('15');
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
   const [fdDuration, setFdDuration] = useState<string>('12'); // months
+  const [paymentMethod, setPaymentMethod] = useState<'gcash' | 'bank_transfer' | 'payroll' | 'otc'>('otc');
+  const [paymentRefNo, setPaymentRefNo] = useState<string>('');
+
+  // Milestone goal editing states
+  const [isEditingGoal, setIsEditingGoal] = useState<boolean>(false);
+  const [newGoalAmount, setNewGoalAmount] = useState<string>('');
 
   // Appointment Form States
   const [appointmentPurpose, setAppointmentPurpose] = useState<string>('Loan Application Consultation');
@@ -253,12 +338,15 @@ export default function OverviewPage() {
       setActiveModal('loan');
       setWizardStep(1);
       setSuccessData(null);
+      setCoMakerName('');
+      setCoMakerPhone('');
       const res = await api.get('/loans/products');
       const activeProducts = res.data.data.filter((p: any) => p.is_active);
       setProducts(activeProducts);
       if (activeProducts.length > 0) {
         setSelectedProduct(activeProducts[0]);
         setLoanAmount(parseFloat(activeProducts[0].min_amount));
+        setSelectedLoanCategory(getProductCategory(activeProducts[0].name));
       }
     } catch (err: any) {
       setModalError('Failed to fetch available loan products. Please try again.');
@@ -274,7 +362,9 @@ export default function OverviewPage() {
       setModalError(null);
       const res = await api.post('/loans', {
         loan_product_id: selectedProduct.id,
-        principal_amount: loanAmount
+        principal_amount: loanAmount,
+        co_maker_name: coMakerName || undefined,
+        co_maker_phone: coMakerPhone || undefined
       });
       setSuccessData(res.data.data);
       setWizardStep(3); // Go to success step
@@ -293,34 +383,60 @@ export default function OverviewPage() {
       return;
     }
 
+    if ((paymentMethod === 'gcash' || paymentMethod === 'bank_transfer') && !paymentRefNo.trim()) {
+      setModalError('Please enter the transaction reference number.');
+      return;
+    }
+
     try {
       setSubmitting(true);
       setModalError(null);
-      let res;
-      if (investmentType === 'payday') {
-        res = await api.post('/accounts/share-capital', {
-          transaction_type: 'credit',
-          amount: amount,
-          remarks: `Every Payday Placement (${paydayCycle} Days)`
-        });
-      } else {
-        res = await api.post('/accounts/fixed-deposits', {
-          principal_amount: amount,
-          interest_rate: 0.05, // 5% default
-          duration_months: parseInt(fdDuration, 10)
-        });
-      }
+      
+      const methodLabel = paymentMethod === 'gcash' ? 'GCash' : paymentMethod === 'bank_transfer' ? 'Bank Transfer' : paymentMethod === 'payroll' ? 'Salary Deduction' : 'Hand-in';
+      const remarksString = `Capital build-up deposit via ${methodLabel}${paymentRefNo ? ' (Ref: ' + paymentRefNo + ')' : ''}`;
+      
+      const res = await api.post('/accounts/share-capital', {
+        transaction_type: 'credit',
+        amount: amount,
+        remarks: remarksString
+      });
+
       setSuccessData({
-        ...res.data.data,
-        type: investmentType,
-        payday_cycle: paydayCycle,
+        ...(res?.data?.data || {}),
+        type: 'share_capital',
         amount: amount,
         reference_code: `TXN-${Math.floor(100000 + Math.random() * 900000)}`
       });
-      setWizardStep(3);
+      setWizardStep(2);
       fetchDashboardData();
     } catch (err: any) {
       setModalError(err.response?.data?.error?.message || 'Failed to initiate investment.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdateGoal = async () => {
+    const goalVal = parseFloat(newGoalAmount);
+    if (isNaN(goalVal) || goalVal <= 0) {
+      alert('Please enter a valid target goal amount.');
+      return;
+    }
+    const memberId = user?.profile?.id;
+    if (!memberId) return;
+
+    try {
+      setSubmitting(true);
+      await api.patch(`/members/${memberId}/milestone-goal`, {
+        investment_goal: goalVal
+      });
+      setMemberMetrics((prev: any) => ({
+        ...prev,
+        investment_goal: goalVal
+      }));
+      setIsEditingGoal(false);
+    } catch (err: any) {
+      alert(err.response?.data?.error?.message || 'Failed to update milestone goal.');
     } finally {
       setSubmitting(false);
     }
@@ -356,6 +472,12 @@ export default function OverviewPage() {
     setModalError(null);
     setInvestmentAmount('');
     setAppointmentDate('');
+    setPaymentRefNo('');
+    setPaymentMethod('otc');
+    setIsEditingGoal(false);
+    setInvestmentType('share_capital');
+    setCoMakerName('');
+    setCoMakerPhone('');
   };
 
   if (user?.role === 'member') {
@@ -448,7 +570,7 @@ export default function OverviewPage() {
                   Initiate Investment
                 </h4>
                 <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                  Add capital or start fixed deposit placement.
+                  Add capital placement to your share equity.
                 </p>
                 <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
                   Proceed &rarr;
@@ -521,7 +643,7 @@ export default function OverviewPage() {
           {/* Progress Bar & Target Math */}
           {(() => {
             const currentEquity = balances.share_capital || 0;
-            const milestoneTarget = currentEquity < 10000 ? 10000 : currentEquity < 25000 ? 25000 : currentEquity < 50000 ? 50000 : currentEquity < 100000 ? 100000 : (Math.ceil(currentEquity / 50000) + 1) * 50000;
+            const milestoneTarget = memberMetrics?.investment_goal || (currentEquity < 10000 ? 10000 : currentEquity < 25000 ? 25000 : currentEquity < 50000 ? 50000 : currentEquity < 100000 ? 100000 : (Math.ceil(currentEquity / 50000) + 1) * 50000);
             const progressPercent = Math.min(100, Math.round((currentEquity / milestoneTarget) * 100));
             const estAnnualDividend = currentEquity * 0.065;
             const isGoalReached = progressPercent >= 100;
@@ -538,8 +660,50 @@ export default function OverviewPage() {
                   </div>
                   <div className="text-right space-y-0.5">
                     <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Target Milestone Goal</span>
-                    <div className="font-headline text-base font-bold text-on-surface dark:text-white">
-                      {formatCurrency(milestoneTarget)}
+                    <div className="flex items-center justify-end gap-1.5 min-h-[28px]">
+                      {isEditingGoal ? (
+                        <div className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-850 px-2 py-0.5 rounded-lg border border-outline-variant/65">
+                          <span className="text-xs text-neutral-500 font-bold">₱</span>
+                          <input
+                            type="number"
+                            value={newGoalAmount}
+                            onChange={(e) => setNewGoalAmount(e.target.value)}
+                            className="w-20 bg-transparent text-xs font-bold focus:outline-none text-right font-mono"
+                            placeholder="e.g. 50000"
+                            autoFocus
+                          />
+                          <button
+                            onClick={handleUpdateGoal}
+                            className="text-primary dark:text-secondary hover:bg-neutral/15 rounded p-0.5 font-bold text-xs"
+                            title="Save Goal"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => setIsEditingGoal(false)}
+                            className="text-neutral-400 hover:bg-neutral/15 rounded p-0.5 font-bold text-xs"
+                            title="Cancel"
+                          >
+                            ✗
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-headline text-base font-bold text-on-surface dark:text-white">
+                            {formatCurrency(milestoneTarget)}
+                          </div>
+                          <button
+                            onClick={() => {
+                              setNewGoalAmount(milestoneTarget.toString());
+                              setIsEditingGoal(true);
+                            }}
+                            className="p-1 text-neutral-400 hover:text-primary dark:text-neutral-500 dark:hover:text-secondary hover:bg-neutral/10 dark:hover:bg-neutral-800 rounded transition-all cursor-pointer"
+                            title="Edit Investment Goal"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -616,7 +780,9 @@ export default function OverviewPage() {
         {/* ======================================================== */}
         {activeModal && (
           <div key={activeModal} className="fixed inset-0 bg-neutral-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-modal-backdrop">
-            <div key={`${activeModal}-${wizardStep}`} className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-modal-pop">
+            <div key={`${activeModal}-${wizardStep}`} className={`bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[95vh] animate-modal-pop ${
+              activeModal === 'loan' ? 'max-w-5xl' : 'max-w-xl'
+            }`}>
               {/* Header */}
               <div className="px-6 py-5 border-b border-outline-variant/40 flex justify-between items-center bg-surface-container-low dark:bg-surface-container-high/40">
                 <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white capitalize">
@@ -656,42 +822,97 @@ export default function OverviewPage() {
 
                     {/* Step 1: Choose Product */}
                     {wizardStep === 1 && (
-                      <div className="space-y-4">
-                        <span className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Select the type of loan you need:</span>
-                        {products.length === 0 ? (
-                          <div className="text-center py-6 text-sm text-neutral-500">No active loan products available.</div>
-                        ) : (
-                          <div className="space-y-3">
-                            {products.map((p) => (
-                              <button
-                                key={p.id}
-                                onClick={() => {
-                                  setSelectedProduct(p);
-                                  setLoanAmount(parseFloat(p.min_amount));
-                                }}
-                                className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer ${selectedProduct?.id === p.id
-                                  ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
-                                  : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 dark:hover:bg-neutral/10'
+                      <div className="space-y-5">
+                        <div className="space-y-2">
+                          <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Select Loan Category:</span>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            {Object.entries(LOAN_CATEGORIES).map(([key, label]) => {
+                              const isActive = selectedLoanCategory === label;
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedLoanCategory(label);
+                                    const filtered = products.filter(p => getProductCategory(p.name) === label);
+                                    if (filtered.length > 0) {
+                                      setSelectedProduct(filtered[0]);
+                                      setLoanAmount(parseFloat(filtered[0].min_amount));
+                                    } else {
+                                      setSelectedProduct(null);
+                                    }
+                                  }}
+                                  className={`p-3 rounded-2xl border text-center transition-all cursor-pointer text-xs font-bold ${
+                                    isActive
+                                      ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
+                                      : 'border-outline-variant/65 text-neutral-600 dark:text-neutral-400 hover:border-neutral/30'
                                   }`}
-                              >
-                                <div className="flex justify-between items-center">
-                                  <span className="font-bold text-on-surface dark:text-white text-base">{p.name}</span>
-                                  <span className="text-xs font-bold bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2.5 py-1 rounded-full uppercase">
-                                    {p.amortization_type.replace('_', ' ')}
-                                  </span>
-                                </div>
-                                <div className="mt-2 text-xs text-neutral-600 dark:text-neutral-400 flex justify-between">
-                                  <span>Interest: <strong className="text-on-surface dark:text-white font-semibold">{(parseFloat(p.interest_rate) * 100).toFixed(1)}%</strong></span>
-                                  <span>Term: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months} months</strong></span>
-                                </div>
-                              </button>
-                            ))}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
                           </div>
-                        )}
+                        </div>
+
+                        {(() => {
+                          const filteredProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
+                          return (
+                            <div className="space-y-3 pt-2">
+                              <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
+                              {filteredProducts.length === 0 ? (
+                                <div className="text-center py-8 text-xs text-neutral-500 italic bg-neutral-50 dark:bg-neutral-900/40 rounded-2xl border border-dashed border-outline-variant/60">
+                                  No active loan products in this category.
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[460px] overflow-y-auto pr-1 pt-1">
+                                  {filteredProducts.map((p) => {
+                                    const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
+                                    const isSelected = selectedProduct?.id === p.id;
+                                    return (
+                                      <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedProduct(p);
+                                          setLoanAmount(parseFloat(p.min_amount));
+                                        }}
+                                        className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                                          isSelected
+                                            ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
+                                            : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 dark:hover:bg-neutral/10'
+                                        }`}
+                                      >
+                                        <div className="flex justify-between items-start">
+                                          <div>
+                                            <span className="font-bold text-on-surface dark:text-white text-sm block">{p.name}</span>
+                                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-normal mt-1">{details.desc}</p>
+                                            {details.helper && (
+                                              <p className="text-[9px] text-primary/70 dark:text-secondary/70 font-semibold mt-0.5">{details.helper}</p>
+                                            )}
+                                          </div>
+                                          <span className="text-[10px] font-bold bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2 py-0.5 rounded-full uppercase whitespace-nowrap">
+                                            {p.amortization_type.replace('_', ' ')}
+                                          </span>
+                                        </div>
+                                        <div className="mt-3.5 pt-2.5 border-t border-outline-variant/30 text-[11px] text-neutral-600 dark:text-neutral-400 flex justify-between">
+                                          <span>Interest: <strong className="text-on-surface dark:text-white font-semibold">{(parseFloat(p.interest_rate) * 100).toFixed(1)}% p.a.</strong></span>
+                                          <span>Term: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months} months</strong></span>
+                                          <span>Range: <strong className="text-on-surface dark:text-white font-semibold">₱{parseFloat(p.min_amount).toLocaleString()} - ₱{parseFloat(p.max_amount).toLocaleString()}</strong></span>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         <button
                           disabled={!selectedProduct}
                           onClick={() => setWizardStep(2)}
-                          className="w-full mt-4 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-base"
+                          className="w-full mt-2 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-base"
                         >
                           Continue to Amount
                         </button>
@@ -699,79 +920,186 @@ export default function OverviewPage() {
                     )}
 
                     {/* Step 2: Amount & Term Slider */}
-                    {wizardStep === 2 && selectedProduct && (
-                      <div className="space-y-6">
-                        <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
-                          <span className="text-xs text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Requested Amortization Principal</span>
-                          <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
-                            {formatCurrency(loanAmount)}
-                          </div>
-                        </div>
+                    {wizardStep === 2 && selectedProduct && (() => {
+                      const shareCapital = memberMetrics?.balances?.share_capital || 0;
+                      const historicalCount = memberMetrics?.loans?.historical_count || 0;
+                      
+                      let borrowLimit = 0;
+                      let multiplierText = '';
+                      let tierName = '';
+                      
+                      if (historicalCount === 0) {
+                        borrowLimit = 0.8 * shareCapital;
+                        multiplierText = '80% (0.8x)';
+                        tierName = '1st Loan (First-Time Borrower)';
+                      } else if (historicalCount === 1) {
+                        borrowLimit = 2.0 * shareCapital;
+                        multiplierText = '200% (2.0x)';
+                        tierName = '2nd Loan (Established Track Record)';
+                      } else {
+                        borrowLimit = 3.0 * shareCapital;
+                        multiplierText = '300% (3.0x)';
+                        tierName = '3rd Loan & Onwards (Maximum Tier)';
+                      }
 
-                        {/* Large Accessible Slider */}
-                        <div className="space-y-2">
-                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400 flex justify-between">
-                            <span>Adjust Amount:</span>
-                            <span>Min: {formatCurrency(parseFloat(selectedProduct.min_amount))}</span>
-                          </label>
-                          <input
-                            type="range"
-                            min={selectedProduct.min_amount}
-                            max={selectedProduct.max_amount}
-                            step="1000"
-                            value={loanAmount}
-                            onChange={(e) => setLoanAmount(parseFloat(e.target.value))}
-                            className="w-full h-3 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-primary dark:accent-secondary"
-                          />
-                          <div className="text-right text-xs font-bold text-neutral-600 dark:text-neutral-400">
-                            Max: {formatCurrency(parseFloat(selectedProduct.max_amount))}
-                          </div>
-                        </div>
+                      // Adjust range max and loan amount if they exceed borrowLimit
+                      const maxProductCap = parseFloat(selectedProduct.max_amount);
+                      const maxSliderCap = Math.min(maxProductCap, borrowLimit);
+                      
+                      // Safeguard current slider value
+                      const currentLoanAmount = Math.min(loanAmount, maxSliderCap);
 
-                        {/* Estimated Repayment Math block */}
-                        <div className="border border-outline-variant/65 rounded-2xl p-4 space-y-2 text-sm bg-surface-container-low">
-                          <h5 className="font-bold text-on-surface dark:text-white border-b border-outline-variant/30 pb-1.5 mb-2">Estimated Monthly Repayments</h5>
-                          <div className="flex justify-between">
-                            <span className="text-neutral-600 dark:text-neutral-400">Loan Product</span>
-                            <span className="font-semibold">{selectedProduct.name}</span>
+                      // Co-maker is required if amount > shareCapital
+                      const coMakerRequired = currentLoanAmount > shareCapital;
+                      
+                      // Submit button validation: if coMakerRequired is true, name is required
+                      const submitDisabled = submitting || (coMakerRequired && !coMakerName.trim());
+
+                      return (
+                        <div className="space-y-6">
+                          {/* Progressive Policy Info banner */}
+                          <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-5 space-y-2.5">
+                            <div className="flex items-center gap-2 font-bold text-sm text-primary dark:text-secondary">
+                              <Info className="w-5 h-5" /> Progressive Loan Policy Overview
+                            </div>
+                            <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                              You are currently categorized under the <strong className="text-on-surface dark:text-white font-bold">{tierName}</strong>. 
+                              Based on your paid-up Share Capital of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>, 
+                              your maximum borrow limit for this loan is capped at <strong className="text-on-surface dark:text-white font-bold">{multiplierText} ({formatCurrency(borrowLimit)})</strong>.
+                            </p>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-neutral-600 dark:text-neutral-400">Amortization Method</span>
-                            <span className="font-semibold uppercase">{selectedProduct.amortization_type.replace('_', ' ')}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-neutral-600 dark:text-neutral-400">Duration Term</span>
-                            <span className="font-semibold">{selectedProduct.term_months} Months</span>
-                          </div>
-                          <div className="flex justify-between pt-2 border-t border-outline-variant/20 font-bold text-base text-primary dark:text-secondary">
-                            <span>Est. Monthly Due</span>
-                            <span>
-                              {formatCurrency(
-                                selectedProduct.amortization_type === 'flat_rate'
-                                  ? (loanAmount + (loanAmount * parseFloat(selectedProduct.interest_rate) * (selectedProduct.term_months / 12))) / selectedProduct.term_months
-                                  : (loanAmount * (parseFloat(selectedProduct.interest_rate) / 12) * Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months)) / (Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months) - 1)
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Left column: Slider and Repayments */}
+                            <div className="space-y-5">
+                              <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
+                                <span className="text-xs text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Requested Amortization Principal</span>
+                                <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
+                                  {formatCurrency(currentLoanAmount)}
+                                </div>
+                              </div>
+
+                              {/* Large Accessible Slider */}
+                              <div className="space-y-2">
+                                <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 flex justify-between">
+                                  <span>Adjust Amount:</span>
+                                  <span>Min: {formatCurrency(parseFloat(selectedProduct.min_amount))}</span>
+                                </label>
+                                <input
+                                  type="range"
+                                  min={selectedProduct.min_amount}
+                                  max={maxSliderCap}
+                                  step="1000"
+                                  value={currentLoanAmount}
+                                  onChange={(e) => setLoanAmount(parseFloat(e.target.value))}
+                                  className="w-full h-3 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-primary dark:accent-secondary"
+                                />
+                                <div className="text-right text-xs font-bold text-neutral-600 dark:text-neutral-400">
+                                  Max Allowed: {formatCurrency(maxSliderCap)}
+                                </div>
+                              </div>
+
+                              {/* Estimated Repayment Math block */}
+                              <div className="border border-outline-variant/65 rounded-2xl p-4 space-y-2 text-sm bg-surface-container-low">
+                                <h5 className="font-bold text-on-surface dark:text-white border-b border-outline-variant/30 pb-1.5 mb-2">Estimated Monthly Repayments</h5>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-neutral-600 dark:text-neutral-400">Loan Product</span>
+                                  <span className="font-semibold">{selectedProduct.name}</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-neutral-600 dark:text-neutral-400">Amortization Method</span>
+                                  <span className="font-semibold uppercase">{selectedProduct.amortization_type.replace('_', ' ')}</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-neutral-600 dark:text-neutral-400">Duration Term</span>
+                                  <span className="font-semibold">{selectedProduct.term_months} Months</span>
+                                </div>
+                                <div className="flex justify-between pt-2 border-t border-outline-variant/20 font-bold text-base text-primary dark:text-secondary">
+                                  <span>Est. Monthly Due</span>
+                                  <span>
+                                    {formatCurrency(
+                                      selectedProduct.amortization_type === 'flat_rate'
+                                        ? (currentLoanAmount + (currentLoanAmount * parseFloat(selectedProduct.interest_rate) * (selectedProduct.term_months / 12))) / selectedProduct.term_months
+                                        : (currentLoanAmount * (parseFloat(selectedProduct.interest_rate) / 12) * Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months)) / (Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months) - 1)
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right column: Co-Maker & Requirements info */}
+                            <div className="space-y-5">
+                              {coMakerRequired ? (
+                                <div className="p-5 border border-amber-500/20 dark:border-amber-400/20 bg-amber-500/5 dark:bg-amber-400/5 rounded-3xl space-y-4">
+                                  <div className="flex items-center gap-2 text-sm font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                                    <Users className="w-5 h-5" /> Co-Maker Required
+                                  </div>
+                                  <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                                    Your requested loan of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(currentLoanAmount)}</strong> exceeds your Share Capital collateral (<strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>). 
+                                    Please supply a co-maker to guarantee the outstanding amount.
+                                  </p>
+                                  <div className="space-y-3 pt-2">
+                                    <div className="space-y-1">
+                                      <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400">Co-Maker Full Name *</label>
+                                      <input
+                                        type="text"
+                                        required
+                                        value={coMakerName}
+                                        onChange={(e) => setCoMakerName(e.target.value)}
+                                        placeholder="Full name of cooperative member"
+                                        className="w-full px-4 py-3 rounded-2xl border border-outline-variant/65 bg-white dark:bg-surface-container-high/40 text-sm text-on-surface dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400">Co-Maker Phone/Contact</label>
+                                      <input
+                                        type="tel"
+                                        value={coMakerPhone}
+                                        onChange={(e) => setCoMakerPhone(e.target.value)}
+                                        placeholder="Mobile phone number"
+                                        className="w-full px-4 py-3 rounded-2xl border border-outline-variant/65 bg-white dark:bg-surface-container-high/40 text-sm text-on-surface dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="p-5 border border-green-500/20 dark:border-green-400/20 bg-green-500/5 dark:bg-green-400/5 rounded-3xl space-y-3 flex flex-col justify-center h-full">
+                                  <div className="flex items-center gap-2 text-sm font-bold text-green-600 dark:text-green-400 uppercase tracking-wide">
+                                    <ShieldCheck className="w-5 h-5" /> Fully Collateralized
+                                  </div>
+                                  <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                                    Your requested loan is fully covered by your current Share Capital of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>.
+                                  </p>
+                                  <p className="text-xs text-neutral-500 dark:text-neutral-500 leading-relaxed italic">
+                                    No co-maker guarantee or additional assets are required for this application.
+                                  </p>
+                                </div>
                               )}
-                            </span>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-4 pt-2 border-t border-outline-variant/30">
+                            <button
+                              type="button"
+                              onClick={() => setWizardStep(1)}
+                              className="flex-1 py-3.5 bg-neutral/10 hover:bg-neutral/15 dark:bg-neutral/20 dark:hover:bg-neutral/25 text-on-surface dark:text-white rounded-2xl font-bold transition-colors cursor-pointer text-center"
+                            >
+                              Back to Categories
+                            </button>
+                            <button
+                              type="button"
+                              disabled={submitDisabled}
+                              onClick={() => {
+                                handleApplyLoan();
+                              }}
+                              className="flex-1 py-3.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center shadow-md"
+                            >
+                              {submitting ? 'Submitting...' : 'Submit Application'}
+                            </button>
                           </div>
                         </div>
-
-                        <div className="flex gap-4">
-                          <button
-                            onClick={() => setWizardStep(1)}
-                            className="flex-1 py-3 bg-neutral/10 hover:bg-neutral/15 dark:bg-neutral/20 dark:hover:bg-neutral/25 text-on-surface dark:text-white rounded-2xl font-bold transition-colors cursor-pointer text-center"
-                          >
-                            Back
-                          </button>
-                          <button
-                            disabled={submitting}
-                            onClick={handleApplyLoan}
-                            className="flex-1 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center"
-                          >
-                            {submitting ? 'Submitting...' : 'Apply Now'}
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Step 3: Success Screen */}
                     {wizardStep === 3 && successData && (
@@ -799,78 +1127,24 @@ export default function OverviewPage() {
                 {/* ----------------- INVESTMENT WIZARD ----------------- */}
                 {activeModal === 'investment' && (
                   <div className="space-y-6">
-                    {/* Step 1 & 2: Forms */}
+                    {/* Step 1: Placement Details & Payment Channel */}
                     {wizardStep === 1 && (
                       <div className="space-y-6">
-                        {/* Type Picker */}
-                        <div className="space-y-2">
-                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Select Asset Portfolio Type:</label>
-                          <div className="grid grid-cols-2 gap-4">
-                            <button
-                              type="button"
-                              onClick={() => setInvestmentType('payday')}
-                              className={`p-4 rounded-2xl border text-center transition-all cursor-pointer hover:border-primary/40 dark:hover:border-secondary/40 ${investmentType === 'payday'
-                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
-                                : 'border-outline-variant/65'
-                                }`}
-                            >
-                              <Building className="w-6 h-6 mx-auto mb-2 text-neutral-600 dark:text-neutral-300" />
-                              <span className="font-bold text-sm block">Every Payday</span>
-                              <span className="text-[10px] text-neutral-500 block mt-0.5">Payday savings placement</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => setInvestmentType('fixed_deposit')}
-                              className={`p-4 rounded-2xl border text-center transition-all cursor-pointer hover:border-primary/40 dark:hover:border-secondary/40 ${investmentType === 'fixed_deposit'
-                                ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/25 dark:ring-secondary/25'
-                                : 'border-outline-variant/65'
-                                }`}
-                            >
-                              <PiggyBank className="w-6 h-6 mx-auto mb-2 text-neutral-600 dark:text-neutral-300" />
-                              <span className="font-bold text-sm block">Fixed Deposit</span>
-                              <span className="text-[10px] text-neutral-500 block mt-0.5">High-yield placements</span>
-                            </button>
+                        {/* Selected Type summary banner */}
+                        <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl text-xs">
+                          <div>
+                            <span className="text-neutral-500 block">Investment Type</span>
+                            <span className="font-bold font-headline text-on-surface dark:text-white capitalize">
+                              Share Capital (Capital Build-Up)
+                            </span>
                           </div>
                         </div>
 
-                        {/* Every Payday Sub-Category Options */}
-                        {investmentType === 'payday' && (
-                          <div className="space-y-2 p-4 border border-outline-variant/50 rounded-2xl bg-neutral/5">
-                            <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider block">
-                              Select Payday Sub-Category:
-                            </label>
-                            <div className="grid grid-cols-2 gap-3">
-                              <button
-                                type="button"
-                                onClick={() => setPaydayCycle('15')}
-                                className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center cursor-pointer ${paydayCycle === '15'
-                                  ? 'border-primary bg-primary text-white dark:bg-secondary dark:text-neutral-950 font-bold shadow-md'
-                                  : 'border-outline-variant/65 bg-white dark:bg-surface-container-high text-on-surface dark:text-white hover:border-neutral/40'
-                                  }`}
-                              >
-                                <span className="text-sm font-bold">15 Days</span>
-                                <span className="text-[10px] opacity-80 font-normal">Semi-Monthly Payday</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setPaydayCycle('30')}
-                                className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center cursor-pointer ${paydayCycle === '30'
-                                  ? 'border-primary bg-primary text-white dark:bg-secondary dark:text-neutral-950 font-bold shadow-md'
-                                  : 'border-outline-variant/65 bg-white dark:bg-surface-container-high text-on-surface dark:text-white hover:border-neutral/40'
-                                  }`}
-                              >
-                                <span className="text-sm font-bold">30 Days</span>
-                                <span className="text-[10px] opacity-80 font-normal">Monthly Payday</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
                         {/* Amount Input */}
                         <div className="space-y-2">
-                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Enter Placement Amount (₱):</label>
+                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
+                            Placement Amount (₱):
+                          </label>
                           <input
                             type="number"
                             placeholder="e.g. 5000"
@@ -880,76 +1154,198 @@ export default function OverviewPage() {
                           />
                         </div>
 
-                        {/* Fixed Deposit extra fields */}
-                        {investmentType === 'fixed_deposit' && (
-                          <div className="space-y-4 p-4 border border-outline-variant/50 rounded-2xl bg-neutral/5">
-                            <div className="space-y-1">
-                              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Rate Yield</label>
-                              <div className="font-bold text-sm">5.0% Per Annum</div>
+                        {/* Payment Channel Options */}
+                        <div className="space-y-3">
+                          <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Select Deposit Channel:</label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentMethod('gcash');
+                                setPaymentRefNo('');
+                              }}
+                              className={`p-3.5 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${paymentMethod === 'gcash'
+                                ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                                : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                                }`}
+                            >
+                              <WalletCards className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                              <div>
+                                <span className="font-bold text-xs block">GCash</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Instant online GCash mobile wallet transfer</span>
+                              </div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentMethod('bank_transfer');
+                                setPaymentRefNo('');
+                              }}
+                              className={`p-3.5 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${paymentMethod === 'bank_transfer'
+                                ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                                : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                                }`}
+                            >
+                              <Building className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                              <div>
+                                <span className="font-bold text-xs block">Bank Transfer</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Direct deposit to BDO Account</span>
+                              </div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentMethod('payroll');
+                                setPaymentRefNo('');
+                              }}
+                              className={`p-3.5 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${paymentMethod === 'payroll'
+                                ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                                : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                                }`}
+                            >
+                              <Lock className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                              <div>
+                                <span className="font-bold text-xs block">Salary Deduction</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Deduct from upcoming payslip</span>
+                              </div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentMethod('otc');
+                                setPaymentRefNo('');
+                              }}
+                              className={`p-3.5 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${paymentMethod === 'otc'
+                                ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                                : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                                }`}
+                            >
+                              <Users className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                              <div>
+                                <span className="font-bold text-xs block">Hand-in</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Hand-in cash to the co-op cashier</span>
+                              </div>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* GCash Details */}
+                        {paymentMethod === 'gcash' && (
+                          <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
+                            <div className="flex justify-between items-center font-bold">
+                              <span>GCash Account Name:</span>
+                              <span className="text-on-surface dark:text-white font-extrabold">Michelle Pable</span>
                             </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Duration Term:</label>
-                              <AnimatedSelect
-                                value={fdDuration}
-                                onChange={setFdDuration}
-                                options={[
-                                  { value: '6', label: '6 Months Placement' },
-                                  { value: '12', label: '12 Months (1 Year)' },
-                                  { value: '24', label: '24 Months (2 Years)' }
-                                ]}
-                              />
+                            <div className="flex justify-between items-center font-bold">
+                              <span>Co-op GCash Number:</span>
+                              <span className="font-mono text-primary dark:text-secondary font-extrabold">09498664041</span>
                             </div>
+                            <input
+                              type="text"
+                              placeholder="Enter GCash Reference No. (e.g. 10029384)"
+                              value={paymentRefNo}
+                              onChange={(e) => setPaymentRefNo(e.target.value)}
+                              className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary"
+                            />
                           </div>
                         )}
 
-                        <button
-                          disabled={submitting || !investmentAmount}
-                          onClick={handleInitiateInvestment}
-                          className="w-full mt-4 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-base"
-                        >
-                          {submitting ? 'Processing...' : 'Submit Placement'}
-                        </button>
+                        {/* Bank Transfer Details */}
+                        {paymentMethod === 'bank_transfer' && (
+                          <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
+                            <div className="flex justify-between items-center font-bold">
+                              <span>BDO Account No:</span>
+                              <span className="font-mono text-primary dark:text-secondary font-extrabold">0012-3456-7890</span>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Enter Bank Deposit/Ref No. (e.g. BDO-98213)"
+                              value={paymentRefNo}
+                              onChange={(e) => setPaymentRefNo(e.target.value)}
+                              className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary"
+                            />
+                          </div>
+                        )}
+
+                        {/* Buttons */}
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            type="button"
+                            onClick={closeModal}
+                            className="flex-1 py-3 bg-neutral/10 hover:bg-neutral/15 dark:bg-neutral/20 dark:hover:bg-neutral/25 text-on-surface dark:text-white rounded-2xl font-bold transition-colors cursor-pointer text-center text-sm"
+                          >
+                            Cancel
+                          </button>
+
+                          <button
+                            disabled={submitting || !investmentAmount}
+                            onClick={handleInitiateInvestment}
+                            className="flex-1 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-sm shadow-md"
+                          >
+                            {submitting ? 'Processing...' : 'Confirm Capital Placement'}
+                          </button>
+                        </div>
                       </div>
                     )}
 
-                    {/* Step 3: Success Screen with payment reference instruction */}
-                    {wizardStep === 3 && successData && (
+                    {/* Step 2: Success Screen */}
+                    {wizardStep === 2 && successData && (
                       <div className="space-y-5 text-center py-2">
                         <div className="w-16 h-16 bg-primary/20 dark:bg-secondary/20 text-primary dark:text-secondary rounded-full flex items-center justify-center mx-auto mb-2 text-2xl font-bold">
                           ✓
                         </div>
-                        <h4 className="font-headline font-bold text-xl text-on-surface dark:text-white">Transaction Requested!</h4>
+                        <h4 className="font-headline font-bold text-xl text-on-surface dark:text-white">Capital Placement Submitted!</h4>
 
                         {/* Reference Ticket info */}
                         <div className="p-5 border border-dashed border-outline-variant rounded-2xl bg-neutral/5 text-left space-y-2.5 max-w-sm mx-auto">
                           <div className="flex justify-between text-xs">
-                            <span className="text-neutral-500 font-bold uppercase">Transaction Type:</span>
-                            <span className="font-bold uppercase text-primary">
-                              {successData.type === 'payday' ? `Every Payday (${successData.payday_cycle || '15'} Days)` : 'Fixed Deposit'}
+                            <span className="text-neutral-500 font-bold uppercase">Placement Type:</span>
+                            <span className="font-bold uppercase text-primary dark:text-secondary">
+                              Share Capital (CBU)
                             </span>
                           </div>
                           <div className="flex justify-between text-xs">
-                            <span className="text-neutral-500 font-bold uppercase">Payment Code:</span>
-                            <span className="font-mono font-bold text-sm tracking-wider">{successData.reference_code}</span>
+                            <span className="text-neutral-500 font-bold uppercase">Payment Channel:</span>
+                            <span className="font-bold uppercase text-on-surface dark:text-white">
+                              {paymentMethod === 'gcash' ? 'GCash' : paymentMethod === 'bank_transfer' ? 'Bank Transfer' : paymentMethod === 'payroll' ? 'Salary Deduction' : 'Hand-in'}
+                            </span>
                           </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-neutral-500 font-bold uppercase">Reference Code:</span>
+                            <span className="font-mono font-bold text-sm tracking-wider text-on-surface dark:text-white">{successData.reference_code}</span>
+                          </div>
+                          {paymentRefNo && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-neutral-500 font-bold uppercase">Payment Ref No:</span>
+                              <span className="font-mono font-bold text-xs text-on-surface dark:text-white">{paymentRefNo}</span>
+                            </div>
+                          )}
                           <div className="flex justify-between text-xs pt-1 border-t border-outline-variant/30">
-                            <span className="text-neutral-500 font-bold uppercase">Amount Due:</span>
-                            <span className="font-extrabold text-base text-on-surface dark:text-white">{formatCurrency(successData.amount)}</span>
+                            <span className="text-neutral-500 font-bold uppercase">Amount Credited:</span>
+                            <span className="font-extrabold text-base text-primary dark:text-secondary">{formatCurrency(successData.amount)}</span>
                           </div>
                         </div>
 
-                        <div className="text-xs text-neutral-600 dark:text-neutral-400 space-y-1 max-w-md mx-auto pt-2">
-                          <p className="font-semibold text-on-surface dark:text-white">How to settle your deposit:</p>
-                          <p>1. Present this payment code over-the-counter to the cooperative cashier.</p>
-                          <p>2. Keep your transaction receipt until the cashier updates your ledger balance.</p>
+                        <div className="text-xs text-neutral-600 dark:text-neutral-400 space-y-1.5 max-w-md mx-auto pt-2">
+                          <p className="font-semibold text-on-surface dark:text-white">What happens next?</p>
+                          {paymentMethod === 'payroll' ? (
+                            <p>Our payroll administrator will reflect this deduction on your upcoming payroll slip. Once validated, your ledger balance will be credited.</p>
+                          ) : paymentMethod === 'otc' ? (
+                            <p>Hand-in your cash payment and present the Reference Code <strong>{successData.reference_code}</strong> to the cooperative cashier to settle your payment.</p>
+                          ) : (
+                            <p>Our cooperative admin will verify your reference code <strong>{paymentRefNo}</strong>. Your Share Capital & Dividend tracker will update once confirmed.</p>
+                          )}
                         </div>
 
                         <div className="pt-4">
                           <button
                             onClick={closeModal}
-                            className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer"
+                            className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer text-sm"
                           >
-                            Finish
+                            Done
                           </button>
                         </div>
                       </div>
@@ -1090,21 +1486,13 @@ export default function OverviewPage() {
         <h2 className="font-headline text-base font-bold text-on-surface dark:text-white flex items-center gap-2">
           <span className="text-lg"></span> Administrative Actions Quick-Desk
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <button
             onClick={() => router.push('/dashboard/members')}
             className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
           >
             <UserIcon className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
             <span className="font-body text-xs font-bold text-on-surface dark:text-white">Register Member</span>
-          </button>
-
-          <button
-            onClick={() => router.push('/dashboard/loans')}
-            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
-          >
-            <PlusCircle className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
-            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Configure Product</span>
           </button>
 
           <button
@@ -1165,7 +1553,7 @@ export default function OverviewPage() {
           <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Operational Status</h2>
           <span className="text-xs text-neutral-500 font-semibold hidden sm:inline">Click any card to filter view</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {/* Total Members -> Redirect to /dashboard/members */}
           <button
             type="button"
@@ -1223,23 +1611,6 @@ export default function OverviewPage() {
             </div>
           </button>
 
-          {/* Fully Paid -> Redirect to /dashboard/loans?status=fully_paid */}
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard/loans?status=fully_paid')}
-            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-green-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-green-500/20"
-            title="Click to view Fully Paid Loans"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-500 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Fully Paid</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="font-headline text-xl font-extrabold text-green-600 dark:text-green-400">{ds.fully_paid_loans || 0}</div>
-          </button>
-
           {/* Defaulted -> Redirect to /dashboard/loans?status=defaulted */}
           <button
             type="button"
@@ -1262,24 +1633,12 @@ export default function OverviewPage() {
       </div>
 
       {/* Financial Assets */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <KpiCard
           label="Total Share Capital"
           value={formatCurrency(ds.total_share_capital)}
           icon={Building}
           description="Combined member equity contributions"
-        />
-        <KpiCard
-          label="Active Fixed Deposits"
-          value={formatCurrency(ds.total_active_fixed_deposits)}
-          icon={PiggyBank}
-          description="Timed deposit placements"
-        />
-        <KpiCard
-          label="Active Investments"
-          value={formatCurrency(ds.total_active_investments)}
-          icon={Coins}
-          description="Member-backed investment portfolios"
         />
       </div>
 

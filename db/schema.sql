@@ -135,6 +135,8 @@ CREATE TABLE loans (
     term_months INT NOT NULL CHECK (term_months > 0),
     amortization_type VARCHAR(50) NOT NULL CHECK (amortization_type IN ('flat_rate', 'diminishing_balance')),
     status VARCHAR(50) NOT NULL DEFAULT 'pending_approval' CHECK (status IN ('pending_approval', 'approved', 'disbursed', 'fully_paid', 'defaulted')),
+    co_maker_name VARCHAR(150) DEFAULT NULL,
+    co_maker_phone VARCHAR(50) DEFAULT NULL,
     disbursed_at TIMESTAMP WITH TIME ZONE,
     maturity_date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

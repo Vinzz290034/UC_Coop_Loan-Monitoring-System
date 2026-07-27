@@ -36,11 +36,15 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('notification_prefs');
-      if (saved) {
-        const prefs = JSON.parse(saved);
-        setEmailNotifications(prefs.email ?? true);
-        setInAppNotifications(prefs.inApp ?? true);
+      try {
+        const saved = localStorage.getItem('notification_prefs');
+        if (saved) {
+          const prefs = JSON.parse(saved);
+          setEmailNotifications(prefs.email ?? true);
+          setInAppNotifications(prefs.inApp ?? true);
+        }
+      } catch (e) {
+        console.error('Failed to parse notification preferences', e);
       }
     }
   }, []);

@@ -63,7 +63,7 @@ router.get('/access-history', protect, getUserAccessHistory);
 router.post('/register', protect, restrictTo('admin', 'manager'), register);
 
 // Manage contact messages (inquiries)
-router.get('/contact-messages', protect, restrictTo('admin', 'manager'), getContactMessages);
+router.get('/contact-messages', protect, restrictTo('admin', 'manager', 'member'), getContactMessages);
 router.put('/contact-messages/:id', protect, restrictTo('admin', 'manager'), updateContactMessageStatus);
 router.post('/contact-messages/:id/reply', protect, restrictTo('admin', 'manager'), replyToContactMessage);
 

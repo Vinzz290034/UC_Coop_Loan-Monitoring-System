@@ -423,7 +423,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
     }
 
     // Verify member exists first
-    const memberCheck = await query('SELECT first_name, last_name, status FROM members WHERE id = $1', [id]);
+    const memberCheck = await query('SELECT first_name, last_name, status, investment_goal FROM members WHERE id = $1', [id]);
     if (memberCheck.rowCount === 0) {
       return res.status(404).json({
         success: false,
@@ -446,6 +446,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         -- Outstanding Active Loans Summary
         COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status = 'disbursed'), 0) as active_loans_count,
         COALESCE((SELECT SUM(principal_amount) FROM loans WHERE member_id = $1 AND status = 'disbursed'), 0) as original_loan_principal,
+        COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status IN ('approved', 'disbursed', 'fully_paid', 'defaulted')), 0) as historical_loans_count,
         
         -- Remaining Outstanding Principal
         COALESCE(
@@ -464,6 +465,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         member_id: id,
         full_name: `${memberCheck.rows[0].first_name} ${memberCheck.rows[0].last_name}`,
         profile_status: memberCheck.rows[0].status,
+        investment_goal: parseFloat(memberCheck.rows[0].investment_goal || 50000.00),
         balances: {
           share_capital: parseFloat(metrics.share_capital_balance),
           fixed_deposits: parseFloat(metrics.fixed_deposit_balance),
@@ -472,6 +474,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         },
         loans: {
           active_count: parseInt(metrics.active_loans_count, 10),
+          historical_count: parseInt(metrics.historical_loans_count, 10),
           original_principal: parseFloat(metrics.original_loan_principal),
           outstanding_balance: parseFloat(metrics.outstanding_loan_balance)
         }
@@ -534,6 +537,56 @@ export const exportMembersReport = async (req, res, next) => {
       columns,
       formattedMembers
     );
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update investment milestone goal for a member
+// @route   PATCH /api/members/:id/milestone-goal
+// @access  Protected (Admin, Manager, Member-Owner)
+export const updateMemberGoal = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { investment_goal } = req.body;
+
+    if (investment_goal === undefined || isNaN(parseFloat(investment_goal)) || parseFloat(investment_goal) <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide a valid investment goal amount.' }
+      });
+    }
+
+    // RBAC Check: Members can only update their own goal
+    if (req.user.role === 'member') {
+      const ownCheck = await query('SELECT id FROM members WHERE user_id = $1', [req.user.id]);
+      if (ownCheck.rowCount === 0 || ownCheck.rows[0].id !== id) {
+        return res.status(403).json({
+          success: false,
+          error: { message: 'You are not authorized to update this investment goal.' }
+        });
+      }
+    }
+
+    const result = await query(
+      'UPDATE members SET investment_goal = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING investment_goal',
+      [parseFloat(investment_goal), id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Member profile not found.' }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Investment milestone goal updated successfully.',
+      data: {
+        investment_goal: parseFloat(result.rows[0].investment_goal)
+      }
+    });
   } catch (error) {
     next(error);
   }

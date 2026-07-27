@@ -1,24 +1,19 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { SkeletonTable, SkeletonCard } from '@/components/ui/Skeleton';
 import {
-  CalendarCheck,
   AlertTriangle,
   ChevronRight,
-  TrendingDown,
+  CalendarCheck,
   Phone,
   Mail,
-  User,
   Clock,
-  Search,
   Filter,
-  DollarSign,
-  ArrowLeft
 } from 'lucide-react';
+
 
 export default function BillingPage() {
   const [activeTab, setActiveTab] = useState<'due' | 'aging'>('due');
@@ -45,6 +40,7 @@ export default function BillingPage() {
   const [selectedTranche, setSelectedTranche] = useState<string>('tranche_30');
 
   const [error, setError] = useState<string | null>(null);
+
 
   // Load Installments Due
   const loadDueBilling = useCallback(async () => {
@@ -87,6 +83,7 @@ export default function BillingPage() {
     }
   }, [activeTab, loadDueBilling, loadAgingReport]);
 
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
@@ -95,17 +92,20 @@ export default function BillingPage() {
   };
 
   return (
-    <div className="space-y-6 animate-micro-elevate">
+    <>
+      <div className="space-y-6 animate-micro-elevate">
       <div>
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
 
       {/* Page Header */}
-      <div>
-        <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white">Billing & Collection Desk</h1>
-        <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-          Monitor chronological payments falling due and track capital risk aging tranches.
-        </p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white">Billing & Collection Desk</h1>
+          <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+            Monitor chronological payments falling due and track capital risk aging tranches.
+          </p>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -305,10 +305,38 @@ export default function BillingPage() {
               {/* Tranche Cards selectors */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { key: 'tranche_30', color: 'border-yellow-400 text-yellow-600' },
-                  { key: 'tranche_60', color: 'border-orange-400 text-orange-600' },
-                  { key: 'tranche_90', color: 'border-amber-600 text-amber-700' },
-                  { key: 'tranche_90_plus', color: 'border-tertiary text-tertiary bg-tertiary/5' }
+                  {
+                    key: 'tranche_30',
+                    border: 'border-primary/50',
+                    text: 'text-primary dark:text-secondary',
+                    bg: 'bg-primary/5 dark:bg-secondary/5',
+                    ring: 'ring-primary dark:ring-secondary',
+                    dot: 'bg-primary dark:bg-secondary'
+                  },
+                  {
+                    key: 'tranche_60',
+                    border: 'border-sky-400/60',
+                    text: 'text-sky-600 dark:text-sky-400',
+                    bg: 'bg-sky-50 dark:bg-sky-900/10',
+                    ring: 'ring-sky-500',
+                    dot: 'bg-sky-500'
+                  },
+                  {
+                    key: 'tranche_90',
+                    border: 'border-orange-400/60',
+                    text: 'text-orange-600 dark:text-orange-400',
+                    bg: 'bg-orange-50 dark:bg-orange-900/10',
+                    ring: 'ring-orange-500',
+                    dot: 'bg-orange-500'
+                  },
+                  {
+                    key: 'tranche_90_plus',
+                    border: 'border-tertiary/60',
+                    text: 'text-tertiary',
+                    bg: 'bg-tertiary/5',
+                    ring: 'ring-tertiary',
+                    dot: 'bg-tertiary'
+                  }
                 ].map((trancheObj) => {
                   const tData = agingData.tranches?.[trancheObj.key] || { label: '', count: 0, balance: 0 };
                   const isSelected = selectedTranche === trancheObj.key;
@@ -316,19 +344,22 @@ export default function BillingPage() {
                     <button
                       key={trancheObj.key}
                       onClick={() => setSelectedTranche(trancheObj.key)}
-                      className={`p-5 rounded-3xl border-2 text-left transition-all active:scale-98 shadow-sm flex flex-col justify-between ${trancheObj.color} ${
+                      className={`p-5 rounded-3xl border-2 text-left transition-all active:scale-[0.98] shadow-sm flex flex-col justify-between ${trancheObj.border} ${trancheObj.bg} ${
                         isSelected
-                          ? 'ring-2 ring-primary ring-offset-2 dark:ring-offset-neutral-900 border-opacity-100 scale-102 bg-white dark:bg-surface-container-high'
-                          : 'border-opacity-30 opacity-70 bg-white dark:bg-surface-container-low hover:opacity-100'
+                          ? `ring-2 ${trancheObj.ring} ring-offset-2 dark:ring-offset-neutral-900 scale-[1.02]`
+                          : 'opacity-70 hover:opacity-100 bg-white dark:bg-surface-container-low'
                       }`}
                     >
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 font-label">{tData.label}</span>
-                        <h4 className="font-headline text-xl font-extrabold mt-1">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className={`w-1.5 h-1.5 rounded-full ${trancheObj.dot}`} />
+                          <span className="text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-400 font-label">{tData.label}</span>
+                        </div>
+                        <h4 className={`font-headline text-xl font-extrabold mt-1 ${trancheObj.text}`}>
                           {formatCurrency(tData.balance)}
                         </h4>
                       </div>
-                      <div className="flex items-center justify-between mt-4">
+                      <div className={`flex items-center justify-between mt-4 ${trancheObj.text}`}>
                         <span className="text-xs font-bold font-body">{tData.count} Contracts</span>
                         <ChevronRight className="w-4 h-4" />
                       </div>
@@ -381,6 +412,7 @@ export default function BillingPage() {
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -109,6 +109,20 @@ export const applyForLoan = async (req, res, next) => {
       });
     }
 
+    // Verify member has no existing active or pending loans
+    const activeLoanCheck = await query(
+      "SELECT id, status FROM loans WHERE member_id = $1 AND status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')",
+      [member_id]
+    );
+    if (activeLoanCheck.rowCount > 0) {
+      const activeStatus = activeLoanCheck.rows[0].status;
+      const statusFriendly = activeStatus.replace('_', ' ');
+      return res.status(400).json({
+        success: false,
+        error: { message: `This member cannot apply for a new loan because they have an existing loan that is "${statusFriendly}".` }
+      });
+    }
+
     // Verify loan product terms
     const product = await query('SELECT * FROM loan_products WHERE id = $1 AND is_active = true', [loan_product_id]);
     if (product.rowCount === 0) {
@@ -130,9 +144,71 @@ export const applyForLoan = async (req, res, next) => {
       });
     }
 
+    // Progressive Loan Policy Verification
+    // 1. Fetch current Share Capital balance
+    const shareCapitalQuery = `
+      SELECT balance_after 
+      FROM share_capital_transactions 
+      WHERE member_id = $1 AND status = 'completed' 
+      ORDER BY transaction_date DESC LIMIT 1
+    `;
+    const shareCapitalResult = await query(shareCapitalQuery, [member_id]);
+    const shareCapital = shareCapitalResult.rowCount > 0 ? parseFloat(shareCapitalResult.rows[0].balance_after) : 0.0;
+
+    // 2. Fetch approved historical loans count
+    const historicalLoansQuery = `
+      SELECT COUNT(*) as count 
+      FROM loans 
+      WHERE member_id = $1 AND status IN ('approved', 'disbursed', 'fully_paid', 'defaulted')
+    `;
+    const historicalLoansResult = await query(historicalLoansQuery, [member_id]);
+    const historicalCount = parseInt(historicalLoansResult.rows[0].count, 10);
+
+    // 3. Compute limits
+    let borrowLimit = 0.0;
+    let multiplierText = '';
+    let tierName = '';
+    
+    if (historicalCount === 0) {
+      borrowLimit = 0.8 * shareCapital;
+      multiplierText = '80% (0.8x)';
+      tierName = '1st Loan (First-Time Borrower)';
+    } else if (historicalCount === 1) {
+      borrowLimit = 2.0 * shareCapital;
+      multiplierText = '200% (2.0x)';
+      tierName = '2nd Loan (Established Track Record)';
+    } else {
+      borrowLimit = 3.0 * shareCapital;
+      multiplierText = '300% (3.0x)';
+      tierName = '3rd Loan & Onwards (Maximum Tier)';
+    }
+
+    if (amount > borrowLimit) {
+      return res.status(400).json({
+        success: false,
+        error: { 
+          message: `Your borrowing limit is capped at ₱${borrowLimit.toLocaleString()} based on the Progressive Loan Policy. As a member in the "${tierName}" tier, your maximum borrowing limit is ${multiplierText} of your paid-up Share Capital (₱${shareCapital.toLocaleString()}).`
+        }
+      });
+    }
+
+    // 4. Co-maker verification
+    // Co-maker is required if the loan amount exceeds 100% of Share Capital
+    const { co_maker_name, co_maker_phone } = req.body;
+    if (amount > shareCapital) {
+      if (!co_maker_name) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            message: `A Co-maker is required because the requested loan amount (₱${amount.toLocaleString()}) exceeds 100% of your paid-up Share Capital (₱${shareCapital.toLocaleString()}).`
+          }
+        });
+      }
+    }
+
     const insertLoan = `
-      INSERT INTO loans (member_id, loan_product_id, principal_amount, interest_rate, term_months, amortization_type, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval')
+      INSERT INTO loans (member_id, loan_product_id, principal_amount, interest_rate, term_months, amortization_type, status, co_maker_name, co_maker_phone)
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8)
       RETURNING *
     `;
     const result = await query(insertLoan, [
@@ -141,7 +217,9 @@ export const applyForLoan = async (req, res, next) => {
       amount,
       p.interest_rate,
       p.term_months,
-      p.amortization_type
+      p.amortization_type,
+      co_maker_name || null,
+      co_maker_phone || null
     ]);
 
     res.status(201).json({
@@ -355,9 +433,14 @@ export const getLoanById = async (req, res, next) => {
       [id]
     );
 
-    // Fetch payments
+    // Fetch payments with allocated principal & interest breakdowns
     const payments = await query(
-      'SELECT * FROM loan_payments WHERE loan_id = $1 ORDER BY payment_date DESC',
+      `SELECT lp.*, 
+         COALESCE((SELECT SUM(principal_allocated) FROM loan_payment_allocations WHERE loan_payment_id = lp.id), 0) as principal_paid,
+         COALESCE((SELECT SUM(interest_allocated) FROM loan_payment_allocations WHERE loan_payment_id = lp.id), 0) as interest_paid
+       FROM loan_payments lp 
+       WHERE lp.loan_id = $1 
+       ORDER BY lp.payment_date DESC`,
       [id]
     );
 

@@ -68,18 +68,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const storedUser = localStorage.getItem('user');
 
       if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-        
         try {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+          
           // Verify token against backend /me endpoint
           const response = await api.get('/auth/me');
           const freshUser = response.data.data || response.data.user;
           setUser(freshUser);
           localStorage.setItem('user', JSON.stringify(freshUser));
         } catch (error) {
-          console.error('Failed to verify session token', error);
-          // Token expired or invalid
+          console.error('Failed to verify session token or parse stored user', error);
+          // Token expired or invalid, or stored user is corrupted JSON
           logout();
         }
       }

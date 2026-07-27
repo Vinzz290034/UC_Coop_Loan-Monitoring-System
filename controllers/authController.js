@@ -1212,6 +1212,20 @@ export const getContactMessages = async (req, res, next) => {
     const queryParams = [];
     let paramIndex = 1;
 
+    // Restrict member user role to view their own registered email inquiries only
+    if (req.user.role === 'member') {
+      const memberEmail = req.user.profile?.email;
+      if (!memberEmail) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Member profile email not linked to user account.' }
+        });
+      }
+      queryText += ` AND email = $${paramIndex}`;
+      queryParams.push(memberEmail);
+      paramIndex++;
+    }
+
     // Filter by status (unread, read, resolved)
     if (status) {
       if (!['unread', 'read', 'resolved'].includes(status)) {

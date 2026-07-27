@@ -1,5 +1,62 @@
 import { query } from '../config/db.js';
 
+// Helper to automatically generate upcoming payment reminder notifications for members
+const generateUpcomingPaymentReminders = async (user) => {
+  try {
+    if (user.role !== 'member' || !user.profile?.id) return;
+    
+    // Find unpaid schedules due within the next 3 days
+    const upcomingSchedules = await query(
+      `SELECT rs.id, rs.installment_number, rs.due_date, rs.total_due, rs.loan_id, lp.name as product_name
+       FROM repayment_schedules rs
+       JOIN loans l ON rs.loan_id = l.id
+       JOIN loan_products lp ON l.loan_product_id = lp.id
+       WHERE l.member_id = $1
+         AND rs.status != 'paid'
+         AND l.status = 'disbursed'
+         AND rs.due_date >= CURRENT_DATE
+         AND rs.due_date <= CURRENT_DATE + INTERVAL '3 days'`,
+      [user.profile.id]
+    );
+
+    for (const schedule of upcomingSchedules.rows) {
+      // Check if a reminder notification already exists for this schedule
+      const existingNotif = await query(
+        `SELECT id FROM notifications 
+         WHERE user_id = $1 
+           AND type = 'loan_due_reminder' 
+           AND reference_id = $2`,
+        [user.id, String(schedule.id)]
+      );
+
+      if (existingNotif.rowCount === 0) {
+        const formattedDate = new Date(schedule.due_date).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+        const formattedAmount = parseFloat(schedule.total_due).toLocaleString('en-US', {
+          style: 'currency',
+          currency: 'PHP'
+        });
+
+        await query(
+          `INSERT INTO notifications (user_id, title, message, type, reference_id)
+           VALUES ($1, $2, $3, 'loan_due_reminder', $4)`,
+          [
+            user.id,
+            'Loan Payment Due Soon',
+            `Your ${schedule.product_name} installment #${schedule.installment_number} of ${formattedAmount} is due on ${formattedDate}. Please settle your balance.`,
+            String(schedule.id)
+          ]
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error generating upcoming payment reminders:', error.message);
+  }
+};
+
 // @desc    Get notifications for the current user (role-based visibility)
 // @route   GET /api/notifications
 // @access  Protected (All roles)
@@ -8,6 +65,11 @@ export const getNotifications = async (req, res, next) => {
     const userId = req.user.id;
     const userRole = req.user.role;
     const { unread_only } = req.query;
+
+    // Reactively generate upcoming reminders for member users
+    if (userRole === 'member') {
+      await generateUpcomingPaymentReminders(req.user);
+    }
 
     // Notifications visible to this user:
     // 1. Directly targeted (user_id = current user)
@@ -50,6 +112,11 @@ export const getUnreadCount = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
+
+    // Reactively generate upcoming reminders for member users
+    if (userRole === 'member') {
+      await generateUpcomingPaymentReminders(req.user);
+    }
 
     const result = await query(
       `SELECT COUNT(*) as count

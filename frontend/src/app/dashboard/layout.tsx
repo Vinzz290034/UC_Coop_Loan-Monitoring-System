@@ -134,7 +134,7 @@ function DashboardLayoutContent({
       name: 'Messages',
       path: '/dashboard/messages',
       icon: MessageSquare,
-      allowed: isAdminOrManager,
+      allowed: true,
     },
     {
       name: 'Notifications',
