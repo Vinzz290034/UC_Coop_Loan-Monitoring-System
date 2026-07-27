@@ -1,21 +1,25 @@
 import express from 'express';
-import { 
-  getAnnouncements, 
-  createAnnouncement, 
-  toggleAnnouncementStatus 
+import {
+  getAnnouncements,
+  getAnnouncementById,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
 } from '../controllers/announcementController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Apply auth protection
+// Apply auth middleware for all announcement routes
 router.use(protect);
 
-// Public feed for authenticated users
+// Public feed & fetching single items (Accessible to all logged-in members/users)
 router.get('/', getAnnouncements);
+router.get('/:id', getAnnouncementById);
 
-// Restricted actions for Admin and Manager roles
+// Restricted actions (Admin and Manager roles only)
 router.post('/', restrictTo('admin', 'manager'), createAnnouncement);
-router.patch('/:id/status', restrictTo('admin', 'manager'), toggleAnnouncementStatus);
+router.put('/:id', restrictTo('admin', 'manager'), updateAnnouncement);
+router.delete('/:id', restrictTo('admin', 'manager'), deleteAnnouncement);
 
 export default router;
