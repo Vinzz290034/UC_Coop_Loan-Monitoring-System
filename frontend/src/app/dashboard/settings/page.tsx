@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Cpu,
   ExternalLink,
+  HelpCircle,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -86,53 +87,6 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Appearance is redundant since it is already visible on the header.*/}
-      {/* <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center gap-2.5">
-          <Sun className="w-4 h-4 text-primary dark:text-secondary" />
-          <h2 className="font-headline text-sm font-bold text-on-surface dark:text-white">Appearance</h2>
-        </div>
-        <div className="p-6">
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">Choose your preferred theme for the application interface.</p>
-          <div className="grid grid-cols-2 gap-3">
-            {themeOptions.map((opt) => {
-              const Icon = opt.icon;
-              const isActive = theme === opt.key;
-              return (
-                <button
-                  key={opt.key}
-                  onClick={() => setTheme(opt.key as 'light' | 'dark')}
-                  className={`p-4 rounded-2xl border-2 transition-all text-left cursor-pointer ${isActive
-                    ? 'border-primary dark:border-secondary bg-primary/5 dark:bg-secondary/5 shadow-md'
-                    : 'border-outline-variant/50 hover:border-primary/30 dark:hover:border-secondary/30 hover:bg-neutral/5 dark:hover:bg-neutral/10'
-                    }`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isActive
-                      ? 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary'
-                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500'
-                      }`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className={`text-sm font-bold ${isActive ? 'text-primary dark:text-secondary' : 'text-on-surface dark:text-white'}`}>
-                        {opt.label}
-                      </h4>
-                      <p className="text-[10px] text-neutral-400 dark:text-neutral-500 font-semibold">{opt.desc}</p>
-                    </div>
-                  </div>
-                  {isActive && (
-                    <div className="mt-1 text-[10px] font-bold text-primary dark:text-secondary flex items-center gap-1">
-                      ✓ Active
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div> */}
-
       {/* Notification Preferences */}
       <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center gap-2.5">
@@ -153,15 +107,14 @@ export default function SettingsPage() {
             </div>
             <button
               onClick={() => saveNotifPrefs(!emailNotifications, inAppNotifications)}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer ${emailNotifications
-                ? 'bg-primary dark:bg-secondary'
-                : 'bg-neutral-300 dark:bg-neutral-600'
-                }`}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer ${
+                emailNotifications ? 'bg-primary dark:bg-secondary' : 'bg-neutral-300 dark:bg-neutral-600'
+              }`}
             >
               <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${emailNotifications
-                  ? 'translate-x-5'
-                  : 'translate-x-0'}`}
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                  emailNotifications ? 'translate-x-5' : 'translate-x-0'
+                }`}
               />
             </button>
           </div>
@@ -179,16 +132,14 @@ export default function SettingsPage() {
             </div>
             <button
               onClick={() => saveNotifPrefs(emailNotifications, !inAppNotifications)}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer ${inAppNotifications
-                ? 'bg-primary dark:bg-secondary'
-                : 'bg-neutral-300 dark:bg-neutral-600'
-                }`}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer ${
+                inAppNotifications ? 'bg-primary dark:bg-secondary' : 'bg-neutral-300 dark:bg-neutral-600'
+              }`}
             >
               <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${inAppNotifications
-                  ? 'translate-x-5'
-                  : 'translate-x-0'
-                  }`}
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                  inAppNotifications ? 'translate-x-5' : 'translate-x-0'
+                }`}
               />
             </button>
           </div>
@@ -229,6 +180,23 @@ export default function SettingsPage() {
               <div>
                 <h4 className="text-xs font-bold text-on-surface dark:text-white">Change Password</h4>
                 <p className="text-[10px] text-neutral-500 dark:text-neutral-400">Update your account password</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-neutral-400" />
+          </button>
+
+          {/* Support Link */}
+          <button
+            onClick={() => router.push('/dashboard/support')}
+            className="w-full flex items-center justify-between p-3.5 rounded-xl hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors cursor-pointer text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary">
+                <HelpCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-on-surface dark:text-white">Support</h4>
+                <p className="text-[10px] text-neutral-500 dark:text-neutral-400">Get assistance and manage support requests</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-neutral-400" />
