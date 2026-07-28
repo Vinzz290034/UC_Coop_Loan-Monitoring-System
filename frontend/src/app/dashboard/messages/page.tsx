@@ -513,7 +513,7 @@ export default function MessagesPage() {
 
       {/* MEMBER NEW INQUIRY MODAL */}
       {isNewInquiryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto font-sans">
             {/* Header */}
             <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30 mb-4">

@@ -38,7 +38,7 @@ interface LoanProduct {
   name: string;
   interest_rate: string;
   term_months: number;
-  amortization_type: 'flat_rate' | 'reducing_balance';
+  amortization_type: 'flat_rate' | 'diminishing_balance';
   min_amount: string;
   max_amount: string;
   is_active: boolean;
@@ -59,61 +59,46 @@ interface Loan {
 }
 
 const LOAN_CATEGORIES = {
-  REGULAR: 'Regular Loans',
-  MICRO: 'Short-Term Micro Loans',
-  COMMODITY: 'Product/Commodity Loans',
-  SPECIAL: 'Special/Assistance Loans'
+  REGULAR: 'Regular Loan',
+  STL: 'Short Term Loan or STL',
 };
 
 const getProductCategory = (name: string) => {
   const lowercaseName = name.toLowerCase();
-  if (
-    lowercaseName.includes('regular') || 
-    lowercaseName.includes('cbu') || 
-    lowercaseName.includes('share capital') || 
-    lowercaseName.includes('educational') || 
-    lowercaseName.includes('travel') || 
-    lowercaseName.includes('car') || 
-    lowercaseName.includes('housing')
-  ) {
+  if (lowercaseName.includes('regular loan')) {
     return LOAN_CATEGORIES.REGULAR;
   }
-  if (
-    lowercaseName.includes('micro') || 
-    lowercaseName.includes('salary') || 
-    lowercaseName.includes('emergency') || 
-    lowercaseName.includes('calamity') || 
-    lowercaseName.includes('cash')
-  ) {
-    return LOAN_CATEGORIES.MICRO;
+  if (lowercaseName.includes('short term loan') || lowercaseName.includes('stl')) {
+    return LOAN_CATEGORIES.STL;
   }
-  if (
-    lowercaseName.includes('appliance') || 
-    lowercaseName.includes('furniture') || 
-    lowercaseName.includes('voucher') || 
-    lowercaseName.includes('commodity') || 
-    lowercaseName.includes('grocery')
-  ) {
-    return LOAN_CATEGORIES.COMMODITY;
-  }
-  return LOAN_CATEGORIES.SPECIAL;
+  return 'Other Loans';
 };
 
 const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
-  "Appliances & Furniture Loan": { desc: "Voucher-based credit for acquiring home appliances, kitchen tools, and local furniture sets from partner cooperative merchants.", helper: "Voucher / Shop credit format" },
-  "Calamity Loan (Typhoon/Flood/Disaster)": { desc: "Urgent humanitarian cash assistance for families affected by declared government states of calamity, storms, or severe flooding.", helper: "Low interest (0.5% - 1.0% flat)" },
-  "Cash Express": { desc: "Fast-approval micro cash loan for immediate retail needs, bills payments, or minor domestic expenses.", helper: "Instant disbursement" },
-  "Commodity/Grocery Voucher": { desc: "Voucher card redeemable at partner supermarkets and local coop retail stores for groceries, foods, and basic household items.", helper: "Grocery voucher format" },
-  "Educational/Tuition Loan": { desc: "Dedicated funding to cover school tuition fees, books, laptops, and student enrolment costs for children of member-borrowers.", helper: "Pay directly to school option" },
-  "Emergency Cash Loan": { desc: "Rapid-response credit line for sudden family contingencies, medical diagnostics, or critical vehicle repairs.", helper: "Disbursed in 24 hours" },
-  "Hospitalization & Health Loan": { desc: "Assistance to settle inpatient hospital bills, purchase critical medications, or pay for medical surgeries and health care needs.", helper: "Medical certificate required" },
-  "Housing Repair/Renovation Loan": { desc: "Medium-term credit for home renovation, roof repairs, room expansions, or structural improvements.", helper: "Collateralized by land/house" },
-  "Livelihood & Micro-Business Loan": { desc: "Capital boost for small sari-sari stores, agriculture inputs, local transport vehicles (tricycles), or artisanal crafts.", helper: "Requires business proof" },
-  "Memorial & Funeral Assistance": { desc: "Compassionate loan to support family memorial services, casket payments, burial plots, and funeral arrangements.", helper: "Death certificate requested" },
-  "Motorcycle/Tricycle Purchase Loan": { desc: "Funding to buy new motorbikes or tricycle cabs for personal commuting or local public transport livelihood operations.", helper: "Or-Cr register lien" },
-  "Regular Capital/CBU Share Loan": { desc: "Standard cooperative credit backed directly by the member's accumulated Share Capital build-up balances.", helper: "Standard multi-purpose format" },
-  "Salary Loan (Direct Payroll)": { desc: "Direct payroll deduction loans for employee members with active monthly salary allocations at cooperating companies.", helper: "Direct employer payslip lien" },
-  "Travel & Livelihood Vehicle Loan": { desc: "Longer-term vehicle financing for delivery trucks, second-hand utility vans, or major co-op transport ventures.", helper: "Enterprise level loan" }
+  'Regular Loan - Salary Deduction': {
+    desc: 'Regular salary-based credit line with automatic payroll deduction.',
+    helper: '₱10,000 to ₱75,000. Maximum term: 1 year (12 months).'
+  },
+  'Regular Loan - Project Loan': {
+    desc: 'Project or entrepreneurial funding for business expansions or asset acquisitions.',
+    helper: '₱76,000 to ₱300,000. Maximum term: 2 years (24 months).'
+  },
+  'Short Term Loan (STL) - Utility Loan': {
+    desc: 'Quick cash relief for paying electricity, water, internet, or other home utilities.',
+    helper: 'Fixed amount: ₱3,000. Term: 1 month.'
+  },
+  'Short Term Loan (STL) - Emergency Loan': {
+    desc: 'Emergency funding for medical needs or unplanned urgent expenses.',
+    helper: 'Fixed amount: ₱5,000. Term: 2 months.'
+  },
+  'Short Term Loan (STL) - Cash Express': {
+    desc: 'Quick cash release to bridge short-term financing gaps.',
+    helper: 'Fixed amount: ₱7,000. Term: 2 months.'
+  },
+  'Short Term Loan (STL) - Special Occasion': {
+    desc: 'Financial support for seasonal expenses, holidays, and school registration periods.',
+    helper: 'Fixed amount: ₱10,000. Term: 3 months.'
+  }
 };
 
 function LoansPageContent() {
@@ -152,7 +137,7 @@ function LoansPageContent() {
   const [prodName, setProdName] = useState('');
   const [prodInterestRate, setProdInterestRate] = useState('');
   const [prodTermMonths, setProdTermMonths] = useState('');
-  const [prodAmortType, setProdAmortType] = useState<'flat_rate' | 'reducing_balance'>('flat_rate');
+  const [prodAmortType, setProdAmortType] = useState<'flat_rate' | 'diminishing_balance'>('diminishing_balance');
   const [prodMinAmount, setProdMinAmount] = useState('');
   const [prodMaxAmount, setProdMaxAmount] = useState('');
   const [productSubmitting, setProductSubmitting] = useState(false);
@@ -522,7 +507,7 @@ function LoansPageContent() {
       setProdName('');
       setProdInterestRate('');
       setProdTermMonths('');
-      setProdAmortType('flat_rate');
+      setProdAmortType('diminishing_balance');
       setProdMinAmount('');
       setProdMaxAmount('');
       setIsProductModalOpen(false);
@@ -1226,7 +1211,7 @@ function LoansPageContent() {
 
       {/* MODAL 1: CREATE LOAN PRODUCT */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsProductModalOpen(false)}
@@ -1291,7 +1276,7 @@ function LoansPageContent() {
                   className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white"
                 >
                   <option value="flat_rate">Flat Amortization (Monthly Flat Rate)</option>
-                  <option value="reducing_balance">Diminishing Balance (Reducing Capital Interest)</option>
+                  <option value="diminishing_balance">Diminishing Balance (Reducing Capital Interest)</option>
                 </select>
               </div>
 
@@ -1342,8 +1327,10 @@ function LoansPageContent() {
 
           {/* MODAL 2: APPLY FOR LOAN */}
       {isApplyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
-          <div className={`bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full ${wizardStep === 3 ? 'max-w-md' : 'max-w-5xl'} shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative animate-modal-pop`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className={`bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full ${
+            wizardStep === 3 ? 'max-w-md' : (wizardStep === 1 ? 'max-w-3xl' : 'max-w-5xl')
+          } shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative animate-modal-pop`}>
             {/* Header */}
             <div className="px-6 py-5 border-b border-outline-variant/40 flex justify-between items-center bg-surface-container-low dark:bg-surface-container-high/40">
               <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white capitalize">
@@ -1455,7 +1442,7 @@ function LoansPageContent() {
                                     No active loan products in this category.
                                   </div>
                                 ) : (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[250px] overflow-y-auto pr-1 pt-1">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[250px] overflow-y-auto pr-1 pt-1">
                                     {filteredProducts.map((p) => {
                                       const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
                                       const isSelected = selectedProduct?.id === p.id;
@@ -1467,7 +1454,7 @@ function LoansPageContent() {
                                             setSelectedProduct(p);
                                             setApplyAmount(parseFloat(p.min_amount));
                                           }}
-                                          className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                                          className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer ${
                                             isSelected
                                               ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
                                               : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 dark:hover:bg-neutral/10'
@@ -1475,19 +1462,24 @@ function LoansPageContent() {
                                         >
                                           <div className="flex justify-between items-start">
                                             <div>
-                                              <span className="font-bold text-on-surface dark:text-white text-sm block">{p.name}</span>
-                                              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-normal mt-1">{details.desc}</p>
+                                              <span className="font-bold text-on-surface dark:text-white text-sm block">
+                                                 {p.name
+                                                   .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
+                                                   .replace(/Short Term Loan\s*-\s*/gi, '')
+                                                   .replace(/Regular Loan\s*-\s*/gi, '')}
+                                              </span>
+                                              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-normal mt-0.5">{details.desc}</p>
                                               {details.helper && (
                                                 <p className="text-[9px] text-primary/70 dark:text-secondary/70 font-semibold mt-0.5">{details.helper}</p>
                                               )}
                                             </div>
                                             <span className="text-[10px] font-bold bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2 py-0.5 rounded-full uppercase whitespace-nowrap">
-                                              {p.amortization_type.replace('_', ' ')}
+                                              {p.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing'}
                                             </span>
                                           </div>
-                                          <div className="mt-3.5 pt-2.5 border-t border-outline-variant/30 text-[11px] text-neutral-600 dark:text-neutral-400 flex justify-between">
+                                          <div className="mt-2 pt-2 border-t border-outline-variant/30 text-[11px] text-neutral-600 dark:text-neutral-400 flex justify-between">
                                             <span>Interest: <strong className="text-on-surface dark:text-white font-semibold">{(parseFloat(p.interest_rate) * 100).toFixed(1)}% p.a.</strong></span>
-                                            <span>Term: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months} months</strong></span>
+                                            <span>Term: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months} mos</strong></span>
                                             <span>Range: <strong className="text-on-surface dark:text-white font-semibold">₱{parseFloat(p.min_amount).toLocaleString()} - ₱{parseFloat(p.max_amount).toLocaleString()}</strong></span>
                                           </div>
                                         </button>
@@ -1713,7 +1705,7 @@ function LoansPageContent() {
 
       {/* MODAL 3: RECORD REPAYMENT */}
       {isRepaymentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsRepaymentModalOpen(false)}
@@ -1812,7 +1804,7 @@ function LoansPageContent() {
       )}
       {/* MODAL 4: PRINT CHECK VOUCHER PREVIEW */}
       {printMode === 'voucher' && printLoan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30 mb-4">
@@ -1949,7 +1941,7 @@ function LoansPageContent() {
 
       {/* MODAL 5: PRINT AMORTIZATION SCHEDULE PREVIEW */}
       {printMode === 'schedule' && printLoan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30 mb-4">
@@ -2011,7 +2003,7 @@ function LoansPageContent() {
 
       {/* MODAL 6: PRINT RECEIPT PREVIEW */}
       {printMode === 'receipt' && printLoan && printPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto font-sans">
             {/* Header */}
             <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30 mb-4">
@@ -2425,7 +2417,7 @@ function LoansPageContent() {
       `}} />
       {/* UNIFIED DIALOGUE / CONFIRM MODAL */}
       {dialogConfig.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-sm shadow-2xl p-6 relative animate-modal-pop text-center space-y-4">
             {/* Header Icon */}
             <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold">

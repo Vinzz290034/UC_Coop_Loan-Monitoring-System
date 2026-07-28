@@ -109,20 +109,6 @@ export const applyForLoan = async (req, res, next) => {
       });
     }
 
-    // Verify member has no existing active or pending loans
-    const activeLoanCheck = await query(
-      "SELECT id, status FROM loans WHERE member_id = $1 AND status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')",
-      [member_id]
-    );
-    if (activeLoanCheck.rowCount > 0) {
-      const activeStatus = activeLoanCheck.rows[0].status;
-      const statusFriendly = activeStatus.replace('_', ' ');
-      return res.status(400).json({
-        success: false,
-        error: { message: `This member cannot apply for a new loan because they have an existing loan that is "${statusFriendly}".` }
-      });
-    }
-
     // Verify loan product terms
     const product = await query('SELECT * FROM loan_products WHERE id = $1 AND is_active = true', [loan_product_id]);
     if (product.rowCount === 0) {
@@ -135,16 +121,44 @@ export const applyForLoan = async (req, res, next) => {
     const p = product.rows[0];
     const amount = parseFloat(principal_amount);
 
-    if (amount < parseFloat(p.min_amount) || amount > parseFloat(p.max_amount)) {
+    // Verify member active loans count by category
+    const activeLoans = await query(
+      `SELECT l.id, l.principal_amount, l.status, lp.name as product_name
+       FROM loans l
+       JOIN loan_products lp ON l.loan_product_id = lp.id
+       WHERE l.member_id = $1 AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')`,
+      [member_id]
+    );
+
+    let regularCount = 0;
+    let stlCount = 0;
+    let totalExistingPrincipal = 0.0;
+
+    for (const loan of activeLoans.rows) {
+      const pName = loan.product_name.toLowerCase();
+      totalExistingPrincipal += parseFloat(loan.principal_amount);
+      if (pName.includes('regular loan')) {
+        regularCount++;
+      } else if (pName.includes('short term loan') || pName.includes('stl')) {
+        stlCount++;
+      }
+    }
+
+    const isRegularProduct = p.name.toLowerCase().includes('regular loan');
+    if (isRegularProduct && regularCount >= 1) {
       return res.status(400).json({
         success: false,
-        error: { 
-          message: `Requested loan amount must be between ₱${parseFloat(p.min_amount).toLocaleString()} and ₱${parseFloat(p.max_amount).toLocaleString()} for product "${p.name}".`
-        }
+        error: { message: 'This member cannot apply for a new Regular Loan because they already have an active Regular Loan.' }
+      });
+    }
+    if (!isRegularProduct && stlCount >= 3) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'This member cannot apply for a new Short Term Loan (STL) because they have reached the maximum limit of 3 active Short Term Loans.' }
       });
     }
 
-    // Progressive Loan Policy Verification
+    // Fetch progressive loan limits first
     // 1. Fetch current Share Capital balance
     const shareCapitalQuery = `
       SELECT balance_after 
@@ -183,11 +197,25 @@ export const applyForLoan = async (req, res, next) => {
       tierName = '3rd Loan & Onwards (Maximum Tier)';
     }
 
-    if (amount > borrowLimit) {
+    // Amount validation with dynamic lower-bound adjustment based on remaining capacity
+    const remainingCapacity = Math.max(0, borrowLimit - totalExistingPrincipal);
+    const minAllowed = Math.min(parseFloat(p.min_amount), remainingCapacity);
+    const maxAllowed = Math.min(parseFloat(p.max_amount), remainingCapacity);
+
+    if (amount < minAllowed || amount > maxAllowed) {
       return res.status(400).json({
         success: false,
         error: { 
-          message: `Your borrowing limit is capped at ₱${borrowLimit.toLocaleString()} based on the Progressive Loan Policy. As a member in the "${tierName}" tier, your maximum borrowing limit is ${multiplierText} of your paid-up Share Capital (₱${shareCapital.toLocaleString()}).`
+          message: `Requested loan amount must be between ₱${minAllowed.toLocaleString()} and ₱${maxAllowed.toLocaleString()} for product "${p.name}".`
+        }
+      });
+    }
+
+    if ((amount + totalExistingPrincipal) > borrowLimit) {
+      return res.status(400).json({
+        success: false,
+        error: { 
+          message: `Your requested loan amount of ₱${amount.toLocaleString()} (plus your existing active loans total of ₱${totalExistingPrincipal.toLocaleString()}) exceeds your borrowing limit of ₱${borrowLimit.toLocaleString()} based on the Progressive Loan Policy.`
         }
       });
     }

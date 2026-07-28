@@ -448,6 +448,30 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         COALESCE((SELECT SUM(principal_amount) FROM loans WHERE member_id = $1 AND status = 'disbursed'), 0) as original_loan_principal,
         COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status IN ('approved', 'disbursed', 'fully_paid', 'defaulted')), 0) as historical_loans_count,
         
+        -- Counts of active loans by category
+        COALESCE((
+          SELECT COUNT(*) 
+          FROM loans l
+          JOIN loan_products lp ON l.loan_product_id = lp.id
+          WHERE l.member_id = $1 
+            AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+            AND lp.name LIKE 'Regular Loan%'
+        ), 0) as active_regular_loans_count,
+        COALESCE((
+          SELECT COUNT(*) 
+          FROM loans l
+          JOIN loan_products lp ON l.loan_product_id = lp.id
+          WHERE l.member_id = $1 
+            AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+            AND (lp.name LIKE 'Short Term Loan%' OR lp.name LIKE 'STL%')
+        ), 0) as active_stl_loans_count,
+        COALESCE((
+          SELECT SUM(principal_amount) 
+          FROM loans 
+          WHERE member_id = $1 
+            AND status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+        ), 0) as active_loans_principal_total,
+        
         -- Remaining Outstanding Principal
         COALESCE(
           (SELECT SUM(l.principal_amount) FROM loans l WHERE l.member_id = $1 AND l.status = 'disbursed') - 
@@ -463,9 +487,11 @@ export const getMemberDashboardSummary = async (req, res, next) => {
       success: true,
       data: {
         member_id: id,
+        first_name: memberCheck.rows[0].first_name,
+        last_name: memberCheck.rows[0].last_name,
         full_name: `${memberCheck.rows[0].first_name} ${memberCheck.rows[0].last_name}`,
         profile_status: memberCheck.rows[0].status,
-        investment_goal: parseFloat(memberCheck.rows[0].investment_goal || 50000.00),
+        investment_goal: parseFloat(memberCheck.rows[0].investment_goal ?? 0.00),
         balances: {
           share_capital: parseFloat(metrics.share_capital_balance),
           fixed_deposits: parseFloat(metrics.fixed_deposit_balance),
@@ -474,6 +500,9 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         },
         loans: {
           active_count: parseInt(metrics.active_loans_count, 10),
+          active_regular_count: parseInt(metrics.active_regular_loans_count, 10),
+          active_stl_count: parseInt(metrics.active_stl_loans_count, 10),
+          active_principal: parseFloat(metrics.active_loans_principal_total),
           historical_count: parseInt(metrics.historical_loans_count, 10),
           original_principal: parseFloat(metrics.original_loan_principal),
           outstanding_balance: parseFloat(metrics.outstanding_loan_balance)

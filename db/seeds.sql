@@ -35,20 +35,12 @@ ON CONFLICT (email) DO NOTHING;
 -- Seed Default Loan Products
 INSERT INTO loan_products (name, interest_rate, term_months, amortization_type, min_amount, max_amount, is_active)
 VALUES 
-    ('Standard Salary Deduction Loan', 0.1200, 12, 'diminishing_balance', 5000.00, 100000.00, true),
-    ('Cash Express', 0.0800, 3, 'flat_rate', 7000.00, 7000.00, true),
-    ('Emergency Loan', 0.0400, 6, 'flat_rate', 5000.00, 5000.00, true),
-    ('Micro Advance / Petty Loan', 0.0200, 1, 'flat_rate', 3000.00, 3000.00, true),
-    ('Utility Bill Loan', 0.0300, 2, 'flat_rate', 3000.00, 3000.00, true),
-    ('Occasion / Seasonal Loan', 0.0500, 6, 'flat_rate', 10000.00, 10000.00, true),
-    ('Consumer Electronics / Laptop / Computer Loan', 0.0600, 12, 'flat_rate', 5000.00, 40000.00, true),
-    ('Appliances & Furniture Loan', 0.0500, 12, 'flat_rate', 5000.00, 30000.00, true),
-    ('Motorcycle & Vehicle Loan', 0.0800, 24, 'diminishing_balance', 20000.00, 120000.00, true),
-    ('Jewelry / Valuables Loan', 0.0400, 6, 'flat_rate', 5000.00, 50000.00, true),
-    ('Essential Commodities (Rice & Store Grocery Vouchers)', 0.0100, 2, 'flat_rate', 1000.00, 5000.00, true),
-    ('Calamity Loan (Typhoon/Flood/Disaster)', 0.0150, 12, 'flat_rate', 5000.00, 20000.00, true),
-    ('Mortuary / Bereavement Assistance Loan', 0.0200, 12, 'flat_rate', 5000.00, 15000.00, true),
-    ('Project / Entrepreneurial Loan', 0.0700, 24, 'diminishing_balance', 10000.00, 150000.00, true)
+    ('Regular Loan - Salary Deduction', 0.1200, 12, 'diminishing_balance', 10000.00, 75000.00, true),
+    ('Regular Loan - Project Loan', 0.0700, 24, 'diminishing_balance', 76000.00, 300000.00, true),
+    ('Short Term Loan (STL) - Utility Loan', 0.0300, 1, 'diminishing_balance', 3000.00, 3000.00, true),
+    ('Short Term Loan (STL) - Emergency Loan', 0.0400, 2, 'diminishing_balance', 5000.00, 5000.00, true),
+    ('Short Term Loan (STL) - Cash Express', 0.0800, 2, 'diminishing_balance', 7000.00, 7000.00, true),
+    ('Short Term Loan (STL) - Special Occasion', 0.0500, 3, 'diminishing_balance', 10000.00, 10000.00, true)
 ON CONFLICT (name) DO NOTHING;
 
 

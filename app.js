@@ -31,6 +31,9 @@ const app = express();
 // Serve uploads directory statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// CORS Middleware first to handle preflight OPTIONS requests correctly
+app.use(cors());
+
 // Security Middlewares
 app.use(helmet());
 
@@ -49,7 +52,6 @@ const apiLimiter = rateLimit({
 app.use('/api', apiLimiter);
 
 // Middlewares
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

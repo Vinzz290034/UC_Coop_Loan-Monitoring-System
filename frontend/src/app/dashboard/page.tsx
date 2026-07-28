@@ -49,77 +49,41 @@ import {
 import { useRouter } from 'next/navigation';
 
 const LOAN_CATEGORIES = {
-  REGULAR: 'Regular Loans (Salary-based)',
-  MICRO: 'Short-Term / Micro Loans (Quick Release)',
-  PRODUCT: 'Product & Commodity Loans',
-  SPECIAL: 'Special & Assistance Loans',
+  REGULAR: 'Regular Loan',
+  STL: 'Short Term Loan or STL',
 };
 
 const getProductCategory = (productName: string) => {
   const name = productName.toLowerCase();
-  if (name.includes('salary') || name.includes('regular flat')) return LOAN_CATEGORIES.REGULAR;
-  if (name.includes('express') || name.includes('emergency') || name.includes('petty') || name.includes('utility') || name.includes('seasonal') || name.includes('occasion')) return LOAN_CATEGORIES.MICRO;
-  if (name.includes('laptop') || name.includes('electronics') || name.includes('appliances') || name.includes('motorcycle') || name.includes('vehicle') || name.includes('jewelry') || name.includes('commodities') || name.includes('groceries') || name.includes('furniture')) return LOAN_CATEGORIES.PRODUCT;
-  if (name.includes('calamity') || name.includes('mortuary') || name.includes('bereavement') || name.includes('project') || name.includes('entrepreneurial')) return LOAN_CATEGORIES.SPECIAL;
+  if (name.includes('regular loan')) return LOAN_CATEGORIES.REGULAR;
+  if (name.includes('short term loan') || name.includes('stl')) return LOAN_CATEGORIES.STL;
   return 'Other Loans';
 };
 
 const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
-  'Standard Salary Deduction Loan': {
+  'Regular Loan - Salary Deduction': {
     desc: 'Regular salary-based credit line with automatic payroll deduction.',
-    helper: 'Maximum cap is based on your paid-up Share Capital (CBU) balance.'
+    helper: '₱10,000 to ₱75,000. Maximum term: 1 year (12 months).'
   },
-  'Cash Express': {
-    desc: 'Ultra-fast cash release for urgent immediate funding needs.',
-    helper: 'Fixed amount of ₱7,000. Low processing overhead.'
+  'Regular Loan - Project Loan': {
+    desc: 'Project or entrepreneurial funding for business expansions or asset acquisitions.',
+    helper: '₱76,000 to ₱300,000. Maximum term: 2 years (24 months).'
   },
-  'Emergency Loan': {
-    desc: 'Quick disbursement for medical bills, unexpected repairs, or family emergencies.',
-    helper: 'Fixed amount of ₱5,000. Requires minimal approval time.'
+  'Short Term Loan (STL) - Utility Loan': {
+    desc: 'Quick cash relief for paying electricity, water, internet, or other home utilities.',
+    helper: 'Fixed amount: ₱3,000. Term: 1 month.'
   },
-  'Micro Advance / Petty Loan': {
-    desc: 'Minor cash advance to bridge short-term personal gaps.',
-    helper: 'Fixed amount of ₱3,000. Due on your next pay period.'
+  'Short Term Loan (STL) - Emergency Loan': {
+    desc: 'Emergency funding for medical needs or unplanned urgent expenses.',
+    helper: 'Fixed amount: ₱5,000. Term: 2 months.'
   },
-  'Utility Bill Loan': {
-    desc: 'Direct payment voucher or advance to settle monthly home electricity, water, or internet bills.',
-    helper: 'Fixed amount of ₱3,000. Paid directly to utility providers.'
+  'Short Term Loan (STL) - Cash Express': {
+    desc: 'Quick cash release to bridge short-term financing gaps.',
+    helper: 'Fixed amount: ₱7,000. Term: 2 months.'
   },
-  'Occasion / Seasonal Loan': {
-    desc: 'Assistance for holiday expenses, school opening tuition, and local traditional celebrations.',
-    helper: 'Maximum cap of ₱10,000. Short-term amortization.'
-  },
-  'Consumer Electronics / Laptop / Computer Loan': {
-    desc: 'Commodity loan for purchasing laptops, desktop PCs, tablets, or smartphones for remote work or online schooling.',
-    helper: '₱5,000 to ₱40,000. Voucher is issued directly to verified retail partners.'
-  },
-  'Appliances & Furniture Loan': {
-    desc: 'Financing for household appliances (refrigerators, washing machines) or home furniture additions.',
-    helper: '₱5,000 to ₱30,000. Low flat interest rates.'
-  },
-  'Motorcycle & Vehicle Loan': {
-    desc: 'Vehicle acquisition loan to purchase motorcycles, tricycles, or personal transport assets.',
-    helper: '₱20,000 to ₱120,000. The vehicle serves as collateral.'
-  },
-  'Jewelry / Valuables Loan': {
-    desc: 'Collateral-backed loan secured against verified physical jewelry and precious metal assets.',
-    helper: '₱5,000 to ₱50,000. Flexible redemption terms.'
-  },
-  'Essential Commodities (Rice & Store Grocery Vouchers)': {
-    desc: 'Voucher lines for cooperative consumer stores to acquire daily rice supplies and basic household groceries.',
-    helper: '₱1,000 to ₱5,000. Interest-free or low processing surcharge.'
-  },
-  'Calamity Loan (Typhoon/Flood/Disaster)': {
-    desc: 'Special low-interest emergency fund for members residing in government-declared calamity areas.',
-    helper: '₱5,000 to ₱20,000. Term-extensions available during active crises.'
-  },
-  'Mortuary / Bereavement Assistance Loan': {
-    desc: 'Immediate financial aid for funeral and bereavement expenses upon the passing of an immediate family member.',
-    helper: '₱5,000 to ₱15,000. Expedited processing within 24 hours.'
-  },
-  'Project / Entrepreneurial Loan': {
-    desc: 'Livelihood capital funding to start or scale micro-enterprises, sari-sari stores, or local agribusiness projects.',
-    helper: '₱10,000 to ₱150,000. Monthly diminishing balance amortization.'
+  'Short Term Loan (STL) - Special Occasion': {
+    desc: 'Financial support for seasonal expenses, holidays, and school registration periods.',
+    helper: 'Fixed amount: ₱10,000. Term: 3 months.'
   }
 };
 
@@ -213,7 +177,7 @@ export default function OverviewPage() {
   // --- MEMBER WIZARD FORM STATES ---
   // (Must be declared at the top level alongside other hooks, never after
   //  conditional returns, to satisfy React's Rules of Hooks.)
-  const [activeModal, setActiveModal] = useState<'loan' | 'investment' | 'appointment' | null>(null);
+  const [activeModal, setActiveModal] = useState<'loan' | 'investment' | 'appointment' | 'welcome' | null>(null);
   const [wizardStep, setWizardStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [successData, setSuccessData] = useState<any>(null);
@@ -236,7 +200,6 @@ export default function OverviewPage() {
   const [paymentRefNo, setPaymentRefNo] = useState<string>('');
 
   // Milestone goal editing states
-  const [isEditingGoal, setIsEditingGoal] = useState<boolean>(false);
   const [newGoalAmount, setNewGoalAmount] = useState<string>('');
 
   // Appointment Form States
@@ -272,7 +235,12 @@ export default function OverviewPage() {
         const memberId = user.profile?.id;
         if (memberId) {
           const response = await api.get(`/members/${memberId}/dashboard-summary`);
-          setMemberMetrics(response.data.data);
+          const metricsData = response.data.data;
+          setMemberMetrics(metricsData);
+          if (metricsData && Number(metricsData.investment_goal) === 0) {
+            setActiveModal('welcome');
+            setWizardStep(1);
+          }
         } else {
           setError('Could not associate authenticated session with member profile.');
         }
@@ -416,31 +384,7 @@ export default function OverviewPage() {
     }
   };
 
-  const handleUpdateGoal = async () => {
-    const goalVal = parseFloat(newGoalAmount);
-    if (isNaN(goalVal) || goalVal <= 0) {
-      alert('Please enter a valid target goal amount.');
-      return;
-    }
-    const memberId = user?.profile?.id;
-    if (!memberId) return;
 
-    try {
-      setSubmitting(true);
-      await api.patch(`/members/${memberId}/milestone-goal`, {
-        investment_goal: goalVal
-      });
-      setMemberMetrics((prev: any) => ({
-        ...prev,
-        investment_goal: goalVal
-      }));
-      setIsEditingGoal(false);
-    } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Failed to update milestone goal.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleBookAppointment = async () => {
     if (!appointmentDate || !appointmentPurpose) {
@@ -474,7 +418,6 @@ export default function OverviewPage() {
     setAppointmentDate('');
     setPaymentRefNo('');
     setPaymentMethod('otc');
-    setIsEditingGoal(false);
     setInvestmentType('share_capital');
     setCoMakerName('');
     setCoMakerPhone('');
@@ -493,7 +436,7 @@ export default function OverviewPage() {
             <span>Verified Member Session</span>
           </div>
           <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
-            Welcome back, {memberMetrics?.full_name || user.username}!
+            Welcome back, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
           </h1>
           <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
             Cooperative Member Ledger Account Summary
@@ -532,7 +475,7 @@ export default function OverviewPage() {
         {/* Quick Transactions Section */}
         <div className="space-y-4">
           <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
 
             {/* Apply for Loan */}
             <button
@@ -556,30 +499,32 @@ export default function OverviewPage() {
             </button>
 
             {/* Initiate Investment */}
-            <button
-              onClick={() => {
-                setActiveModal('investment');
-                setWizardStep(1);
-                setSuccessData(null);
-                setModalError(null);
-              }}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
-            >
-              <div className="space-y-1">
-                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
-                  Initiate Investment
-                </h4>
-                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                  Add capital placement to your share equity.
-                </p>
-                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                  Proceed &rarr;
-                </span>
-              </div>
-              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
-                <Coins className="w-6 h-6" />
-              </div>
-            </button>
+            {balances.total_assets === 0 && (
+              <button
+                onClick={() => {
+                  setActiveModal('investment');
+                  setWizardStep(1);
+                  setSuccessData(null);
+                  setModalError(null);
+                }}
+                className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+              >
+                <div className="space-y-1">
+                  <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
+                    Initiate Investment
+                  </h4>
+                  <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                    Add capital placement to your share equity.
+                  </p>
+                  <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                    Proceed &rarr;
+                  </span>
+                </div>
+                <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                  <Coins className="w-6 h-6" />
+                </div>
+              </button>
+            )}
 
             {/* Book Appointment */}
             <button
@@ -643,10 +588,10 @@ export default function OverviewPage() {
           {/* Progress Bar & Target Math */}
           {(() => {
             const currentEquity = balances.share_capital || 0;
-            const milestoneTarget = memberMetrics?.investment_goal || (currentEquity < 10000 ? 10000 : currentEquity < 25000 ? 25000 : currentEquity < 50000 ? 50000 : currentEquity < 100000 ? 100000 : (Math.ceil(currentEquity / 50000) + 1) * 50000);
-            const progressPercent = Math.min(100, Math.round((currentEquity / milestoneTarget) * 100));
+            const milestoneTarget = memberMetrics?.investment_goal ?? 0;
+            const progressPercent = milestoneTarget > 0 ? Math.min(100, Math.round((currentEquity / milestoneTarget) * 100)) : 0;
             const estAnnualDividend = currentEquity * 0.065;
-            const isGoalReached = progressPercent >= 100;
+            const isGoalReached = milestoneTarget > 0 && progressPercent >= 100;
 
             return (
               <div className="space-y-5">
@@ -661,49 +606,9 @@ export default function OverviewPage() {
                   <div className="text-right space-y-0.5">
                     <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Target Milestone Goal</span>
                     <div className="flex items-center justify-end gap-1.5 min-h-[28px]">
-                      {isEditingGoal ? (
-                        <div className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-850 px-2 py-0.5 rounded-lg border border-outline-variant/65">
-                          <span className="text-xs text-neutral-500 font-bold">₱</span>
-                          <input
-                            type="number"
-                            value={newGoalAmount}
-                            onChange={(e) => setNewGoalAmount(e.target.value)}
-                            className="w-20 bg-transparent text-xs font-bold focus:outline-none text-right font-mono"
-                            placeholder="e.g. 50000"
-                            autoFocus
-                          />
-                          <button
-                            onClick={handleUpdateGoal}
-                            className="text-primary dark:text-secondary hover:bg-neutral/15 rounded p-0.5 font-bold text-xs"
-                            title="Save Goal"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            onClick={() => setIsEditingGoal(false)}
-                            className="text-neutral-400 hover:bg-neutral/15 rounded p-0.5 font-bold text-xs"
-                            title="Cancel"
-                          >
-                            ✗
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="font-headline text-base font-bold text-on-surface dark:text-white">
-                            {formatCurrency(milestoneTarget)}
-                          </div>
-                          <button
-                            onClick={() => {
-                              setNewGoalAmount(milestoneTarget.toString());
-                              setIsEditingGoal(true);
-                            }}
-                            className="p-1 text-neutral-400 hover:text-primary dark:text-neutral-500 dark:hover:text-secondary hover:bg-neutral/10 dark:hover:bg-neutral-800 rounded transition-all cursor-pointer"
-                            title="Edit Investment Goal"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                        </>
-                      )}
+                      <div className="font-headline text-base font-bold text-on-surface dark:text-white">
+                        {formatCurrency(milestoneTarget)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -779,9 +684,11 @@ export default function OverviewPage() {
         {/* TRANSACTIONS MODAL OVERLAYS (ELDERLY ACCESSIBLE DESIGN) */}
         {/* ======================================================== */}
         {activeModal && (
-          <div key={activeModal} className="fixed inset-0 bg-neutral-950/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-modal-backdrop">
+          <div key={activeModal} className="fixed inset-0 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-modal-backdrop">
             <div key={`${activeModal}-${wizardStep}`} className={`bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[95vh] animate-modal-pop ${
-              activeModal === 'loan' ? 'max-w-5xl' : 'max-w-xl'
+              activeModal === 'loan'
+                ? (wizardStep === 3 ? 'max-w-md' : (wizardStep === 1 ? 'max-w-3xl' : 'max-w-5xl'))
+                : 'max-w-xl'
             }`}>
               {/* Header */}
               <div className="px-6 py-5 border-b border-outline-variant/40 flex justify-between items-center bg-surface-container-low dark:bg-surface-container-high/40">
@@ -789,14 +696,17 @@ export default function OverviewPage() {
                   {activeModal === 'loan' && 'Apply for a Loan'}
                   {activeModal === 'investment' && 'Initiate Investment'}
                   {activeModal === 'appointment' && 'Book Office Appointment'}
+                  {activeModal === 'welcome' && (wizardStep === 1 ? 'Welcome to UC COOP!' : 'Set Your Investment Goal')}
                 </h3>
-                <button
-                  onClick={closeModal}
-                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  aria-label="Close modal"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                {activeModal !== 'welcome' && (
+                  <button
+                    onClick={closeModal}
+                    className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    aria-label="Close modal"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
 
               {/* Body */}
@@ -821,103 +731,163 @@ export default function OverviewPage() {
                     </div>
 
                     {/* Step 1: Choose Product */}
-                    {wizardStep === 1 && (
-                      <div className="space-y-5">
-                        <div className="space-y-2">
-                          <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Select Loan Category:</span>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                            {Object.entries(LOAN_CATEGORIES).map(([key, label]) => {
-                              const isActive = selectedLoanCategory === label;
-                              return (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedLoanCategory(label);
-                                    const filtered = products.filter(p => getProductCategory(p.name) === label);
-                                    if (filtered.length > 0) {
-                                      setSelectedProduct(filtered[0]);
-                                      setLoanAmount(parseFloat(filtered[0].min_amount));
-                                    } else {
-                                      setSelectedProduct(null);
-                                    }
-                                  }}
-                                  className={`p-3 rounded-2xl border text-center transition-all cursor-pointer text-xs font-bold ${
-                                    isActive
-                                      ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
-                                      : 'border-outline-variant/65 text-neutral-600 dark:text-neutral-400 hover:border-neutral/30'
-                                  }`}
-                                >
-                                  {label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
+                    {/* Step 1: Choose Product */}
+                    {wizardStep === 1 && (() => {
+                      const activeRegularCount = memberMetrics?.loans?.active_regular_count || 0;
+                      const activeStlCount = memberMetrics?.loans?.active_stl_count || 0;
+                      const isRegularLocked = selectedLoanCategory === LOAN_CATEGORIES.REGULAR && activeRegularCount >= 1;
+                      const isStlLocked = selectedLoanCategory === LOAN_CATEGORIES.STL && activeStlCount >= 3;
+                      const filteredProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
 
-                        {(() => {
-                          const filteredProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
-                          return (
-                            <div className="space-y-3 pt-2">
-                              <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
-                              {filteredProducts.length === 0 ? (
-                                <div className="text-center py-8 text-xs text-neutral-500 italic bg-neutral-50 dark:bg-neutral-900/40 rounded-2xl border border-dashed border-outline-variant/60">
-                                  No active loan products in this category.
-                                </div>
+                      return (
+                        <div className="space-y-5">
+                          <div className="space-y-2">
+                            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Select Loan Category:</span>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                              {Object.entries(LOAN_CATEGORIES).map(([key, label]) => {
+                                const isActive = selectedLoanCategory === label;
+                                return (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedLoanCategory(label);
+                                      const filtered = products.filter(p => getProductCategory(p.name) === label);
+                                      if (filtered.length > 0) {
+                                        setSelectedProduct(filtered[0]);
+                                        setLoanAmount(parseFloat(filtered[0].min_amount));
+                                      } else {
+                                        setSelectedProduct(null);
+                                      }
+                                    }}
+                                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer text-xs font-bold ${
+                                      isActive
+                                        ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
+                                        : 'border-outline-variant/65 text-neutral-600 dark:text-neutral-400 hover:border-neutral/30'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            
+                            <div className="text-[11px] font-bold text-neutral-500/90 flex items-center gap-2 mt-2.5 bg-neutral/5 dark:bg-neutral/10 p-2 px-3.5 rounded-2xl border border-outline-variant/30">
+                              <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                              {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
+                                <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
                               ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[460px] overflow-y-auto pr-1 pt-1">
-                                  {filteredProducts.map((p) => {
-                                    const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
-                                    const isSelected = selectedProduct?.id === p.id;
-                                    return (
-                                      <button
-                                        key={p.id}
-                                        type="button"
-                                        onClick={() => {
-                                          setSelectedProduct(p);
-                                          setLoanAmount(parseFloat(p.min_amount));
-                                        }}
-                                        className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                                          isSelected
-                                            ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
-                                            : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 dark:hover:bg-neutral/10'
-                                        }`}
-                                      >
-                                        <div className="flex justify-between items-start">
-                                          <div>
-                                            <span className="font-bold text-on-surface dark:text-white text-sm block">{p.name}</span>
-                                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-normal mt-1">{details.desc}</p>
-                                            {details.helper && (
-                                              <p className="text-[9px] text-primary/70 dark:text-secondary/70 font-semibold mt-0.5">{details.helper}</p>
-                                            )}
-                                          </div>
-                                          <span className="text-[10px] font-bold bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2 py-0.5 rounded-full uppercase whitespace-nowrap">
-                                            {p.amortization_type.replace('_', ' ')}
-                                          </span>
-                                        </div>
-                                        <div className="mt-3.5 pt-2.5 border-t border-outline-variant/30 text-[11px] text-neutral-600 dark:text-neutral-400 flex justify-between">
-                                          <span>Interest: <strong className="text-on-surface dark:text-white font-semibold">{(parseFloat(p.interest_rate) * 100).toFixed(1)}% p.a.</strong></span>
-                                          <span>Term: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months} months</strong></span>
-                                          <span>Range: <strong className="text-on-surface dark:text-white font-semibold">₱{parseFloat(p.min_amount).toLocaleString()} - ₱{parseFloat(p.max_amount).toLocaleString()}</strong></span>
-                                        </div>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
+                                <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
                               )}
                             </div>
-                          );
-                        })()}
+                          </div>
 
-                        <button
-                          disabled={!selectedProduct}
-                          onClick={() => setWizardStep(2)}
-                          className="w-full mt-2 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-base"
-                        >
-                          Continue to Amount
-                        </button>
-                      </div>
-                    )}
+                          <div className="space-y-3 pt-2">
+                            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
+                            {isRegularLocked && (
+                              <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
+                                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                                <span>You cannot apply for a new Regular Loan because you already have an active Regular Loan.</span>
+                              </div>
+                            )}
+                            {isStlLocked && (
+                              <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
+                                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                                <span>You cannot apply for a new Short Term Loan (STL) because you have reached the maximum limit of 3 active Short Term Loans.</span>
+                              </div>
+                            )}
+
+                            {filteredProducts.length === 0 ? (
+                              <div className="text-center py-8 text-xs text-neutral-500 italic bg-neutral-50 dark:bg-neutral-900/40 rounded-2xl border border-dashed border-outline-variant/60">
+                                No active loan products in this category.
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[460px] overflow-y-auto pr-1 pt-1">
+                                {filteredProducts.map((p) => {
+                                  const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
+                                  const isSelected = selectedProduct?.id === p.id;
+                                  return (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      disabled={isRegularLocked || isStlLocked}
+                                      onClick={() => {
+                                        setSelectedProduct(p);
+                                        setLoanAmount(parseFloat(p.min_amount));
+                                      }}
+                                      className={`w-full p-3.5 rounded-2xl border text-left transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                                        isSelected
+                                          ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                                          : 'border-outline-variant/65 bg-transparent hover:border-primary/45 dark:hover:border-secondary/45 hover:bg-neutral/5'
+                                      }`}
+                                    >
+                                      <div className="flex justify-between items-center mb-2.5">
+                                        <span className="font-bold text-on-surface dark:text-white text-sm block tracking-tight">
+                                          {p.name
+                                            .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
+                                            .replace(/Short Term Loan\s*-\s*/gi, '')
+                                            .replace(/Regular Loan\s*-\s*/gi, '')}
+                                        </span>
+                                        <span className="text-[9px] font-black bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap tracking-wider">
+                                          {p.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing'}
+                                        </span>
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-3 gap-2 text-center">
+                                        <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
+                                          <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Amount</span>
+                                          <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
+                                            {p.min_amount === p.max_amount 
+                                              ? `₱${parseFloat(p.min_amount).toLocaleString()}`
+                                              : `₱${parseFloat(p.min_amount).toLocaleString()} - ₱${parseFloat(p.max_amount).toLocaleString()}`}
+                                          </strong>
+                                        </div>
+                                        <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
+                                          <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Interest</span>
+                                          <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
+                                            {(parseFloat(p.interest_rate) * 100).toFixed(1)}% p.a.
+                                          </strong>
+                                        </div>
+                                        <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
+                                          <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Term</span>
+                                          <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
+                                            {p.term_months} {p.term_months === 1 ? 'Month' : 'Months'}
+                                          </strong>
+                                        </div>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          <button
+                            disabled={!selectedProduct || isRegularLocked || isStlLocked}
+                            onClick={() => {
+                              if (selectedProduct) {
+                                const shareCapital = memberMetrics?.balances?.share_capital || 0;
+                                const historicalCount = memberMetrics?.loans?.historical_count || 0;
+                                let borrowLimit = 0;
+                                if (historicalCount === 0) {
+                                  borrowLimit = 0.8 * shareCapital;
+                                } else if (historicalCount === 1) {
+                                  borrowLimit = 2.0 * shareCapital;
+                                } else {
+                                  borrowLimit = 3.0 * shareCapital;
+                                }
+                                const maxSliderCap = Math.min(parseFloat(selectedProduct.max_amount), borrowLimit);
+                                setLoanAmount(maxSliderCap);
+                              }
+                              setWizardStep(2);
+                            }}
+                            className="w-full mt-2 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-base"
+                          >
+                            Continue to Amount
+                          </button>
+                        </div>
+                      );
+                    })()}
 
                     {/* Step 2: Amount & Term Slider */}
                     {wizardStep === 2 && selectedProduct && (() => {
@@ -983,11 +953,11 @@ export default function OverviewPage() {
                               <div className="space-y-2">
                                 <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 flex justify-between">
                                   <span>Adjust Amount:</span>
-                                  <span>Min: {formatCurrency(parseFloat(selectedProduct.min_amount))}</span>
+                                  <span>Min: {formatCurrency(Math.min(parseFloat(selectedProduct.min_amount), maxSliderCap))}</span>
                                 </label>
                                 <input
                                   type="range"
-                                  min={selectedProduct.min_amount}
+                                  min={Math.min(parseFloat(selectedProduct.min_amount), maxSliderCap)}
                                   max={maxSliderCap}
                                   step="1000"
                                   value={currentLoanAmount}
@@ -1439,6 +1409,92 @@ export default function OverviewPage() {
                             className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer"
                           >
                             Finish
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ----------------- WELCOME & GOAL SETTING WIZARD ----------------- */}
+                {activeModal === 'welcome' && (
+                  <div className="space-y-6">
+                    {wizardStep === 1 && (
+                      <div className="space-y-4 text-center py-4">
+                        <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary flex items-center justify-center mb-2">
+                          <Sparkles className="w-8 h-8" />
+                        </div>
+                        <h4 className="font-headline font-extrabold text-xl text-primary dark:text-secondary">
+                          Hello, {user?.profile?.first_name || 'Member'}!
+                        </h4>
+                        <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed max-w-md mx-auto">
+                          Welcome to the **University Cooperative Loan Monitoring & Financial Management System**. 
+                          We are excited to help you track your share capital, fixed deposits, investments, and loan applications in one unified, secure platform.
+                        </p>
+                        <div className="pt-4">
+                          <button
+                            onClick={() => setWizardStep(2)}
+                            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer"
+                          >
+                            <span>Get Started</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {wizardStep === 2 && (
+                      <div className="space-y-5">
+                        <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                          Setting an investment milestone goal helps you visualize and track your accumulated equity capital (Share Capital + Fixed Deposits). Once your investment hits 100% of your milestone goal, our Cooperative Office will be automatically notified to coordinate payout or rollover options.
+                        </p>
+                        
+                        <div className="space-y-2">
+                          <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider">
+                            Your Target Investment Goal (PHP)
+                          </label>
+                          <div className="relative rounded-2xl border border-outline-variant/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden bg-neutral-50 dark:bg-neutral-900 transition-all">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 font-bold">₱</span>
+                            <input
+                              type="number"
+                              value={newGoalAmount}
+                              onChange={(e) => setNewGoalAmount(e.target.value)}
+                              placeholder="e.g. 50000"
+                              className="w-full bg-transparent pl-8 pr-4 py-3 text-sm font-bold text-on-surface dark:text-white focus:outline-none placeholder-neutral-400"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="pt-3">
+                          <button
+                            onClick={async () => {
+                              const goalVal = parseFloat(newGoalAmount);
+                              if (isNaN(goalVal) || goalVal <= 0) {
+                                setModalError('Please enter a valid target goal amount (greater than 0).');
+                                return;
+                              }
+                              setSubmitting(true);
+                              setModalError(null);
+                              try {
+                                const memberId = user?.profile?.id;
+                                const response = await api.patch(`/members/${memberId}/milestone-goal`, {
+                                  investment_goal: goalVal
+                                });
+                                setMemberMetrics((prev: any) => prev ? {
+                                  ...prev,
+                                  investment_goal: response.data.data.investment_goal
+                                } : null);
+                                closeModal();
+                              } catch (err: any) {
+                                setModalError(err.response?.data?.error?.message || 'Failed to save milestone goal.');
+                              } finally {
+                                setSubmitting(false);
+                              }
+                            }}
+                            disabled={submitting}
+                            className="w-full py-3 px-4 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all active:scale-95 shadow-md disabled:opacity-50 cursor-pointer text-center"
+                          >
+                            {submitting ? 'Saving...' : 'Save & Finish'}
                           </button>
                         </div>
                       </div>

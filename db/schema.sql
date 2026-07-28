@@ -40,6 +40,7 @@ CREATE TABLE members (
     address TEXT,
     date_of_birth DATE,
     age INT,
+    investment_goal NUMERIC DEFAULT 0.00,
     status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'inactive')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

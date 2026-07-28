@@ -321,7 +321,8 @@ export default function MembersPage() {
   };
 
   return (
-    <div className="space-y-6 animate-micro-elevate">
+    <>
+      <div className="space-y-6 animate-micro-elevate">
       <div>
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
@@ -814,9 +815,11 @@ export default function MembersPage() {
         </div>
       )}
 
+      </div>
+
       {/* Add Member Modal Popup System */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/50 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsModalOpen(false)}
@@ -973,6 +976,6 @@ export default function MembersPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
