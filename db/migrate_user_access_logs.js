@@ -12,11 +12,10 @@ const pool = new Pool({
   port: parseInt(process.env.DB_PORT || '5432', 10),
 });
 
-async function migrate() {
-  console.log('Connecting to database:', process.env.DB_NAME);
+export async function migrateUserAccessLogs() {
+  console.log('[Migration] Checking user_access_logs table...');
   const client = await pool.connect();
   try {
-    console.log('Creating user_access_logs table if not exists...');
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS user_access_logs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -39,13 +38,18 @@ async function migrate() {
       CREATE INDEX IF NOT EXISTS idx_user_access_logs_status ON user_access_logs(status);
     `;
     await client.query(createTableQuery);
-    console.log('Successfully created user_access_logs table and indexes.');
+    console.log('[Migration] user_access_logs table is ready.');
   } catch (error) {
-    console.error('Migration failed:', error);
+    console.error('[Migration] Failed to migrate user_access_logs:', error);
+    throw error;
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
-migrate();
+// Allow direct CLI execution
+if (import.meta.url === `file://${process.argv[1]}`) {
+  migrateUserAccessLogs()
+    .then(() => pool.end())
+    .catch(() => pool.end());
+}

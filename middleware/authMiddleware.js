@@ -44,12 +44,11 @@ export const protect = async (req, res, next) => {
       // Auto-create or link fallback member profile if role is member
       if (req.user.role === 'member') {
         const newMember = await query(
-          `INSERT INTO members (user_id, member_no, first_name, last_name, email, phone, status)
-           VALUES ($1, $2, $3, $4, $5, $6, 'active')
+          `INSERT INTO members (user_id, first_name, last_name, email, phone, status)
+           VALUES ($1, $2, $3, $4, $5, 'active')
            RETURNING *`,
           [
             req.user.id,
-            `MEM-${Math.floor(100000 + Math.random() * 900000)}`,
             req.user.username.split('_')[0] || req.user.username,
             req.user.username.split('_')[1] || 'Member',
             `${req.user.username}@ucmetc.coop`,
