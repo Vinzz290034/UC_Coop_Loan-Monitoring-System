@@ -189,7 +189,7 @@ export default function OverviewPage() {
   // --- MEMBER WIZARD FORM STATES ---
   // (Must be declared at the top level alongside other hooks, never after
   //  conditional returns, to satisfy React's Rules of Hooks.)
-  const [activeModal, setActiveModal] = useState<'loan' | 'investment' | 'appointment' | 'welcome' | null>(null);
+  const [activeModal, setActiveModal] = useState<'loan' | 'unverified_loan' | 'investment' | 'appointment' | 'welcome' | null>(null);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -323,6 +323,10 @@ export default function OverviewPage() {
 
   // Fetch products when opening loan modal
   const openLoanModal = async () => {
+    if (!isVerified) {
+      setActiveModal('unverified_loan');
+      return;
+    }
     try {
       setModalError(null);
       setSubmitting(true);
@@ -518,28 +522,27 @@ export default function OverviewPage() {
           <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
           <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
 
-            {/* Apply for Loan (Only visible & triggerable after profile verification and admin approval) */}
-            {isVerified && (
-              <button
-                onClick={openLoanModal}
-                className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
-              >
-                <div className="space-y-1">
-                  <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
-                    Apply for a Loan
-                  </h4>
-                  <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                    Submit a new credit application request.
-                  </p>
-                  <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                    Proceed &rarr;
-                  </span>
-                </div>
-                <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
-                  <PlusCircle className="w-6 h-6" />
-                </div>
-              </button>
-            )}
+            {/* Apply for Loan */}
+            <button
+              onClick={openLoanModal}
+              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40 relative overflow-hidden"
+            >
+              <div className="space-y-1">
+                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
+                  Apply for a Loan
+                  {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                </h4>
+                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                  Submit a new credit application request.
+                </p>
+                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                  {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
+                </span>
+              </div>
+              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                <PlusCircle className="w-6 h-6" />
+              </div>
+            </button>
 
             {/* Initiate Investment */}
             {balances.total_assets === 0 && (
@@ -739,6 +742,7 @@ export default function OverviewPage() {
               <div className="px-6 py-5 border-b border-outline-variant/40 flex justify-between items-center bg-surface-container-low dark:bg-surface-container-high/40">
                 <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white capitalize">
                   {activeModal === 'loan' && 'Apply for a Loan'}
+                  {activeModal === 'unverified_loan' && 'Account Verification Required'}
                   {activeModal === 'investment' && 'Initiate Investment'}
                   {activeModal === 'appointment' && 'Book Office Appointment'}
                   {activeModal === 'welcome' && (wizardStep === 1 ? 'Welcome to Coop Sync!' : wizardStep === 2 ? 'Set Your Investment Goal' : 'Account Verification Required')}
@@ -760,6 +764,53 @@ export default function OverviewPage() {
                   <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-sm font-semibold flex items-start gap-2.5">
                     <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                     <span>{modalError}</span>
+                  </div>
+                )}
+
+                {/* ----------------- UNVERIFIED LOAN WARNING MODAL ----------------- */}
+                {activeModal === 'unverified_loan' && (
+                  <div className="space-y-6 text-center py-2">
+                    <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto ring-8 ring-amber-500/5">
+                      <Lock className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-2">
+                      <h4 className="font-headline font-extrabold text-xl text-on-surface dark:text-white">
+                        Account Profile Not Yet Verified
+                      </h4>
+                      <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-md mx-auto leading-relaxed font-medium">
+                        Your account profile is currently unverified or pending review by Cooperative Management. You must complete your personal profile verification and receive Admin approval before applying for a credit line.
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs text-left space-y-2 font-medium">
+                      <p className="font-bold flex items-center gap-2">
+                        <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                        Next Steps Required:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-[11px] text-neutral-700 dark:text-neutral-300 pl-1">
+                        <li>Complete all personal profile details (TIN, Member Title, Address, etc.)</li>
+                        <li>Submit your profile for verification on the Profile Page</li>
+                        <li>Wait for Cooperative Admin or Staff review (typically 24–48 hours)</li>
+                      </ul>
+                    </div>
+
+                    <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                      <button
+                        onClick={() => {
+                          closeModal();
+                          router.push('/dashboard/profile');
+                        }}
+                        className="w-full sm:w-auto px-6 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-2xl text-xs shadow-md hover:opacity-90 transition-all cursor-pointer"
+                      >
+                        Go to Profile Verification
+                      </button>
+                      <button
+                        onClick={closeModal}
+                        className="w-full sm:w-auto px-6 py-3 border border-outline-variant/65 text-neutral-700 dark:text-neutral-300 font-bold rounded-2xl text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                 )}
 

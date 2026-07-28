@@ -140,6 +140,7 @@ function LoansPageContent() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
   const [isRepaymentModalOpen, setIsRepaymentModalOpen] = useState(false);
+  const [isUnverifiedModalOpen, setIsUnverifiedModalOpen] = useState(false);
 
   // Form Fields: Product
   const [prodName, setProdName] = useState('');
@@ -529,6 +530,10 @@ function LoansPageContent() {
   };
 
   const openApplyModal = () => {
+    if (!isAdminOrManager && !isVerified) {
+      setIsUnverifiedModalOpen(true);
+      return;
+    }
     setWizardStep(1);
     setSelectedProduct(null);
     setSelectedLoanCategory(LOAN_CATEGORIES.REGULAR);
@@ -678,8 +683,8 @@ function LoansPageContent() {
             Manage credit products, loan instantiation, approvals, and repayment bookings.
           </p>
         </div>
-        {isAdminOrManager && (
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {isAdminOrManager && (
             <button
               onClick={() => setIsRepaymentModalOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-full text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 transition-all shadow-sm"
@@ -687,17 +692,16 @@ function LoansPageContent() {
               <CreditCard className="w-4 h-4 text-tertiary" />
               Book Repayment
             </button>
-            {isVerified && (
-              <button
-                onClick={openApplyModal}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all"
-              >
-                <PlusCircle className="w-4 h-4" />
-                Apply for Loan
-              </button>
-            )}
-          </div>
-        )}
+          )}
+          <button
+            onClick={openApplyModal}
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all cursor-pointer"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Apply for Loan
+            {!isVerified && !isAdminOrManager && <Lock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
+          </button>
+        </div>
       </div>
 
       {!isAdminOrManager && !isVerified && (
@@ -2152,6 +2156,53 @@ function LoansPageContent() {
                   <Printer className="w-4 h-4" /> Print Receipt
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: UNVERIFIED ACCOUNT NOTICE MODAL */}
+      {isUnverifiedModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop text-center space-y-5">
+            <div className="w-14 h-14 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto ring-8 ring-amber-500/5">
+              <Lock className="w-7 h-7" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white">
+                Account Profile Not Yet Verified
+              </h3>
+              <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed font-medium">
+                Your account profile is currently unverified or pending review by Cooperative Management. You must complete your personal profile verification and receive Admin approval before applying for a credit line.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs text-left space-y-1.5 font-medium">
+              <p className="font-bold flex items-center gap-1.5">
+                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                Required Actions:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-neutral-700 dark:text-neutral-300 pl-1">
+                <li>Complete all profile details (TIN, Member Title, Address, etc.)</li>
+                <li>Submit your profile for verification on the Profile Page</li>
+                <li>Wait for Cooperative Admin review (typically 24–48 hours)</li>
+              </ul>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+              <Link
+                href="/dashboard/profile"
+                className="w-full sm:w-auto px-5 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-2xl text-xs shadow hover:opacity-90 transition-all text-center"
+              >
+                Go to Profile Verification
+              </Link>
+              <button
+                type="button"
+                onClick={() => setIsUnverifiedModalOpen(false)}
+                className="w-full sm:w-auto px-5 py-2.5 border border-outline-variant/65 text-neutral-700 dark:text-neutral-300 font-bold rounded-2xl text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
