@@ -52,13 +52,7 @@ export default function AppointmentsPage() {
   }, [setBreadcrumbLabel]);
 
   // Redirect staff from appointments
-  useEffect(() => {
-    if (user && user.role === 'staff') {
-      router.push('/dashboard');
-    }
-  }, [user, router]);
-
-  const isAdminOrManager = user?.role === 'admin';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);

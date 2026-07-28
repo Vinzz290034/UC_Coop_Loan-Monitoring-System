@@ -8,7 +8,9 @@ import {
   deleteMember,
   getMemberDashboardSummary, // Imported summary function
   exportMembersReport,        // Imported exporter function
-  updateMemberGoal
+  updateMemberGoal,
+  completeMemberProfile,
+  reviewMemberProfile
 } from '../controllers/memberController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -16,6 +18,12 @@ const router = express.Router();
 
 // Apply auth middleware to all member routes
 router.use(protect);
+
+// Onboarding Step 2 Profile Completion
+router.post('/complete-profile', completeMemberProfile);
+
+// Admin & Staff Approval Decision
+router.patch('/:id/approval', restrictTo('admin', 'staff'), reviewMemberProfile);
 
 // Standard Member CRUD & Listings
 router.route('/')

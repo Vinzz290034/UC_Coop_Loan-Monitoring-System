@@ -36,7 +36,8 @@ interface Member {
   address?: string;
   date_of_birth?: string;
   profile_picture_url?: string | null;
-  status: 'active' | 'suspended' | 'inactive';
+  status: 'active' | 'suspended' | 'inactive' | 'pending' | 'approved' | 'disapproved';
+  profile_completed?: boolean;
   created_at: string;
 }
 
@@ -310,11 +311,26 @@ export default function MembersPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'pending':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Pending Review
+          </span>
+        );
+      case 'approved':
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
             <CheckCircle className="w-3.5 h-3.5" />
-            Active
+            {status === 'approved' ? 'Approved' : 'Active'}
+          </span>
+        );
+      case 'disapproved':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+            <X className="w-3.5 h-3.5" />
+            Disapproved
           </span>
         );
       case 'suspended':
@@ -398,6 +414,9 @@ export default function MembersPage() {
               className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
             >
               <option value="">All Statuses</option>
+              <option value="pending">Pending Review</option>
+              <option value="approved">Approved</option>
+              <option value="disapproved">Disapproved</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
               <option value="inactive">Inactive</option>
@@ -884,7 +903,43 @@ export default function MembersPage() {
                         </td>
 
                         {/* Actions Cell */}
-                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap space-x-2">
+                          {member.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await api.patch(`/members/${member.id}/approval`, { status: 'approved' });
+                                    setToastMessage(`Member ${member.first_name} ${member.last_name} profile approved.`);
+                                    fetchMembers();
+                                  } catch (err: any) {
+                                    alert(err.response?.data?.error?.message || 'Failed to approve profile.');
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/20"
+                                title="Approve Member Profile"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                Approve
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await api.patch(`/members/${member.id}/approval`, { status: 'disapproved' });
+                                    setToastMessage(`Member ${member.first_name} ${member.last_name} profile disapproved.`);
+                                    fetchMembers();
+                                  } catch (err: any) {
+                                    alert(err.response?.data?.error?.message || 'Failed to disapprove profile.');
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20"
+                                title="Disapprove Member Profile"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                Reject
+                              </button>
+                            </>
+                          )}
                           <Link
                             href={`/dashboard/members/${member.id}`}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs"

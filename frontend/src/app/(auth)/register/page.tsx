@@ -340,20 +340,8 @@ export default function RegisterPage() {
         return;
       }
     }
-    if (username.length < 3) {
-      setError('Username must be at least 3 characters long.');
-      return;
-    }
-    if (!/^[a-zA-Z]/.test(username)) {
-      setError('Username must begin with a letter.');
-      return;
-    }
-    if (/\s/.test(username)) {
-      setError('Username must be a single word (no spaces).');
-      return;
-    }
-    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(username)) {
-      setError('Username can only contain letters, numbers, and underscores.');
+    if (!/^[a-zA-Z0-9_]{3,}$/.test(username)) {
+      setError('Username must be at least 3 characters and contain letters, numbers, and underscores only.');
       return;
     }
     if (password.length < 8) {

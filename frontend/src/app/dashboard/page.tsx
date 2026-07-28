@@ -46,6 +46,8 @@ import {
   ArrowRight,
   Pencil,
 } from 'lucide-react';
+import ProfileCompletionModal from '@/components/onboarding/ProfileCompletionModal';
+import IncompleteProfileBanner from '@/components/onboarding/IncompleteProfileBanner';
 import { useRouter } from 'next/navigation';
 
 const LOAN_CATEGORIES = {
@@ -179,10 +181,20 @@ export default function OverviewPage() {
   // (Must be declared at the top level alongside other hooks, never after
   //  conditional returns, to satisfy React's Rules of Hooks.)
   const [activeModal, setActiveModal] = useState<'loan' | 'investment' | 'appointment' | 'welcome' | null>(null);
+  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [successData, setSuccessData] = useState<any>(null);
   const [modalError, setModalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user && user.role === 'member') {
+      const isCompleted = user.profile?.profile_completed;
+      if (!isCompleted) {
+        setIsOnboardingModalOpen(true);
+      }
+    }
+  }, [user]);
 
   // Loan Form States
   const [products, setProducts] = useState<any[]>([]);
@@ -430,8 +442,25 @@ export default function OverviewPage() {
     const balances = memberMetrics?.balances || { share_capital: 0, fixed_deposits: 0, investments: 0, total_assets: 0 };
     const loans = memberMetrics?.loans || { active_count: 0, original_principal: 0, outstanding_balance: 0 };
 
+    const isProfileCompleted = user?.profile?.profile_completed;
+    const memberStatus = user?.profile?.status;
+    const isProfileApproved = isProfileCompleted && ['approved', 'active'].includes(memberStatus || '');
+
     return (
       <div className="space-y-8">
+        <ProfileCompletionModal
+          isOpen={isOnboardingModalOpen}
+          onClose={() => setIsOnboardingModalOpen(false)}
+        />
+
+        {!isProfileApproved && (
+          <IncompleteProfileBanner
+            onActionClick={() => setIsOnboardingModalOpen(true)}
+            status={memberStatus}
+            isCompleted={isProfileCompleted}
+          />
+        )}
+
         {/* Header Greeting */}
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary mb-2">

@@ -366,10 +366,10 @@ export const updateMemberStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status, remarks } = req.body;
 
-    if (!status || !['active', 'suspended', 'inactive'].includes(status)) {
+    if (!status || !['active', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'].includes(status)) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Please provide a valid status: active, suspended, or inactive.' }
+        error: { message: 'Please provide a valid status: pending, approved, disapproved, active, suspended, or inactive.' }
       });
     }
 
@@ -692,5 +692,163 @@ export const updateMemberGoal = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+// @desc    Complete member profile with deferred personal information (Step 2 Onboarding)
+// @route   POST /api/members/complete-profile
+// @access  Protected (Member)
+export const completeMemberProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { gender, civil_status, address, tin, title } = req.body;
+
+    if (!gender || !civil_status || !address) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Gender, civil status, and complete address are required.' }
+      });
+    }
+
+    if (!['Male', 'Female'].includes(gender)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Gender must be Male or Female.' }
+      });
+    }
+
+    if (!['Single', 'Married', 'Widowed', 'Separated', 'Divorced'].includes(civil_status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid civil status.' }
+      });
+    }
+
+    const cleanAddress = address.trim();
+    const cleanTin = tin ? tin.trim() : null;
+    const cleanTitle = title ? title.trim() : null;
+
+    // Update member profile
+    const updateRes = await query(
+      `UPDATE members
+       SET gender = $1,
+           civil_status = $2,
+           address = $3,
+           tin = $4,
+           title = $5,
+           profile_completed = true,
+           status = 'pending',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $6
+       RETURNING *`,
+      [gender, civil_status, cleanAddress, cleanTin, cleanTitle, userId]
+    );
+
+    if (updateRes.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Member profile not found for this account.' }
+      });
+    }
+
+    const member = updateRes.rows[0];
+
+    // Notify Admin and Staff about new profile submission
+    try {
+      const notifTitle = 'New Profile Submitted for Verification';
+      const notifMsg = `Member ${member.first_name} ${member.last_name} has completed their personal information and is awaiting approval.`;
+      await query(
+        `INSERT INTO notifications (role_target, type, title, message, reference_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        ['admin', 'profile_review', notifTitle, notifMsg, member.id]
+      );
+      await query(
+        `INSERT INTO notifications (role_target, type, title, message, reference_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        ['staff', 'profile_review', notifTitle, notifMsg, member.id]
+      );
+    } catch (notifErr) {
+      console.error('Failed to dispatch admin/staff notification for profile completion:', notifErr.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Your profile has been submitted successfully. Your information is currently under review. Approval typically takes 24–48 hours.',
+      data: member
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Admin & Staff review and approval/disapproval of member profile
+// @route   PATCH /api/members/:id/approval
+// @access  Protected (Admin, Staff)
+export const reviewMemberProfile = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { status, remarks } = req.body;
+
+    if (!status || !['approved', 'disapproved'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Status must be either approved or disapproved.' }
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const memberRes = await client.query('SELECT * FROM members WHERE id = $1 FOR UPDATE', [id]);
+    if (memberRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Member profile not found.' }
+      });
+    }
+
+    const member = memberRes.rows[0];
+    const targetStatus = status === 'approved' ? 'approved' : 'disapproved';
+
+    // Update status
+    const updateRes = await client.query(
+      `UPDATE members SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+      [targetStatus, id]
+    );
+
+    // Audit log
+    await client.query(
+      `INSERT INTO member_status_logs (member_id, previous_status, new_status, changed_by, remarks)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, member.status, targetStatus, req.user.id, remarks || null]
+    );
+
+    // Notify Member
+    if (member.user_id) {
+      const notifTitle = targetStatus === 'approved' ? 'Account Profile Approved' : 'Profile Submission Decision';
+      const notifMsg = targetStatus === 'approved'
+        ? 'Your profile information has been approved. You now have full access to loan and investment services.'
+        : `Your profile submission requires revisions. ${remarks ? `Remarks: ${remarks}` : 'Please contact support or update your information.'}`;
+
+      await client.query(
+        `INSERT INTO notifications (user_id, type, title, message, reference_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [member.user_id, 'profile_decision', notifTitle, notifMsg, member.id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      message: `Member status updated to ${targetStatus}.`,
+      data: updateRes.rows[0]
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
   }
 };

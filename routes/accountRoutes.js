@@ -10,7 +10,7 @@ import {
   getPendingPlacements,
   confirmPlacementPayment
 } from '../controllers/accountController.js';
-import { protect, restrictTo } from '../middleware/authMiddleware.js';
+import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -19,21 +19,21 @@ router.use(protect);
 
 // 1. Share Capital Ledger
 router.route('/share-capital')
-  .post(restrictTo('admin', 'staff', 'member'), postShareCapitalTransaction);
+  .post(restrictTo('admin', 'staff', 'member'), requireApprovedProfile, postShareCapitalTransaction);
 
 router.route('/share-capital/:memberId')
   .get(getShareCapital);
 
 // 2. Fixed Deposit placements
 router.route('/fixed-deposits')
-  .post(restrictTo('admin', 'staff', 'member'), createFixedDeposit);
+  .post(restrictTo('admin', 'staff', 'member'), requireApprovedProfile, createFixedDeposit);
 
 router.route('/fixed-deposits/:memberId')
   .get(getFixedDeposits);
 
 // 3. Investment tracking
 router.route('/investments')
-  .post(restrictTo('admin', 'staff', 'member'), createInvestment);
+  .post(restrictTo('admin', 'staff', 'member'), requireApprovedProfile, createInvestment);
 
 router.route('/investments/:id/transactions')
   .post(restrictTo('admin', 'staff'), postInvestmentTransaction);

@@ -1,4 +1,6 @@
 import { migrateMembersSchema } from './migrate_members_schema.js';
+import { migrateRoleStaff } from './migrate_role_staff.js';
+import { migrateMembersOnboarding } from './migrate_members_onboarding.js';
 import { migrateAnalyticsAudit } from './migrate_analytics_audit.js';
 import { migrateUserAccessLogs } from './migrate_user_access_logs.js';
 import { migrateAnnouncements } from './migrate_announcements.js';
@@ -11,7 +13,9 @@ import { migrateRegistrationOtp } from './migrate_registration_otp.js';
 export async function runMigrations() {
   console.log('[System Startup] Running automated database migrations...');
   try {
+    await migrateRoleStaff();
     await migrateMembersSchema();
+    await migrateMembersOnboarding();
     await migrateAnalyticsAudit();
     await migrateUserAccessLogs();
     await migrateAnnouncements();

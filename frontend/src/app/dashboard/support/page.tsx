@@ -48,14 +48,7 @@ export default function SupportPage() {
     setBreadcrumbLabel('support', 'Support Desk');
   }, [setBreadcrumbLabel]);
 
-  // Redirect staff from support desk
-  useEffect(() => {
-    if (user && user.role === 'staff') {
-      router.push('/dashboard');
-    }
-  }, [user, router]);
-
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);

@@ -13,7 +13,7 @@ import {
   getMyLoanHistory
 
 } from '../controllers/loanController.js';
-import { protect, restrictTo } from '../middleware/authMiddleware.js';
+import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -58,7 +58,7 @@ router.route('/my-history')
 // 6. LOAN APPLICATIONS & LISTING
 // ==========================================
 router.route('/')
-  .post(restrictTo('admin', 'staff', 'member'), applyForLoan)
+  .post(restrictTo('admin', 'staff', 'member'), requireApprovedProfile, applyForLoan)
   .get(getLoans);
 
 router.route('/:id')

@@ -4,9 +4,9 @@ INSERT INTO users (id, username, password_hash, role)
 VALUES ('11111111-1111-1111-1111-111111111111', 'admin', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'admin')
 ON CONFLICT (username) DO NOTHING;
 
--- Manager
+-- Staff
 INSERT INTO users (id, username, password_hash, role)
-VALUES ('22222222-2222-2222-2222-222222222222', 'manager', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'manager')
+VALUES ('22222222-2222-2222-2222-222222222222', 'manager', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'staff')
 ON CONFLICT (username) DO NOTHING;
 
 -- Member User

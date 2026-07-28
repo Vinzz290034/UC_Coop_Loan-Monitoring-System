@@ -7,13 +7,15 @@ import api from '../lib/api';
 export interface User {
   id: number;
   username: string;
-  role: 'admin' | 'manager' | 'member';
+  role: 'admin' | 'staff' | 'member';
   profile_picture_url?: string | null;
   profile?: {
     id: number;
     first_name: string;
     last_name: string;
     middle_name?: string | null;
+    title?: string | null;
+    tin?: string | null;
     age?: number | null;
     gender?: string | null;
     civil_status?: string | null;
@@ -21,7 +23,9 @@ export interface User {
     phone?: string | null;
     address?: string | null;
     date_of_birth?: string | null;
-    status: 'active' | 'suspended' | 'inactive';
+    status: 'active' | 'suspended' | 'inactive' | 'pending' | 'approved' | 'disapproved';
+    profile_completed?: boolean;
+    is_verified?: boolean;
   } | null;
 }
 

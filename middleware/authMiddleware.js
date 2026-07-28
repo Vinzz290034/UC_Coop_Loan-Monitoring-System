@@ -95,3 +95,49 @@ export const restrictTo = (...roles) => {
     next();
   };
 };
+
+// Require approved & completed profile for financial & loan operations
+export const requireApprovedProfile = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Authentication required.' }
+      });
+    }
+
+    // Bypass for admin and staff roles
+    if (req.user.role === 'admin' || req.user.role === 'staff') {
+      return next();
+    }
+
+    // Fetch latest member status and profile completion
+    const memberCheck = await query(
+      'SELECT profile_completed, status FROM members WHERE user_id = $1 LIMIT 1',
+      [req.user.id]
+    );
+
+    if (memberCheck.rowCount === 0) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Member profile not found. Please complete your registration.' }
+      });
+    }
+
+    const member = memberCheck.rows[0];
+    const isApproved = ['approved', 'active'].includes(member.status);
+
+    if (!member.profile_completed || !isApproved) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          message: 'Your personal information must be completed and approved by Admin or Staff before performing loan, investment, or financial transactions.'
+        }
+      });
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
