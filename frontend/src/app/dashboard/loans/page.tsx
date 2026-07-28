@@ -66,14 +66,19 @@ const LOAN_CATEGORIES = {
 };
 
 const getProductCategory = (name: string) => {
+  if (!name) return LOAN_CATEGORIES.REGULAR;
   const lowercaseName = name.toLowerCase();
-  if (lowercaseName.includes('regular loan')) {
-    return LOAN_CATEGORIES.REGULAR;
-  }
-  if (lowercaseName.includes('short term loan') || lowercaseName.includes('stl')) {
+  if (
+    lowercaseName.includes('short term') ||
+    lowercaseName.includes('stl') ||
+    lowercaseName.includes('utility') ||
+    lowercaseName.includes('emergency') ||
+    lowercaseName.includes('express') ||
+    lowercaseName.includes('special')
+  ) {
     return LOAN_CATEGORIES.STL;
   }
-  return 'Other Loans';
+  return LOAN_CATEGORIES.REGULAR;
 };
 
 const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
@@ -155,7 +160,7 @@ function LoansPageContent() {
 
   // Apply Wizard states matching main dashboard flow
   const [wizardStep, setWizardStep] = useState(1);
-  const [selectedLoanCategory, setSelectedLoanCategory] = useState('Regular Loans');
+  const [selectedLoanCategory, setSelectedLoanCategory] = useState<string>(LOAN_CATEGORIES.REGULAR);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [coMakerName, setCoMakerName] = useState('');
   const [coMakerPhone, setCoMakerPhone] = useState('');
@@ -526,6 +531,7 @@ function LoansPageContent() {
   const openApplyModal = () => {
     setWizardStep(1);
     setSelectedProduct(null);
+    setSelectedLoanCategory(LOAN_CATEGORIES.REGULAR);
     setApplyMemberId('');
     setApplyAmount(0);
     setCoMakerName('');

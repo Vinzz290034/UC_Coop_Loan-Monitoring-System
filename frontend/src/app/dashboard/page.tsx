@@ -56,10 +56,19 @@ const LOAN_CATEGORIES = {
 };
 
 const getProductCategory = (productName: string) => {
+  if (!productName) return LOAN_CATEGORIES.REGULAR;
   const name = productName.toLowerCase();
-  if (name.includes('regular loan')) return LOAN_CATEGORIES.REGULAR;
-  if (name.includes('short term loan') || name.includes('stl')) return LOAN_CATEGORIES.STL;
-  return 'Other Loans';
+  if (
+    name.includes('short term') ||
+    name.includes('stl') ||
+    name.includes('utility') ||
+    name.includes('emergency') ||
+    name.includes('express') ||
+    name.includes('special')
+  ) {
+    return LOAN_CATEGORIES.STL;
+  }
+  return LOAN_CATEGORIES.REGULAR;
 };
 
 const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
@@ -199,7 +208,7 @@ export default function OverviewPage() {
   // Loan Form States
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [selectedLoanCategory, setSelectedLoanCategory] = useState<string>('');
+  const [selectedLoanCategory, setSelectedLoanCategory] = useState<string>(LOAN_CATEGORIES.REGULAR);
   const [loanAmount, setLoanAmount] = useState<number>(0);
   const [coMakerName, setCoMakerName] = useState<string>('');
   const [coMakerPhone, setCoMakerPhone] = useState<string>('');
