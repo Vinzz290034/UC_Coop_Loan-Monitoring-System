@@ -232,7 +232,7 @@ export default function BillingPage() {
                       <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
                       <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Loan Product</th>
                       <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-mono hidden md:table-cell">Contract ID</th>
-                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Inst #</th>
+                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Month</th>
                       <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Remaining Due</th>
                       <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Maturity Date</th>
                       <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Contacts</th>
@@ -254,7 +254,7 @@ export default function BillingPage() {
                         </td>
                         <td className="px-4 sm:px-6 py-4 text-primary dark:text-secondary font-semibold hidden sm:table-cell">{row.product_name}</td>
                         <td className="px-4 sm:px-6 py-4 font-mono font-bold hidden md:table-cell">#{row.loan_id}</td>
-                        <td className="px-4 sm:px-6 py-4 hidden lg:table-cell">Installment #{row.installment_number}</td>
+                        <td className="px-4 sm:px-6 py-4 hidden lg:table-cell font-bold">{row.installment_number}</td>
                         <td className="px-4 sm:px-6 py-4 font-bold text-tertiary">
                           {formatCurrency(parseFloat(row.amount_remaining))}
                         </td>

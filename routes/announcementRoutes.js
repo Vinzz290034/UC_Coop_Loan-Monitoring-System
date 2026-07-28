@@ -17,9 +17,9 @@ router.use(protect);
 router.get('/', getAnnouncements);
 router.get('/:id', getAnnouncementById);
 
-// Restricted actions (Admin and Manager roles only)
-router.post('/', restrictTo('admin', 'manager'), createAnnouncement);
-router.put('/:id', restrictTo('admin', 'manager'), updateAnnouncement);
-router.delete('/:id', restrictTo('admin', 'manager'), deleteAnnouncement);
+// Restricted actions (Admin and Staff roles only)
+router.post('/', restrictTo('admin', 'staff'), createAnnouncement);
+router.put('/:id', restrictTo('admin', 'staff'), updateAnnouncement);
+router.delete('/:id', restrictTo('admin', 'staff'), deleteAnnouncement);
 
 export default router;

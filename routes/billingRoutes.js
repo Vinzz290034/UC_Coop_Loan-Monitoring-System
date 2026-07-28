@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Apply auth verification to all routes
 router.use(protect);
-router.use(restrictTo('admin', 'manager'));
+router.use(restrictTo('admin', 'staff'));
 
 // Billing and Collections Queues
 router.get('/due', getBillingQueue);

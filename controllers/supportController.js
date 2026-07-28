@@ -56,7 +56,7 @@ export const getSupportTickets = async (req, res, next) => {
     } else {
       // Admin/Manager view includes user details
       ticketsQuery = `
-        SELECT st.*, u.email, m.first_name, m.last_name
+        SELECT st.*, m.email, m.first_name, m.last_name
         FROM support_tickets st
         JOIN users u ON st.user_id = u.id
         LEFT JOIN members m ON u.id = m.user_id

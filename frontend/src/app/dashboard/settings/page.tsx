@@ -60,7 +60,7 @@ export default function SettingsPage() {
   if (!user) return null;
 
   const isAdmin = user.role === 'admin';
-  const isAdminOrManager = user.role === 'admin' || user.role === 'manager';
+  const isAdminOrManager = user.role === 'admin' || user.role === 'staff';
 
   const themeOptions = [
     { key: 'light', label: 'Light', icon: Sun, desc: 'Bright, clean interface' },

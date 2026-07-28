@@ -24,7 +24,7 @@ import {
 
 export default function AccountingPage() {
   const { user } = useAuth();
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {

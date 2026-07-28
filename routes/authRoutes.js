@@ -60,12 +60,12 @@ router.get('/access-history', protect, getUserAccessHistory);
 // Admin & Manager Protected Routes
 // ==========================================
 // Register new credentials directly
-router.post('/register', protect, restrictTo('admin', 'manager'), register);
+router.post('/register', protect, restrictTo('admin', 'staff'), register);
 
 // Manage contact messages (inquiries)
-router.get('/contact-messages', protect, restrictTo('admin', 'manager', 'member'), getContactMessages);
-router.put('/contact-messages/:id', protect, restrictTo('admin', 'manager'), updateContactMessageStatus);
-router.post('/contact-messages/:id/reply', protect, restrictTo('admin', 'manager'), replyToContactMessage);
+router.get('/contact-messages', protect, restrictTo('admin', 'staff', 'member'), getContactMessages);
+router.put('/contact-messages/:id', protect, restrictTo('admin', 'staff'), updateContactMessageStatus);
+router.post('/contact-messages/:id/reply', protect, restrictTo('admin', 'staff'), replyToContactMessage);
 
 // ==========================================
 // Admin Only User Management (Full CRUD)

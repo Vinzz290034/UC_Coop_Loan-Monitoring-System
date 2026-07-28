@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import BackButton from '@/components/BackButton';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import {
@@ -19,6 +21,16 @@ import {
 } from 'lucide-react';
 
 export default function ReportsPage() {
+  const { user } = useAuth();
+  const router = useRouter();
+
+  // Redirect non-admin users from reports page
+  useEffect(() => {
+    if (user && user.role !== 'admin') {
+      router.push('/dashboard');
+    }
+  }, [user, router]);
+
   const [activeTab, setActiveTab] = useState<'disbursement' | 'monitoring' | 'transactions'>('disbursement');
 
   const [records, setRecords] = useState<any[]>([]);

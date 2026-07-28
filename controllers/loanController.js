@@ -74,7 +74,7 @@ export const getLoanProducts = async (req, res, next) => {
 // @access  Protected (Admin, Manager)
 export const applyForLoan = async (req, res, next) => {
   try {
-    let { member_id, loan_product_id, principal_amount } = req.body;
+    let { member_id, loan_product_id, principal_amount, term_months } = req.body;
 
     // Enforce own profile ID if caller is a member
     if (req.user.role === 'member') {
@@ -234,6 +234,21 @@ export const applyForLoan = async (req, res, next) => {
       }
     }
 
+    let finalTermMonths = p.term_months;
+    if (term_months !== undefined && term_months !== null) {
+      const parsedTerm = parseInt(term_months, 10);
+      if (isNaN(parsedTerm) || parsedTerm <= 0 || parsedTerm > p.term_months) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `Selected term must be between 1 and ${p.term_months} months for product "${p.name}".` }
+        });
+      }
+      finalTermMonths = parsedTerm;
+    }
+
+    // Dynamic interest rate: 15% if 36 months, otherwise 2% (0.02)
+    const finalInterestRate = finalTermMonths === 36 ? 0.1500 : 0.0200;
+
     const insertLoan = `
       INSERT INTO loans (member_id, loan_product_id, principal_amount, interest_rate, term_months, amortization_type, status, co_maker_name, co_maker_phone)
       VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8)
@@ -243,8 +258,8 @@ export const applyForLoan = async (req, res, next) => {
       member_id,
       loan_product_id,
       amount,
-      p.interest_rate,
-      p.term_months,
+      finalInterestRate,
+      finalTermMonths,
       p.amortization_type,
       co_maker_name || null,
       co_maker_phone || null

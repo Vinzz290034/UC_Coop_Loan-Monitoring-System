@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
@@ -43,13 +44,21 @@ interface Appointment {
 
 export default function AppointmentsPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const { setBreadcrumbLabel } = useBreadcrumb();
 
   useEffect(() => {
     setBreadcrumbLabel('appointments', 'Appointments');
   }, [setBreadcrumbLabel]);
 
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+  // Redirect staff from appointments
+  useEffect(() => {
+    if (user && user.role === 'staff') {
+      router.push('/dashboard');
+    }
+  }, [user, router]);
+
+  const isAdminOrManager = user?.role === 'admin';
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);

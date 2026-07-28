@@ -280,7 +280,7 @@ export default function LoanAmortizationCalculator() {
                 <table className="w-full text-left border-collapse">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/45">
-                      <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase">#</th>
+                      <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase">Month</th>
                       <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase">Due Date</th>
                       <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase">Principal</th>
                       <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase">Interest</th>

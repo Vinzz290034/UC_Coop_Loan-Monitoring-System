@@ -24,7 +24,7 @@ router.use(protect);
 // 1. LOAN PRODUCTS REGISTRY
 // ==========================================
 router.route('/products')
-  .post(restrictTo('admin', 'manager'), createLoanProduct)
+  .post(restrictTo('admin', 'staff'), createLoanProduct)
   .get(getLoanProducts);
 
 // ==========================================
@@ -38,13 +38,13 @@ router.post('/preview-schedule', previewAmortizationSchedule);
 // ==========================================
 // Placed before /:id routes to avoid route collision
 router.route('/metrics/summary')
-  .get(restrictTo('admin', 'manager'), getLoanMetricsSummary);
+  .get(restrictTo('admin', 'staff'), getLoanMetricsSummary);
 
 // ==========================================
 // 4. REPAYMENTS
 // ==========================================
 router.route('/repayments')
-  .post(restrictTo('admin', 'manager'), postRepayment);
+  .post(restrictTo('admin', 'staff'), postRepayment);
 
 // ==========================================
 
@@ -56,10 +56,9 @@ router.route('/my-history')
 
 // ==========================================
 // 6. LOAN APPLICATIONS & LISTING
-// 5. LOAN APPLICATIONS & LISTINGS
 // ==========================================
 router.route('/')
-  .post(restrictTo('admin', 'manager', 'member'), applyForLoan)
+  .post(restrictTo('admin', 'staff', 'member'), applyForLoan)
   .get(getLoans);
 
 router.route('/:id')
@@ -67,14 +66,11 @@ router.route('/:id')
 
 // ==========================================
 // 7. LOAN ACTIONS (DISBURSE & REJECT)
-
-// 6. LOAN ACTIONS (DISBURSE & REJECT)
-
 // ==========================================
 router.route('/:id/disburse')
-  .post(restrictTo('admin', 'manager'), disburseLoan);
+  .post(restrictTo('admin', 'staff'), disburseLoan);
 
 router.route('/:id/reject')
-  .patch(restrictTo('admin', 'manager'), rejectLoanApplication);
+  .patch(restrictTo('admin', 'staff'), rejectLoanApplication);
 
 export default router;

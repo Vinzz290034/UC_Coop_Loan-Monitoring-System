@@ -96,7 +96,10 @@ export const calculateFlatRate = (principal, annualRate, termMonths, startDate) 
 export const calculateDiminishingBalance = (principal, annualRate, termMonths, startDate) => {
   const term = parseInt(termMonths, 10);
   const p = parseFloat(principal);
-  const r = parseFloat(annualRate) / 12; // Monthly rate
+  
+  const rate = parseFloat(annualRate);
+  // Monthly interest rate is treated directly as the database interest rate
+  const r = rate;
 
   const schedule = [];
   
@@ -105,26 +108,29 @@ export const calculateDiminishingBalance = (principal, annualRate, termMonths, s
     return calculateFlatRate(principal, 0, termMonths, startDate);
   }
 
-  // Calculate fixed monthly installment (PMT)
-  const pmt = (p * r) / (1 - Math.pow(1 + r, -term));
-  const roundedPmt = Math.round(pmt * 100) / 100;
+  // Straight line principal: Principal due = Total Principal / Term
+  const monthlyPrincipal = Math.round((p / term) * 100) / 100;
 
   let remainingPrincipal = p;
   let principalPaidAccumulator = 0;
 
   for (let i = 1; i <= term; i++) {
+    if (remainingPrincipal <= 0) {
+      break;
+    }
     const dueDate = addMonths(startDate, i);
     
     // Interest is calculated on the outstanding balance
-    const interestDue = Math.round((remainingPrincipal * r) * 100) / 100;
-    let principalDue = Math.round((roundedPmt - interestDue) * 100) / 100;
-
-    // Adjust final installment
-    if (i === term) {
-      principalDue = Math.round((p - principalPaidAccumulator) * 100) / 100;
+    const interestDue = remainingPrincipal > 0 ? Math.round((remainingPrincipal * r) * 100) / 100 : 0.00;
+    
+    let principalDue = monthlyPrincipal;
+    if (i === term || remainingPrincipal < monthlyPrincipal) {
+      principalDue = remainingPrincipal;
     }
 
-    remainingPrincipal -= principalDue;
+    const totalDue = Math.round((principalDue + interestDue) * 100) / 100;
+
+    remainingPrincipal = Math.round((remainingPrincipal - totalDue) * 100) / 100;
     principalPaidAccumulator += principalDue;
 
     schedule.push({
@@ -132,7 +138,7 @@ export const calculateDiminishingBalance = (principal, annualRate, termMonths, s
       due_date: dueDate,
       principal_due: principalDue,
       interest_due: interestDue,
-      total_due: Math.round((principalDue + interestDue) * 100) / 100
+      total_due: totalDue
     });
   }
 

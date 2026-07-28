@@ -139,7 +139,7 @@ export const register = async (req, res, next) => {
     }
 
     // Validate role
-    if (!['admin', 'manager', 'member'].includes(role)) {
+    if (!['admin', 'staff', 'member'].includes(role)) {
       return res.status(400).json({
         success: false,
         error: { message: 'Invalid role specifier.' }
@@ -978,10 +978,10 @@ export const updateUser = async (req, res, next) => {
     }
 
     // --- Validate role if provided ---
-    if (role && !['admin', 'manager', 'member'].includes(role)) {
+    if (role && !['admin', 'staff', 'member'].includes(role)) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Invalid role. Must be admin, manager, or member.' }
+        error: { message: 'Invalid role. Must be admin, staff, or member.' }
       });
     }
 
@@ -1091,44 +1091,40 @@ export const deleteUser = async (req, res, next) => {
 
     const targetUser = userCheck.rows[0];
 
-    // --- Check for linked member with financial records ---
+    // --- Get linked member if exists ---
     const memberCheck = await client.query('SELECT id FROM members WHERE user_id = $1', [id]);
-    if (memberCheck.rowCount > 0) {
-      const memberId = memberCheck.rows[0].id;
-      const financialCheck = await client.query(
-        `SELECT
-          (SELECT COUNT(*) FROM loans WHERE member_id = $1) as loan_count,
-          (SELECT COUNT(*) FROM share_capital_transactions WHERE member_id = $1) as tx_count`,
-        [memberId]
-      );
-      const { loan_count, tx_count } = financialCheck.rows[0];
-      if (parseInt(loan_count, 10) > 0 || parseInt(tx_count, 10) > 0) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            message: 'Cannot delete this user. Their linked member profile has financial records. Consider deactivating the account instead.'
-          }
-        });
-      }
-    }
-
+    
     await client.query('BEGIN');
 
-    // Clean up linked member profile and logs (if no financial records)
     if (memberCheck.rowCount > 0) {
       const memberId = memberCheck.rows[0].id;
+      
+      // Get all loans of this member
+      const loansRes = await client.query('SELECT id FROM loans WHERE member_id = $1', [memberId]);
+      for (const loan of loansRes.rows) {
+        // Delete all payments of this loan (allocations will cascade delete)
+        await client.query('DELETE FROM loan_payments WHERE loan_id = $1', [loan.id]);
+        // Delete repayment schedules of this loan
+        await client.query('DELETE FROM repayment_schedules WHERE loan_id = $1', [loan.id]);
+        // Delete the loan
+        await client.query('DELETE FROM loans WHERE id = $1', [loan.id]);
+      }
+
+      // Delete other member logs
       await client.query('DELETE FROM member_status_logs WHERE member_id = $1', [memberId]);
+      
+      // Finally, delete the member profile (this cascade deletes share capital, investments, fixed deposits, appointments, etc.)
       await client.query('DELETE FROM members WHERE id = $1', [memberId]);
     }
 
-    // Delete the user
+    // Delete the user (this cascade deletes notifications, support tickets)
     await client.query('DELETE FROM users WHERE id = $1', [id]);
 
     await client.query('COMMIT');
 
     res.status(200).json({
       success: true,
-      message: `User account "${targetUser.username}" has been permanently deleted.`
+      message: `User account "${targetUser.username}" and all associated data have been permanently deleted.`
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1198,7 +1194,7 @@ export const submitContactMessage = async (req, res, next) => {
       await query(
         `INSERT INTO notifications (role_target, type, title, message, reference_id)
          VALUES ($1, $2, $3, $4, $5)`,
-        ['manager', 'contact_message', 'New Contact Message', `From ${cleanName}: ${truncatedMsg}`, newMessage.id]
+        ['staff', 'contact_message', 'New Contact Message', `From ${cleanName}: ${truncatedMsg}`, newMessage.id]
       );
     } catch (notifError) {
       // Non-critical: don't fail the contact submission if notification insert fails

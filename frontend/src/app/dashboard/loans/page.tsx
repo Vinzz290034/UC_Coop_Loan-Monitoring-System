@@ -90,15 +90,15 @@ const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
   },
   'Short Term Loan (STL) - Emergency Loan': {
     desc: 'Emergency funding for medical needs or unplanned urgent expenses.',
-    helper: 'Fixed amount: ₱5,000. Term: 2 months.'
+    helper: 'Fixed amount: ₱5,000. Term: 1-2 months.'
   },
   'Short Term Loan (STL) - Cash Express': {
     desc: 'Quick cash release to bridge short-term financing gaps.',
-    helper: 'Fixed amount: ₱7,000. Term: 2 months.'
+    helper: 'Fixed amount: ₱7,000. Term: 1-2 months.'
   },
   'Short Term Loan (STL) - Special Occasion': {
     desc: 'Financial support for seasonal expenses, holidays, and school registration periods.',
-    helper: 'Fixed amount: ₱10,000. Term: 3 months.'
+    helper: 'Fixed amount: ₱10,000. Term: 1-3 months.'
   }
 };
 
@@ -107,7 +107,7 @@ function LoansPageContent() {
   const searchParams = useSearchParams();
   const statusParam = searchParams.get('status');
 
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
 
   const [activeTab, setActiveTab] = useState<'loans' | 'products' | 'calculator'>('loans');
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -157,6 +157,7 @@ function LoansPageContent() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [coMakerName, setCoMakerName] = useState('');
   const [coMakerPhone, setCoMakerPhone] = useState('');
+  const [applyTermMonths, setApplyTermMonths] = useState<number>(1);
   
   // Selected Member CBU & details
   const [selectedMemberSummary, setSelectedMemberSummary] = useState<any>(null);
@@ -555,6 +556,7 @@ function LoansPageContent() {
         member_id: parseInt(applyMemberId, 10),
         loan_product_id: selectedProduct.id,
         principal_amount: applyAmount,
+        term_months: applyTermMonths,
         co_maker_name: coMakerRequired ? coMakerName : null,
         co_maker_phone: coMakerRequired ? coMakerPhone : null
       });
@@ -1047,10 +1049,11 @@ function LoansPageContent() {
                                           <table className="w-full text-left border-collapse text-[11px]">
                                             <thead>
                                               <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Inst #</th>
+                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Month</th>
                                                 <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Principal Due</th>
                                                 <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Interest Due</th>
                                                 <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Total Due</th>
+                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Balance</th>
                                                 <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Principal</th>
                                                 <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Interest</th>
                                                 <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Due Date</th>
@@ -1058,26 +1061,40 @@ function LoansPageContent() {
                                               </tr>
                                             </thead>
                                             <tbody className="divide-y divide-outline-variant/35 font-mono">
-                                              {loanDetails.schedule?.map((sch: any) => (
-                                                <tr key={sch.id} className="hover:bg-neutral/5">
-                                                  <td className="px-4 py-2 font-bold">Installment #{sch.installment_number}</td>
-                                                  <td className="px-4 py-2">{formatCurrency(parseFloat(sch.principal_due))}</td>
-                                                  <td className="px-4 py-2">{formatCurrency(parseFloat(sch.interest_due))}</td>
-                                                  <td className="px-4 py-2 font-bold">{formatCurrency(parseFloat(sch.principal_due) + parseFloat(sch.interest_due))}</td>
-                                                  <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
-                                                  <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
-                                                  <td className="px-4 py-2 font-sans">{new Date(sch.due_date).toLocaleDateString()}</td>
-                                                  <td className="px-4 py-2 font-sans">
-                                                    {sch.status === 'paid' ? (
-                                                      <span className="text-primary font-bold">Paid</span>
-                                                    ) : sch.status === 'partially_paid' ? (
-                                                      <span className="text-amber-500 font-bold">Partial</span>
-                                                    ) : (
-                                                      <span className="text-tertiary font-bold">Unpaid</span>
-                                                    )}
-                                                  </td>
-                                                </tr>
-                                              ))}
+                                              {(() => {
+                                                let runningBalance = parseFloat(loanDetails.principal_amount);
+                                                return loanDetails.schedule?.map((sch: any) => {
+                                                  const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
+                                                  if (loanDetails.amortization_type === 'diminishing_balance') {
+                                                    runningBalance = Math.round((runningBalance - schTotalDue) * 100) / 100;
+                                                  } else {
+                                                    runningBalance = Math.round((runningBalance - parseFloat(sch.principal_due)) * 100) / 100;
+                                                  }
+                                                  const displayBalance = Math.max(0, runningBalance);
+
+                                                  return (
+                                                    <tr key={sch.id} className="hover:bg-neutral/5">
+                                                      <td className="px-4 py-2 font-bold">{sch.installment_number}</td>
+                                                      <td className="px-4 py-2">{formatCurrency(parseFloat(sch.principal_due))}</td>
+                                                      <td className="px-4 py-2">{formatCurrency(parseFloat(sch.interest_due))}</td>
+                                                      <td className="px-4 py-2 font-bold">{formatCurrency(parseFloat(sch.principal_due) + parseFloat(sch.interest_due))}</td>
+                                                      <td className="px-4 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
+                                                      <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
+                                                      <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
+                                                      <td className="px-4 py-2 font-sans">{new Date(sch.due_date).toLocaleDateString()}</td>
+                                                      <td className="px-4 py-2 font-sans">
+                                                        {sch.status === 'paid' ? (
+                                                          <span className="text-primary font-bold">Paid</span>
+                                                        ) : sch.status === 'partially_paid' ? (
+                                                          <span className="text-amber-500 font-bold">Partial</span>
+                                                        ) : (
+                                                          <span className="text-tertiary font-bold">Unpaid</span>
+                                                        )}
+                                                      </td>
+                                                    </tr>
+                                                  );
+                                                });
+                                              })()}
                                             </tbody>
                                           </table>
                                         </div>
@@ -1424,6 +1441,7 @@ function LoansPageContent() {
                                       if (filtered.length > 0) {
                                         setSelectedProduct(filtered[0]);
                                         setApplyAmount(parseFloat(filtered[0].min_amount));
+                                        setApplyTermMonths(filtered[0].term_months);
                                       } else {
                                         setSelectedProduct(null);
                                       }
@@ -1463,6 +1481,7 @@ function LoansPageContent() {
                                           onClick={() => {
                                             setSelectedProduct(p);
                                             setApplyAmount(parseFloat(p.min_amount));
+                                            setApplyTermMonths(p.term_months);
                                           }}
                                           className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer ${
                                             isSelected
@@ -1488,8 +1507,8 @@ function LoansPageContent() {
                                             </span>
                                           </div>
                                           <div className="mt-2 pt-2 border-t border-outline-variant/30 text-[11px] text-neutral-600 dark:text-neutral-400 flex justify-between">
-                                            <span>Interest: <strong className="text-on-surface dark:text-white font-semibold">{(parseFloat(p.interest_rate) * 100).toFixed(1)}% p.a.</strong></span>
-                                            <span>Term: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months} mos</strong></span>
+                                            <span>Interest: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months === 36 ? '2.0%-15.0%' : `${(parseFloat(p.interest_rate) * 100).toFixed(1)}%`} p.a.</strong></span>
+                                            <span>Term: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months === 1 ? '1 mo' : `1-${p.term_months} mos`}</strong></span>
                                             <span>Range: <strong className="text-on-surface dark:text-white font-semibold">₱{parseFloat(p.min_amount).toLocaleString()} - ₱{parseFloat(p.max_amount).toLocaleString()}</strong></span>
                                           </div>
                                         </button>
@@ -1508,7 +1527,12 @@ function LoansPageContent() {
                   <div className="pt-2 flex justify-end">
                     <button
                       disabled={!applyMemberId || !selectedProduct}
-                      onClick={() => setWizardStep(2)}
+                      onClick={() => {
+                        if (selectedProduct) {
+                          setApplyTermMonths(selectedProduct.term_months);
+                        }
+                        setWizardStep(2);
+                      }}
                       className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-sm animate-micro-elevate"
                     >
                       Continue to Amount
@@ -1591,6 +1615,28 @@ function LoansPageContent() {
                           </div>
                         </div>
 
+                        {/* Term Selection Slider (Only if product allows multiple months) */}
+                        {selectedProduct.term_months > 1 && (
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 flex justify-between">
+                              <span>Adjust Term:</span>
+                              <span>{applyTermMonths} {applyTermMonths === 1 ? 'Month' : 'Months'}</span>
+                            </label>
+                            <input
+                              type="range"
+                              min="1"
+                              max={selectedProduct.term_months}
+                              step="1"
+                              value={applyTermMonths}
+                              onChange={(e) => setApplyTermMonths(parseInt(e.target.value, 10))}
+                              className="w-full h-3 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-primary dark:accent-secondary"
+                            />
+                            <div className="text-right text-xs font-bold text-neutral-600 dark:text-neutral-400">
+                              Max Term: {selectedProduct.term_months} {selectedProduct.term_months === 1 ? 'Month' : 'Months'}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Amortization math preview */}
                         <div className="border border-outline-variant/65 rounded-2xl p-4 space-y-2 text-xs bg-surface-container-low">
                           <h5 className="font-bold text-on-surface dark:text-white border-b border-outline-variant/30 pb-1.5 mb-2">Estimated Monthly Repayments</h5>
@@ -1600,15 +1646,27 @@ function LoansPageContent() {
                           </div>
                           <div className="flex justify-between text-[11px]">
                             <span className="text-neutral-600 dark:text-neutral-400">Term Period</span>
-                            <span className="font-semibold">{selectedProduct.term_months} Months</span>
+                            <span className="font-semibold">{applyTermMonths} {applyTermMonths === 1 ? 'Month' : 'Months'}</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-neutral-600 dark:text-neutral-400">Interest Rate</span>
+                            <span className="font-semibold">
+                              {applyTermMonths === 36 ? '15.0% monthly' : '2.0% monthly'}
+                            </span>
                           </div>
                           <div className="flex justify-between pt-2 border-t border-outline-variant/20 font-bold text-sm text-primary dark:text-secondary">
-                            <span>Est. Monthly Due</span>
+                            <span>Est. Month 1 Due</span>
                             <span>
                               {formatCurrency(
-                                selectedProduct.amortization_type === 'flat_rate'
-                                  ? (currentAmountValue + (currentAmountValue * parseFloat(selectedProduct.interest_rate) * (selectedProduct.term_months / 12))) / selectedProduct.term_months
-                                  : (currentAmountValue * (parseFloat(selectedProduct.interest_rate) / 12) * Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months)) / (Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months) - 1)
+                                (() => {
+                                  const rate = applyTermMonths === 36 ? 0.15 : 0.02;
+                                  if (selectedProduct.amortization_type === 'flat_rate') {
+                                    return (currentAmountValue + (currentAmountValue * rate * applyTermMonths)) / applyTermMonths;
+                                  } else {
+                                    // Diminishing straight-line principal Month 1 payment
+                                    return (currentAmountValue / applyTermMonths) + (currentAmountValue * rate);
+                                  }
+                                })()
                               )}
                             </span>
                           </div>
@@ -2243,33 +2301,48 @@ function LoansPageContent() {
                 <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      <th style={{ padding: '8px 12px', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Inst #</th>
+                      <th style={{ padding: '8px 12px', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Month</th>
                       <th style={{ padding: '8px 12px', textAlign: 'right', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Principal Due (₱)</th>
                       <th style={{ padding: '8px 12px', textAlign: 'right', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Interest Due (₱)</th>
                       <th style={{ padding: '8px 12px', textAlign: 'right', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Total Due (₱)</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Balance (₱)</th>
                       <th style={{ padding: '8px 12px', textAlign: 'right', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Repayment Date</th>
                       <th style={{ padding: '8px 12px', textAlign: 'center', width: '96px' }}>Initial</th>
                     </tr>
                   </thead>
                   <tbody style={{ fontFamily: 'monospace', fontSize: '9px' }}>
-                    {printLoan.schedule?.map((sch: any) => (
-                      <tr key={sch.id} style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                        <td style={{ padding: '6px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.05)', fontFamily: 'sans-serif', color: '#4b5563' }}>Installment #{sch.installment_number}</td>
-                        <td style={{ padding: '6px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.05)', color: '#1f2937' }}>
-                          {parseFloat(sch.principal_due).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '6px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.05)', color: '#1f2937' }}>
-                          {parseFloat(sch.interest_due).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 'bold', color: '#064e3b', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                          {(parseFloat(sch.principal_due) + parseFloat(sch.interest_due)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '6px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.05)', fontFamily: 'sans-serif', color: '#4b5563' }}>
-                          {new Date(sch.due_date).toLocaleDateString()}
-                        </td>
-                        <td style={{ padding: '6px 12px', textAlign: 'center', color: '#d1d5db', fontFamily: 'sans-serif' }}>______</td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      let printBalance = parseFloat(printLoan.principal_amount);
+                      return printLoan.schedule?.map((sch: any) => {
+                        const schTotal = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
+                        if (printLoan.amortization_type === 'diminishing_balance') {
+                          printBalance = Math.max(0, Math.round((printBalance - schTotal) * 100) / 100);
+                        } else {
+                          printBalance = Math.max(0, Math.round((printBalance - parseFloat(sch.principal_due)) * 100) / 100);
+                        }
+                        return (
+                          <tr key={sch.id} style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                            <td style={{ padding: '6px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.05)', fontFamily: 'sans-serif', color: '#4b5563', fontWeight: 'bold' }}>{sch.installment_number}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.05)', color: '#1f2937' }}>
+                              {parseFloat(sch.principal_due).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.05)', color: '#1f2937' }}>
+                              {parseFloat(sch.interest_due).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 'bold', color: '#064e3b', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                              {schTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.05)', color: '#1f2937', fontWeight: 'bold' }}>
+                              {printBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.05)', fontFamily: 'sans-serif', color: '#4b5563' }}>
+                              {new Date(sch.due_date).toLocaleDateString()}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'center', color: '#d1d5db', fontFamily: 'sans-serif' }}>______</td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>

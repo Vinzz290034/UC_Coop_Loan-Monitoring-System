@@ -87,7 +87,7 @@ function DashboardLayoutContent({
   };
 
   // Navigation Links based on role
-  const isAdminOrManager = user.role === 'admin' || user.role === 'manager';
+  const isAdminOrStaff = user.role === 'admin' || user.role === 'staff';
 
   const menuItems = [
     {
@@ -106,7 +106,7 @@ function DashboardLayoutContent({
       name: 'Members',
       path: '/dashboard/members',
       icon: Users,
-      allowed: isAdminOrManager,
+      allowed: isAdminOrStaff,
     },
     {
       name: 'Loans',
@@ -124,19 +124,19 @@ function DashboardLayoutContent({
       name: 'Billings',
       path: '/dashboard/billing',
       icon: CalendarCheck,
-      allowed: isAdminOrManager,
+      allowed: isAdminOrStaff,
     },
     {
       name: 'Appointments',
       path: '/dashboard/appointments',
       icon: CalendarClock,
-      allowed: true,
+      allowed: user.role !== 'staff',
     },
     {
       name: 'Reports',
       path: '/dashboard/reports',
       icon: BarChart3,
-      allowed: isAdminOrManager,
+      allowed: user.role === 'admin',
     },
     {
       name: 'Messages',
@@ -148,7 +148,7 @@ function DashboardLayoutContent({
       name: 'Support Desk',
       path: '/dashboard/support',
       icon: LifeBuoy,
-      allowed: true,
+      allowed: user.role !== 'staff',
     },
     {
       name: 'Notifications',

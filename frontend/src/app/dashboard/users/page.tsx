@@ -204,7 +204,7 @@ function CreateAccountModal({
               className="w-full px-4 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/65 rounded-xl text-sm font-body font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-secondary/30 disabled:opacity-50 transition-all"
             >
               <option value="member">Member</option>
-              <option value="manager">Manager</option>
+              <option value="staff">Staff</option>
               <option value="admin">Admin</option>
             </select>
           </div>
@@ -412,7 +412,7 @@ export default function UsersPage() {
   const getRoleBadge = (role: string) => {
     const styles: Record<string, string> = {
       admin: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-      manager: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+      staff: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
       member: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
     };
     return (
@@ -481,7 +481,7 @@ export default function UsersPage() {
           >
             <option value="">All Roles</option>
             <option value="admin">Admin</option>
-            <option value="manager">Manager</option>
+            <option value="staff">Staff</option>
             <option value="member">Member</option>
           </select>
 

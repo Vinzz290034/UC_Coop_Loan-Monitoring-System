@@ -80,7 +80,7 @@ export default function CalendarPage() {
     event_date: ''
   });
 
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
 
   // Fetch events from API
   const fetchEvents = async () => {

@@ -19,33 +19,33 @@ router.use(protect);
 
 // 1. Share Capital Ledger
 router.route('/share-capital')
-  .post(restrictTo('admin', 'manager', 'member'), postShareCapitalTransaction);
+  .post(restrictTo('admin', 'staff', 'member'), postShareCapitalTransaction);
 
 router.route('/share-capital/:memberId')
   .get(getShareCapital);
 
 // 2. Fixed Deposit placements
 router.route('/fixed-deposits')
-  .post(restrictTo('admin', 'manager', 'member'), createFixedDeposit);
+  .post(restrictTo('admin', 'staff', 'member'), createFixedDeposit);
 
 router.route('/fixed-deposits/:memberId')
   .get(getFixedDeposits);
 
 // 3. Investment tracking
 router.route('/investments')
-  .post(restrictTo('admin', 'manager', 'member'), createInvestment);
+  .post(restrictTo('admin', 'staff', 'member'), createInvestment);
 
 router.route('/investments/:id/transactions')
-  .post(restrictTo('admin', 'manager'), postInvestmentTransaction);
+  .post(restrictTo('admin', 'staff'), postInvestmentTransaction);
 
 router.route('/investments/:memberId')
   .get(getInvestments);
 
 // 4. Pending placements & office cash payment confirmation
 router.route('/pending-placements')
-  .get(restrictTo('admin', 'manager'), getPendingPlacements);
+  .get(restrictTo('admin', 'staff'), getPendingPlacements);
 
 router.route('/confirm-placement/:type/:id')
-  .put(restrictTo('admin', 'manager'), confirmPlacementPayment);
+  .put(restrictTo('admin', 'staff'), confirmPlacementPayment);
 
 export default router;

@@ -234,7 +234,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
     );
   }
 
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
 
   return (
     <div className="space-y-6">

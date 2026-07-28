@@ -14,10 +14,10 @@ router.use(protect);
 
 router.route('/')
   .get(getCalendarEvents)
-  .post(restrictTo('admin', 'manager'), createCalendarEvent);
+  .post(restrictTo('admin', 'staff'), createCalendarEvent);
 
 router.route('/:id')
-  .put(restrictTo('admin', 'manager'), updateCalendarEvent)
-  .delete(restrictTo('admin', 'manager'), deleteCalendarEvent);
+  .put(restrictTo('admin', 'staff'), updateCalendarEvent)
+  .delete(restrictTo('admin', 'staff'), deleteCalendarEvent);
 
 export default router;

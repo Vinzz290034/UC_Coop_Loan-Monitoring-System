@@ -13,7 +13,7 @@ const router = express.Router();
 
 // Apply auth protection and role restriction to all analytics routes
 router.use(protect);
-router.use(restrictTo('admin', 'manager'));
+router.use(restrictTo('admin', 'staff'));
 
 // Dashboard KPI summary
 router.get('/dashboard-summary', getDashboardSummary);

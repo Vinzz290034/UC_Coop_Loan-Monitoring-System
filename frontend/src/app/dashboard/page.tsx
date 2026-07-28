@@ -75,15 +75,15 @@ const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
   },
   'Short Term Loan (STL) - Emergency Loan': {
     desc: 'Emergency funding for medical needs or unplanned urgent expenses.',
-    helper: 'Fixed amount: ₱5,000. Term: 2 months.'
+    helper: 'Fixed amount: ₱5,000. Term: 1-2 months.'
   },
   'Short Term Loan (STL) - Cash Express': {
     desc: 'Quick cash release to bridge short-term financing gaps.',
-    helper: 'Fixed amount: ₱7,000. Term: 2 months.'
+    helper: 'Fixed amount: ₱7,000. Term: 1-2 months.'
   },
   'Short Term Loan (STL) - Special Occasion': {
     desc: 'Financial support for seasonal expenses, holidays, and school registration periods.',
-    helper: 'Fixed amount: ₱10,000. Term: 3 months.'
+    helper: 'Fixed amount: ₱10,000. Term: 1-3 months.'
   }
 };
 
@@ -190,6 +190,7 @@ export default function OverviewPage() {
   const [loanAmount, setLoanAmount] = useState<number>(0);
   const [coMakerName, setCoMakerName] = useState<string>('');
   const [coMakerPhone, setCoMakerPhone] = useState<string>('');
+  const [loanTerm, setLoanTerm] = useState<number>(1);
 
   // Investment Form States
   const [investmentType, setInvestmentType] = useState<'share_capital' | 'fixed_deposit' | 'payday'>('share_capital');
@@ -214,7 +215,7 @@ export default function OverviewPage() {
       else setLoading(true);
       setError(null);
 
-      if (user.role === 'admin' || user.role === 'manager') {
+      if (user.role === 'admin' || user.role === 'staff') {
         // Fetch all analytics endpoints in parallel
         const [summaryRes, trendsRes, repaymentRes, growthRes, distRes, finRes] = await Promise.all([
           api.get('/analytics/dashboard-summary'),
@@ -331,6 +332,7 @@ export default function OverviewPage() {
       const res = await api.post('/loans', {
         loan_product_id: selectedProduct.id,
         principal_amount: loanAmount,
+        term_months: loanTerm,
         co_maker_name: coMakerName || undefined,
         co_maker_phone: coMakerPhone || undefined
       });
@@ -756,6 +758,7 @@ export default function OverviewPage() {
                                       if (filtered.length > 0) {
                                         setSelectedProduct(filtered[0]);
                                         setLoanAmount(parseFloat(filtered[0].min_amount));
+                                        setLoanTerm(filtered[0].term_months);
                                       } else {
                                         setSelectedProduct(null);
                                       }
@@ -814,6 +817,7 @@ export default function OverviewPage() {
                                       onClick={() => {
                                         setSelectedProduct(p);
                                         setLoanAmount(parseFloat(p.min_amount));
+                                        setLoanTerm(p.term_months);
                                       }}
                                       className={`w-full p-3.5 rounded-2xl border text-left transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                                         isSelected
@@ -845,13 +849,13 @@ export default function OverviewPage() {
                                         <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
                                           <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Interest</span>
                                           <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
-                                            {(parseFloat(p.interest_rate) * 100).toFixed(1)}% p.a.
+                                            {p.term_months === 36 ? '2.0% - 15.0%' : `${(parseFloat(p.interest_rate) * 100).toFixed(1)}%`} p.a.
                                           </strong>
                                         </div>
                                         <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
                                           <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Term</span>
                                           <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
-                                            {p.term_months} {p.term_months === 1 ? 'Month' : 'Months'}
+                                            {p.term_months === 1 ? '1 Month' : `1 - ${p.term_months} Months`}
                                           </strong>
                                         </div>
                                       </div>
@@ -878,6 +882,7 @@ export default function OverviewPage() {
                                 }
                                 const maxSliderCap = Math.min(parseFloat(selectedProduct.max_amount), borrowLimit);
                                 setLoanAmount(maxSliderCap);
+                                setLoanTerm(selectedProduct.term_months);
                               }
                               setWizardStep(2);
                             }}
@@ -969,6 +974,28 @@ export default function OverviewPage() {
                                 </div>
                               </div>
 
+                              {/* Term Selection Slider (Only if product allows multiple months) */}
+                              {selectedProduct.term_months > 1 && (
+                                <div className="space-y-2">
+                                  <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 flex justify-between">
+                                    <span>Adjust Term:</span>
+                                    <span>{loanTerm} {loanTerm === 1 ? 'Month' : 'Months'}</span>
+                                  </label>
+                                  <input
+                                    type="range"
+                                    min="1"
+                                    max={selectedProduct.term_months}
+                                    step="1"
+                                    value={loanTerm}
+                                    onChange={(e) => setLoanTerm(parseInt(e.target.value, 10))}
+                                    className="w-full h-3 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-primary dark:accent-secondary"
+                                  />
+                                  <div className="text-right text-xs font-bold text-neutral-600 dark:text-neutral-400">
+                                    Max Term: {selectedProduct.term_months} {selectedProduct.term_months === 1 ? 'Month' : 'Months'}
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Estimated Repayment Math block */}
                               <div className="border border-outline-variant/65 rounded-2xl p-4 space-y-2 text-sm bg-surface-container-low">
                                 <h5 className="font-bold text-on-surface dark:text-white border-b border-outline-variant/30 pb-1.5 mb-2">Estimated Monthly Repayments</h5>
@@ -982,15 +1009,27 @@ export default function OverviewPage() {
                                 </div>
                                 <div className="flex justify-between text-xs">
                                   <span className="text-neutral-600 dark:text-neutral-400">Duration Term</span>
-                                  <span className="font-semibold">{selectedProduct.term_months} Months</span>
+                                  <span className="font-semibold">{loanTerm} {loanTerm === 1 ? 'Month' : 'Months'}</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-neutral-600 dark:text-neutral-400">Interest Rate</span>
+                                  <span className="font-semibold">
+                                    {loanTerm === 36 ? '15.0% monthly' : '2.0% monthly'}
+                                  </span>
                                 </div>
                                 <div className="flex justify-between pt-2 border-t border-outline-variant/20 font-bold text-base text-primary dark:text-secondary">
-                                  <span>Est. Monthly Due</span>
+                                  <span>Est. Month 1 Due</span>
                                   <span>
                                     {formatCurrency(
-                                      selectedProduct.amortization_type === 'flat_rate'
-                                        ? (currentLoanAmount + (currentLoanAmount * parseFloat(selectedProduct.interest_rate) * (selectedProduct.term_months / 12))) / selectedProduct.term_months
-                                        : (currentLoanAmount * (parseFloat(selectedProduct.interest_rate) / 12) * Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months)) / (Math.pow(1 + (parseFloat(selectedProduct.interest_rate) / 12), selectedProduct.term_months) - 1)
+                                      (() => {
+                                        const rate = loanTerm === 36 ? 0.15 : 0.02;
+                                        if (selectedProduct.amortization_type === 'flat_rate') {
+                                          return (currentLoanAmount + (currentLoanAmount * rate * loanTerm)) / loanTerm;
+                                        } else {
+                                          // Diminishing straight-line principal Month 1 payment
+                                          return (currentLoanAmount / loanTerm) + (currentLoanAmount * rate);
+                                        }
+                                      })()
                                     )}
                                   </span>
                                 </div>
