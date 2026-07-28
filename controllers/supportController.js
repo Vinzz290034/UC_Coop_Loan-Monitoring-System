@@ -75,3 +75,130 @@ export const getSupportTickets = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Get all FAQs and Guides
+// @route   GET /api/support/faqs-guides
+// @access  Protected (All authenticated users)
+export const getFaqsAndGuides = async (req, res, next) => {
+  try {
+    const result = await query(
+      'SELECT id, title, content, type, category, created_at FROM faqs_guides ORDER BY created_at DESC'
+    );
+    res.status(200).json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (err) {
+    console.error('Error fetching FAQs and guides:', err);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to retrieve FAQs and guides' },
+    });
+  }
+};
+
+// @desc    Create a new FAQ or Guide
+// @route   POST /api/support/faqs-guides
+// @access  Protected (Admin / Staff)
+export const createFaqOrGuide = async (req, res, next) => {
+  try {
+    const { title, content, type, category } = req.body;
+
+    if (!title || !content || !type) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Title, content, and type are required' },
+      });
+    }
+
+    const result = await query(
+      `INSERT INTO faqs_guides (title, content, type, category, created_at) 
+       VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+      [title, content, type, category || 'general']
+    );
+
+    res.status(201).json({
+      success: true,
+      data: result.rows[0],
+    });
+  } catch (err) {
+    console.error('Error creating FAQ/Guide:', err);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to create FAQ or guide' },
+    });
+  }
+};
+
+// @desc    Delete an FAQ or Guide
+// @route   DELETE /api/support/faqs-guides/:id
+// @access  Protected (Admin / Staff)
+export const deleteFaqOrGuide = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const deleteResult = await query(
+      'DELETE FROM faqs_guides WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (deleteResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'FAQ or guide not found' },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Deleted successfully',
+    });
+  } catch (err) {
+    console.error('Error deleting FAQ/Guide:', err);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to delete item' },
+    });
+  }
+};
+
+// @desc    Update support ticket status
+// @route   PATCH /api/support/tickets/:id/status
+// @access  Protected (Admin / Staff)
+export const updateTicketStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['open', 'in_progress', 'resolved', 'closed'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid status value provided' },
+      });
+    }
+
+    const result = await query(
+      'UPDATE support_tickets SET status = $1 WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Support ticket not found' },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result.rows[0],
+    });
+  } catch (err) {
+    console.error('Error updating ticket status:', err);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to update ticket status' },
+    });
+  }
+};
