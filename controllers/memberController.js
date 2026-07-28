@@ -7,7 +7,7 @@ import { exportToExcel } from '../services/reportExporter.js'; // Ensure this li
 export const createMember = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, status, user_id } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, status, user_id, is_verified } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
@@ -249,7 +249,7 @@ export const getMemberById = async (req, res, next) => {
 export const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, is_verified } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
@@ -286,26 +286,54 @@ export const updateMember = async (req, res, next) => {
       }
     }
 
-    const updateQuery = `
-      UPDATE members
-      SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $11
-      RETURNING *
-    `;
+    const isVerifiedVal = is_verified !== undefined ? !!is_verified : undefined;
 
-    const result = await query(updateQuery, [
-      first_name.trim(),
-      last_name.trim(),
-      middle_name?.trim() || null,
-      computedAge,
-      email?.toLowerCase() || null,
-      phone?.trim() || null,
-      address?.trim() || null,
-      date_of_birth || null,
-      gender || null,
-      civil_status || null,
-      id
-    ]);
+    let updateQuery;
+    let queryParams;
+    if (isVerifiedVal !== undefined) {
+      updateQuery = `
+        UPDATE members
+        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, is_verified = $11, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $12
+        RETURNING *
+      `;
+      queryParams = [
+        first_name.trim(),
+        last_name.trim(),
+        middle_name?.trim() || null,
+        computedAge,
+        email?.toLowerCase() || null,
+        phone?.trim() || null,
+        address?.trim() || null,
+        date_of_birth || null,
+        gender || null,
+        civil_status || null,
+        isVerifiedVal,
+        id
+      ];
+    } else {
+      updateQuery = `
+        UPDATE members
+        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $11
+        RETURNING *
+      `;
+      queryParams = [
+        first_name.trim(),
+        last_name.trim(),
+        middle_name?.trim() || null,
+        computedAge,
+        email?.toLowerCase() || null,
+        phone?.trim() || null,
+        address?.trim() || null,
+        date_of_birth || null,
+        gender || null,
+        civil_status || null,
+        id
+      ];
+    }
+
+    const result = await query(updateQuery, queryParams);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
@@ -617,10 +645,18 @@ export const updateMemberGoal = async (req, res, next) => {
     const { id } = req.params;
     const { investment_goal } = req.body;
 
-    if (investment_goal === undefined || isNaN(parseFloat(investment_goal)) || parseFloat(investment_goal) <= 0) {
+    if (investment_goal === undefined || isNaN(parseFloat(investment_goal))) {
       return res.status(400).json({
         success: false,
         error: { message: 'Please provide a valid investment goal amount.' }
+      });
+    }
+
+    const goalAmount = parseFloat(investment_goal);
+    if (goalAmount < 50000 || goalAmount > 150000) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Investment milestone goal must be between ₱50,000 and ₱150,000.' }
       });
     }
 

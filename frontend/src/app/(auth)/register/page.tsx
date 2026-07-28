@@ -294,20 +294,38 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
 
-    if (!firstName || !lastName || !email || !username || !password || !confirmPassword) {
+    if (!firstName || !lastName || !email || !phone || !username || !password || !confirmPassword) {
       setError('Please fill in all required fields.');
+      return;
+    }
+    if (/\d/.test(firstName)) {
+      setError('First Name must not contain numbers.');
       return;
     }
     if (!/^[a-zA-Z\s'-]+$/.test(firstName)) {
       setError('First Name must contain letters, spaces, hyphens, and apostrophes only.');
       return;
     }
-    if (middleName && !/^[a-zA-Z\s'-]+$/.test(middleName)) {
-      setError('Middle Name must contain letters, spaces, hyphens, and apostrophes only.');
+    if (middleName) {
+      if (/\d/.test(middleName)) {
+        setError('Middle Name must not contain numbers.');
+        return;
+      }
+      if (!/^[a-zA-Z\s'-]+$/.test(middleName)) {
+        setError('Middle Name must contain letters, spaces, hyphens, and apostrophes only.');
+        return;
+      }
+    }
+    if (/\d/.test(lastName)) {
+      setError('Last Name must not contain numbers.');
       return;
     }
     if (!/^[a-zA-Z\s'-]+$/.test(lastName)) {
       setError('Last Name must contain letters, spaces, hyphens, and apostrophes only.');
+      return;
+    }
+    if (!/^\d{11}$/.test(phone)) {
+      setError('Mobile/Contact Number must be exactly 11 digits (e.g., 09123456789).');
       return;
     }
     if (dob) {
@@ -473,7 +491,7 @@ export default function RegisterPage() {
                       id="reg-firstname"
                       required
                       value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
+                      onChange={(e) => setFirstName(e.target.value.replace(/[^a-zA-Z\s'-]/g, ''))}
                       placeholder="Juan"
                       className="w-full px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
                     />
@@ -487,7 +505,7 @@ export default function RegisterPage() {
                       id="reg-lastname"
                       required
                       value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
+                      onChange={(e) => setLastName(e.target.value.replace(/[^a-zA-Z\s'-]/g, ''))}
                       placeholder="Dela Cruz"
                       className="w-full px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
                     />
@@ -504,7 +522,7 @@ export default function RegisterPage() {
                       type="text"
                       id="reg-middlename"
                       value={middleName}
-                      onChange={(e) => setMiddleName(e.target.value)}
+                      onChange={(e) => setMiddleName(e.target.value.replace(/[^a-zA-Z\s'-]/g, ''))}
                       placeholder="Santos (Optional)"
                       className="w-full px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
                     />
@@ -529,42 +547,7 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                {/* Sex/Gender & Civil Status */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-gender">
-                      Sex / Gender
-                    </label>
-                    <select
-                      id="reg-gender"
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value)}
-                      className="w-full px-3 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-xs font-semibold text-on-surface dark:text-white"
-                    >
-                      <option value="">Select Sex/Gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-civil-status">
-                      Civil Status
-                    </label>
-                    <select
-                      id="reg-civil-status"
-                      value={civilStatus}
-                      onChange={(e) => setCivilStatus(e.target.value)}
-                      className="w-full px-3 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-xs font-semibold text-on-surface dark:text-white"
-                    >
-                      <option value="">Select Civil Status</option>
-                      <option value="Single">Single</option>
-                      <option value="Married">Married</option>
-                      <option value="Widowed">Widowed</option>
-                      <option value="Separated">Separated</option>
-                      <option value="Divorced">Divorced</option>
-                    </select>
-                  </div>
-                </div>
+
                 {computedAge !== null && (
                   <div className="px-1 text-[11px] font-bold text-primary dark:text-secondary flex items-center gap-1.5">
                     <span>Calculated Age:</span>
@@ -577,7 +560,7 @@ export default function RegisterPage() {
                 {/* Mobile / Contact Number */}
                 <div className="space-y-1.5">
                   <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-phone">
-                    Mobile/Contact Number
+                    Mobile/Contact Number *
                   </label>
                   <div className="relative group">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">
@@ -586,8 +569,9 @@ export default function RegisterPage() {
                     <input
                       type="tel"
                       id="reg-phone"
+                      required
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
                       placeholder="09123456789"
                       className="w-full pl-12 pr-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
                     />
@@ -859,7 +843,7 @@ export default function RegisterPage() {
                   Account Created!
                 </h2>
                 <p className="font-body text-sm text-on-surface/70 dark:text-neutral-300">
-                  Your cooperative account for <span className="font-bold text-primary dark:text-secondary">@{username}</span> has been verified and registered as a member.
+                  Your cooperative account <span className="font-bold text-primary dark:text-secondary">@{username}</span> has been email-verified and registered as a member.
                 </p>
               </div>
               <button

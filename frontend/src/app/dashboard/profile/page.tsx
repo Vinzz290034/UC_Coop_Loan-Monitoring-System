@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
@@ -21,6 +22,7 @@ import {
   Edit3,
   Camera,
   X,
+  Clock,
 } from 'lucide-react';
 import UserAccessHistoryTable from '@/components/UserAccessHistoryTable';
 
@@ -174,6 +176,8 @@ export default function ProfilePage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   // Load profile data
   useEffect(() => {
@@ -201,6 +205,7 @@ export default function ProfilePage() {
       }
     }
     loadProfile();
+    setMounted(true);
   }, []);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -227,8 +232,7 @@ export default function ProfilePage() {
         address: address.trim() || null,
         date_of_birth: dateOfBirth || null,
       });
-      setProfileSuccess('Profile updated successfully!');
-      setTimeout(() => setProfileSuccess(null), 4000);
+      setShowVerificationModal(true);
     } catch (err: any) {
       setProfileError(err.response?.data?.error?.message || 'Failed to save profile.');
     } finally {
@@ -579,12 +583,12 @@ export default function ProfilePage() {
                   {saving ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Saving...
+                      Submitting...
                     </>
                   ) : (
                     <>
                       <Save className="w-4 h-4" />
-                      Save Changes
+                      Submit Changes
                     </>
                   )}
                 </button>
@@ -706,6 +710,36 @@ export default function ProfilePage() {
 
       {/* User Login & Logout History */}
       <UserAccessHistoryTable />
+
+      {showVerificationModal && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-modal-pop text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <Clock className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">
+                Under Review
+              </h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                Your credentials have been submitted for review.
+              </p>
+            </div>
+            <p className="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed">
+              Your profile updates have been successfully submitted to the Cooperative Administrator. Please wait up to <strong>24 hours</strong> while the admin reviews and verifies your credentials. You will be notified as soon as you are fully verified.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => setShowVerificationModal(false)}
+                className="w-full py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-sm font-bold hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

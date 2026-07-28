@@ -288,6 +288,14 @@ function DeleteConfirmModal({
   username: string;
   deleting: boolean;
 }) {
+  const [confirmText, setConfirmText] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setConfirmText('');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -311,6 +319,19 @@ function DeleteConfirmModal({
           Are you sure you want to permanently delete user <strong className="text-tertiary">@{username}</strong>?
         </p>
 
+        <div className="space-y-2">
+          <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider">
+            Type the username <span className="font-mono text-on-surface dark:text-white bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 rounded select-all font-extrabold">{username}</span> to confirm:
+          </label>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder={username}
+            className="w-full px-3 py-2 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/65 rounded-xl text-sm font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 placeholder-neutral-400"
+          />
+        </div>
+
         <div className="flex gap-3 pt-2">
           <button
             onClick={onClose}
@@ -321,7 +342,7 @@ function DeleteConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            disabled={deleting}
+            disabled={deleting || confirmText !== username}
             className="flex-1 py-2.5 bg-tertiary text-white rounded-xl text-sm font-bold hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
             {deleting ? (

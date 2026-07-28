@@ -381,7 +381,8 @@ h6 {
 
 .animate-modal-pop {
   animation: modal-pop-in 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 /* 5. Custom Dropdown Pop Entrance Keyframes */

@@ -154,6 +154,7 @@ function AnimatedSelect({
 export default function OverviewPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const isVerified = user?.role === 'admin' || user?.role === 'staff' || !!user?.profile?.is_verified;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -480,25 +481,44 @@ export default function OverviewPage() {
           <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
 
             {/* Apply for Loan */}
-            <button
-              onClick={openLoanModal}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
-            >
-              <div className="space-y-1">
-                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
-                  Apply for a Loan
-                </h4>
-                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                  Submit a new credit application request.
-                </p>
-                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                  Proceed &rarr;
-                </span>
+            {isVerified ? (
+              <button
+                onClick={openLoanModal}
+                className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+              >
+                <div className="space-y-1">
+                  <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
+                    Apply for a Loan
+                  </h4>
+                  <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                    Submit a new credit application request.
+                  </p>
+                  <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                    Proceed &rarr;
+                  </span>
+                </div>
+                <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                  <PlusCircle className="w-6 h-6" />
+                </div>
+              </button>
+            ) : (
+              <div className="flex items-center justify-between p-6 bg-neutral-50 dark:bg-neutral-900 border-2 border-neutral-300 dark:border-neutral-800 rounded-3xl text-left shadow opacity-75 relative overflow-hidden">
+                <div className="space-y-1">
+                  <h4 className="font-headline font-black text-base text-neutral-500 flex items-center gap-1.5">
+                    Apply for a Loan <Lock className="w-4 h-4 text-neutral-400" />
+                  </h4>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
+                    Submit a new credit application request.
+                  </p>
+                  <span className="inline-block pt-1 text-xs font-bold text-amber-600 dark:text-amber-400">
+                    Verification pending review (takes up to 24h)
+                  </span>
+                </div>
+                <div className="p-3.5 bg-neutral-200 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-600 rounded-2xl flex-shrink-0 ml-4">
+                  <PlusCircle className="w-6 h-6" />
+                </div>
               </div>
-              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
-                <PlusCircle className="w-6 h-6" />
-              </div>
-            </button>
+            )}
 
             {/* Initiate Investment */}
             {balances.total_assets === 0 && (
@@ -573,18 +593,20 @@ export default function OverviewPage() {
               </p>
             </div>
 
-            <button
-              onClick={() => {
-                setActiveModal('investment');
-                setWizardStep(1);
-                setSuccessData(null);
-                setModalError(null);
-              }}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer self-start sm:self-auto"
-            >
-              <Coins className="w-4 h-4" />
-              <span>Add Capital Placement +</span>
-            </button>
+            {balances.total_assets > 0 && (
+              <button
+                onClick={() => {
+                  setActiveModal('investment');
+                  setWizardStep(1);
+                  setSuccessData(null);
+                  setModalError(null);
+                }}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer self-start sm:self-auto"
+              >
+                <Coins className="w-4 h-4" />
+                <span>Add Capital Placement +</span>
+              </button>
+            )}
           </div>
 
           {/* Progress Bar & Target Math */}
@@ -698,7 +720,7 @@ export default function OverviewPage() {
                   {activeModal === 'loan' && 'Apply for a Loan'}
                   {activeModal === 'investment' && 'Initiate Investment'}
                   {activeModal === 'appointment' && 'Book Office Appointment'}
-                  {activeModal === 'welcome' && (wizardStep === 1 ? 'Welcome to UC COOP!' : 'Set Your Investment Goal')}
+                  {activeModal === 'welcome' && (wizardStep === 1 ? 'Welcome to Coop Sync!' : wizardStep === 2 ? 'Set Your Investment Goal' : 'Account Verification Required')}
                 </h3>
                 {activeModal !== 'welcome' && (
                   <button
@@ -1466,9 +1488,9 @@ export default function OverviewPage() {
                         <h4 className="font-headline font-extrabold text-xl text-primary dark:text-secondary">
                           Hello, {user?.profile?.first_name || 'Member'}!
                         </h4>
-                        <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed max-w-md mx-auto">
-                          Welcome to the **University Cooperative Loan Monitoring & Financial Management System**. 
-                          We are excited to help you track your share capital, fixed deposits, investments, and loan applications in one unified, secure platform.
+                        <p className="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed max-w-md mx-auto">
+                          Welcome to the UC-METC Cooperative Loan Monitoring & Financial Management System. 
+                          We are excited to help you track your share capital, loan balance, and loan applications in one unified, secure platform.
                         </p>
                         <div className="pt-4">
                           <button
@@ -1484,8 +1506,8 @@ export default function OverviewPage() {
 
                     {wizardStep === 2 && (
                       <div className="space-y-5">
-                        <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                          Setting an investment milestone goal helps you visualize and track your accumulated equity capital (Share Capital + Fixed Deposits). Once your investment hits 100% of your milestone goal, our Cooperative Office will be automatically notified to coordinate payout or rollover options.
+                        <p className="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed">
+                          Setting an investment milestone goal helps you visualize and track your accumulated share capital. Once your investment hits 100% of your milestone goal, our Coop Office will be automatically notified to coordinate or payout or rollover options.
                         </p>
                         
                         <div className="space-y-2">
@@ -1496,20 +1518,25 @@ export default function OverviewPage() {
                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 font-bold">₱</span>
                             <input
                               type="number"
+                              min={50000}
+                              max={150000}
                               value={newGoalAmount}
                               onChange={(e) => setNewGoalAmount(e.target.value)}
                               placeholder="e.g. 50000"
                               className="w-full bg-transparent pl-8 pr-4 py-3 text-sm font-bold text-on-surface dark:text-white focus:outline-none placeholder-neutral-400"
                             />
                           </div>
+                          <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-bold px-1">
+                            Min: ₱50,000 | Max: ₱150,000
+                          </p>
                         </div>
 
                         <div className="pt-3">
                           <button
                             onClick={async () => {
                               const goalVal = parseFloat(newGoalAmount);
-                              if (isNaN(goalVal) || goalVal <= 0) {
-                                setModalError('Please enter a valid target goal amount (greater than 0).');
+                              if (isNaN(goalVal) || goalVal < 50000 || goalVal > 150000) {
+                                setModalError('Milestone target goal must be between ₱50,000 and ₱150,000.');
                                 return;
                               }
                               setSubmitting(true);
@@ -1523,7 +1550,7 @@ export default function OverviewPage() {
                                   ...prev,
                                   investment_goal: response.data.data.investment_goal
                                 } : null);
-                                closeModal();
+                                setWizardStep(3);
                               } catch (err: any) {
                                 setModalError(err.response?.data?.error?.message || 'Failed to save milestone goal.');
                               } finally {
@@ -1533,7 +1560,42 @@ export default function OverviewPage() {
                             disabled={submitting}
                             className="w-full py-3 px-4 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all active:scale-95 shadow-md disabled:opacity-50 cursor-pointer text-center"
                           >
-                            {submitting ? 'Saving...' : 'Save & Finish'}
+                            {submitting ? 'Saving...' : 'Save & Continue'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {wizardStep === 3 && (
+                      <div className="space-y-5 text-center py-4">
+                        <div className="mx-auto w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2">
+                          <ShieldCheck className="w-8 h-8" />
+                        </div>
+                        <h4 className="font-headline font-extrabold text-xl text-amber-600 dark:text-amber-400">
+                          Complete Your Profile Verification
+                        </h4>
+                        
+                        <div className="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed space-y-3 text-left">
+                          <p>
+                            To unlock loan privileges, you must fill out your <strong>full credentials</strong>. You will only be allowed to apply for loans once your account has been fully verified.
+                          </p>
+                          <p>
+                            Please note that verification may take up to <strong>24 hours</strong> as our administrators must manually review your submitted credentials.
+                          </p>
+                          <p>
+                            Once fully verified, you can apply for loans. Your maximum loanable amount will be calculated based on your total <strong>Share Capital</strong> balance.
+                          </p>
+                        </div>
+
+                        <div className="pt-4">
+                          <button
+                            onClick={() => {
+                              closeModal();
+                              router.push('/dashboard/profile');
+                            }}
+                            className="w-full py-3 px-4 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all active:scale-95 shadow-md cursor-pointer text-center"
+                          >
+                            I Understand & Finish
                           </button>
                         </div>
                       </div>

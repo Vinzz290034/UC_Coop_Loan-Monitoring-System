@@ -25,7 +25,9 @@ import {
   Building,
   PiggyBank,
   Coins,
-  TrendingDown
+  TrendingDown,
+  ShieldCheck,
+  Clock
 } from 'lucide-react';
 
 interface MemberProfileProps {
@@ -56,6 +58,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [dob, setDob] = useState('');
+  const [isVerified, setIsVerified] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
@@ -95,6 +98,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
       setEmail(mData.email || '');
       setPhone(mData.phone || '');
       setAddress(mData.address || '');
+      setIsVerified(!!mData.is_verified);
       if (mData.date_of_birth) {
         setDob(new Date(mData.date_of_birth).toISOString().split('T')[0]);
       }
@@ -140,6 +144,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
         phone: phone || undefined,
         address: address || undefined,
         date_of_birth: dob || undefined,
+        is_verified: isVerified,
       });
       setIsEditModalOpen(false);
       fetchProfileAndBalances();
@@ -263,7 +268,47 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
               </h2>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">Joined {new Date(member.created_at).toLocaleDateString()}</p>
             </div>
-            <div>{getStatusBadge(member.status)}</div>
+            <div className="flex flex-col items-center gap-1.5 w-full">
+              <div>{getStatusBadge(member.status)}</div>
+              {member.is_verified ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary dark:bg-secondary/10 dark:text-secondary border border-primary/20 dark:border-secondary/20">
+                  <ShieldCheck className="w-3 h-3" /> Fully Verified
+                </span>
+              ) : (
+                <div className="flex flex-col items-center gap-2 w-full px-4">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-900/30">
+                    <Clock className="w-3 h-3 animate-pulse" /> Pending Verification
+                  </span>
+                  {isAdminOrManager && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await api.put(`/members/${memberId}`, {
+                            first_name: member.first_name,
+                            last_name: member.last_name,
+                            middle_name: member.middle_name,
+                            age: member.age,
+                            gender: member.gender,
+                            civil_status: member.civil_status,
+                            email: member.email,
+                            phone: member.phone,
+                            address: member.address,
+                            date_of_birth: member.date_of_birth ? new Date(member.date_of_birth).toISOString().split('T')[0] : null,
+                            is_verified: true,
+                          });
+                          fetchProfileAndBalances();
+                        } catch (err: any) {
+                          alert(err.response?.data?.error?.message || 'Failed to verify member.');
+                        }
+                      }}
+                      className="w-full py-1.5 px-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-[10px] rounded-lg shadow-sm hover:opacity-95 active:scale-95 transition-all cursor-pointer text-center"
+                    >
+                      Approve Verification
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="border-t border-outline-variant/40 pt-6 space-y-4 text-xs font-body">
@@ -540,6 +585,19 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                   onChange={(e) => setAddress(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
                 />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 px-1">
+                <input
+                  type="checkbox"
+                  id="isVerifiedCheckbox"
+                  checked={isVerified}
+                  onChange={(e) => setIsVerified(e.target.checked)}
+                  className="w-4 h-4 text-primary dark:text-secondary rounded border-outline-variant focus:ring-primary/20 cursor-pointer"
+                />
+                <label htmlFor="isVerifiedCheckbox" className="font-label text-xs font-bold text-neutral-700 dark:text-neutral-300 cursor-pointer select-none">
+                  Fully Verified (Unlocks Loan Privileges)
+                </label>
               </div>
 
               <div className="pt-4 flex items-center justify-end gap-3">

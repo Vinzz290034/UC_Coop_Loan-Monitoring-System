@@ -99,7 +99,7 @@ export const login = async (req, res, next) => {
     let memberProfile = null;
     if (user.role === 'member') {
       const memberResult = await query(
-        'SELECT id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, status FROM members WHERE user_id = $1',
+        'SELECT id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, status, is_verified FROM members WHERE user_id = $1',
         [user.id]
       );
       if (memberResult.rowCount > 0) {
@@ -184,7 +184,7 @@ export const getMe = async (req, res, next) => {
     // Fetch linked member/profile for ALL roles (admin/manager may also have one)
     let memberProfile = null;
     const memberResult = await query(
-      'SELECT id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status FROM members WHERE user_id = $1',
+      'SELECT id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status, is_verified FROM members WHERE user_id = $1',
       [user.id]
     );
     if (memberResult.rowCount > 0) {
@@ -1493,9 +1493,10 @@ export const updateProfile = async (req, res, next) => {
            age = $8,
            gender = $9,
            civil_status = $10,
+           is_verified = false,
            updated_at = CURRENT_TIMESTAMP
          WHERE user_id = $11
-         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status`,
+         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status, is_verified`,
         [
           first_name.trim(),
           last_name.trim(),
@@ -1515,7 +1516,7 @@ export const updateProfile = async (req, res, next) => {
       result = await query(
         `INSERT INTO members (user_id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
-         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status`,
+         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status, is_verified`,
         [
           userId,
           first_name.trim(),
