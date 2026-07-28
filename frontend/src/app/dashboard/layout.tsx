@@ -28,6 +28,7 @@ import {
   Menu,
   X,
   LifeBuoy,
+  Megaphone,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
@@ -145,9 +146,21 @@ function DashboardLayoutContent({
       allowed: true,
     },
     {
+      name: 'Support Desk',
+      path: '/dashboard/support',
+      icon: LifeBuoy,
+      allowed: user.role === 'admin' || user.role === 'staff',
+    },
+    {
       name: 'Notifications',
       path: '/dashboard/notifications',
       icon: Bell,
+      allowed: true,
+    },
+    {
+      name: 'Announcements',
+      path: '/dashboard/announcements',
+      icon: Megaphone,
       allowed: true,
     },
     {
@@ -329,7 +342,6 @@ function DashboardLayoutContent({
     <div className="h-screen flex bg-background dark:bg-background transition-colors duration-200">
 
       {/* ─── Mobile Sidebar Overlay (< md) ─── */}
-      {/* Backdrop */}
       {mobileSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-40 md:hidden animate-modal-backdrop"
@@ -362,7 +374,6 @@ function DashboardLayoutContent({
         <header className="h-16 md:h-20 bg-white dark:bg-surface-container-low border-b border-outline-variant/65 flex items-center justify-between px-4 sm:px-6 md:px-8 z-30 flex-shrink-0">
           {/* Left Section: Hamburger + Page Title */}
           <div className="flex items-center gap-3 min-w-0">
-            {/* Mobile hamburger — visible only on < md */}
             <button
               onClick={() => setMobileSidebarOpen(true)}
               className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer flex-shrink-0"
@@ -374,16 +385,15 @@ function DashboardLayoutContent({
               {pathname === '/dashboard'
                 ? 'System Dashboard'
                 : pathname
-                  .split('/')
-                  .slice(2)
-                  .map((segment) => breadcrumbLabels[segment] || segment)
-                  .join(' / ')}
+                    .split('/')
+                    .slice(2)
+                    .map((segment) => breadcrumbLabels[segment] || segment)
+                    .join(' / ')}
             </h2>
           </div>
 
           {/* Right Action Control Bar */}
           <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-            {/* Live Date Badge — hidden on small screens */}
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral/5 dark:bg-neutral/10 border border-outline-variant/30 text-xs text-neutral-600 dark:text-neutral-300">
               <Calendar className="w-3.5 h-3.5" />
               <span className="font-mono font-semibold">
@@ -395,10 +405,7 @@ function DashboardLayoutContent({
               </span>
             </div>
 
-            {/* Notification Bell */}
             <NotificationBell />
-
-            {/* Theme Toggle */}
             <ThemeToggle />
           </div>
         </header>
