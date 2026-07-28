@@ -232,6 +232,8 @@ export default function RegisterPage() {
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dob, setDob] = useState('');
+  const [gender, setGender] = useState('');
+  const [civilStatus, setCivilStatus] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -357,6 +359,8 @@ export default function RegisterPage() {
         last_name: lastName,
         date_of_birth: dob || undefined,
         age: computedAge ?? undefined,
+        gender: gender || undefined,
+        civil_status: civilStatus || undefined,
         phone: phone || undefined,
         username,
         password,
@@ -522,6 +526,43 @@ export default function RegisterPage() {
                         className="w-full pl-9 pr-3 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-xs font-semibold text-on-surface dark:text-white"
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* Sex/Gender & Civil Status */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-gender">
+                      Sex / Gender
+                    </label>
+                    <select
+                      id="reg-gender"
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value)}
+                      className="w-full px-3 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-xs font-semibold text-on-surface dark:text-white"
+                    >
+                      <option value="">Select Sex/Gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reg-civil-status">
+                      Civil Status
+                    </label>
+                    <select
+                      id="reg-civil-status"
+                      value={civilStatus}
+                      onChange={(e) => setCivilStatus(e.target.value)}
+                      className="w-full px-3 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-xs font-semibold text-on-surface dark:text-white"
+                    >
+                      <option value="">Select Civil Status</option>
+                      <option value="Single">Single</option>
+                      <option value="Married">Married</option>
+                      <option value="Widowed">Widowed</option>
+                      <option value="Separated">Separated</option>
+                      <option value="Divorced">Divorced</option>
+                    </select>
                   </div>
                 </div>
                 {computedAge !== null && (

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import api from '@/lib/api';
 import LandingNavbar from '@/components/LandingNavbar';
 import LandingFooter from '@/components/LandingFooter';
 import { Mail, Phone, MapPin, Send, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
@@ -21,36 +22,19 @@ export default function ContactPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/contact', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          full_name: name,
-          email: email,
-          message_content: message,
-        }),
+      await api.post('/auth/contact', {
+        full_name: name,
+        email: email,
+        message_content: message,
       });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error?.message || 'Something went wrong. Please try again.');
-      }
 
       // Success
       setSubmitted(true);
       setName('');
       setEmail('');
       setMessage('');
-    } catch (err) {
-      // Safe type narrow to replace the 'any' linter error
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Unable to connect to the server.');
-      }
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || err.message || 'Unable to connect to the server.');
     } finally {
       setLoading(false);
     }

@@ -15,6 +15,8 @@ export interface User {
     last_name: string;
     middle_name?: string | null;
     age?: number | null;
+    gender?: string | null;
+    civil_status?: string | null;
     email?: string | null;
     phone?: string | null;
     address?: string | null;
@@ -29,6 +31,8 @@ interface RegisterPayload {
   middle_name?: string;
   date_of_birth?: string;
   age?: number | string;
+  gender?: string;
+  civil_status?: string;
   phone?: string;
   username: string;
   password: string;

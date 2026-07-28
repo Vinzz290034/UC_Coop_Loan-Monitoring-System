@@ -50,6 +50,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [civilStatus, setCivilStatus] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -88,6 +90,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
       setLastName(mData.last_name || '');
       setMiddleName(mData.middle_name || '');
       setAge(mData.age != null ? String(mData.age) : '');
+      setGender(mData.gender || '');
+      setCivilStatus(mData.civil_status || '');
       setEmail(mData.email || '');
       setPhone(mData.phone || '');
       setAddress(mData.address || '');
@@ -130,6 +134,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
         last_name: lastName,
         middle_name: middleName || undefined,
         age: age ? parseInt(age, 10) : undefined,
+        gender: gender || undefined,
+        civil_status: civilStatus || undefined,
         email: email || undefined,
         phone: phone || undefined,
         address: address || undefined,
@@ -262,8 +268,16 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
 
           <div className="border-t border-outline-variant/40 pt-6 space-y-4 text-xs font-body">
             <div className="flex items-center gap-3">
-              <span className="font-bold text-neutral-600 dark:text-neutral-400 w-16">Age:</span>
+              <span className="font-bold text-neutral-600 dark:text-neutral-400 w-24">Age:</span>
               <span className="text-on-surface dark:text-white font-semibold">{member.age != null ? `${member.age} years old` : <span className="italic text-neutral-600 dark:text-neutral-400/50">Not set</span>}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-neutral-600 dark:text-neutral-400 w-24">Sex / Gender:</span>
+              <span className="text-on-surface dark:text-white font-semibold">{member.gender || <span className="italic text-neutral-600 dark:text-neutral-400/50">Not set</span>}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-neutral-600 dark:text-neutral-400 w-24">Civil Status:</span>
+              <span className="text-on-surface dark:text-white font-semibold">{member.civil_status || <span className="italic text-neutral-600 dark:text-neutral-400/50">Not set</span>}</span>
             </div>
             <div className="flex items-center gap-3">
               <Mail className="w-4 h-4 text-neutral-600 dark:text-neutral-400 flex-shrink-0" />
@@ -464,6 +478,36 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                     onChange={(e) => setDob(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Sex / Gender</label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Civil Status</label>
+                  <select
+                    value={civilStatus}
+                    onChange={(e) => setCivilStatus(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  >
+                    <option value="">Select Civil Status</option>
+                    <option value="Single">Single</option>
+                    <option value="Married">Married</option>
+                    <option value="Widowed">Widowed</option>
+                    <option value="Separated">Separated</option>
+                    <option value="Divorced">Divorced</option>
+                  </select>
                 </div>
               </div>
 
