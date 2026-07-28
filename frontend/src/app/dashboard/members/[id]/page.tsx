@@ -58,6 +58,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [dob, setDob] = useState('');
+  const [title, setTitle] = useState('');
+  const [tin, setTin] = useState('');
   const [isVerified, setIsVerified] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [updatingProfile, setUpdatingProfile] = useState(false);
@@ -89,6 +91,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
       }
       
       // Initialize edit fields
+      setTitle(mData.title || '');
+      setTin(mData.tin || '');
       setFirstName(mData.first_name || '');
       setLastName(mData.last_name || '');
       setMiddleName(mData.middle_name || '');
@@ -134,6 +138,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
 
     try {
       await api.put(`/members/${memberId}`, {
+        title: title || undefined,
+        tin: tin || undefined,
         first_name: firstName,
         last_name: lastName,
         middle_name: middleName || undefined,
@@ -287,6 +293,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                             first_name: member.first_name,
                             last_name: member.last_name,
                             middle_name: member.middle_name,
+                            title: member.title || undefined,
+                            tin: member.tin || undefined,
                             age: member.age,
                             gender: member.gender,
                             civil_status: member.civil_status,
@@ -312,6 +320,14 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
           </div>
 
           <div className="border-t border-outline-variant/40 pt-6 space-y-4 text-xs font-body">
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-neutral-600 dark:text-neutral-400 w-24">Title:</span>
+              <span className="text-on-surface dark:text-white font-semibold">{member.title || <span className="italic text-neutral-600 dark:text-neutral-400/50">Not set</span>}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-neutral-600 dark:text-neutral-400 w-24">TIN:</span>
+              <span className="text-on-surface dark:text-white font-semibold">{member.tin || <span className="italic text-neutral-600 dark:text-neutral-400/50">Not set</span>}</span>
+            </div>
             <div className="flex items-center gap-3">
               <span className="font-bold text-neutral-600 dark:text-neutral-400 w-24">Age:</span>
               <span className="text-on-surface dark:text-white font-semibold">{member.age != null ? `${member.age} years old` : <span className="italic text-neutral-600 dark:text-neutral-400/50">Not set</span>}</span>
@@ -488,6 +504,29 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                     required
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Title</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Mr., Ms., Engr., Dr."
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">TIN (Taxpayer ID)</label>
+                  <input
+                    type="text"
+                    value={tin}
+                    onChange={(e) => setTin(e.target.value)}
+                    placeholder="000-000-000-000"
                     className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
                   />
                 </div>

@@ -150,6 +150,10 @@ export default function ProfilePage() {
   };
 
   // Profile form state
+  const PREDEFINED_TITLES = ['Mr.', 'Ms.', 'Mrs.', 'Engr.', 'Atty.', 'Dr.'];
+  const [titleDropdown, setTitleDropdown] = useState('Mr.');
+  const [customTitle, setCustomTitle] = useState('');
+  const [tin, setTin] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -187,6 +191,15 @@ export default function ProfilePage() {
         const data = res.data.data;
         const profile = data.profile;
         if (profile) {
+          const t = profile.title || '';
+          if (t && !PREDEFINED_TITLES.includes(t)) {
+            setTitleDropdown('Other');
+            setCustomTitle(t);
+          } else {
+            setTitleDropdown(t || 'Mr.');
+            setCustomTitle('');
+          }
+          setTin(profile.tin || '');
           setFirstName(profile.first_name || '');
           setLastName(profile.last_name || '');
           setMiddleName(profile.middle_name || '');
@@ -218,9 +231,13 @@ export default function ProfilePage() {
       return;
     }
 
+    const selectedTitle = titleDropdown === 'Other' ? customTitle.trim() : titleDropdown;
+
     setSaving(true);
     try {
       await api.put('/auth/me/profile', {
+        title: selectedTitle || null,
+        tin: tin.trim() || null,
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         middle_name: middleName.trim() || null,
@@ -391,14 +408,46 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Personal Information */}
-      <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center gap-2.5">
-          <Edit3 className="w-4 h-4 text-primary dark:text-secondary" />
-          <h2 className="font-headline text-sm font-bold text-on-surface dark:text-white">Personal Information</h2>
+      {/* Personal Information & Profile Verification Card */}
+      <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl overflow-hidden shadow-sm">
+        <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Edit3 className="w-4 h-4 text-primary dark:text-secondary" />
+            <h2 className="font-headline text-sm font-bold text-on-surface dark:text-white">
+              Personal Information & Profile Verification
+            </h2>
+          </div>
+          {user.role === 'member' && (
+            user.profile?.profile_completed ? (
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                user.profile?.status === 'approved' || user.profile?.status === 'active'
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300/40'
+                  : user.profile?.status === 'disapproved'
+                  ? 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300 border border-red-300/40'
+                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300/40'
+              }`}>
+                {user.profile?.status === 'approved' || user.profile?.status === 'active'
+                  ? 'Approved'
+                  : user.profile?.status === 'disapproved'
+                  ? 'Disapproved'
+                  : 'Under Review'}
+              </span>
+            ) : (
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300/40">
+                Incomplete
+              </span>
+            )
+          )}
         </div>
 
         <form onSubmit={handleSaveProfile} className="p-6 space-y-4">
+          {user.role === 'member' && user.profile?.profile_completed && user.profile?.status === 'pending' && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs font-medium space-y-1 mb-4">
+              <p className="font-bold">Your profile has been submitted successfully.</p>
+              <p>Your information is currently under review. Approval typically takes 24–48 hours. You will receive access to transaction features once your account has been approved.</p>
+            </div>
+          )}
+
           {profileError && (
             <div className="p-3 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-xl text-[11px] font-bold flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -418,6 +467,68 @@ export default function ProfilePage() {
             </div>
           ) : (
             <>
+              {/* Title & TIN Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
+                    Member Title (Optional)
+                  </label>
+                  <select
+                    value={titleDropdown}
+                    onChange={(e) => setTitleDropdown(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white"
+                  >
+                    {PREDEFINED_TITLES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                    <option value="Other">Other (Specify Custom Title)</option>
+                  </select>
+                </div>
+
+                {titleDropdown === 'Other' ? (
+                  <div className="space-y-1.5">
+                    <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
+                      Custom Title
+                    </label>
+                    <input
+                      type="text"
+                      value={customTitle}
+                      onChange={(e) => setCustomTitle(e.target.value)}
+                      placeholder="e.g. Prof. or Rev."
+                      className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
+                      TIN (Taxpayer ID)
+                    </label>
+                    <input
+                      type="text"
+                      value={tin}
+                      onChange={(e) => setTin(e.target.value)}
+                      placeholder="000-000-000-000"
+                      className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {titleDropdown === 'Other' && (
+                <div className="space-y-1.5">
+                  <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
+                    TIN (Taxpayer ID)
+                  </label>
+                  <input
+                    type="text"
+                    value={tin}
+                    onChange={(e) => setTin(e.target.value)}
+                    placeholder="000-000-000-000"
+                    className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
+                  />
+                </div>
+              )}
+
               {/* Name Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
@@ -588,7 +699,7 @@ export default function ProfilePage() {
                   ) : (
                     <>
                       <Save className="w-4 h-4" />
-                      Submit Changes
+                      {user.role === 'member' && !user.profile?.profile_completed ? 'Submit Profile for Verification' : 'Submit Changes'}
                     </>
                   )}
                 </button>
@@ -743,3 +854,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+

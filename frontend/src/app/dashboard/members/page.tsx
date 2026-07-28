@@ -57,6 +57,8 @@ export default function MembersPage() {
 
   // Add Member Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [titleInput, setTitleInput] = useState('');
+  const [tinInput, setTinInput] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -67,7 +69,7 @@ export default function MembersPage() {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [dob, setDob] = useState('');
-  const [memberStatus, setMemberStatus] = useState<'active' | 'suspended' | 'inactive'>('active');
+  const [memberStatus, setMemberStatus] = useState<string>('active');
   const [userId, setUserId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -265,6 +267,8 @@ export default function MembersPage() {
 
     try {
       await api.post('/members', {
+        title: titleInput?.trim() || undefined,
+        tin: tinInput?.trim() || undefined,
         first_name: firstName,
         last_name: lastName,
         middle_name: middleName || undefined,
@@ -280,6 +284,8 @@ export default function MembersPage() {
       });
 
       // Clear Form and Close Modal
+      setTitleInput('');
+      setTinInput('');
       setFirstName('');
       setLastName('');
       setMiddleName('');
@@ -854,8 +860,11 @@ export default function MembersPage() {
                               <select
                                 value={inlineData.status || member.status}
                                 onChange={(e) => setInlineData({ ...inlineData, status: e.target.value })}
-                                className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
+                                className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white font-semibold"
                               >
+                                <option value="pending">Pending Review</option>
+                                <option value="approved">Approved</option>
+                                <option value="disapproved">Disapproved</option>
                                 <option value="active">Active</option>
                                 <option value="suspended">Suspended</option>
                                 <option value="inactive">Inactive</option>
@@ -1020,6 +1029,29 @@ export default function MembersPage() {
             <form onSubmit={handleAddMember} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Title (Optional)</label>
+                  <input
+                    type="text"
+                    value={titleInput}
+                    onChange={(e) => setTitleInput(e.target.value)}
+                    placeholder="e.g. Mr., Ms., Engr., Dr."
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">TIN (Taxpayer ID)</label>
+                  <input
+                    type="text"
+                    value={tinInput}
+                    onChange={(e) => setTinInput(e.target.value)}
+                    placeholder="000-000-000-000"
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">First Name *</label>
                   <input
                     type="text"
@@ -1147,8 +1179,11 @@ export default function MembersPage() {
                   <select
                     value={memberStatus}
                     onChange={(e: any) => setMemberStatus(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white font-semibold"
                   >
+                    <option value="pending">Pending Review</option>
+                    <option value="approved">Approved</option>
+                    <option value="disapproved">Disapproved</option>
                     <option value="active">Active</option>
                     <option value="suspended">Suspended</option>
                     <option value="inactive">Inactive</option>

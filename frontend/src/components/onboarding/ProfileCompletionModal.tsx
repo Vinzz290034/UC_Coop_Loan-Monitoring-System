@@ -16,7 +16,7 @@ export default function ProfileCompletionModal({ isOpen, onClose }: ProfileCompl
 
   const handleCompleteNow = () => {
     onClose();
-    router.push('/dashboard/settings');
+    router.push('/dashboard/profile');
   };
 
   return (

@@ -16,11 +16,12 @@ export async function migrateMembersOnboarding() {
   console.log('[Migration] Checking members table schema for onboarding columns...');
   const client = await pool.connect();
   try {
-    // 1. Add tin, title, profile_completed columns if missing
+    // 1. Add tin, title, profile_completed, investment_goal columns if missing
     await client.query(`
       ALTER TABLE members ADD COLUMN IF NOT EXISTS tin VARCHAR(50) DEFAULT NULL;
       ALTER TABLE members ADD COLUMN IF NOT EXISTS title VARCHAR(50) DEFAULT NULL;
       ALTER TABLE members ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE members ADD COLUMN IF NOT EXISTS investment_goal NUMERIC DEFAULT 0.00;
     `);
 
     // 2. Drop existing members status check constraint safely if present

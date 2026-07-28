@@ -7,7 +7,7 @@ import { exportToExcel } from '../services/reportExporter.js'; // Ensure this li
 export const createMember = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, status, user_id, is_verified } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id, is_verified } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
@@ -49,8 +49,8 @@ export const createMember = async (req, res, next) => {
 
     // 1. Insert Member
     const insertMemberQuery = `
-      INSERT INTO members (first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, status, user_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      INSERT INTO members (first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `;
     const memberResult = await client.query(insertMemberQuery, [
@@ -64,6 +64,8 @@ export const createMember = async (req, res, next) => {
       date_of_birth || null,
       gender || null,
       civil_status || null,
+      tin?.trim() || null,
+      title?.trim() || null,
       status || 'active',
       user_id || null
     ]);
@@ -249,7 +251,7 @@ export const getMemberById = async (req, res, next) => {
 export const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, is_verified } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, is_verified } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
@@ -293,8 +295,8 @@ export const updateMember = async (req, res, next) => {
     if (isVerifiedVal !== undefined) {
       updateQuery = `
         UPDATE members
-        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, is_verified = $11, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $12
+        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, tin = $11, title = $12, is_verified = $13, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $14
         RETURNING *
       `;
       queryParams = [
@@ -308,14 +310,16 @@ export const updateMember = async (req, res, next) => {
         date_of_birth || null,
         gender || null,
         civil_status || null,
+        tin?.trim() || null,
+        title?.trim() || null,
         isVerifiedVal,
         id
       ];
     } else {
       updateQuery = `
         UPDATE members
-        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $11
+        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, tin = $11, title = $12, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $13
         RETURNING *
       `;
       queryParams = [
@@ -329,6 +333,8 @@ export const updateMember = async (req, res, next) => {
         date_of_birth || null,
         gender || null,
         civil_status || null,
+        tin?.trim() || null,
+        title?.trim() || null,
         id
       ];
     }

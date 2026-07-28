@@ -1411,7 +1411,7 @@ export const replyToContactMessage = async (req, res, next) => {
 export const updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, title, tin } = req.body;
 
     // Validate required fields
     if (!first_name || !last_name) {
@@ -1493,10 +1493,12 @@ export const updateProfile = async (req, res, next) => {
            age = $8,
            gender = $9,
            civil_status = $10,
-           is_verified = false,
+           title = $11,
+           tin = $12,
+           profile_completed = true,
            updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $11
-         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status, is_verified`,
+         WHERE user_id = $13
+         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, title, tin, email, phone, address, date_of_birth, status, profile_completed, is_verified`,
         [
           first_name.trim(),
           last_name.trim(),
@@ -1508,15 +1510,17 @@ export const updateProfile = async (req, res, next) => {
           computedAge,
           gender || null,
           civil_status || null,
+          title?.trim() || null,
+          tin?.trim() || null,
           userId
         ]
       );
     } else {
       // Create a new member profile for this user (admin/manager without one)
       result = await query(
-        `INSERT INTO members (user_id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
-         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status, is_verified`,
+        `INSERT INTO members (user_id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, title, tin, profile_completed, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, 'active')
+         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, title, tin, email, phone, address, date_of_birth, status, profile_completed, is_verified`,
         [
           userId,
           first_name.trim(),
@@ -1528,7 +1532,9 @@ export const updateProfile = async (req, res, next) => {
           address?.trim() || null,
           date_of_birth || null,
           gender || null,
-          civil_status || null
+          civil_status || null,
+          title?.trim() || null,
+          tin?.trim() || null
         ]
       );
     }
