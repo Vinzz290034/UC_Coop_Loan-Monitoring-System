@@ -94,18 +94,18 @@ export const applyForLoan = async (req, res, next) => {
       });
     }
 
-    // Verify member exists and is active
-    const member = await query('SELECT status FROM members WHERE id = $1', [member_id]);
+    // Verify member exists, completed profile, and has admin approval
+    const member = await query('SELECT status, profile_completed FROM members WHERE id = $1', [member_id]);
     if (member.rowCount === 0) {
       return res.status(404).json({
         success: false,
         error: { message: 'Member not found.' }
       });
     }
-    if (member.rows[0].status !== 'active') {
-      return res.status(400).json({
+    if (!member.rows[0].profile_completed || !['active', 'approved'].includes(member.rows[0].status)) {
+      return res.status(403).json({
         success: false,
-        error: { message: `Cannot approve loans for members who are currently ${member.rows[0].status}.` }
+        error: { message: 'You cannot apply for a loan until your profile verification has been completed and approved by an administrator.' }
       });
     }
 

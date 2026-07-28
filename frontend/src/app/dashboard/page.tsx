@@ -509,8 +509,8 @@ export default function OverviewPage() {
           <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
           <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
 
-            {/* Apply for Loan */}
-            {isVerified ? (
+            {/* Apply for Loan (Only visible & triggerable after profile verification and admin approval) */}
+            {isVerified && (
               <button
                 onClick={openLoanModal}
                 className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
@@ -530,23 +530,6 @@ export default function OverviewPage() {
                   <PlusCircle className="w-6 h-6" />
                 </div>
               </button>
-            ) : (
-              <div className="flex items-center justify-between p-6 bg-neutral-50 dark:bg-neutral-900 border-2 border-neutral-300 dark:border-neutral-800 rounded-3xl text-left shadow opacity-75 relative overflow-hidden">
-                <div className="space-y-1">
-                  <h4 className="font-headline font-black text-base text-neutral-500 flex items-center gap-1.5">
-                    Apply for a Loan <Lock className="w-4 h-4 text-neutral-400" />
-                  </h4>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
-                    Submit a new credit application request.
-                  </p>
-                  <span className="inline-block pt-1 text-xs font-bold text-amber-600 dark:text-amber-400">
-                    Verification pending review (takes up to 24h)
-                  </span>
-                </div>
-                <div className="p-3.5 bg-neutral-200 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-600 rounded-2xl flex-shrink-0 ml-4">
-                  <PlusCircle className="w-6 h-6" />
-                </div>
-              </div>
             )}
 
             {/* Initiate Investment */}

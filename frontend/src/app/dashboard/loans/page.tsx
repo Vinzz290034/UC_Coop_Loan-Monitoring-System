@@ -31,7 +31,8 @@ import {
   CheckCircle2,
   Users,
   Printer,
-  Download
+  Download,
+  Lock
 } from 'lucide-react';
 
 interface LoanProduct {
@@ -108,6 +109,7 @@ function LoansPageContent() {
   const statusParam = searchParams.get('status');
 
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
+  const isVerified = isAdminOrManager || (!!user?.profile?.profile_completed && (user?.profile?.status === 'approved' || user?.profile?.status === 'active'));
 
   const [activeTab, setActiveTab] = useState<'loans' | 'products' | 'calculator'>('loans');
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -679,16 +681,30 @@ function LoansPageContent() {
               <CreditCard className="w-4 h-4 text-tertiary" />
               Book Repayment
             </button>
-            <button
-              onClick={openApplyModal}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all"
-            >
-              <PlusCircle className="w-4 h-4" />
-              Apply for Loan
-            </button>
+            {isVerified && (
+              <button
+                onClick={openApplyModal}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Apply for Loan
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {!isAdminOrManager && !isVerified && (
+        <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs font-medium space-y-1">
+          <p className="font-bold flex items-center gap-2 text-amber-900 dark:text-amber-200">
+            <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            Profile Verification & Approval Required
+          </p>
+          <p>
+            You cannot apply for a loan until your profile verification has been completed and approved by an administrator. Please visit your <a href="/dashboard/profile" className="underline font-bold hover:text-primary dark:hover:text-secondary">Profile Page</a> to submit your profile verification details.
+          </p>
+        </div>
+      )}
 
       {/* Dynamic Dashboard KPI Cards */}
       {!metricsLoading && (
