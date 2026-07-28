@@ -65,7 +65,7 @@ function PasswordStrength({ password }: { password: string }) {
 }
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, refreshUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Avatar upload states
@@ -249,6 +249,7 @@ export default function ProfilePage() {
         address: address.trim() || null,
         date_of_birth: dateOfBirth || null,
       });
+      await refreshUser();
       setShowVerificationModal(true);
     } catch (err: any) {
       setProfileError(err.response?.data?.error?.message || 'Failed to save profile.');

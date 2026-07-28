@@ -99,7 +99,7 @@ export const login = async (req, res, next) => {
     let memberProfile = null;
     if (user.role === 'member') {
       const memberResult = await query(
-        'SELECT id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, status, is_verified FROM members WHERE user_id = $1',
+        'SELECT id, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified FROM members WHERE user_id = $1',
         [user.id]
       );
       if (memberResult.rowCount > 0) {
@@ -184,7 +184,7 @@ export const getMe = async (req, res, next) => {
     // Fetch linked member/profile for ALL roles (admin/manager may also have one)
     let memberProfile = null;
     const memberResult = await query(
-      'SELECT id, first_name, last_name, middle_name, age, gender, civil_status, email, phone, address, date_of_birth, status, is_verified FROM members WHERE user_id = $1',
+      'SELECT id, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified FROM members WHERE user_id = $1',
       [user.id]
     );
     if (memberResult.rowCount > 0) {

@@ -817,9 +817,9 @@ export const reviewMemberProfile = async (req, res, next) => {
     const member = memberRes.rows[0];
     const targetStatus = status === 'approved' ? 'approved' : 'disapproved';
 
-    // Update status
+    // Update status and mark profile_completed = true if approved
     const updateRes = await client.query(
-      `UPDATE members SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+      `UPDATE members SET status = $1, profile_completed = (CASE WHEN $1 = 'approved' THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
       [targetStatus, id]
     );
 
