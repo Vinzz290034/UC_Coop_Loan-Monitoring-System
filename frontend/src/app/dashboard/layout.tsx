@@ -145,12 +145,6 @@ function DashboardLayoutContent({
       allowed: true,
     },
     {
-      name: 'Support Desk',
-      path: '/dashboard/support',
-      icon: LifeBuoy,
-      allowed: user.role !== 'staff',
-    },
-    {
       name: 'Notifications',
       path: '/dashboard/notifications',
       icon: Bell,
