@@ -11,7 +11,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import {
   LifeBuoy,
   AlertTriangle,
-  PlusCircle,
+  Plus,
   Search,
   Filter,
   Clock,
@@ -55,7 +55,7 @@ export default function SupportPage() {
     }
   }, [user, router]);
 
-  const isAdminOrManager = user?.role === 'admin';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -219,13 +219,15 @@ export default function SupportPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsCreateOpen(true)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95"
-        >
-          <PlusCircle className="w-4 h-4" />
-          New Support Ticket
-        </button>
+        {!isAdminOrManager && (
+          <button
+            onClick={() => setIsCreateOpen(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full font-bold text-xs shadow-sm hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            New Support Ticket
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -309,7 +311,7 @@ export default function SupportPage() {
             {statusFilter !== 'all' ? `No ${statusFilter.replace('_', ' ')} tickets.` : 'No support tickets yet.'}
           </h3>
           <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-            {user?.role === 'member'
+            {!isAdminOrManager
               ? 'Have a question? Create your first support ticket.'
               : 'No member tickets to review at this time.'}
           </p>
