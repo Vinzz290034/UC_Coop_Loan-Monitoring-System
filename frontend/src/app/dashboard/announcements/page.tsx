@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import axios from 'axios';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
@@ -10,9 +11,6 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import {
   Megaphone,
   PlusCircle,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
   Clock,
   Search,
   Filter,
@@ -25,12 +23,16 @@ import {
   User,
   Inbox,
   AlertTriangle,
+  Image as ImageIcon,
+  UploadCloud,
+  Maximize2,
 } from 'lucide-react';
 
 interface Announcement {
   id: string;
   title: string;
   content: string;
+  image_url?: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   is_active: boolean;
   created_by?: string;
@@ -43,6 +45,16 @@ interface Announcement {
   created_at: string;
   updated_at: string;
 }
+
+// Helper function to convert relative upload paths to full backend URLs
+const getImageUrl = (url?: string) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:')) {
+    return url;
+  }
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5000';
+  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 export default function AnnouncementsPage() {
   const { user } = useAuth();
@@ -74,6 +86,9 @@ export default function AnnouncementsPage() {
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
   
+  // Fullscreen Image Lightbox State
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
+
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -81,10 +96,17 @@ export default function AnnouncementsPage() {
     is_active: true,
     related_loan_product_id: '',
     calendar_event_id: '',
+    image_url: '',
   });
+
+  // File Upload State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Fetch announcements
   // Fetch announcements
   const fetchAnnouncements = useCallback(async () => {
     try {
@@ -94,9 +116,12 @@ export default function AnnouncementsPage() {
       if (res.data && res.data.success) {
         setAnnouncements(res.data.data || []);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching announcements:', err);
-      setError(err.response?.data?.error?.message || 'Failed to load announcements.');
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.error?.message || 'Failed to load announcements.'
+        : 'Failed to load announcements.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -106,10 +131,27 @@ export default function AnnouncementsPage() {
     fetchAnnouncements();
   }, [fetchAnnouncements]);
 
+  // Handle image selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedFile(null);
+    setImagePreview(null);
+    setFormData(prev => ({ ...prev, image_url: '' }));
+  };
+
   // Open Create Modal
   const handleOpenCreate = () => {
     setModalMode('create');
     setSelectedAnnouncementId(null);
+    setSelectedFile(null);
+    setImagePreview(null);
     setFormData({
       title: '',
       content: '',
@@ -117,6 +159,7 @@ export default function AnnouncementsPage() {
       is_active: true,
       related_loan_product_id: '',
       calendar_event_id: '',
+      image_url: '',
     });
     setFormError(null);
     setIsModalOpen(true);
@@ -126,6 +169,8 @@ export default function AnnouncementsPage() {
   const handleOpenEdit = (ann: Announcement) => {
     setModalMode('edit');
     setSelectedAnnouncementId(ann.id);
+    setSelectedFile(null);
+    setImagePreview(ann.image_url ? getImageUrl(ann.image_url) : null);
     setFormData({
       title: ann.title,
       content: ann.content,
@@ -133,12 +178,13 @@ export default function AnnouncementsPage() {
       is_active: ann.is_active,
       related_loan_product_id: ann.related_loan_product_id || '',
       calendar_event_id: ann.calendar_event_id || '',
+      image_url: ann.image_url || '',
     });
     setFormError(null);
     setIsModalOpen(true);
   };
 
-  // Handle Form Submit (Create or Update)
+  // Handle Form Submit
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.content) {
@@ -150,25 +196,42 @@ export default function AnnouncementsPage() {
       setFormSubmitting(true);
       setFormError(null);
 
-      const payload = {
-        title: formData.title,
-        content: formData.content,
-        priority: formData.priority,
-        is_active: formData.is_active,
-        related_loan_product_id: formData.related_loan_product_id || null,
-        calendar_event_id: formData.calendar_event_id || null,
-      };
+      const data = new FormData();
+      data.append('title', formData.title);
+      data.append('content', formData.content);
+      data.append('priority', formData.priority);
+      data.append('is_active', String(formData.is_active));
+      
+      if (formData.related_loan_product_id) {
+        data.append('related_loan_product_id', formData.related_loan_product_id);
+      }
+      if (formData.calendar_event_id) {
+        data.append('calendar_event_id', formData.calendar_event_id);
+      }
+      if (formData.image_url) {
+        data.append('image_url', formData.image_url);
+      }
+      if (selectedFile) {
+        data.append('image', selectedFile);
+      }
 
       if (modalMode === 'create') {
-        await api.post('/announcements', payload);
+        await api.post('/announcements', data, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
       } else if (selectedAnnouncementId) {
-        await api.put(`/announcements/${selectedAnnouncementId}`, payload);
+        await api.put(`/announcements/${selectedAnnouncementId}`, data, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
       }
 
       setIsModalOpen(false);
       await fetchAnnouncements();
-    } catch (err: any) {
-      setFormError(err.response?.data?.error?.message || 'Failed to save announcement.');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.error?.message || 'Failed to save announcement.'
+        : 'Failed to save announcement.';
+      setFormError(message);
     } finally {
       setFormSubmitting(false);
     }
@@ -182,8 +245,11 @@ export default function AnnouncementsPage() {
       setActionLoadingId(id);
       await api.delete(`/announcements/${id}`);
       await fetchAnnouncements();
-    } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Failed to delete announcement.');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.error?.message || 'Failed to delete announcement.'
+        : 'Failed to delete announcement.';
+      alert(message);
     } finally {
       setActionLoadingId(null);
     }
@@ -237,7 +303,7 @@ export default function AnnouncementsPage() {
           </p>
         </div>
 
-        {/* Create Announcement Button (Admin / Staff Only) */}
+        {/* Create Announcement Button */}
         {isAdminOrStaff && (
           <button
             onClick={handleOpenCreate}
@@ -288,7 +354,7 @@ export default function AnnouncementsPage() {
       {/* Error Banner */}
       {error && (
         <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl flex items-center gap-3 text-xs font-semibold">
-          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+          <AlertTriangle className="w-5 h-5 shrink-0" />
           <span>{error}</span>
           <button onClick={fetchAnnouncements} className="ml-auto px-3 py-1 bg-tertiary/10 hover:bg-tertiary/20 rounded-lg font-bold transition-colors">
             Retry
@@ -373,6 +439,29 @@ export default function AnnouncementsPage() {
                 </p>
               </div>
 
+              {/* Attached Announcement Image - Full Picture Uncropped */}
+              {ann.image_url && (
+                <div className="pt-2">
+                  <div 
+                    onClick={() => setLightboxImage({ url: getImageUrl(ann.image_url), title: ann.title })}
+                    className="relative group rounded-2xl overflow-hidden border border-outline-variant/40 bg-neutral-900/5 dark:bg-neutral-950/40 p-1 flex items-center justify-center cursor-pointer transition-all hover:border-primary/50"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={getImageUrl(ann.image_url)}
+                      alt={ann.title}
+                      className="w-full h-auto max-h-125 object-contain rounded-xl transition-transform duration-300 group-hover:scale-[1.01]"
+                    />
+                    <div className="absolute inset-0 bg-neutral-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                      <span className="bg-neutral-900/80 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md backdrop-blur-xs">
+                        <Maximize2 className="w-3.5 h-3.5" />
+                        View Full Screen
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Related Tags / Metadata Footer */}
               {(ann.related_loan_product_name || ann.calendar_event_title || ann.author_username) && (
                 <div className="pt-3 border-t border-outline-variant/40 flex flex-wrap items-center gap-4 text-[11px] text-neutral-500 dark:text-neutral-400">
@@ -405,7 +494,7 @@ export default function AnnouncementsPage() {
 
       {/* Create / Edit Modal */}
       {isModalOpen && mounted && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsModalOpen(false)}
@@ -425,7 +514,7 @@ export default function AnnouncementsPage() {
 
             {formError && (
               <div className="p-3 mb-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{formError}</span>
               </div>
             )}
@@ -453,12 +542,55 @@ export default function AnnouncementsPage() {
                 </label>
                 <textarea
                   required
-                  rows={5}
+                  rows={4}
                   placeholder="Provide full details of the announcement..."
                   value={formData.content}
                   onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
                   className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white resize-none"
                 />
+              </div>
+
+              {/* Photo / Image Upload Field */}
+              <div className="space-y-1.5">
+                <label className="font-label text-neutral-600 dark:text-neutral-400 px-1 font-semibold flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                  <span>Announcement Image (Optional)</span>
+                </label>
+
+                {imagePreview ? (
+                  <div className="relative rounded-2xl overflow-hidden border border-outline-variant/60 bg-neutral-900/5 dark:bg-neutral-950/40 p-2 group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imagePreview}
+                      alt="Selected upload preview"
+                      className="w-full h-auto max-h-56 object-contain rounded-xl"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute top-3 right-3 bg-neutral-900/80 hover:bg-neutral-950 text-white p-1.5 rounded-full transition-all cursor-pointer shadow-md"
+                      title="Remove image"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-outline-variant/70 rounded-2xl cursor-pointer hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
+                    <UploadCloud className="w-6 h-6 text-neutral-400 mb-1" />
+                    <span className="text-[11px] font-medium text-neutral-600 dark:text-neutral-300">
+                      Click to upload an image
+                    </span>
+                    <span className="text-[10px] text-neutral-400 mt-0.5">
+                      PNG, JPG, WEBP up to 5MB
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                )}
               </div>
 
               {/* Priority & Status */}
@@ -517,7 +649,7 @@ export default function AnnouncementsPage() {
                   </label>
                   <input
                     type="text"
-                    placeholder="UUID or leave blank"
+                    placeholder="ID or leave blank"
                     value={formData.calendar_event_id}
                     onChange={(e) => setFormData(prev => ({ ...prev, calendar_event_id: e.target.value }))}
                     className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white font-mono text-[11px]"
@@ -543,6 +675,37 @@ export default function AnnouncementsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Fullscreen Image Lightbox Modal */}
+      {lightboxImage && mounted && createPortal(
+        <div 
+          onClick={() => setLightboxImage(null)}
+          className="fixed inset-0 z-110 flex items-center justify-center bg-neutral-950/90 backdrop-blur-md p-4 animate-modal-backdrop cursor-zoom-out"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="relative max-w-5xl max-h-[92vh] w-full flex flex-col items-center justify-center"
+          >
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute -top-12 right-0 bg-neutral-800 hover:bg-neutral-700 text-white p-2 rounded-full transition-all cursor-pointer"
+              aria-label="Close image preview"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lightboxImage.url}
+              alt={lightboxImage.title}
+              className="w-auto h-auto max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+            />
+            <p className="text-white text-xs font-medium mt-3 text-center opacity-80">
+              {lightboxImage.title}
+            </p>
           </div>
         </div>,
         document.body
