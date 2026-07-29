@@ -9,6 +9,7 @@ import { migrateSupportTickets } from './migrate_support_tickets.js';
 import { migrateContactMessages } from './migrate_contact_messages.js';
 import { migrateCalendarEvents } from './migrate_calendar.js';
 import { migrateRegistrationOtp } from './migrate_registration_otp.js';
+import { migrateLoansComaker } from './migrate_loans_comaker.js';
 
 export async function runMigrations() {
   console.log('[System Startup] Running automated database migrations...');
@@ -16,6 +17,7 @@ export async function runMigrations() {
     await migrateRoleStaff();
     await migrateMembersSchema();
     await migrateMembersOnboarding();
+    await migrateLoansComaker();
     await migrateAnalyticsAudit();
     await migrateUserAccessLogs();
     await migrateAnnouncements();
