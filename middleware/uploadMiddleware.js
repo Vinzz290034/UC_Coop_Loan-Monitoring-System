@@ -6,40 +6,88 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Ensure uploads/avatars directory exists
-const uploadDir = path.join(__dirname, '../uploads/avatars');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Ensure base uploads directory structure exists
+const avatarDir = path.join(__dirname, '../uploads/avatars');
+if (!fs.existsSync(avatarDir)) {
+  fs.mkdirSync(avatarDir, { recursive: true });
 }
 
 // Storage configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    cb(null, avatarDir);
   },
   filename: (req, file, cb) => {
-    // Save file as user-id-timestamp.ext to ensure uniqueness and avoid caching issues
     const userId = req.user?.id || 'anonymous';
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `avatar-${userId}-${Date.now()}${ext}`);
+    cb(null, `file-${userId}-${Date.now()}${ext}`);
   }
 });
 
-// File filter (limits formats to jpg/jpeg, png, webp)
+// Resilient File Filter
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|webp/;
-  const mimetype = allowedTypes.test(file.mimetype);
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-
-  if (mimetype && extname) {
+  if (!file) {
     return cb(null, true);
   }
+
+  const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowedExtensions = ['.jpeg', '.jpg', '.png', '.webp'];
+
+  const isMimeValid = allowedMimeTypes.includes(file.mimetype.toLowerCase());
+  const isExtValid = allowedExtensions.includes(ext);
+
+  if (isMimeValid || isExtValid) {
+    return cb(null, true);
+  }
+
   cb(new Error('Only JPEG, PNG, and WebP images are allowed.'));
 };
 
-// Multer upload config
-export const uploadAvatar = multer({
+// 1. Raw Multer export
+export const upload = multer({
   storage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter
-}).single('avatar');
+});
+
+// 2. Wrapped Avatar Middleware (Requires file)
+const rawAvatarUpload = upload.single('avatar');
+
+export const uploadAvatar = (req, res, next) => {
+  rawAvatarUpload(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File size exceeds the allowed limit (5MB).' });
+      }
+      return res.status(400).json({ error: err.message });
+    } else if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Please upload an image file.' });
+    }
+
+    next();
+  });
+};
+
+// 3. Wrapped Announcement Image Middleware (Optional file)
+const rawImageUpload = upload.single('image');
+
+export const uploadAnnouncementImage = (req, res, next) => {
+  rawImageUpload(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: { message: 'Image size exceeds the allowed limit (5MB).' } });
+      }
+      return res.status(400).json({ error: { message: err.message } });
+    } else if (err) {
+      return res.status(400).json({ error: { message: err.message } });
+    }
+
+    // No req.file check here because images are optional for announcements
+    next();
+  });
+};
