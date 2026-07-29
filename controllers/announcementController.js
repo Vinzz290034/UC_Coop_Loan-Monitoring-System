@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 
-// @desc    Get all active announcements with joined relational details
+// @desc    Get all active announcements
 // @route   GET /api/announcements
 // @access  Protected
 export const getAnnouncements = async (req, res, next) => {
@@ -10,6 +10,7 @@ export const getAnnouncements = async (req, res, next) => {
         a.id,
         a.title,
         a.content,
+        a.image_url,
         a.priority,
         a.is_active,
         a.created_at,
@@ -41,12 +42,20 @@ export const getAnnouncements = async (req, res, next) => {
   }
 };
 
-// @desc    Get a single announcement by ID with relational details
+// @desc    Get single announcement by ID
 // @route   GET /api/announcements/:id
 // @access  Protected
 export const getAnnouncementById = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const numericId = parseInt(id, 10);
+
+    if (isNaN(numericId)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid announcement ID format.' },
+      });
+    }
 
     const fetchQuery = `
       SELECT 
@@ -62,7 +71,7 @@ export const getAnnouncementById = async (req, res, next) => {
       WHERE a.id = $1;
     `;
 
-    const result = await query(fetchQuery, [id]);
+    const result = await query(fetchQuery, [numericId]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
@@ -80,9 +89,9 @@ export const getAnnouncementById = async (req, res, next) => {
   }
 };
 
-// @desc    Create a new announcement with optional relations
+// @desc    Create a new announcement with optional image
 // @route   POST /api/announcements
-// @access  Protected (Admin / Manager)
+// @access  Protected (Admin / Staff)
 export const createAnnouncement = async (req, res, next) => {
   try {
     const { 
@@ -92,8 +101,9 @@ export const createAnnouncement = async (req, res, next) => {
       related_loan_product_id, 
       calendar_event_id 
     } = req.body;
-    
-    // Automatically set created_by from the authenticated user context
+
+    // Extract image URL from uploaded file or body parameter
+    const imageUrl = req.file ? `/uploads/avatars/${req.file.filename}` : (req.body.image_url || null);
     const authorId = req.user?.id || null;
 
     if (!title || !content) {
@@ -107,22 +117,28 @@ export const createAnnouncement = async (req, res, next) => {
       INSERT INTO announcements (
         title, 
         content, 
+        image_url,
         priority, 
         created_by, 
         related_loan_product_id, 
         calendar_event_id
       )
-      VALUES ($1, $2, COALESCE($3, 'normal'), $4, $5, $6)
+      VALUES ($1, $2, $3, COALESCE($4, 'normal'), $5, $6, $7)
       RETURNING *;
     `;
+
+    const parsedCalendarEventId = calendar_event_id && !isNaN(parseInt(calendar_event_id, 10)) 
+      ? parseInt(calendar_event_id, 10) 
+      : null;
 
     const result = await query(insertQuery, [
       title,
       content,
+      imageUrl,
       priority || 'normal',
       authorId,
       related_loan_product_id || null,
-      calendar_event_id || null,
+      parsedCalendarEventId,
     ]);
 
     res.status(201).json({
@@ -135,12 +151,21 @@ export const createAnnouncement = async (req, res, next) => {
   }
 };
 
-// @desc    Update an announcement and its relational links
+// @desc    Update announcement details / image
 // @route   PUT /api/announcements/:id
-// @access  Protected (Admin / Manager)
+// @access  Protected (Admin / Staff)
 export const updateAnnouncement = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const numericId = parseInt(id, 10);
+
+    if (isNaN(numericId)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid announcement ID format.' },
+      });
+    }
+
     const { 
       title, 
       content, 
@@ -150,28 +175,48 @@ export const updateAnnouncement = async (req, res, next) => {
       calendar_event_id 
     } = req.body;
 
+    // Determine image URL state safely for updates
+    let imageUrl = null;
+    if (req.file) {
+      imageUrl = `/uploads/avatars/${req.file.filename}`;
+    } else if (req.body.image_url !== undefined) {
+      imageUrl = req.body.image_url;
+    }
+
+    // Convert string booleans from multipart form data
+    let parsedIsActive = is_active;
+    if (typeof is_active === 'string') {
+      parsedIsActive = is_active.toLowerCase() === 'true';
+    }
+
     const updateQuery = `
       UPDATE announcements
       SET 
         title = COALESCE($1, title),
         content = COALESCE($2, content),
-        priority = COALESCE($3, priority),
-        is_active = COALESCE($4, is_active),
-        related_loan_product_id = $5,
-        calendar_event_id = $6,
+        image_url = CASE WHEN $3::text IS NOT NULL THEN $3::text ELSE image_url END,
+        priority = COALESCE($4, priority),
+        is_active = COALESCE($5, is_active),
+        related_loan_product_id = COALESCE($6, related_loan_product_id),
+        calendar_event_id = COALESCE($7, calendar_event_id),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $7
+      WHERE id = $8
       RETURNING *;
     `;
 
+    const parsedCalendarEventId = calendar_event_id && !isNaN(parseInt(calendar_event_id, 10))
+      ? parseInt(calendar_event_id, 10)
+      : null;
+
     const result = await query(updateQuery, [
-      title,
-      content,
-      priority,
-      is_active,
-      related_loan_product_id !== undefined ? related_loan_product_id : null,
-      calendar_event_id !== undefined ? calendar_event_id : null,
-      id,
+      title || null,
+      content || null,
+      imageUrl,
+      priority || null,
+      parsedIsActive !== undefined ? parsedIsActive : null,
+      related_loan_product_id || null,
+      parsedCalendarEventId,
+      numericId,
     ]);
 
     if (result.rowCount === 0) {
@@ -191,12 +236,20 @@ export const updateAnnouncement = async (req, res, next) => {
   }
 };
 
-// @desc    Delete an announcement (Hard delete)
+// @desc    Delete announcement
 // @route   DELETE /api/announcements/:id
-// @access  Protected (Admin / Manager)
+// @access  Protected (Admin / Staff)
 export const deleteAnnouncement = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const numericId = parseInt(id, 10);
+
+    if (isNaN(numericId)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid announcement ID format.' },
+      });
+    }
 
     const deleteQuery = `
       DELETE FROM announcements
@@ -204,7 +257,7 @@ export const deleteAnnouncement = async (req, res, next) => {
       RETURNING id;
     `;
 
-    const result = await query(deleteQuery, [id]);
+    const result = await query(deleteQuery, [numericId]);
 
     if (result.rowCount === 0) {
       return res.status(404).json({
@@ -216,7 +269,7 @@ export const deleteAnnouncement = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Announcement deleted successfully.',
-      data: { id },
+      data: { id: numericId },
     });
   } catch (error) {
     next(error);
