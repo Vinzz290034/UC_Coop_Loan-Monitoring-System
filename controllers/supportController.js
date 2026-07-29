@@ -129,7 +129,6 @@ export const createFaqOrGuide = async (req, res, next) => {
     });
   }
 };
-
 // @desc    Delete an FAQ or Guide
 // @route   DELETE /api/support/faqs-guides/:id
 // @access  Protected (Admin / Staff)
@@ -161,7 +160,6 @@ export const deleteFaqOrGuide = async (req, res, next) => {
     });
   }
 };
-
 // @desc    Update support ticket status
 // @route   PATCH /api/support/tickets/:id/status
 // @access  Protected (Admin / Staff)
