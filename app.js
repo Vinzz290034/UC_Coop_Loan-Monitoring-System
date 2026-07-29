@@ -22,6 +22,7 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import calendarRoutes from './routes/calendarRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
+import userRoutes from './routes/userRoutes.js'; // 1. Added userRoutes import
 
 dotenv.config();
 
@@ -30,7 +31,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Serve uploads directory statically
+// Serve uploads directory statically (already handles http://localhost:PORT/uploads/...)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // CORS Middleware first to handle preflight OPTIONS requests correctly
@@ -98,6 +99,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/users', userRoutes); // 2. Mounted user routes under /api/users
 
 // Error Handling Middleware
 app.use(errorHandler);
