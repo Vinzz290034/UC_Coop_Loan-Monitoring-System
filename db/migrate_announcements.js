@@ -18,16 +18,16 @@ export async function migrateAnnouncements() {
   try {
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS announcements (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id SERIAL PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         content TEXT NOT NULL,
-        priority VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+        image_url TEXT,
+        priority VARCHAR(50) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
         is_active BOOLEAN NOT NULL DEFAULT true,
         
-        -- Foreign Key Relationships to Existing Tables
         created_by UUID REFERENCES users(id) ON DELETE SET NULL,
         related_loan_product_id UUID REFERENCES loan_products(id) ON DELETE SET NULL,
-        calendar_event_id UUID REFERENCES calendar_events(id) ON DELETE SET NULL,
+        calendar_event_id INTEGER REFERENCES calendar_events(id) ON DELETE SET NULL,
         
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -41,15 +41,20 @@ export async function migrateAnnouncements() {
     `;
     await client.query(createTableQuery);
 
-    // Ensure priority constraint is updated safely if modified in the future
+    // Safely add image_url column if table already exists
+    await client.query(`
+      ALTER TABLE announcements 
+      ADD COLUMN IF NOT EXISTS image_url TEXT;
+    `);
+
     try {
       await client.query(`ALTER TABLE announcements DROP CONSTRAINT IF EXISTS announcements_priority_check;`);
       await client.query(`ALTER TABLE announcements ADD CONSTRAINT announcements_priority_check CHECK (priority IN ('low', 'normal', 'high', 'urgent'));`);
     } catch (e) {
-      // Ignore if constraint already exists or alter succeeds
+      // Ignore if constraint already exists
     }
 
-    console.log('[Migration] announcements table is ready with relational schema.');
+    console.log('[Migration] announcements table updated with image_url column.');
   } catch (error) {
     console.error('[Migration] Failed to migrate announcements:', error);
     throw error;
@@ -58,7 +63,6 @@ export async function migrateAnnouncements() {
   }
 }
 
-// Allow direct execution
 if (import.meta.url === `file://${process.argv[1]}`) {
   migrateAnnouncements()
     .then(() => pool.end())
