@@ -403,9 +403,9 @@ export const updateMemberStatus = async (req, res, next) => {
       });
     }
 
-    // 2. Update status & sync is_verified flag
+    // 2. Update status & sync is_verified and profile_completed flags
     await client.query(
-      "UPDATE members SET status = $1, is_verified = (CASE WHEN $1 IN ('approved', 'active') THEN true ELSE false END), updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+      "UPDATE members SET status = $1, is_verified = (CASE WHEN $1 IN ('approved', 'active') THEN true ELSE false END), profile_completed = (CASE WHEN $1 IN ('approved', 'active') THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2",
       [status, id]
     );
 

@@ -28,8 +28,9 @@ export async function migrateMembersSchema() {
       console.log('[Migration] Column is_verified added successfully.');
     }
 
-    // Set existing active/approved records to true so legacy and approved members are verified
-    await client.query("UPDATE members SET is_verified = true WHERE status IN ('active', 'approved')");
+    // Set status = 'approved' for verified members so status and is_verified stay synchronized
+    await client.query("UPDATE members SET status = 'approved', profile_completed = true WHERE is_verified = true AND status = 'pending'");
+    await client.query("UPDATE members SET is_verified = true, profile_completed = true WHERE status IN ('active', 'approved')");
     console.log('[Migration] members table schema is ready.');
   } catch (error) {
     console.error('[Migration] Failed to migrate members schema:', error);

@@ -166,7 +166,7 @@ function AnimatedSelect({
 export default function OverviewPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const isVerified = user?.role === 'admin' || user?.role === 'staff' || (!!user?.profile?.profile_completed && (user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true));
+  const isVerified = user?.role === 'admin' || user?.role === 'staff' || user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -474,7 +474,7 @@ export default function OverviewPage() {
 
     const isProfileCompleted = user?.profile?.profile_completed;
     const memberStatus = user?.profile?.status;
-    const isProfileApproved = isProfileCompleted && ['approved', 'active'].includes(memberStatus || '');
+    const isProfileApproved = user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
 
     return (
       <div className="space-y-8">

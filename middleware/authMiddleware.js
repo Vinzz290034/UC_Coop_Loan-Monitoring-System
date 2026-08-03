@@ -113,7 +113,7 @@ export const requireApprovedProfile = async (req, res, next) => {
 
     // Fetch latest member status and profile completion
     const memberCheck = await query(
-      'SELECT profile_completed, status FROM members WHERE user_id = $1 LIMIT 1',
+      'SELECT profile_completed, status, is_verified FROM members WHERE user_id = $1 LIMIT 1',
       [req.user.id]
     );
 
@@ -125,9 +125,9 @@ export const requireApprovedProfile = async (req, res, next) => {
     }
 
     const member = memberCheck.rows[0];
-    const isApproved = ['approved', 'active'].includes(member.status);
+    const isApproved = ['approved', 'active'].includes(member.status) || member.is_verified === true;
 
-    if (!member.profile_completed || !isApproved) {
+    if (!isApproved) {
       return res.status(403).json({
         success: false,
         error: {

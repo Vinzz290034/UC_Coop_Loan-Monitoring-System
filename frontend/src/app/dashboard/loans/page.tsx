@@ -114,7 +114,7 @@ function LoansPageContent() {
   const statusParam = searchParams.get('status');
 
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
-  const isVerified = isAdminOrManager || (!!user?.profile?.profile_completed && (user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true));
+  const isVerified = isAdminOrManager || user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
 
   const [activeTab, setActiveTab] = useState<'loans' | 'products' | 'calculator'>('loans');
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -1190,6 +1190,10 @@ function LoansPageContent() {
               </div>
             </div>
           )}
+        </div>
+      ) : activeTab === 'calculator' ? (
+        <div className="space-y-6">
+          <LoanAmortizationCalculator />
         </div>
       ) : (
         /* PRODUCTS TAB */

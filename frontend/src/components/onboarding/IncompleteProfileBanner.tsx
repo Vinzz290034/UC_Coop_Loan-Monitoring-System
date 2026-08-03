@@ -21,6 +21,10 @@ export default function IncompleteProfileBanner({ onActionClick, status, isCompl
     }
   };
 
+  if (status === 'approved' || status === 'active') {
+    return null;
+  }
+
   const isPendingReview = isCompleted && status === 'pending';
   const isDisapproved = status === 'disapproved';
 
