@@ -78,7 +78,7 @@ app.get('/health', (req, res) => {
 
 // Root route
 app.get('/', (req, res) => {
-  res.send('Welcome to the UC COOP Loan Monitoring and Financial Management System API.');
+  res.send('Welcome to the UC COOP Loan Monitoring System API.');
 });
 
 // Audit & Activity Tracking Middleware (applied to all API routes)

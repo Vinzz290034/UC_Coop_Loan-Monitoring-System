@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import { SkeletonCard } from '@/components/ui/Skeleton';
@@ -165,10 +166,15 @@ function AnimatedSelect({
 export default function OverviewPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const isVerified = user?.role === 'admin' || user?.role === 'staff' || !!user?.profile?.is_verified;
+  const isVerified = user?.role === 'admin' || user?.role === 'staff' || (!!user?.profile?.profile_completed && (user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [tomorrowStr, setTomorrowStr] = useState('');
   useEffect(() => {
@@ -226,7 +232,8 @@ export default function OverviewPage() {
   const [newGoalAmount, setNewGoalAmount] = useState<string>('');
 
   // Appointment Form States
-  const [appointmentPurpose, setAppointmentPurpose] = useState<string>('Loan Application Consultation');
+  const [appointmentPurpose, setAppointmentPurpose] = useState<string>('Discuss a Loan Application');
+  const [appointmentReason, setAppointmentReason] = useState<string>('');
   const [appointmentDate, setAppointmentDate] = useState<string>('');
   const [appointmentSlot, setAppointmentSlot] = useState<'morning' | 'afternoon'>('morning');
 
@@ -420,11 +427,20 @@ export default function OverviewPage() {
       return;
     }
 
+    let finalPurpose = appointmentPurpose;
+    if (appointmentPurpose === 'Other / Specify Reason') {
+      if (!appointmentReason.trim()) {
+        setModalError('Please specify your specific reason for the appointment.');
+        return;
+      }
+      finalPurpose = `Other: ${appointmentReason.trim()}`;
+    }
+
     try {
       setSubmitting(true);
       setModalError(null);
       const res = await api.post('/appointments', {
-        purpose: appointmentPurpose,
+        purpose: finalPurpose,
         appointment_date: appointmentDate,
         time_slot: appointmentSlot
       });
@@ -444,6 +460,7 @@ export default function OverviewPage() {
     setModalError(null);
     setInvestmentAmount('');
     setAppointmentDate('');
+    setAppointmentReason('');
     setPaymentRefNo('');
     setPaymentMethod('otc');
     setInvestmentType('share_capital');
@@ -548,6 +565,10 @@ export default function OverviewPage() {
             {balances.total_assets === 0 && (
               <button
                 onClick={() => {
+                  if (!isVerified) {
+                    setActiveModal('unverified_loan');
+                    return;
+                  }
                   setActiveModal('investment');
                   setWizardStep(1);
                   setSuccessData(null);
@@ -556,14 +577,15 @@ export default function OverviewPage() {
                 className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
               >
                 <div className="space-y-1">
-                  <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
+                  <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
                     Initiate Investment
+                    {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                   </h4>
                   <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
                     Add capital placement to your share equity.
                   </p>
                   <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                    Proceed &rarr;
+                    {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
                   </span>
                 </div>
                 <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
@@ -731,8 +753,8 @@ export default function OverviewPage() {
         {/* ======================================================== */}
         {/* TRANSACTIONS MODAL OVERLAYS (ELDERLY ACCESSIBLE DESIGN) */}
         {/* ======================================================== */}
-        {activeModal && (
-          <div key={activeModal} className="fixed inset-0 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-modal-backdrop">
+        {activeModal && mounted && createPortal(
+          <div key={activeModal} className="fixed inset-0 bg-neutral-950/60 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-modal-backdrop">
             <div key={`${activeModal}-${wizardStep}`} className={`bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[95vh] animate-modal-pop ${
               activeModal === 'loan'
                 ? (wizardStep === 3 ? 'max-w-md' : (wizardStep === 1 ? 'max-w-3xl' : 'max-w-5xl'))
@@ -1466,15 +1488,37 @@ export default function OverviewPage() {
                           <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Purpose of Consultation:</label>
                           <AnimatedSelect
                             value={appointmentPurpose}
-                            onChange={setAppointmentPurpose}
+                            onChange={(val) => {
+                              setAppointmentPurpose(val);
+                              if (val !== 'Other / Specify Reason') {
+                                setAppointmentReason('');
+                              }
+                            }}
                             options={[
-                              { value: 'Loan Application Consultation', label: 'Discuss a Loan Application' },
-                              { value: 'Fixed Deposit Account Placement', label: 'Open a new Fixed Deposit' },
-                              { value: 'Capital Placement Deposit', label: 'Share Capital Deposit' },
-                              { value: 'General Inquiry', label: 'General Cooperative Inquiry' }
+                              { value: 'Discuss a Loan Application', label: 'Discuss a Loan Application' },
+                              { value: 'System Inquiries', label: 'System Inquiries' },
+                              { value: 'General Cooperative Inquiry', label: 'General Cooperative Inquiry' },
+                              { value: 'Other / Specify Reason', label: 'Other / Specify Reason' }
                             ]}
                           />
                         </div>
+
+                        {/* Specific Reason for Appointment (Only shown when "Other / Specify Reason" is selected) */}
+                        {appointmentPurpose === 'Other / Specify Reason' && (
+                          <div className="space-y-2 animate-fade-in">
+                            <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
+                              Specific Reason for Appointment *
+                            </label>
+                            <textarea
+                              required
+                              rows={3}
+                              value={appointmentReason}
+                              onChange={(e) => setAppointmentReason(e.target.value)}
+                              placeholder="Please specify your detailed reason for booking an appointment..."
+                              className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent focus:outline-none focus:border-primary dark:focus:border-secondary text-sm font-medium text-on-surface dark:text-white placeholder-neutral-400"
+                            />
+                          </div>
+                        )}
 
                         {/* Date Selection */}
                         <div className="space-y-2">
@@ -1517,7 +1561,7 @@ export default function OverviewPage() {
                         </div>
 
                         <button
-                          disabled={submitting || !appointmentDate}
+                          disabled={submitting || !appointmentDate || (appointmentPurpose === 'Other / Specify Reason' && !appointmentReason.trim())}
                           onClick={handleBookAppointment}
                           className="w-full mt-4 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-base"
                         >
@@ -1676,7 +1720,8 @@ export default function OverviewPage() {
                 )}
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     );

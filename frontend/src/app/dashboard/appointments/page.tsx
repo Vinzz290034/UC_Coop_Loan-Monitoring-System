@@ -72,7 +72,8 @@ export default function AppointmentsPage() {
   // Create appointment modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
-    purpose: 'loan_consultation',
+    purpose: 'Discuss a Loan Application',
+    specific_reason: '',
     appointment_date: '',
     time_slot: '9:00 AM - 10:00 AM',
   });
@@ -129,6 +130,15 @@ export default function AppointmentsPage() {
       return;
     }
 
+    let finalPurpose = createForm.purpose;
+    if (createForm.purpose === 'Other / Specify Reason') {
+      if (!createForm.specific_reason.trim()) {
+        setCreateError('Please specify your specific reason for the appointment.');
+        return;
+      }
+      finalPurpose = `Other: ${createForm.specific_reason.trim()}`;
+    }
+
     // Prevent past dates
     const today = new Date().toISOString().split('T')[0];
     if (createForm.appointment_date < today) {
@@ -141,13 +151,13 @@ export default function AppointmentsPage() {
       setCreateError(null);
 
       await api.post('/appointments', {
-        purpose: createForm.purpose,
+        purpose: finalPurpose,
         appointment_date: createForm.appointment_date,
         time_slot: createForm.time_slot,
       });
 
       setIsCreateOpen(false);
-      setCreateForm({ purpose: 'loan_consultation', appointment_date: '', time_slot: '9:00 AM - 10:00 AM' });
+      setCreateForm({ purpose: 'Discuss a Loan Application', specific_reason: '', appointment_date: '', time_slot: '9:00 AM - 10:00 AM' });
       await fetchAppointments();
     } catch (err: any) {
       setCreateError(err.response?.data?.error?.message || 'Failed to create appointment.');
@@ -223,12 +233,10 @@ export default function AppointmentsPage() {
 
   // Purpose options
   const purposeOptions = [
-    { value: 'loan_consultation', label: 'Loan Consultation' },
-    { value: 'document_submission', label: 'Document Submission' },
-    { value: 'account_inquiry', label: 'Account Inquiry' },
-    { value: 'payment_arrangement', label: 'Payment Arrangement' },
-    { value: 'membership_concern', label: 'Membership Concern' },
-    { value: 'general_inquiry', label: 'General Inquiry' },
+    { value: 'Discuss a Loan Application', label: 'Discuss a Loan Application' },
+    { value: 'System Inquiries', label: 'System Inquiries' },
+    { value: 'General Cooperative Inquiry', label: 'General Cooperative Inquiry' },
+    { value: 'Other / Specify Reason', label: 'Other / Specify Reason' },
   ];
 
   return (
@@ -505,7 +513,11 @@ export default function AppointmentsPage() {
                 </label>
                 <select
                   value={createForm.purpose}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, purpose: e.target.value }))}
+                  onChange={(e) => setCreateForm(prev => ({
+                    ...prev,
+                    purpose: e.target.value,
+                    specific_reason: e.target.value === 'Other / Specify Reason' ? prev.specific_reason : ''
+                  }))}
                   className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white"
                 >
                   {purposeOptions.map((opt) => (
@@ -513,6 +525,23 @@ export default function AppointmentsPage() {
                   ))}
                 </select>
               </div>
+
+              {/* Specific Reason (Only shown when "Other / Specify Reason" is selected) */}
+              {createForm.purpose === 'Other / Specify Reason' && (
+                <div className="space-y-1.5 animate-fade-in">
+                  <label className="font-label text-neutral-600 dark:text-neutral-400 px-1 font-semibold">
+                    Specific Reason for Appointment *
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={createForm.specific_reason}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, specific_reason: e.target.value }))}
+                    placeholder="Please describe your specific reason or details for this appointment..."
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white placeholder:text-neutral-400"
+                  />
+                </div>
+              )}
 
               {/* Date */}
               <div className="space-y-1.5">

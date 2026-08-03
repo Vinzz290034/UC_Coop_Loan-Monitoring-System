@@ -183,7 +183,20 @@ export default function ProfilePage() {
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Load profile data
+const computeAgeFromDob = (dobString: string): string => {
+  if (!dobString) return '';
+  const birthDate = new Date(dobString);
+  const today = new Date();
+  if (isNaN(birthDate.getTime())) return '';
+  let computed = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    computed--;
+  }
+  return computed >= 0 ? String(computed) : '';
+};
+
+// Load profile data
   useEffect(() => {
     async function loadProfile() {
       try {
@@ -203,13 +216,15 @@ export default function ProfilePage() {
           setFirstName(profile.first_name || '');
           setLastName(profile.last_name || '');
           setMiddleName(profile.middle_name || '');
-          setAge(profile.age != null ? String(profile.age) : '');
           setGender(profile.gender || '');
           setCivilStatus(profile.civil_status || '');
           setEmail(profile.email || '');
           setPhone(profile.phone || '');
           setAddress(profile.address || '');
-          setDateOfBirth(profile.date_of_birth ? profile.date_of_birth.split('T')[0] : '');
+          const dobVal = profile.date_of_birth ? profile.date_of_birth.split('T')[0] : '';
+          setDateOfBirth(dobVal);
+          const computedAge = computeAgeFromDob(dobVal);
+          setAge(computedAge || (profile.age != null ? String(profile.age) : ''));
         }
       } catch {
         setProfileError('Failed to load profile data.');
@@ -226,12 +241,24 @@ export default function ProfilePage() {
     setProfileError(null);
     setProfileSuccess(null);
 
-    if (!firstName.trim() || !lastName.trim()) {
-      setProfileError('First name and last name are required.');
+    const selectedTitle = titleDropdown === 'Other' ? customTitle.trim() : titleDropdown;
+
+    // Validate mandatory fields for profile verification
+    if (
+      !selectedTitle ||
+      !tin.trim() ||
+      !firstName.trim() ||
+      !lastName.trim() ||
+      !email.trim() ||
+      !phone.trim() ||
+      !gender ||
+      !civilStatus ||
+      !address.trim() ||
+      !dateOfBirth
+    ) {
+      setProfileError('Please complete all required verification fields (Member Title, TIN, First Name, Last Name, Email, Phone, Gender, Civil Status, Date of Birth, and Address).');
       return;
     }
-
-    const selectedTitle = titleDropdown === 'Other' ? customTitle.trim() : titleDropdown;
 
     setSaving(true);
     try {
@@ -249,8 +276,14 @@ export default function ProfilePage() {
         address: address.trim() || null,
         date_of_birth: dateOfBirth || null,
       });
+      const wasApproved = user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
       await refreshUser();
-      setShowVerificationModal(true);
+      if (!wasApproved) {
+        setShowVerificationModal(true);
+      } else {
+        setProfileSuccess('Profile updated successfully!');
+        setTimeout(() => setProfileSuccess(null), 4000);
+      }
     } catch (err: any) {
       setProfileError(err.response?.data?.error?.message || 'Failed to save profile.');
     } finally {
@@ -418,16 +451,17 @@ export default function ProfilePage() {
               Personal Information & Profile Verification
             </h2>
           </div>
-          {user.role === 'member' && (
-            user.profile?.profile_completed ? (
+          {user.role === 'member' && (() => {
+            const isApprovedMember = user.profile?.status === 'approved' || user.profile?.status === 'active' || user.profile?.is_verified === true;
+            return user.profile?.profile_completed ? (
               <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                user.profile?.status === 'approved' || user.profile?.status === 'active'
+                isApprovedMember
                   ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300/40'
                   : user.profile?.status === 'disapproved'
                   ? 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300 border border-red-300/40'
                   : 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300/40'
               }`}>
-                {user.profile?.status === 'approved' || user.profile?.status === 'active'
+                {isApprovedMember
                   ? 'Approved'
                   : user.profile?.status === 'disapproved'
                   ? 'Disapproved'
@@ -437,15 +471,15 @@ export default function ProfilePage() {
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300/40">
                 Incomplete
               </span>
-            )
-          )}
+            );
+          })()}
         </div>
 
         <form onSubmit={handleSaveProfile} className="p-6 space-y-4">
-          {user.role === 'member' && user.profile?.profile_completed && user.profile?.status === 'pending' && (
+          {user.role === 'member' && user.profile?.profile_completed && !(user.profile?.status === 'approved' || user.profile?.status === 'active' || user.profile?.is_verified === true) && user.profile?.status !== 'disapproved' && (
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs font-medium space-y-1 mb-4">
-              <p className="font-bold">Your profile has been submitted successfully.</p>
-              <p>Your information is currently under review. Approval typically takes 24–48 hours. You will receive access to transaction features once your account has been approved.</p>
+              <p className="font-bold">Your profile has been submitted for verification.</p>
+              <p>Your information is currently under review by Coop Admin. Approval typically takes 24–48 hours. Loan application features will be unlocked once your account has been approved.</p>
             </div>
           )}
 
@@ -472,9 +506,10 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    Member Title (Optional)
+                    Member Title *
                   </label>
                   <select
+                    required
                     value={titleDropdown}
                     onChange={(e) => setTitleDropdown(e.target.value)}
                     className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white"
@@ -489,10 +524,11 @@ export default function ProfilePage() {
                 {titleDropdown === 'Other' ? (
                   <div className="space-y-1.5">
                     <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                      Custom Title
+                      Custom Title *
                     </label>
                     <input
                       type="text"
+                      required
                       value={customTitle}
                       onChange={(e) => setCustomTitle(e.target.value)}
                       placeholder="e.g. Prof. or Rev."
@@ -502,10 +538,11 @@ export default function ProfilePage() {
                 ) : (
                   <div className="space-y-1.5">
                     <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                      TIN (Taxpayer ID)
+                      TIN (Taxpayer ID) *
                     </label>
                     <input
                       type="text"
+                      required
                       value={tin}
                       onChange={(e) => setTin(e.target.value)}
                       placeholder="000-000-000-000"
@@ -518,10 +555,11 @@ export default function ProfilePage() {
               {titleDropdown === 'Other' && (
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    TIN (Taxpayer ID)
+                    TIN (Taxpayer ID) *
                   </label>
                   <input
                     type="text"
+                    required
                     value={tin}
                     onChange={(e) => setTin(e.target.value)}
                     placeholder="000-000-000-000"
@@ -549,12 +587,13 @@ export default function ProfilePage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    Middle Name
+                    Middle Name (Optional)
                   </label>
                   <input
                     type="text"
                     value={middleName}
                     onChange={(e) => setMiddleName(e.target.value)}
+                    placeholder="Optional"
                     className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white"
                   />
                 </div>
@@ -576,12 +615,13 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    Email Address
+                    Email Address *
                   </label>
                   <div className="relative group">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary pointer-events-none" />
                     <input
                       type="email"
+                      required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="email@example.com"
@@ -591,15 +631,16 @@ export default function ProfilePage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    Phone Number
+                    Phone Number *
                   </label>
                   <div className="relative group">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary pointer-events-none" />
                     <input
                       type="tel"
+                      required
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+63 xxx xxx xxxx"
+                      placeholder="0917XXXXXXX"
                       className="w-full pl-9 pr-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
                     />
                   </div>
@@ -609,23 +650,22 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    Age
+                    Age (Auto-computed)
                   </label>
                   <input
-                    type="number"
-                    min={18}
-                    max={120}
+                    type="text"
+                    disabled
                     value={age}
-                    onChange={(e) => setAge(e.target.value)}
-                    placeholder="e.g. 28"
-                    className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
+                    placeholder="Auto-computed"
+                    className="w-full px-3 py-2.5 bg-neutral-200/60 dark:bg-neutral-800/80 border border-outline-variant/50 rounded-xl text-xs font-bold text-neutral-700 dark:text-neutral-300 cursor-not-allowed outline-none"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    Sex / Gender
+                    Sex / Gender *
                   </label>
                   <select
+                    required
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
                     className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white"
@@ -637,9 +677,10 @@ export default function ProfilePage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    Civil Status
+                    Civil Status *
                   </label>
                   <select
+                    required
                     value={civilStatus}
                     onChange={(e) => setCivilStatus(e.target.value)}
                     className="w-full px-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white"
@@ -657,26 +698,32 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    Date of Birth
+                    Date of Birth *
                   </label>
                   <div className="relative group">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary pointer-events-none" />
                     <input
                       type="date"
+                      required
                       value={dateOfBirth}
-                      onChange={(e) => setDateOfBirth(e.target.value)}
+                      onChange={(e) => {
+                        const dobVal = e.target.value;
+                        setDateOfBirth(dobVal);
+                        setAge(computeAgeFromDob(dobVal));
+                      }}
                       className="w-full pl-9 pr-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white"
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
-                    Address
+                    Address *
                   </label>
                   <div className="relative group">
                     <MapPin className="absolute left-3 top-3 w-4 h-4 text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary pointer-events-none" />
                     <input
                       type="text"
+                      required
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
                       placeholder="City, Province"

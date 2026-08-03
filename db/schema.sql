@@ -250,6 +250,17 @@ CREATE TABLE calendar_events (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 19. FAQs and Guides Table
+CREATE TABLE faqs_guides (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('faq', 'guide')),
+    category VARCHAR(100) DEFAULT 'general',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance optimization on critical query pathways
 CREATE INDEX idx_members_user_id ON members(user_id);
 CREATE INDEX idx_share_capital_member ON share_capital_transactions(member_id);
@@ -270,3 +281,5 @@ CREATE INDEX idx_support_tickets_user ON support_tickets(user_id);
 CREATE INDEX idx_support_tickets_status ON support_tickets(status);
 CREATE INDEX idx_calendar_events_date ON calendar_events(event_date);
 CREATE INDEX idx_calendar_events_type ON calendar_events(type);
+CREATE INDEX idx_faqs_guides_type ON faqs_guides(type);
+CREATE INDEX idx_faqs_guides_created_at ON faqs_guides(created_at DESC);

@@ -778,10 +778,10 @@ export const verifyRegistrationOtp = async (req, res, next) => {
     );
     const newUser = userResult.rows[0];
 
-    // 2. Create member profile linked to user
+     // 2. Create member profile linked to user
     await client.query(
-      `INSERT INTO members (user_id, first_name, last_name, middle_name, date_of_birth, age, gender, civil_status, phone, email, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')`,
+      `INSERT INTO members (user_id, first_name, last_name, middle_name, date_of_birth, age, gender, civil_status, phone, email, status, profile_completed, is_verified)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', false, false)`,
       [
         newUser.id,
         regData.first_name,
@@ -1421,6 +1421,27 @@ export const updateProfile = async (req, res, next) => {
       });
     }
 
+    // Members submitting verification must fill all mandatory fields
+    if (req.user.role === 'member') {
+      if (
+        !title?.trim() ||
+        !tin?.trim() ||
+        !first_name?.trim() ||
+        !last_name?.trim() ||
+        !email?.trim() ||
+        !phone?.trim() ||
+        !gender ||
+        !civil_status ||
+        !address?.trim() ||
+        !date_of_birth
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Please complete all required verification fields (Member Title, TIN, First Name, Last Name, Email, Phone, Gender, Civil Status, Date of Birth, and Address).' }
+        });
+      }
+    }
+
     if (gender && !['Male', 'Female'].includes(gender)) {
       return res.status(400).json({
         success: false,
@@ -1495,7 +1516,8 @@ export const updateProfile = async (req, res, next) => {
            civil_status = $10,
            title = $11,
            tin = $12,
-           profile_completed = true,
+           status = (CASE WHEN status IN ('approved', 'active') THEN status ELSE 'pending' END),
+           is_verified = (CASE WHEN status IN ('approved', 'active') THEN true ELSE false END),
            updated_at = CURRENT_TIMESTAMP
          WHERE user_id = $13
          RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, title, tin, email, phone, address, date_of_birth, status, profile_completed, is_verified`,

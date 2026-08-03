@@ -102,7 +102,7 @@ export const applyForLoan = async (req, res, next) => {
         error: { message: 'Member not found.' }
       });
     }
-    if (!member.rows[0].profile_completed || !['active', 'approved'].includes(member.rows[0].status)) {
+    if (!member.rows[0].profile_completed || member.rows[0].status !== 'approved') {
       return res.status(403).json({
         success: false,
         error: { message: 'You cannot apply for a loan until your profile verification has been completed and approved by an administrator.' }

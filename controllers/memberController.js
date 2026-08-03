@@ -403,8 +403,11 @@ export const updateMemberStatus = async (req, res, next) => {
       });
     }
 
-    // 2. Update status
-    await client.query('UPDATE members SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [status, id]);
+    // 2. Update status & sync is_verified flag
+    await client.query(
+      "UPDATE members SET status = $1, is_verified = (CASE WHEN $1 IN ('approved', 'active') THEN true ELSE false END), updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+      [status, id]
+    );
 
     // 3. Log status change
     await client.query(
@@ -659,10 +662,10 @@ export const updateMemberGoal = async (req, res, next) => {
     }
 
     const goalAmount = parseFloat(investment_goal);
-    if (goalAmount < 50000 || goalAmount > 150000) {
+    if (goalAmount < 5000 || goalAmount > 150000) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Investment milestone goal must be between ₱50,000 and ₱150,000.' }
+        error: { message: 'Investment milestone goal must be between ₱5,000 and ₱150,000.' }
       });
     }
 

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'url';
 import { migrateMembersSchema } from './migrate_members_schema.js';
 import { migrateRoleStaff } from './migrate_role_staff.js';
 import { migrateMembersOnboarding } from './migrate_members_onboarding.js';
@@ -20,11 +21,11 @@ export async function runMigrations() {
     await migrateLoansComaker();
     await migrateAnalyticsAudit();
     await migrateUserAccessLogs();
+    await migrateCalendarEvents();
     await migrateAnnouncements();
     await migrateAppointments();
     await migrateSupportTickets();
     await migrateContactMessages();
-    await migrateCalendarEvents();
     await migrateRegistrationOtp();
     console.log('[System Startup] All database migrations completed successfully.');
   } catch (error) {
@@ -33,6 +34,6 @@ export async function runMigrations() {
 }
 
 // Allow CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   runMigrations().then(() => process.exit(0));
 }

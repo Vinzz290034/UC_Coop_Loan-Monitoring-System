@@ -146,7 +146,7 @@ export default function AboutPage() {
           </div>
           <h3 className="font-headline text-base font-bold">Technology Partner</h3>
           <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 max-w-md mx-auto">
-            This Loan Monitoring and Financial Management System is designed, engineered, and maintained by <strong>KADT Solutions</strong> in partnership with the UC-METC Multipurpose Cooperative Board of Directors.
+            This Loan Monitoring System is designed, engineered, and maintained by <strong>KADT Solutions</strong> in partnership with the UC-METC Multipurpose Cooperative Board of Directors.
           </p>
         </section>
       </main>

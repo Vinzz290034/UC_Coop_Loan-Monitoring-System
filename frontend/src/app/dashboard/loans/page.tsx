@@ -114,7 +114,7 @@ function LoansPageContent() {
   const statusParam = searchParams.get('status');
 
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
-  const isVerified = isAdminOrManager || (!!user?.profile?.profile_completed && (user?.profile?.status === 'approved' || user?.profile?.status === 'active'));
+  const isVerified = isAdminOrManager || (!!user?.profile?.profile_completed && (user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true));
 
   const [activeTab, setActiveTab] = useState<'loans' | 'products' | 'calculator'>('loans');
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -1591,9 +1591,13 @@ function LoansPageContent() {
                 }
 
                 // Adjust slider cap
-                const maxProductCap = parseFloat(selectedProduct.max_amount);
-                const maxSliderCap = Math.min(maxProductCap, borrowLimit);
-                const currentAmountValue = Math.min(applyAmount || parseFloat(selectedProduct.min_amount), maxSliderCap);
+                const maxProductCap = parseFloat(selectedProduct.max_amount) || borrowLimit;
+                const maxSliderCap = Math.max(1000, Math.min(maxProductCap, borrowLimit));
+
+                const rawMinProduct = parseFloat(selectedProduct.min_amount) || 1000;
+                const minSliderCap = Math.min(rawMinProduct, maxSliderCap > 1000 ? 1000 : maxSliderCap);
+
+                const currentAmountValue = Math.max(minSliderCap, Math.min(applyAmount || maxSliderCap, maxSliderCap));
 
                 const coMakerRequired = currentAmountValue > shareCapital;
                 const submitDisabled = applySubmitting || (coMakerRequired && !coMakerName.trim());
@@ -1625,13 +1629,13 @@ function LoansPageContent() {
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 flex justify-between">
                             <span>Adjust Amount:</span>
-                            <span>Min: {formatCurrency(parseFloat(selectedProduct.min_amount))}</span>
+                            <span>Min: {formatCurrency(minSliderCap)}</span>
                           </label>
                           <input
                             type="range"
-                            min={selectedProduct.min_amount}
+                            min={minSliderCap}
                             max={maxSliderCap}
-                            step="1000"
+                            step={maxSliderCap - minSliderCap > 10000 ? 1000 : 500}
                             value={currentAmountValue}
                             onChange={(e) => setApplyAmount(parseFloat(e.target.value))}
                             className="w-full h-3 bg-neutral-200 dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-primary dark:accent-secondary"

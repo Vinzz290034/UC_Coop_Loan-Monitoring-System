@@ -127,8 +127,8 @@ export const createAnnouncement = async (req, res, next) => {
       RETURNING *;
     `;
 
-    const parsedCalendarEventId = calendar_event_id && !isNaN(parseInt(calendar_event_id, 10)) 
-      ? parseInt(calendar_event_id, 10) 
+    const parsedCalendarEventId = calendar_event_id && typeof calendar_event_id === 'string' && calendar_event_id.trim() !== '' 
+      ? calendar_event_id.trim() 
       : null;
 
     const result = await query(insertQuery, [
@@ -204,8 +204,8 @@ export const updateAnnouncement = async (req, res, next) => {
       RETURNING *;
     `;
 
-    const parsedCalendarEventId = calendar_event_id && !isNaN(parseInt(calendar_event_id, 10))
-      ? parseInt(calendar_event_id, 10)
+    const parsedCalendarEventId = calendar_event_id && typeof calendar_event_id === 'string' && calendar_event_id.trim() !== ''
+      ? calendar_event_id.trim()
       : null;
 
     const result = await query(updateQuery, [
