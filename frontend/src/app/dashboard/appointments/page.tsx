@@ -8,6 +8,7 @@ import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { useBreadcrumb } from '@/context/BreadcrumbContext';
 import { SkeletonTable, SkeletonCard } from '@/components/ui/Skeleton';
+import * as XLSX from 'xlsx';
 import {
   CalendarCheck,
   Clock,
@@ -25,6 +26,7 @@ import {
   Ban,
   RotateCw,
   Inbox,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface Appointment {
@@ -181,6 +183,24 @@ export default function AppointmentsPage() {
     return true;
   });
 
+  // Export to Excel handler
+  const handleExportExcel = () => {
+    const dataToExport = filteredAppointments.map((apt) => ({
+      ID: apt.id,
+      ...(isAdminOrManager ? { 'Member Name': `${apt.first_name || ''} ${apt.last_name || ''}`.trim() } : {}),
+      Purpose: formatPurpose(apt.purpose),
+      'Appointment Date': apt.appointment_date,
+      'Time Slot': apt.time_slot,
+      Status: apt.status.toUpperCase(),
+      'Created At': new Date(apt.created_at).toLocaleString(),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Appointments');
+    XLSX.writeFile(workbook, `Appointments_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   // Status badge styles
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -259,16 +279,31 @@ export default function AppointmentsPage() {
           </p>
         </div>
 
-        {/* Create Appointment Button — Members and Admins */}
-        {user?.role === 'member' && (
-          <button
-            onClick={() => setIsCreateOpen(true)}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95"
-          >
-            <PlusCircle className="w-4 h-4" />
-            Book Appointment
-          </button>
-        )}
+        {/* Action Buttons Header */}
+        <div className="flex items-center gap-2">
+          {/* Export Excel Button */}
+          {filteredAppointments.length > 0 && (
+            <button
+              onClick={handleExportExcel}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full shadow-sm transition-all active:scale-95 cursor-pointer"
+              title="Download Excel Report"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Export Excel
+            </button>
+          )}
+
+          {/* Create Appointment Button — Members */}
+          {user?.role === 'member' && (
+            <button
+              onClick={() => setIsCreateOpen(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Book Appointment
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Summary Status Cards */}
@@ -526,7 +561,7 @@ export default function AppointmentsPage() {
                 </select>
               </div>
 
-              {/* Specific Reason (Only shown when "Other / Specify Reason" is selected) */}
+              {/* Specific Reason */}
               {createForm.purpose === 'Other / Specify Reason' && (
                 <div className="space-y-1.5 animate-fade-in">
                   <label className="font-label text-neutral-600 dark:text-neutral-400 px-1 font-semibold">
