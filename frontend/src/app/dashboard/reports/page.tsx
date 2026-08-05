@@ -140,6 +140,7 @@ export default function ReportsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const fetchReport = useCallback(async () => {
     try {
       setLoading(true);
@@ -157,9 +158,10 @@ export default function ReportsPage() {
       const response = await api.get(endpoint);
       setRecords(response.data.data || []);
       setCurrentPage(1);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching report:', err);
-      setError(err.response?.data?.message || 'Failed to retrieve report data.');
+      const errorObj = err as { response?: { data?: { message?: string } } };
+      setError(errorObj.response?.data?.message || 'Failed to retrieve report data.');
     } finally {
       setLoading(false);
     }
