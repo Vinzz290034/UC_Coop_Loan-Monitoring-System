@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import * as XLSX from 'xlsx';
 import {
   MessageSquare,
   Search,
@@ -21,6 +22,7 @@ import {
   HelpCircle,
   ShieldAlert,
   Eye,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface ContactMessage {
@@ -81,6 +83,9 @@ export default function MessagesPage() {
   const [error, setError] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
+  // FIXED: Moved useRef to the top level of the component with other hooks
+  const replyPanelRef = useRef<HTMLDivElement>(null);
+
   const isMember = user?.role === 'member';
 
   const fetchMessages = useCallback(async () => {
@@ -91,8 +96,9 @@ export default function MessagesPage() {
       if (search) params.set('search', search);
       const res = await api.get(`/auth/contact-messages?${params.toString()}`);
       setMessages(res.data.data || []);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to load messages.');
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(errorObj.response?.data?.error?.message || 'Failed to load messages.');
     } finally {
       setLoading(false);
     }
@@ -123,8 +129,9 @@ export default function MessagesPage() {
       if (selectedMessage?.id === id) {
         setSelectedMessage((prev) => prev ? { ...prev, status: newStatus as ContactMessage['status'] } : null);
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to update status.');
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(errorObj.response?.data?.error?.message || 'Failed to update status.');
     } finally {
       setUpdatingStatus(null);
     }
@@ -145,8 +152,9 @@ export default function MessagesPage() {
       );
       setSelectedMessage((prev) => prev ? { ...prev, status: 'resolved' } : null);
       setTimeout(() => setReplySuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to send reply.');
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(errorObj.response?.data?.error?.message || 'Failed to send reply.');
     } finally {
       setReplying(false);
     }
@@ -175,14 +183,30 @@ export default function MessagesPage() {
       setInquirySuccess(true);
       setTimeout(() => setInquirySuccess(false), 4000);
       fetchMessages();
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to submit inquiry.');
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(errorObj.response?.data?.error?.message || 'Failed to submit inquiry.');
     } finally {
       setSendingInquiry(false);
     }
   };
 
-  const replyPanelRef = React.useRef<HTMLDivElement>(null);
+  // Export to Excel
+  const exportToExcel = () => {
+    const dataToExport = messages.map((m) => ({
+      ID: m.id,
+      'Full Name': m.full_name,
+      Email: m.email,
+      Message: m.message_content,
+      Status: m.status,
+      'Date Submitted': formatDate(m.created_at),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Contact Messages');
+    XLSX.writeFile(workbook, `Contact_Messages_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   const handleOpenMessage = async (msg: ContactMessage) => {
     setSelectedMessage(msg);
@@ -190,12 +214,10 @@ export default function MessagesPage() {
     setReplySuccess(false);
     setError(null);
 
-    // Auto-mark as read for admin
     if (!isMember && msg.status === 'unread') {
       handleUpdateStatus(msg.id, 'read');
     }
 
-    // Smooth scroll to reply panel on mobile screens
     setTimeout(() => {
       replyPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
@@ -221,7 +243,7 @@ export default function MessagesPage() {
             </div>
             {isMember ? 'Support messages' : 'Contact Messages'}
           </h1>
-          <p className="font-body text-xs text-neutral-500 dark:text-neutral-400 mt-1 ml-[52px]">
+          <p className="font-body text-xs text-neutral-500 dark:text-neutral-400 mt-1 ml-13">
             {isMember 
               ? 'Send inquiries or request support from the cooperative management.' 
               : 'Manage and respond to public inquiries from the contact form.'}
@@ -236,19 +258,27 @@ export default function MessagesPage() {
             <Plus className="w-4 h-4" /> Compose Message
           </button>
         ) : (
-          unreadCount > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-tertiary/10 text-tertiary border border-tertiary/20 text-xs font-bold">
-              <Inbox className="w-3.5 h-3.5" />
-              {unreadCount} unread
-            </div>
-          )
+          <div className="flex items-center gap-2.5">
+            {unreadCount > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-tertiary/10 text-tertiary border border-tertiary/20 text-xs font-bold">
+                <Inbox className="w-3.5 h-3.5" />
+                {unreadCount} unread
+              </div>
+            )}
+            <button
+              onClick={exportToExcel}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Export Excel
+            </button>
+          </div>
         )}
       </div>
 
       {/* Success notification banner for member */}
       {inquirySuccess && (
         <div className="p-4 bg-primary/15 dark:bg-secondary/15 border border-primary/30 dark:border-secondary/30 rounded-2xl text-xs font-bold text-primary dark:text-secondary flex items-center gap-2.5 animate-micro-elevate">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
           Message submitted successfully! The cooperative management has been notified and will reply to your registered email.
         </div>
       )}
@@ -258,7 +288,6 @@ export default function MessagesPage() {
         <div className="flex-1 min-w-0">
           {/* Search & Filters */}
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-4 space-y-3 shadow-sm">
-            {/* Search Bar */}
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
               <input
@@ -270,7 +299,6 @@ export default function MessagesPage() {
               />
             </div>
 
-            {/* Status Tabs */}
             <div className="flex gap-1 flex-wrap items-center">
               {tabs.map((tab) => (
                 <button
@@ -320,11 +348,11 @@ export default function MessagesPage() {
                     selectedMessage?.id === msg.id
                       ? 'border-primary dark:border-secondary ring-2 ring-primary/10 dark:ring-secondary/10'
                       : 'border-outline-variant/65 hover:border-primary/30 dark:hover:border-secondary/30'
-                  } ${msg.status === 'unread' ? 'bg-primary/[0.01] dark:bg-secondary/[0.01]' : ''}`}
+                  } ${msg.status === 'unread' ? 'bg-primary/1 dark:bg-secondary/1' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3.5 min-w-0">
-                      <div className={`w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                      <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
                         msg.status === 'unread'
                           ? 'bg-tertiary/10 text-tertiary'
                           : msg.status === 'read'
@@ -345,7 +373,7 @@ export default function MessagesPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <div className="flex flex-col items-end gap-2 shrink-0">
                       <StatusBadge status={msg.status} />
                       <span className="text-[10px] text-neutral-400 dark:text-neutral-500 font-semibold whitespace-nowrap">
                         {formatDate(msg.created_at)}
@@ -359,23 +387,20 @@ export default function MessagesPage() {
         </div>
 
         {/* Detail Panel */}
-        <div className="lg:w-[420px] flex-shrink-0">
+        <div className="lg:w-105 shrink-0">
           {selectedMessage ? (
             <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl overflow-hidden sticky top-6 shadow-md animate-micro-elevate">
-              {/* Detail Header */}
               <div className="px-5 py-4.5 border-b border-outline-variant/40 flex items-center justify-between">
                 <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">Message Details</h3>
                 <button
                   onClick={() => setSelectedMessage(null)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  aria-label="Close details"
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               <div className="p-5 space-y-5 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {/* Sender Info */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary">
@@ -395,7 +420,6 @@ export default function MessagesPage() {
                   </div>
                 </div>
 
-                {/* Message Content */}
                 <div className="bg-neutral-50 dark:bg-surface rounded-2xl p-4 border border-outline-variant/30 space-y-1">
                   <span className="text-[8px] uppercase tracking-wider text-neutral-400 font-bold font-label block">Inquiry Body</span>
                   <p className="text-xs text-neutral-700 dark:text-neutral-200 leading-relaxed whitespace-pre-wrap font-body">
@@ -403,47 +427,42 @@ export default function MessagesPage() {
                   </p>
                 </div>
 
-                {/* Conditional Admin Actions / Reply Form */}
                 {!isMember ? (
                   <>
-                    {/* Status Actions */}
                     <div className="flex gap-2">
                       {selectedMessage.status !== 'read' && selectedMessage.status !== 'resolved' && (
                         <button
                           onClick={() => handleUpdateStatus(selectedMessage.id, 'read')}
                           disabled={updatingStatus === selectedMessage.id}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl hover:bg-amber-500/20 transition-colors disabled:opacity-50 cursor-pointer"
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl hover:bg-amber-500/25 transition-colors cursor-pointer"
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          Mark as Read
+                          <Eye className="w-3.5 h-3.5" /> Mark as Read
                         </button>
                       )}
                       {selectedMessage.status !== 'resolved' && (
                         <button
                           onClick={() => handleUpdateStatus(selectedMessage.id, 'resolved')}
                           disabled={updatingStatus === selectedMessage.id}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 rounded-xl hover:bg-primary/20 dark:hover:bg-secondary/20 transition-colors disabled:opacity-50 cursor-pointer"
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 rounded-xl hover:bg-primary/20 dark:hover:bg-secondary/20 transition-colors cursor-pointer"
                         >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Resolve
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Resolve
                         </button>
                       )}
                     </div>
 
-                    {/* Reply Form */}
-                    <div className="border-t border-outline-variant/30 pt-4 space-y-3">
+                    <div className="border-t border-outline-variant/30 pt-4 space-y-3" ref={replyPanelRef}>
                       <h4 className="text-[10px] font-bold text-on-surface dark:text-white uppercase tracking-wider font-label">Reply to Inquirer</h4>
 
                       {error && (
                         <div className="p-3 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-xl text-[11px] font-bold flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                          <AlertTriangle className="w-4 h-4 shrink-0" />
                           {error}
                         </div>
                       )}
 
                       {replySuccess && (
-                        <div className="p-3 bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 text-primary dark:text-secondary rounded-xl text-[11px] font-bold flex items-center gap-2 animate-micro-elevate">
-                          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                        <div className="p-3 bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 text-primary dark:text-secondary rounded-xl text-[11px] font-bold flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
                           Reply sent successfully and message resolved.
                         </div>
                       )}
@@ -453,29 +472,19 @@ export default function MessagesPage() {
                         onChange={(e) => setReplyContent(e.target.value)}
                         rows={4}
                         placeholder="Type your reply..."
-                        className="w-full px-3.5 py-2.5 bg-neutral-50 dark:bg-surface border border-outline-variant rounded-2xl text-xs font-body outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary resize-none transition-all text-on-surface dark:text-white placeholder:text-neutral-450"
+                        className="w-full px-3.5 py-2.5 bg-neutral-50 dark:bg-surface border border-outline-variant rounded-2xl text-xs font-body outline-none focus:ring-2 focus:ring-primary/20 resize-none text-on-surface dark:text-white"
                       />
                       <button
                         onClick={handleReply}
                         disabled={replying || !replyContent.trim()}
-                        className="w-full py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-xs font-bold rounded-2xl shadow hover:-translate-y-px active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                        className="w-full py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-xs font-bold rounded-2xl shadow hover:-translate-y-px active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
-                        {replying ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Sending...
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-4 h-4" />
-                            Send Reply
-                          </>
-                        )}
+                        {replying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        Send Reply
                       </button>
                     </div>
                   </>
                 ) : (
-                  /* Member Support Status Notice */
                   <div className="border-t border-outline-variant/30 pt-4 space-y-3">
                     {selectedMessage.status === 'resolved' ? (
                       <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-2xl p-4.5 space-y-2">
@@ -483,17 +492,16 @@ export default function MessagesPage() {
                           <CheckCircle2 className="w-4.5 h-4.5" /> Response Submitted
                         </div>
                         <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed font-body">
-                          An official response from the Cooperative Management has been resolved and emailed to your registered email: <strong>{selectedMessage.email}</strong>. 
-                          Please check your inbox or spam directory for the response.
+                          An official response has been emailed to your registered email: <strong>{selectedMessage.email}</strong>.
                         </p>
                       </div>
                     ) : (
                       <div className="bg-neutral-50 dark:bg-surface border border-outline-variant/40 rounded-2xl p-4.5 space-y-2 flex items-start gap-2.5">
-                        <HelpCircle className="w-5 h-5 text-neutral-400 flex-shrink-0 mt-0.5" />
+                        <HelpCircle className="w-5 h-5 text-neutral-400 shrink-0 mt-0.5" />
                         <div>
                           <h5 className="font-bold text-neutral-600 dark:text-neutral-300 text-xs">Ticket Under Review</h5>
                           <p className="text-[11px] text-neutral-500 leading-normal mt-1">
-                            Cooperative management has received your inquiry and is currently reviewing it. You will receive an email response once resolved.
+                            Cooperative management has received your inquiry and is currently reviewing it.
                           </p>
                         </div>
                       </div>
@@ -508,11 +516,7 @@ export default function MessagesPage() {
                 <MessageSquare className="w-7 h-7 opacity-30" />
               </div>
               <p className="text-sm font-semibold text-center">Select a message</p>
-              <p className="text-xs text-center">
-                {isMember 
-                  ? 'Click on an inquiry to view status and details.' 
-                  : 'Click on a message to view details and reply.'}
-              </p>
+              <p className="text-xs text-center">Click on a message to view details and reply.</p>
             </div>
           )}
         </div>
@@ -520,34 +524,31 @@ export default function MessagesPage() {
 
       {/* MEMBER NEW INQUIRY MODAL */}
       {isNewInquiryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto font-sans">
-            {/* Header */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative">
             <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30 mb-4">
               <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-primary" /> Compose Support Message
               </h3>
               <button
                 onClick={() => { setIsNewInquiryOpen(false); setInquiryContent(''); setError(null); }}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-                aria-label="Close modal"
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 text-neutral-500 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleSendInquiry} className="space-y-4 text-xs">
               {error && (
                 <div className="p-3.5 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-[11px] font-bold flex items-center gap-2">
-                  <ShieldAlert className="w-4.5 h-4.5 flex-shrink-0" />
+                  <ShieldAlert className="w-4.5 h-4.5 shrink-0" />
                   {error}
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="font-bold text-neutral-600 dark:text-neutral-450 uppercase tracking-wider font-label text-[9px]">Sender Name</label>
+                  <label className="font-bold text-neutral-600 uppercase tracking-wider font-label text-[9px]">Sender Name</label>
                   <input
                     type="text"
                     disabled
@@ -556,7 +557,7 @@ export default function MessagesPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="font-bold text-neutral-600 dark:text-neutral-450 uppercase tracking-wider font-label text-[9px]">Registered Email</label>
+                  <label className="font-bold text-neutral-600 uppercase tracking-wider font-label text-[9px]">Registered Email</label>
                   <input
                     type="text"
                     disabled
@@ -567,7 +568,7 @@ export default function MessagesPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-neutral-600 dark:text-neutral-440 uppercase tracking-wider font-label text-[9px]">Message *</label>
+                <label className="font-bold text-neutral-600 uppercase tracking-wider font-label text-[9px]">Message *</label>
                 <textarea
                   required
                   value={inquiryContent}
@@ -582,7 +583,7 @@ export default function MessagesPage() {
                 <button
                   type="button"
                   onClick={() => { setIsNewInquiryOpen(false); setInquiryContent(''); setError(null); }}
-                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
+                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -591,17 +592,8 @@ export default function MessagesPage() {
                   disabled={sendingInquiry || !inquiryContent.trim()}
                   className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
                 >
-                  {sendingInquiry ? (
-                    <>
-                      <Loader2 className="w-4.5 h-4.5 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      Send Message
-                    </>
-                  )}
+                  {sendingInquiry ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Send Message
                 </button>
               </div>
             </form>
