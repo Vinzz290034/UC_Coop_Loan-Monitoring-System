@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { SkeletonCard } from '@/components/ui/Skeleton';
+import * as XLSX from 'xlsx';
 import {
   Users,
   Search,
@@ -22,6 +23,7 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  FileSpreadsheet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -103,8 +105,9 @@ function CreateAccountModal({
         handleClose();
         onSuccess();
       }, 1500);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to create account.');
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(errorObj.response?.data?.error?.message || 'Failed to create account.');
     } finally {
       setSubmitting(false);
     }
@@ -138,14 +141,14 @@ function CreateAccountModal({
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
             <div className="p-3 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-xl text-xs font-bold flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {success && (
             <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 rounded-xl text-xs font-bold flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>Account created successfully!</span>
             </div>
           )}
@@ -201,7 +204,7 @@ function CreateAccountModal({
               value={role}
               onChange={(e) => setRole(e.target.value)}
               disabled={success}
-              className="w-full px-4 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/65 rounded-xl text-sm font-body font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-secondary/30 disabled:opacity-50 transition-all"
+              className="w-full px-4 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/65 rounded-xl text-sm font-body font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-secondary/30 disabled:opacity-50 transition-all cursor-pointer"
             >
               <option value="member">Member</option>
               <option value="staff">Staff</option>
@@ -214,7 +217,7 @@ function CreateAccountModal({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 py-2.5 border border-outline-variant/65 rounded-xl text-sm font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 transition-all"
+              className="flex-1 py-2.5 border border-outline-variant/65 rounded-xl text-sm font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 transition-all cursor-pointer"
             >
               Cancel
             </button>
@@ -304,7 +307,7 @@ function DeleteConfirmModal({
           <button
             onClick={onClose}
             disabled={deleting}
-            className="flex-1 py-2.5 border border-outline-variant/65 rounded-xl text-sm font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 transition-all disabled:opacity-50"
+            className="flex-1 py-2.5 border border-outline-variant/65 rounded-xl text-sm font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 transition-all disabled:opacity-50 cursor-pointer"
           >
             Cancel
           </button>
@@ -366,8 +369,9 @@ export default function UsersPage() {
 
       const response = await api.get(`/auth/users?${params.toString()}`);
       setUsers(response.data.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to load users.');
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(errorObj.response?.data?.error?.message || 'Failed to load users.');
     } finally {
       setLoading(false);
     }
@@ -377,6 +381,7 @@ export default function UsersPage() {
     if (user?.role === 'admin') {
       fetchUsers();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
@@ -384,6 +389,7 @@ export default function UsersPage() {
       const debounce = setTimeout(() => fetchUsers(), 300);
       return () => clearTimeout(debounce);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, roleFilter, statusFilter]);
 
   // Auto-dismiss success messages
@@ -402,12 +408,50 @@ export default function UsersPage() {
       setActionSuccess(`User "${deleteTarget.username}" has been deleted.`);
       setDeleteTarget(null);
       fetchUsers();
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to delete user.');
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { error?: { message?: string } } } };
+      setError(errorObj.response?.data?.error?.message || 'Failed to delete user.');
       setDeleteTarget(null);
     } finally {
       setDeleting(false);
     }
+  };
+
+  // ─── Export to Excel Logic ────────────────────────────────────────────────
+  const exportToExcel = () => {
+    const dataToExport = users.map((u) => ({
+      ID: u.id,
+      Username: u.username,
+      Role: u.role.charAt(0).toUpperCase() + u.role.slice(1),
+      Status: u.is_active ? 'Active' : 'Inactive',
+      'Full Name': u.member_profile
+        ? `${u.member_profile.first_name} ${u.member_profile.last_name}`
+        : 'N/A',
+      Email: u.member_profile?.email || 'N/A',
+      Phone: u.member_profile?.phone || 'N/A',
+      'Last Login': u.last_login_at
+        ? new Date(u.last_login_at).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+        : 'Never',
+      'Registered Date': new Date(u.created_at).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Users_Directory');
+    XLSX.writeFile(
+      workbook,
+      `Users_Report_${new Date().toISOString().split('T')[0]}.xlsx`
+    );
   };
 
   const formatDate = (date: string | null) => {
@@ -449,193 +493,201 @@ export default function UsersPage() {
   return (
     <>
       <div className="space-y-6 animate-micro-elevate">
-      <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-      </div>
-
-      {/* Page Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white">
-            User Management
-          </h1>
-          <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-            System-wide user directory with profile, login tracking, and activity monitoring
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold rounded-xl shadow-md hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          Create Account
-        </button>
-      </div>
-
-      {/* Success Banner */}
-      {actionSuccess && (
-        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 rounded-2xl text-xs font-bold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          <span>{actionSuccess}</span>
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[220px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by username, name, or email..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-surface-container-low border border-outline-variant/65 text-sm font-body text-on-surface dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-secondary/30 transition-all"
-          />
+          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-neutral-500" />
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-3 py-2.5 rounded-xl bg-white dark:bg-surface-container-low border border-outline-variant/65 text-sm font-body text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="">All Roles</option>
-            <option value="admin">Admin</option>
-            <option value="staff">Staff</option>
-            <option value="member">Member</option>
-          </select>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2.5 rounded-xl bg-white dark:bg-surface-container-low border border-outline-variant/65 text-sm font-body text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="">All Status</option>
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Stats bar */}
-      <div className="flex items-center gap-4 text-xs font-bold text-neutral-600 dark:text-neutral-400">
-        <span className="flex items-center gap-1">
-          <Users className="w-3.5 h-3.5" /> {users.length} users found
-        </span>
-      </div>
-
-      {/* Error State */}
-      {error && (
-        <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl">
-          <div className="flex items-center gap-2 font-bold text-sm">
-            <AlertTriangle className="w-4 h-4" /> {error}
+        {/* Page Header */}
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white">
+              User Management
+            </h1>
+            <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+              System-wide user directory with profile, login tracking, and activity monitoring
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportToExcel}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-surface-container-low border border-emerald-600/40 hover:border-emerald-600 text-emerald-700 dark:text-emerald-400 font-label text-sm font-bold rounded-full shadow-sm hover:shadow-md hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              Export Excel
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold rounded-xl shadow-md hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Create Account
+            </button>
           </div>
         </div>
-      )}
 
-      {/* Loading State */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
-      ) : (
-        /* Users Grid */
-        <div className="space-y-3">
-          {users.map((u) => (
-            <div
-              key={u.id}
-              className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl p-4 hover:border-primary/40 dark:hover:border-secondary/40 transition-all group shadow-sm hover:shadow-md"
+        {/* Success Banner */}
+        {actionSuccess && (
+          <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 rounded-2xl text-xs font-bold flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{actionSuccess}</span>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-55 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by username, name, or email..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-surface-container-low border border-outline-variant/65 text-sm font-body text-on-surface dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-secondary/30 transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-neutral-500" />
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl bg-white dark:bg-surface-container-low border border-outline-variant/65 text-sm font-body text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
             >
-              <div className="flex items-center justify-between">
-                <Link
-                  href={`/dashboard/users/${u.id}`}
-                  className="flex items-center gap-4 min-w-0 flex-1"
-                >
-                  {/* Avatar */}
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${u.is_active ? 'bg-primary/15 text-primary dark:bg-secondary/15 dark:text-secondary' : 'bg-neutral/10 text-neutral-500'}`}>
-                    {u.member_profile
-                      ? `${u.member_profile.first_name[0]}${u.member_profile.last_name[0]}`
-                      : u.username[0].toUpperCase()}
-                  </div>
+              <option value="">All Roles</option>
+              <option value="admin">Admin</option>
+              <option value="staff">Staff</option>
+              <option value="member">Member</option>
+            </select>
 
-                  {/* User Info */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white truncate">
-                        {u.member_profile
-                          ? `${u.member_profile.first_name} ${u.member_profile.last_name}`
-                          : u.username}
-                      </h4>
-                      {getRoleBadge(u.role)}
-                      {u.is_active ? (
-                        <span className="flex items-center gap-0.5 text-[10px] font-bold text-green-600">
-                          <UserCheck className="w-3 h-3" /> Active
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-0.5 text-[10px] font-bold text-red-500">
-                          <UserX className="w-3 h-3" /> Inactive
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4 mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
-                      <span>@{u.username}</span>
-                      {u.member_profile?.email && <span>{u.member_profile.email}</span>}
-                    </div>
-                  </div>
-                </Link>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2.5 rounded-xl bg-white dark:bg-surface-container-low border border-outline-variant/65 text-sm font-body text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+            >
+              <option value="">All Status</option>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </div>
+        </div>
 
-                {/* Meta + Actions */}
-                <div className="flex items-center gap-3">
-                  <div className="hidden md:flex items-center gap-6 text-[11px] text-neutral-500 dark:text-neutral-400">
-                    <div className="text-right">
-                      <div className="font-bold text-neutral-600 dark:text-neutral-300">Last Login</div>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <Clock className="w-3 h-3" />
-                        {formatDateTime(u.last_login_at)}
+        {/* Stats bar */}
+        <div className="flex items-center gap-4 text-xs font-bold text-neutral-600 dark:text-neutral-400">
+          <span className="flex items-center gap-1">
+            <Users className="w-3.5 h-3.5" /> {users.length} users found
+          </span>
+        </div>
+
+        {/* Error State */}
+        {error && (
+          <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl">
+            <div className="flex items-center gap-2 font-bold text-sm">
+              <AlertTriangle className="w-4 h-4" /> {error}
+            </div>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        ) : (
+          /* Users Grid */
+          <div className="space-y-3">
+            {users.map((u) => (
+              <div
+                key={u.id}
+                className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl p-4 hover:border-primary/40 dark:hover:border-secondary/40 transition-all group shadow-sm hover:shadow-md"
+              >
+                <div className="flex items-center justify-between">
+                  <Link
+                    href={`/dashboard/users/${u.id}`}
+                    className="flex items-center gap-4 min-w-0 flex-1"
+                  >
+                    {/* Avatar */}
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${u.is_active ? 'bg-primary/15 text-primary dark:bg-secondary/15 dark:text-secondary' : 'bg-neutral/10 text-neutral-500'}`}>
+                      {u.member_profile
+                        ? `${u.member_profile.first_name[0]}${u.member_profile.last_name[0]}`
+                        : u.username[0].toUpperCase()}
+                    </div>
+
+                    {/* User Info */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white truncate">
+                          {u.member_profile
+                            ? `${u.member_profile.first_name} ${u.member_profile.last_name}`
+                            : u.username}
+                        </h4>
+                        {getRoleBadge(u.role)}
+                        {u.is_active ? (
+                          <span className="flex items-center gap-0.5 text-[10px] font-bold text-green-600">
+                            <UserCheck className="w-3 h-3" /> Active
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-0.5 text-[10px] font-bold text-red-500">
+                            <UserX className="w-3 h-3" /> Inactive
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                        <span>@{u.username}</span>
+                        {u.member_profile?.email && <span>{u.member_profile.email}</span>}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-bold text-neutral-600 dark:text-neutral-300">Registered</div>
-                      <div>{formatDate(u.created_at)}</div>
-                    </div>
-                  </div>
-
-                  {/* Delete button (don't show for self) */}
-                  {u.id !== user?.id.toString() && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDeleteTarget(u);
-                      }}
-                      className="p-2 rounded-xl text-neutral-400 hover:text-tertiary hover:bg-tertiary/10 transition-all opacity-0 group-hover:opacity-100"
-                      title="Delete user"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-
-                  <Link href={`/dashboard/users/${u.id}`}>
-                    <ChevronRight className="w-5 h-5 text-neutral-400 group-hover:text-primary dark:group-hover:text-secondary transition-colors" />
                   </Link>
+
+                  {/* Meta + Actions */}
+                  <div className="flex items-center gap-3">
+                    <div className="hidden md:flex items-center gap-6 text-[11px] text-neutral-500 dark:text-neutral-400">
+                      <div className="text-right">
+                        <div className="font-bold text-neutral-600 dark:text-neutral-300">Last Login</div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3" />
+                          {formatDateTime(u.last_login_at)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-neutral-600 dark:text-neutral-300">Registered</div>
+                        <div>{formatDate(u.created_at)}</div>
+                      </div>
+                    </div>
+
+                    {/* Delete button (don't show for self) */}
+                    {u.id !== user?.id.toString() && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDeleteTarget(u);
+                        }}
+                        className="p-2 rounded-xl text-neutral-400 hover:text-tertiary hover:bg-tertiary/10 transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                        title="Delete user"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    <Link href={`/dashboard/users/${u.id}`}>
+                      <ChevronRight className="w-5 h-5 text-neutral-400 group-hover:text-primary dark:group-hover:text-secondary transition-colors cursor-pointer" />
+                    </Link>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {users.length === 0 && !loading && (
-            <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
-              <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="font-body text-sm">No users found matching your filters.</p>
-            </div>
-          )}
-        </div>
-      )}
-
+            {users.length === 0 && !loading && (
+              <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
+                <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                <p className="font-body text-sm">No users found matching your filters.</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Modals */}
