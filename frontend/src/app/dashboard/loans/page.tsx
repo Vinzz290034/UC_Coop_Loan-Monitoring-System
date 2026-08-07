@@ -8,6 +8,7 @@ import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { SkeletonTable, SkeletonCard } from '@/components/ui/Skeleton';
 import LoanAmortizationCalculator from '@/components/loans/LoanAmortizationCalculator';
+import * as XLSX from 'xlsx';
 import {
   Banknote,
   Percent,
@@ -68,6 +69,10 @@ const LOAN_CATEGORIES = {
 const getProductCategory = (name: string) => {
   if (!name) return LOAN_CATEGORIES.REGULAR;
   const lowercaseName = name.toLowerCase();
+  // Calamity Loan is strictly a Regular Loan
+  if (lowercaseName.includes('calamity')) {
+    return LOAN_CATEGORIES.REGULAR;
+  }
   if (
     lowercaseName.includes('short term') ||
     lowercaseName.includes('stl') ||
@@ -89,6 +94,10 @@ const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
   'Regular Loan - Project Loan': {
     desc: 'Project or entrepreneurial funding for business expansions or asset acquisitions.',
     helper: '₱76,000 to ₱300,000. Maximum term: 2 years (24 months).'
+  },
+  'Regular Loan - Calamity Loan': {
+    desc: 'Emergency financial assistance released during officially declared State of Calamity.',
+    helper: '₱10,000 to ₱50,000. Maximum term: 1-2 years (24 months).'
   },
   'Short Term Loan (STL) - Utility Loan': {
     desc: 'Quick cash relief for paying electricity, water, internet, or other home utilities.',
@@ -166,7 +175,10 @@ function LoansPageContent() {
   const [coMakerName, setCoMakerName] = useState('');
   const [coMakerPhone, setCoMakerPhone] = useState('');
   const [applyTermMonths, setApplyTermMonths] = useState<number>(1);
-  
+
+  // State of Calamity declaration toggle
+  const [isCalamityDeclared, setIsCalamityDeclared] = useState(false);
+
   // Selected Member CBU & details
   const [selectedMemberSummary, setSelectedMemberSummary] = useState<any>(null);
   const [loadingMemberSummary, setLoadingMemberSummary] = useState(false);
@@ -212,6 +224,78 @@ function LoansPageContent() {
     setPrintMode('receipt');
   };
 
+  // Excel Export Functions
+  const exportLoansToExcel = () => {
+    if (!loans || loans.length === 0) return;
+    
+    const excelData = loans.map((l) => ({
+      'Loan ID': `#${l.id}`,
+      'Borrower Name': `${l.last_name || ''}, ${l.first_name || ''}`.trim() || 'N/A',
+      'Loan Product': l.product_name || 'N/A',
+      'Principal Amount (PHP)': parseFloat(l.principal_amount),
+      'Interest Rate (%)': `${parseFloat(l.interest_rate)}%`,
+      'Term (Months)': l.term_months,
+      'Amortization Type': l.amortization_type?.replace('_', ' ').toUpperCase(),
+      'Status': l.status.toUpperCase(),
+      'Application Date': new Date(l.created_at).toLocaleDateString()
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Credit Portfolio');
+    XLSX.writeFile(workbook, `Loan_Records_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const exportSingleLoanScheduleToExcel = (loanDetailsObj: any) => {
+    if (!loanDetailsObj || !loanDetailsObj.schedule) return;
+
+    const summaryData = [
+      { Parameter: 'Loan ID', Value: `#${loanDetailsObj.id}` },
+      { Parameter: 'Borrower', Value: `${loanDetailsObj.last_name || ''}, ${loanDetailsObj.first_name || ''}`.trim() },
+      { Parameter: 'Product', Value: loanDetailsObj.product_name || 'N/A' },
+      { Parameter: 'Principal Amount', Value: `PHP ${parseFloat(loanDetailsObj.principal_amount).toLocaleString()}` },
+      { Parameter: 'Interest Rate', Value: `${parseFloat(loanDetailsObj.interest_rate)}% p.a.` },
+      { Parameter: 'Term', Value: `${loanDetailsObj.term_months} Months` },
+      { Parameter: 'Amortization Type', Value: loanDetailsObj.amortization_type?.replace('_', ' ').toUpperCase() },
+      { Parameter: 'Status', Value: loanDetailsObj.status?.toUpperCase() },
+      { Parameter: 'Disbursement Date', Value: loanDetailsObj.disbursement_date ? new Date(loanDetailsObj.disbursement_date).toLocaleDateString() : 'N/A' },
+      {}
+    ];
+
+    let runningBal = parseFloat(loanDetailsObj.principal_amount);
+    const scheduleRows = loanDetailsObj.schedule.map((sch: any) => {
+      const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
+      if (loanDetailsObj.amortization_type === 'diminishing_balance') {
+        runningBal = Math.round((runningBal - schTotalDue) * 100) / 100;
+      } else {
+        runningBal = Math.round((runningBal - parseFloat(sch.principal_due)) * 100) / 100;
+      }
+      return {
+        'Month': sch.installment_number,
+        'Principal Due (PHP)': parseFloat(sch.principal_due),
+        'Interest Due (PHP)': parseFloat(sch.interest_due),
+        'Total Due (PHP)': schTotalDue,
+        'Remaining Balance (PHP)': Math.max(0, runningBal),
+        'Principal Paid (PHP)': parseFloat(sch.principal_paid),
+        'Interest Paid (PHP)': parseFloat(sch.interest_paid),
+        'Due Date': new Date(sch.due_date).toLocaleDateString(),
+        'Status': sch.status?.toUpperCase()
+      };
+    });
+
+    const workbook = XLSX.utils.book_new();
+    
+    // Schedule sheet
+    const scheduleWs = XLSX.utils.json_to_sheet(scheduleRows);
+    XLSX.utils.book_append_sheet(workbook, scheduleWs, 'Amortization Schedule');
+
+    // Summary sheet
+    const summaryWs = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, summaryWs, 'Loan Summary');
+
+    XLSX.writeFile(workbook, `Loan_#${loanDetailsObj.id}_Amortization_Schedule.xlsx`);
+  };
+
   const handlePrint = () => {
     setTimeout(() => {
       window.print();
@@ -224,7 +308,7 @@ function LoansPageContent() {
 
     // If print state is not already set to this receipt, temporarily set it to render print-section in DOM
     const alreadyConfigured = printLoan?.id === loanObj.id && printPayment?.id === paymentObj.id && printMode === 'receipt';
-    
+
     if (!alreadyConfigured) {
       setPrintLoan(loanObj);
       setPrintPayment(paymentObj);
@@ -246,10 +330,10 @@ function LoansPageContent() {
 
     // Clone the print element so we can modify it for off-screen rendering
     const clone = printEl.cloneNode(true) as HTMLElement;
-    
+
     // Remove the printing classes that make it hidden on screen
     clone.classList.remove('hidden', 'print:block');
-    
+
     // Apply off-screen layout styling with standard sizing and background color
     clone.style.cssText = `
       position: fixed;
@@ -303,7 +387,7 @@ function LoansPageContent() {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     confirmText: 'OK',
     cancelText: '',
     type: 'success'
@@ -322,7 +406,7 @@ function LoansPageContent() {
       title,
       message,
       type,
-      onConfirm: onConfirm || (() => {}),
+      onConfirm: onConfirm || (() => { }),
       confirmText,
       cancelText
     });
@@ -576,7 +660,7 @@ function LoansPageContent() {
 
       setSuccessData(response.data.data);
       setWizardStep(3);
-      
+
       // Reset state fields
       setApplyAmount(0);
       setCoMakerName('');
@@ -671,599 +755,613 @@ function LoansPageContent() {
   return (
     <>
       <div className="space-y-6 animate-micro-elevate">
-      <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-      </div>
-
-      {/* Header and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white">Credit Portfolio Ledger</h1>
-          <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-            Manage credit products, loan instantiation, approvals, and repayment bookings.
-          </p>
+          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {isAdminOrManager && (
-            <button
-              onClick={() => setIsRepaymentModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-full text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 transition-all shadow-sm"
-            >
-              <CreditCard className="w-4 h-4 text-tertiary" />
-              Book Repayment
-            </button>
-          )}
-          <button
-            onClick={openApplyModal}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4" />
-            Apply for Loan
-            {!isVerified && !isAdminOrManager && <Lock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
-          </button>
-        </div>
-      </div>
 
-      {!isAdminOrManager && !isVerified && (
-        <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs font-medium space-y-1">
-          <p className="font-bold flex items-center gap-2 text-amber-900 dark:text-amber-200">
-            <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            Profile Verification & Approval Required
-          </p>
-          <p>
-            You cannot apply for a loan until your profile verification has been completed and approved by an administrator. Please visit your <a href="/dashboard/profile" className="underline font-bold hover:text-primary dark:hover:text-secondary">Profile Page</a> to submit your profile verification details.
-          </p>
-        </div>
-      )}
-
-      {/* Dynamic Dashboard KPI Cards */}
-      {!metricsLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-          {isAdminOrManager ? (
-            <>
-              {/* Card 1: Active Portfolio */}
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                  <Banknote className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Active Portfolio</span>
-                  <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
-                    {formatCurrency(adminMetrics?.ledger_aggregates?.current_outstanding_balance || 0)}
-                  </span>
-                  <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
-                    Deployed: {formatCurrency(adminMetrics?.ledger_aggregates?.total_capital_deployed || 0)} ({adminMetrics?.portfolio_health?.active_loans || 0} loans)
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 2: Interest Collected */}
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="w-12 h-12 rounded-2xl bg-secondary/10 dark:bg-secondary/15 text-primary dark:text-secondary flex items-center justify-center flex-shrink-0">
-                  <Percent className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Interest Revenue</span>
-                  <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
-                    {formatCurrency(adminMetrics?.ledger_aggregates?.total_interest_earned || 0)}
-                  </span>
-                  <span className="text-[9px] font-bold text-green-600 dark:text-green-400 block mt-0.5">
-                    Cumulative interest earned p.a.
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 3: Pending Underwriting */}
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="w-12 h-12 rounded-2xl bg-tertiary/10 text-tertiary flex items-center justify-center flex-shrink-0">
-                  <Clock className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Underwriting Queue</span>
-                  <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
-                    {adminMetrics?.portfolio_health?.pending_applications || 0} Applications
-                  </span>
-                  <span className="text-[9px] font-bold text-tertiary block mt-0.5">
-                    Awaiting manager review/disbursement
-                  </span>
-                </div>
-              </div>
-
-              {/* Card 4: Default Risks */}
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center flex-shrink-0">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Delinquency Risk</span>
-                  <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
-                    {adminMetrics?.portfolio_health?.defaulted_loans || 0} Accounts Defaulted
-                  </span>
-                  <span className="text-[9px] font-bold text-red-500 block mt-0.5">
-                    Rate: {(((adminMetrics?.portfolio_health?.defaulted_loans || 0) / ((adminMetrics?.portfolio_health?.active_loans || 0) + (adminMetrics?.portfolio_health?.defaulted_loans || 0) || 1)) * 100).toFixed(2)}% of portfolio
-                  </span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Member Card 1: Active Loan Count */}
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                  <FileCheck className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">My Credit Status</span>
-                  <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
-                    {memberMetrics?.loans?.active_count || 0} Active Loans
-                  </span>
-                  <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
-                    Approved cooperative contracts list
-                  </span>
-                </div>
-              </div>
-
-              {/* Member Card 2: Outstanding Balance */}
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className="w-12 h-12 rounded-2xl bg-secondary/10 dark:bg-secondary/15 text-primary dark:text-secondary flex items-center justify-center flex-shrink-0">
-                  <Banknote className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Outstanding Balance</span>
-                  <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
-                    {formatCurrency(memberMetrics?.loans?.outstanding_balance || 0)}
-                  </span>
-                  <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
-                    Initial Deployed: {formatCurrency(memberMetrics?.loans?.original_principal || 0)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Member Card 3: Policy Tier */}
-              {(() => {
-                const historicalCount = memberMetrics?.loans?.historical_count || 0;
-                const tierName = historicalCount === 0 ? '1st Loan (New)' : historicalCount === 1 ? '2nd Loan (Track Record)' : '3rd Loan+ (Max Tier)';
-                const desc = historicalCount === 0 ? 'Fully collateralized' : historicalCount === 1 ? 'Co-maker for excess' : '3.0x Share Capital cap';
-                return (
-                  <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-                    <div className="w-12 h-12 rounded-2xl bg-tertiary/10 text-tertiary flex items-center justify-center flex-shrink-0">
-                      <User className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Borrower Policy Tier</span>
-                      <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
-                        {tierName}
-                      </span>
-                      <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
-                        {desc} ({historicalCount} past approvals)
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Member Card 4: Borrowing Limit */}
-              {(() => {
-                const shareCapital = memberMetrics?.balances?.share_capital || 0;
-                const historicalCount = memberMetrics?.loans?.historical_count || 0;
-                const outstandingBalance = memberMetrics?.loans?.outstanding_balance || 0;
-                const limit = historicalCount === 0 ? 0.8 * shareCapital : historicalCount === 1 ? 2.0 * shareCapital : 3.0 * shareCapital;
-                const remaining = outstandingBalance > 0 ? 0 : limit;
-                return (
-                  <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-                    <div className="w-12 h-12 rounded-2xl bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0">
-                      <Clock className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Remaining Borrowable Limit</span>
-                      <span className="text-xl font-headline font-extrabold text-green-600 dark:text-green-500 block mt-0.5">
-                        {formatCurrency(remaining)}
-                      </span>
-                      <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
-                        {outstandingBalance > 0 ? (
-                          <span className="text-tertiary">Active loan balance remaining. Clear balance to unlock limit.</span>
-                        ) : (
-                          `Total Cap Limit: ${formatCurrency(limit)}`
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex border-b border-outline-variant/50 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('loans')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'loans'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-            }`}
-        >
-          Credit Contracts List
-        </button>
-        <button
-          onClick={() => setActiveTab('products')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'products'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-            }`}
-        >
-          Loan Products Registry
-        </button>
-        <button
-          onClick={() => setActiveTab('calculator')}
-          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'calculator'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-            }`}
-        >
-          Amortization Calculator
-        </button>
-      </div>
-
-      {/* TABS CONTAINER */}
-      {activeTab === 'loans' ? (
-        <div className="space-y-6">
-          {/* Filters */}
-          <div className="flex items-center gap-4 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
-            <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 font-label">Contract Status:</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-            >
-              <option value="">All Loans</option>
-              <option value="pending_approval">Pending Approval</option>
-              <option value="disbursed">Active / Disbursed</option>
-              <option value="fully_paid">Fully Paid</option>
-              <option value="rejected">Rejected</option>
-              <option value="defaulted">Defaulted</option>
-            </select>
+        {/* Header and Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white">Credit Portfolio Ledger</h1>
+            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+              Manage credit products, loan instantiation, approvals, and repayment bookings.
+            </p>
           </div>
-
-          {/* Loans List */}
-          {loansLoading ? (
-            <SkeletonTable rows={5} cols={6} />
-          ) : error ? (
-            <div className="p-6 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-3xl">
-              <p className="text-sm font-bold">{error}</p>
-            </div>
-          ) : loans.length === 0 ? (
-            <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
-              <AlertTriangle className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
-              <h3 className="font-headline font-bold text-on-surface dark:text-white">No Loans Registered</h3>
-              <p className="text-xs text-neutral-600 dark:text-neutral-400">No loans found matching the status filter.</p>
-            </div>
-          ) : (
-            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">ID</th>
-                      {isAdminOrManager && (
-                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
-                      )}
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Principal Amount</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest (Term)</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
-                    {loans.map((loan) => {
-                      const isExpanded = expandedLoanId === loan.id;
-                      return (
-                        <React.Fragment key={loan.id}>
-                          <tr className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
-                            <td className="px-6 py-4 font-mono font-bold">#{loan.id}</td>
-                            {isAdminOrManager && (
-                              <td className="px-6 py-4 font-semibold">
-                                {loan.last_name}, {loan.first_name}
-                              </td>
-                            )}
-                            <td className="px-6 py-4 font-semibold text-primary dark:text-secondary">{loan.product_name || 'Legacy Product'}</td>
-                            <td className="px-6 py-4 font-bold">{formatCurrency(parseFloat(loan.principal_amount))}</td>
-                            <td className="px-6 py-4 font-mono">
-                              {parseFloat(loan.interest_rate)}% ({loan.term_months}mo)
-                            </td>
-                            <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
-                            <td className="px-6 py-4 text-right">
-                              <button
-                                onClick={() => toggleLoanExpand(loan.id)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral/5 transition-all text-[11px] font-bold"
-                              >
-                                {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                Amortization
-                              </button>
-                            </td>
-                          </tr>
-
-                          {/* Expanded Details Row */}
-                          {isExpanded && (
-                            <tr>
-                              <td colSpan={isAdminOrManager ? 7 : 6} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
-                                {loadingDetails ? (
-                                  <div className="flex items-center gap-2 py-4 justify-center">
-                                    <div className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
-                                    <span className="text-neutral-600 dark:text-neutral-400 font-semibold text-xs">Loading schedules and ledger data...</span>
-                                  </div>
-                                ) : !loanDetails ? (
-                                  <p className="text-center text-xs text-neutral-600 dark:text-neutral-400">Failed to parse loan details.</p>
-                                ) : (
-                                  <div className="space-y-6">
-                                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/40 pb-4">
-                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs">
-                                        <div>
-                                          <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Amortization Type</span>
-                                          <p className="font-semibold text-on-surface dark:text-white capitalize mt-0.5">
-                                            {loanDetails.amortization_type?.replace('_', ' ')}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Registered Date</span>
-                                          <p className="font-semibold text-on-surface dark:text-white mt-0.5">
-                                            {new Date(loanDetails.created_at).toLocaleDateString()}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Disbursement Date</span>
-                                          <p className="font-semibold text-on-surface dark:text-white mt-0.5">
-                                            {loanDetails.disbursement_date
-                                              ? new Date(loanDetails.disbursement_date).toLocaleDateString()
-                                              : <span className="italic text-neutral-600 dark:text-neutral-400/50">Un-disbursed</span>}
-                                          </p>
-                                        </div>
-                                      </div>
-
-                                      {/* Disbursement / Rejection / Printing actions */}
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        {isAdminOrManager && (
-                                          <>
-                                            <button
-                                              onClick={() => openVoucherModal(loanDetails)}
-                                              className="inline-flex items-center gap-1.5 px-4 py-2 border border-outline-variant hover:bg-neutral/5 text-neutral-700 dark:text-neutral-300 font-bold rounded-full text-[11px] transition-colors"
-                                            >
-                                              <Printer className="w-3.5 h-3.5" />
-                                              Check Voucher
-                                            </button>
-                                            <button
-                                              onClick={() => openPrintAmortizationModal(loanDetails)}
-                                              className="inline-flex items-center gap-1.5 px-4 py-2 border border-outline-variant hover:bg-neutral/5 text-neutral-700 dark:text-neutral-300 font-bold rounded-full text-[11px] transition-colors"
-                                            >
-                                              <Printer className="w-3.5 h-3.5" />
-                                              Print Schedule
-                                            </button>
-                                          </>
-                                        )}
-
-                                        {isAdminOrManager && loan.status === 'pending_approval' && (
-                                          <>
-                                            <button
-                                              onClick={() => handleRejectLoan(loan.id)}
-                                              className="px-4 py-2 border border-tertiary/40 hover:bg-tertiary/10 text-tertiary font-bold rounded-full text-[11px] transition-colors"
-                                            >
-                                              Reject Credit Request
-                                            </button>
-                                            <button
-                                              onClick={() => handleDisburseLoan(loan.id)}
-                                              className="px-4 py-2 bg-primary text-white font-bold rounded-full text-[11px] shadow hover:translate-y-[-1px] transition-all"
-                                            >
-                                              Verify & Disburse Funds
-                                            </button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Amortization Schedule */}
-                                    <div className="space-y-3">
-                                      <h4 className="font-headline font-bold text-xs text-on-surface dark:text-white flex items-center gap-1.5">
-                                        <Calendar className="w-4 h-4 text-primary dark:text-secondary" />
-                                        Amortization Schedule Matrices
-                                      </h4>
-                                      {loanDetails.schedule && loanDetails.schedule.length === 0 ? (
-                                        <p className="text-[11px] text-neutral-600 dark:text-neutral-400 italic">No schedules generated yet (needs disbursement).</p>
-                                      ) : (
-                                        <div className="border border-outline-variant/60 rounded-2xl overflow-hidden bg-white dark:bg-surface">
-                                          <table className="w-full text-left border-collapse text-[11px]">
-                                            <thead>
-                                              <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Month</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Principal Due</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Interest Due</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Total Due</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Balance</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Principal</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Interest</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Due Date</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Status</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-outline-variant/35 font-mono">
-                                              {(() => {
-                                                let runningBalance = parseFloat(loanDetails.principal_amount);
-                                                return loanDetails.schedule?.map((sch: any) => {
-                                                  const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
-                                                  if (loanDetails.amortization_type === 'diminishing_balance') {
-                                                    runningBalance = Math.round((runningBalance - schTotalDue) * 100) / 100;
-                                                  } else {
-                                                    runningBalance = Math.round((runningBalance - parseFloat(sch.principal_due)) * 100) / 100;
-                                                  }
-                                                  const displayBalance = Math.max(0, runningBalance);
-
-                                                  return (
-                                                    <tr key={sch.id} className="hover:bg-neutral/5">
-                                                      <td className="px-4 py-2 font-bold">{sch.installment_number}</td>
-                                                      <td className="px-4 py-2">{formatCurrency(parseFloat(sch.principal_due))}</td>
-                                                      <td className="px-4 py-2">{formatCurrency(parseFloat(sch.interest_due))}</td>
-                                                      <td className="px-4 py-2 font-bold">{formatCurrency(parseFloat(sch.principal_due) + parseFloat(sch.interest_due))}</td>
-                                                      <td className="px-4 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
-                                                      <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
-                                                      <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
-                                                      <td className="px-4 py-2 font-sans">{new Date(sch.due_date).toLocaleDateString()}</td>
-                                                      <td className="px-4 py-2 font-sans">
-                                                        {sch.status === 'paid' ? (
-                                                          <span className="text-primary font-bold">Paid</span>
-                                                        ) : sch.status === 'partially_paid' ? (
-                                                          <span className="text-amber-500 font-bold">Partial</span>
-                                                        ) : (
-                                                          <span className="text-tertiary font-bold">Unpaid</span>
-                                                        )}
-                                                      </td>
-                                                    </tr>
-                                                  );
-                                                });
-                                              })()}
-                                            </tbody>
-                                          </table>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Payments History */}
-                                    <div className="space-y-3">
-                                      <h4 className="font-headline font-bold text-xs text-on-surface dark:text-white flex items-center gap-1.5">
-                                        <CreditCard className="w-4 h-4 text-primary dark:text-secondary" />
-                                        Posted Ledger Payments History
-                                      </h4>
-                                      {loanDetails.payments && loanDetails.payments.length === 0 ? (
-                                        <p className="text-[11px] text-neutral-600 dark:text-neutral-400 italic">No payments logged yet.</p>
-                                      ) : (
-                                        <div className="border border-outline-variant/60 rounded-2xl overflow-hidden bg-white dark:bg-surface">
-                                          <table className="w-full text-left border-collapse text-[11px]">
-                                            <thead>
-                                              <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Ref No</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Amount Paid</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Payment Method</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Booking Date</th>
-                                                <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 text-right">Receipt</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-outline-variant/35 font-mono">
-                                              {loanDetails.payments?.map((pay: any) => (
-                                                <tr key={pay.id} className="hover:bg-neutral/5">
-                                                  <td className="px-4 py-2 font-bold">{pay.reference_no || 'N/A'}</td>
-                                                  <td className="px-4 py-2 text-primary font-bold">{formatCurrency(parseFloat(pay.amount))}</td>
-                                                  <td className="px-4 py-2 font-sans">{pay.payment_method}</td>
-                                                  <td className="px-4 py-2 font-sans">{new Date(pay.payment_date).toLocaleString()}</td>
-                                                  <td className="px-4 py-2 text-right">
-                                                    <div className="flex items-center justify-end gap-1.5">
-                                                      <button
-                                                        onClick={() => downloadReceipt(loanDetails, pay)}
-                                                        className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
-                                                      >
-                                                        <Download className="w-2.5 h-2.5" /> Download
-                                                      </button>
-                                                      <button
-                                                        onClick={() => openReceiptModal(loanDetails, pay)}
-                                                        className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
-                                                      >
-                                                        <Printer className="w-2.5 h-2.5" /> Print
-                                                      </button>
-                                                    </div>
-                                                  </td>
-                                                </tr>
-                                              ))}
-                                            </tbody>
-                                          </table>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : activeTab === 'calculator' ? (
-        <div className="space-y-6">
-          <LoanAmortizationCalculator />
-        </div>
-      ) : (
-        /* PRODUCTS TAB */
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">Active Loan Templates Catalog</h3>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={exportLoansToExcel}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-full hover:shadow-md transition-all cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              Export Ledger (.xlsx)
+            </button>
             {isAdminOrManager && (
               <button
-                onClick={() => setIsProductModalOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95"
+                onClick={() => setIsRepaymentModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-full text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 transition-all shadow-sm"
               >
-                <PlusCircle className="w-4 h-4" />
-                Configure New Product
+                <CreditCard className="w-4 h-4 text-tertiary" />
+                Book Repayment
               </button>
             )}
+            <button
+              onClick={openApplyModal}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Apply for Loan
+              {!isVerified && !isAdminOrManager && <Lock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
+            </button>
           </div>
+        </div>
 
-          {productsLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-            </div>
-          ) : products.length === 0 ? (
-            <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
-              <AlertTriangle className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
-              <h3 className="font-headline font-bold text-on-surface dark:text-white">No Products Registered</h3>
-              <p className="text-xs text-neutral-600 dark:text-neutral-400">No credit products configured yet.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {products.map((prod) => (
-                <div key={prod.id} className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-headline font-bold text-base text-on-surface dark:text-white">{prod.name}</h4>
-                      <p className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-0.5 capitalize">{prod.amortization_type?.replace('_', ' ')} Formula</p>
-                    </div>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
-                      Active
+        {!isAdminOrManager && !isVerified && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs font-medium space-y-1">
+            <p className="font-bold flex items-center gap-2 text-amber-900 dark:text-amber-200">
+              <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              Profile Verification & Approval Required
+            </p>
+            <p>
+              You cannot apply for a loan until your profile verification has been completed and approved by an administrator. Please visit your <a href="/dashboard/profile" className="underline font-bold hover:text-primary dark:hover:text-secondary">Profile Page</a> to submit your profile verification details.
+            </p>
+          </div>
+        )}
+
+        {/* Dynamic Dashboard KPI Cards */}
+        {!metricsLoading && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+            {isAdminOrManager ? (
+              <>
+                {/* Card 1: Active Portfolio */}
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <Banknote className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Active Portfolio</span>
+                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                      {formatCurrency(adminMetrics?.ledger_aggregates?.current_outstanding_balance || 0)}
+                    </span>
+                    <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
+                      Deployed: {formatCurrency(adminMetrics?.ledger_aggregates?.total_capital_deployed || 0)} ({adminMetrics?.portfolio_health?.active_loans || 0} loans)
                     </span>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/40 pt-4 text-xs font-body">
-                    <div>
-                      <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Interest Rate</span>
-                      <p className="font-headline text-base font-extrabold text-primary dark:text-secondary mt-0.5 flex items-center gap-0.5">
-                        <Percent className="w-4 h-4" /> {parseFloat(prod.interest_rate)}% p.a.
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Term Limit</span>
-                      <p className="font-headline text-base font-extrabold text-on-surface dark:text-white mt-0.5">
-                        {prod.term_months} Months
-                      </p>
-                    </div>
+                {/* Card 2: Interest Collected */}
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 rounded-2xl bg-secondary/10 dark:bg-secondary/15 text-primary dark:text-secondary flex items-center justify-center flex-shrink-0">
+                    <Percent className="w-6 h-6" />
                   </div>
-
-                  <div className="border-t border-outline-variant/40 pt-4 text-[11px] text-neutral-600 dark:text-neutral-400">
-                    <span>Borrowing Range Limits:</span>
-                    <p className="font-mono font-bold text-on-surface dark:text-white mt-0.5">
-                      {formatCurrency(parseFloat(prod.min_amount))} - {formatCurrency(parseFloat(prod.max_amount))}
-                    </p>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Interest Revenue</span>
+                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                      {formatCurrency(adminMetrics?.ledger_aggregates?.total_interest_earned || 0)}
+                    </span>
+                    <span className="text-[9px] font-bold text-green-600 dark:text-green-400 block mt-0.5">
+                      Cumulative interest earned p.a.
+                    </span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Card 3: Pending Underwriting */}
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 rounded-2xl bg-tertiary/10 text-tertiary flex items-center justify-center flex-shrink-0">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Underwriting Queue</span>
+                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                      {adminMetrics?.portfolio_health?.pending_applications || 0} Applications
+                    </span>
+                    <span className="text-[9px] font-bold text-tertiary block mt-0.5">
+                      Awaiting manager review/disbursement
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card 4: Default Risks */}
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Delinquency Risk</span>
+                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                      {adminMetrics?.portfolio_health?.defaulted_loans || 0} Accounts Defaulted
+                    </span>
+                    <span className="text-[9px] font-bold text-red-500 block mt-0.5">
+                      Rate: {(((adminMetrics?.portfolio_health?.defaulted_loans || 0) / ((adminMetrics?.portfolio_health?.active_loans || 0) + (adminMetrics?.portfolio_health?.defaulted_loans || 0) || 1)) * 100).toFixed(2)}% of portfolio
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Member Card 1: Active Loan Count */}
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <FileCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">My Credit Status</span>
+                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                      {memberMetrics?.loans?.active_count || 0} Active Loans
+                    </span>
+                    <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
+                      Approved cooperative contracts list
+                    </span>
+                  </div>
+                </div>
+
+                {/* Member Card 2: Outstanding Balance */}
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 rounded-2xl bg-secondary/10 dark:bg-secondary/15 text-primary dark:text-secondary flex items-center justify-center flex-shrink-0">
+                    <Banknote className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Outstanding Balance</span>
+                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                      {formatCurrency(memberMetrics?.loans?.outstanding_balance || 0)}
+                    </span>
+                    <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
+                      Initial Deployed: {formatCurrency(memberMetrics?.loans?.original_principal || 0)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Member Card 3: Policy Tier */}
+                {(() => {
+                  const historicalCount = memberMetrics?.loans?.historical_count || 0;
+                  const tierName = historicalCount === 0 ? '1st Loan (New)' : historicalCount === 1 ? '2nd Loan (Track Record)' : '3rd Loan+ (Max Tier)';
+                  const desc = historicalCount === 0 ? 'Fully collateralized' : historicalCount === 1 ? 'Co-maker for excess' : '3.0x Share Capital cap';
+                  return (
+                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                      <div className="w-12 h-12 rounded-2xl bg-tertiary/10 text-tertiary flex items-center justify-center flex-shrink-0">
+                        <User className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Borrower Policy Tier</span>
+                        <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                          {tierName}
+                        </span>
+                        <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
+                          {desc} ({historicalCount} past approvals)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Member Card 4: Borrowing Limit */}
+                {(() => {
+                  const shareCapital = memberMetrics?.balances?.share_capital || 0;
+                  const historicalCount = memberMetrics?.loans?.historical_count || 0;
+                  const outstandingBalance = memberMetrics?.loans?.outstanding_balance || 0;
+                  const limit = historicalCount === 0 ? 0.8 * shareCapital : historicalCount === 1 ? 2.0 * shareCapital : 3.0 * shareCapital;
+                  const remaining = outstandingBalance > 0 ? 0 : limit;
+                  return (
+                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                      <div className="w-12 h-12 rounded-2xl bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0">
+                        <Clock className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Remaining Borrowable Limit</span>
+                        <span className="text-xl font-headline font-extrabold text-green-600 dark:text-green-500 block mt-0.5">
+                          {formatCurrency(remaining)}
+                        </span>
+                        <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
+                          {outstandingBalance > 0 ? (
+                            <span className="text-tertiary">Active loan balance remaining. Clear balance to unlock limit.</span>
+                          ) : (
+                            `Total Cap Limit: ${formatCurrency(limit)}`
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex border-b border-outline-variant/50 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('loans')}
+            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'loans'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+              }`}
+          >
+            Credit Contracts List
+          </button>
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'products'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+              }`}
+          >
+            Loan Products Registry
+          </button>
+          <button
+            onClick={() => setActiveTab('calculator')}
+            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'calculator'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+              }`}
+          >
+            Amortization Calculator
+          </button>
         </div>
-      )}
+
+        {/* TABS CONTAINER */}
+        {activeTab === 'loans' ? (
+          <div className="space-y-6">
+            {/* Filters */}
+            <div className="flex items-center gap-4 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
+              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 font-label">Contract Status:</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+              >
+                <option value="">All Loans</option>
+                <option value="pending_approval">Pending Approval</option>
+                <option value="disbursed">Active / Disbursed</option>
+                <option value="fully_paid">Fully Paid</option>
+                <option value="rejected">Rejected</option>
+                <option value="defaulted">Defaulted</option>
+              </select>
+            </div>
+
+            {/* Loans List */}
+            {loansLoading ? (
+              <SkeletonTable rows={5} cols={6} />
+            ) : error ? (
+              <div className="p-6 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-3xl">
+                <p className="text-sm font-bold">{error}</p>
+              </div>
+            ) : loans.length === 0 ? (
+              <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
+                <AlertTriangle className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
+                <h3 className="font-headline font-bold text-on-surface dark:text-white">No Loans Registered</h3>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400">No loans found matching the status filter.</p>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
+                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">ID</th>
+                        {isAdminOrManager && (
+                          <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
+                        )}
+                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
+                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Principal Amount</th>
+                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest (Term)</th>
+                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
+                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
+                      {loans.map((loan) => {
+                        const isExpanded = expandedLoanId === loan.id;
+                        return (
+                          <React.Fragment key={loan.id}>
+                            <tr className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
+                              <td className="px-6 py-4 font-mono font-bold">#{loan.id}</td>
+                              {isAdminOrManager && (
+                                <td className="px-6 py-4 font-semibold">
+                                  {loan.last_name}, {loan.first_name}
+                                </td>
+                              )}
+                              <td className="px-6 py-4 font-semibold text-primary dark:text-secondary">{loan.product_name || 'Legacy Product'}</td>
+                              <td className="px-6 py-4 font-bold">{formatCurrency(parseFloat(loan.principal_amount))}</td>
+                              <td className="px-6 py-4 font-mono">
+                                {parseFloat(loan.interest_rate)}% ({loan.term_months}mo)
+                              </td>
+                              <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
+                              <td className="px-6 py-4 text-right">
+                                <button
+                                  onClick={() => toggleLoanExpand(loan.id)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral/5 transition-all text-[11px] font-bold"
+                                >
+                                  {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                  Amortization
+                                </button>
+                              </td>
+                            </tr>
+
+                            {/* Expanded Details Row */}
+                            {isExpanded && (
+                              <tr>
+                                <td colSpan={isAdminOrManager ? 7 : 6} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
+                                  {loadingDetails ? (
+                                    <div className="flex items-center gap-2 py-4 justify-center">
+                                      <div className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
+                                      <span className="text-neutral-600 dark:text-neutral-400 font-semibold text-xs">Loading schedules and ledger data...</span>
+                                    </div>
+                                  ) : !loanDetails ? (
+                                    <p className="text-center text-xs text-neutral-600 dark:text-neutral-400">Failed to parse loan details.</p>
+                                  ) : (
+                                    <div className="space-y-6">
+                                      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/40 pb-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs">
+                                          <div>
+                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Amortization Type</span>
+                                            <p className="font-semibold text-on-surface dark:text-white capitalize mt-0.5">
+                                              {loanDetails.amortization_type?.replace('_', ' ')}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Registered Date</span>
+                                            <p className="font-semibold text-on-surface dark:text-white mt-0.5">
+                                              {new Date(loanDetails.created_at).toLocaleDateString()}
+                                            </p>
+                                          </div>
+                                          <div>
+                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Disbursement Date</span>
+                                            <p className="font-semibold text-on-surface dark:text-white mt-0.5">
+                                              {loanDetails.disbursement_date
+                                                ? new Date(loanDetails.disbursement_date).toLocaleDateString()
+                                                : <span className="italic text-neutral-600 dark:text-neutral-400/50">Un-disbursed</span>}
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        {/* Disbursement / Rejection / Printing / Export actions */}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <button
+                                            onClick={() => exportSingleLoanScheduleToExcel(loanDetails)}
+                                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600/10 border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-full text-[11px] hover:bg-emerald-600 hover:text-white transition-all"
+                                          >
+                                            <Download className="w-3.5 h-3.5" />
+                                            Export Schedule (.xlsx)
+                                          </button>
+                                          {isAdminOrManager && (
+                                            <>
+                                              <button
+                                                onClick={() => openVoucherModal(loanDetails)}
+                                                className="inline-flex items-center gap-1.5 px-4 py-2 border border-outline-variant hover:bg-neutral/5 text-neutral-700 dark:text-neutral-300 font-bold rounded-full text-[11px] transition-colors"
+                                              >
+                                                <Printer className="w-3.5 h-3.5" />
+                                                Check Voucher
+                                              </button>
+                                              <button
+                                                onClick={() => openPrintAmortizationModal(loanDetails)}
+                                                className="inline-flex items-center gap-1.5 px-4 py-2 border border-outline-variant hover:bg-neutral/5 text-neutral-700 dark:text-neutral-300 font-bold rounded-full text-[11px] transition-colors"
+                                              >
+                                                <Printer className="w-3.5 h-3.5" />
+                                                Print Schedule
+                                              </button>
+                                            </>
+                                          )}
+
+                                          {isAdminOrManager && loan.status === 'pending_approval' && (
+                                            <>
+                                              <button
+                                                onClick={() => handleRejectLoan(loan.id)}
+                                                className="px-4 py-2 border border-tertiary/40 hover:bg-tertiary/10 text-tertiary font-bold rounded-full text-[11px] transition-colors"
+                                              >
+                                                Reject Credit Request
+                                              </button>
+                                              <button
+                                                onClick={() => handleDisburseLoan(loan.id)}
+                                                className="px-4 py-2 bg-primary text-white font-bold rounded-full text-[11px] shadow hover:translate-y-[-1px] transition-all"
+                                              >
+                                                Verify & Disburse Funds
+                                              </button>
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Amortization Schedule */}
+                                      <div className="space-y-3">
+                                        <h4 className="font-headline font-bold text-xs text-on-surface dark:text-white flex items-center gap-1.5">
+                                          <Calendar className="w-4 h-4 text-primary dark:text-secondary" />
+                                          Amortization Schedule Matrices
+                                        </h4>
+                                        {loanDetails.schedule && loanDetails.schedule.length === 0 ? (
+                                          <p className="text-[11px] text-neutral-600 dark:text-neutral-400 italic">No schedules generated yet (needs disbursement).</p>
+                                        ) : (
+                                          <div className="border border-outline-variant/60 rounded-2xl overflow-hidden bg-white dark:bg-surface">
+                                            <table className="w-full text-left border-collapse text-[11px]">
+                                              <thead>
+                                                <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Month</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Principal Due</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Interest Due</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Total Due</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Balance</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Principal</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Interest</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Due Date</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Status</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-outline-variant/35 font-mono">
+                                                {(() => {
+                                                  let runningBalance = parseFloat(loanDetails.principal_amount);
+                                                  return loanDetails.schedule?.map((sch: any) => {
+                                                    const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
+                                                    if (loanDetails.amortization_type === 'diminishing_balance') {
+                                                      runningBalance = Math.round((runningBalance - schTotalDue) * 100) / 100;
+                                                    } else {
+                                                      runningBalance = Math.round((runningBalance - parseFloat(sch.principal_due)) * 100) / 100;
+                                                    }
+                                                    const displayBalance = Math.max(0, runningBalance);
+
+                                                    return (
+                                                      <tr key={sch.id} className="hover:bg-neutral/5">
+                                                        <td className="px-4 py-2 font-bold">{sch.installment_number}</td>
+                                                        <td className="px-4 py-2">{formatCurrency(parseFloat(sch.principal_due))}</td>
+                                                        <td className="px-4 py-2">{formatCurrency(parseFloat(sch.interest_due))}</td>
+                                                        <td className="px-4 py-2 font-bold">{formatCurrency(parseFloat(sch.principal_due) + parseFloat(sch.interest_due))}</td>
+                                                        <td className="px-4 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
+                                                        <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
+                                                        <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
+                                                        <td className="px-4 py-2 font-sans">{new Date(sch.due_date).toLocaleDateString()}</td>
+                                                        <td className="px-4 py-2 font-sans">
+                                                          {sch.status === 'paid' ? (
+                                                            <span className="text-primary font-bold">Paid</span>
+                                                          ) : sch.status === 'partially_paid' ? (
+                                                            <span className="text-amber-500 font-bold">Partial</span>
+                                                          ) : (
+                                                            <span className="text-tertiary font-bold">Unpaid</span>
+                                                          )}
+                                                        </td>
+                                                      </tr>
+                                                    );
+                                                  });
+                                                })()}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Payments History */}
+                                      <div className="space-y-3">
+                                        <h4 className="font-headline font-bold text-xs text-on-surface dark:text-white flex items-center gap-1.5">
+                                          <CreditCard className="w-4 h-4 text-primary dark:text-secondary" />
+                                          Posted Ledger Payments History
+                                        </h4>
+                                        {loanDetails.payments && loanDetails.payments.length === 0 ? (
+                                          <p className="text-[11px] text-neutral-600 dark:text-neutral-400 italic">No payments logged yet.</p>
+                                        ) : (
+                                          <div className="border border-outline-variant/60 rounded-2xl overflow-hidden bg-white dark:bg-surface">
+                                            <table className="w-full text-left border-collapse text-[11px]">
+                                              <thead>
+                                                <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Ref No</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Amount Paid</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Payment Method</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Booking Date</th>
+                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 text-right">Receipt</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-outline-variant/35 font-mono">
+                                                {loanDetails.payments?.map((pay: any) => (
+                                                  <tr key={pay.id} className="hover:bg-neutral/5">
+                                                    <td className="px-4 py-2 font-bold">{pay.reference_no || 'N/A'}</td>
+                                                    <td className="px-4 py-2 text-primary font-bold">{formatCurrency(parseFloat(pay.amount))}</td>
+                                                    <td className="px-4 py-2 font-sans">{pay.payment_method}</td>
+                                                    <td className="px-4 py-2 font-sans">{new Date(pay.payment_date).toLocaleString()}</td>
+                                                    <td className="px-4 py-2 text-right">
+                                                      <div className="flex items-center justify-end gap-1.5">
+                                                        <button
+                                                          onClick={() => downloadReceipt(loanDetails, pay)}
+                                                          className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
+                                                        >
+                                                          <Download className="w-2.5 h-2.5" /> Download
+                                                        </button>
+                                                        <button
+                                                          onClick={() => openReceiptModal(loanDetails, pay)}
+                                                          className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
+                                                        >
+                                                          <Printer className="w-2.5 h-2.5" /> Print
+                                                        </button>
+                                                      </div>
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : activeTab === 'calculator' ? (
+          <div className="space-y-6">
+            <LoanAmortizationCalculator />
+          </div>
+        ) : (
+          /* PRODUCTS TAB */
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">Active Loan Templates Catalog</h3>
+              {isAdminOrManager && (
+                <button
+                  onClick={() => setIsProductModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Configure New Product
+                </button>
+              )}
+            </div>
+
+            {productsLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
+            ) : products.length === 0 ? (
+              <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
+                <AlertTriangle className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
+                <h3 className="font-headline font-bold text-on-surface dark:text-white">No Products Registered</h3>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400">No credit products configured yet.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {products.map((prod) => (
+                  <div key={prod.id} className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-headline font-bold text-base text-on-surface dark:text-white">{prod.name}</h4>
+                        <p className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-0.5 capitalize">{prod.amortization_type?.replace('_', ' ')} Formula</p>
+                      </div>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
+                        Active
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/40 pt-4 text-xs font-body">
+                      <div>
+                        <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Interest Rate</span>
+                        <p className="font-headline text-base font-extrabold text-primary dark:text-secondary mt-0.5 flex items-center gap-0.5">
+                          <Percent className="w-4 h-4" /> {parseFloat(prod.interest_rate)}% p.a.
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Term Limit</span>
+                        <p className="font-headline text-base font-extrabold text-on-surface dark:text-white mt-0.5">
+                          {prod.term_months} Months
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-outline-variant/40 pt-4 text-[11px] text-neutral-600 dark:text-neutral-400">
+                      <span>Borrowing Range Limits:</span>
+                      <p className="font-mono font-bold text-on-surface dark:text-white mt-0.5">
+                        {formatCurrency(parseFloat(prod.min_amount))} - {formatCurrency(parseFloat(prod.max_amount))}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* MODAL 1: CREATE LOAN PRODUCT */}
@@ -1382,12 +1480,11 @@ function LoansPageContent() {
         </div>
       )}
 
-          {/* MODAL 2: APPLY FOR LOAN */}
+      {/* MODAL 2: APPLY FOR LOAN */}
       {isApplyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
-          <div className={`bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full ${
-            wizardStep === 3 ? 'max-w-md' : (wizardStep === 1 ? 'max-w-3xl' : 'max-w-5xl')
-          } shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative animate-modal-pop`}>
+          <div className={`bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full ${wizardStep === 3 ? 'max-w-md' : (wizardStep === 1 ? 'max-w-3xl' : 'max-w-5xl')
+            } shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative animate-modal-pop`}>
             {/* Header */}
             <div className="px-6 py-5 border-b border-outline-variant/40 flex justify-between items-center bg-surface-container-low dark:bg-surface-container-high/40">
               <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white capitalize">
@@ -1449,7 +1546,7 @@ function LoansPageContent() {
                             <AlertTriangle className="w-5 h-5" /> Active Loan Balance Detected
                           </div>
                           <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-lg mx-auto leading-relaxed">
-                            This member currently has an outstanding active loan balance of <strong>{formatCurrency(parseFloat(selectedMemberSummary.loans.outstanding_balance))}</strong>. 
+                            This member currently has an outstanding active loan balance of <strong>{formatCurrency(parseFloat(selectedMemberSummary.loans.outstanding_balance))}</strong>.
                             According to cooperative lending policy, a borrower must settle all active loan balances in full before they can apply for a new loan.
                           </p>
                         </div>
@@ -1476,11 +1573,10 @@ function LoansPageContent() {
                                         setSelectedProduct(null);
                                       }
                                     }}
-                                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer text-xs font-bold ${
-                                      isActive
+                                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer text-xs font-bold ${isActive
                                         ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
                                         : 'border-outline-variant/65 text-neutral-600 dark:text-neutral-400 hover:border-neutral/30'
-                                    }`}
+                                      }`}
                                   >
                                     {label}
                                   </button>
@@ -1491,56 +1587,124 @@ function LoansPageContent() {
 
                           {/* Available products under the category */}
                           {(() => {
-                            const filteredProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
+                            let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
+                            
+                            // Guarantee Calamity Loan product exists under Regular Loan category
+                            if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
+                              const calamityFallback: LoanProduct = {
+                                id: 999999,
+                                name: 'Regular Loan - Calamity Loan',
+                                interest_rate: '0.0500',
+                                term_months: 24,
+                                amortization_type: 'diminishing_balance',
+                                min_amount: '10000.00',
+                                max_amount: '50000.00',
+                                is_active: true
+                              };
+                              categoryProducts = [...categoryProducts, calamityFallback];
+                            }
+
                             return (
                               <div className="space-y-3 pt-2">
-                                <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
-                                {filteredProducts.length === 0 ? (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
+                                  
+                                  {/* Interactive State of Calamity Toggle */}
+                                  {selectedLoanCategory === LOAN_CATEGORIES.REGULAR && (
+                                    <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
+                                      <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">State of Calamity Declared:</span>
+                                      <input
+                                        type="checkbox"
+                                        checked={isCalamityDeclared}
+                                        onChange={(e) => setIsCalamityDeclared(e.target.checked)}
+                                        className="w-3.5 h-3.5 accent-amber-600 rounded cursor-pointer"
+                                      />
+                                    </label>
+                                  )}
+                                </div>
+
+                                {categoryProducts.length === 0 ? (
                                   <div className="text-center py-8 text-xs text-neutral-500 italic bg-neutral-50 dark:bg-neutral-900/40 rounded-2xl border border-dashed border-outline-variant/60">
                                     No active loan products in this category.
                                   </div>
                                 ) : (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[250px] overflow-y-auto pr-1 pt-1">
-                                    {filteredProducts.map((p) => {
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[350px] overflow-y-auto pr-1 pt-1">
+                                    {categoryProducts.map((p) => {
                                       const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
                                       const isSelected = selectedProduct?.id === p.id;
+                                      const isCalamityProduct = p.name.toLowerCase().includes('calamity');
+                                      const isDisabled = isCalamityProduct && !isCalamityDeclared;
+
                                       return (
                                         <button
                                           key={p.id}
                                           type="button"
+                                          disabled={isDisabled}
                                           onClick={() => {
+                                            if (isDisabled) return;
                                             setSelectedProduct(p);
                                             setApplyAmount(parseFloat(p.min_amount));
                                             setApplyTermMonths(p.term_months);
                                           }}
-                                          className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                                            isSelected
-                                              ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20'
-                                              : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 dark:hover:bg-neutral/10'
+                                          className={`w-full p-3.5 rounded-2xl border text-left transition-all ${
+                                            isDisabled
+                                              ? 'border-outline-variant/40 bg-neutral-100/60 dark:bg-neutral-900/40 opacity-60 cursor-not-allowed'
+                                              : isSelected
+                                              ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20 cursor-pointer shadow-sm'
+                                              : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 cursor-pointer'
                                           }`}
                                         >
-                                          <div className="flex justify-between items-start">
-                                            <div>
-                                              <span className="font-bold text-on-surface dark:text-white text-sm block">
-                                                 {p.name
-                                                   .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
-                                                   .replace(/Short Term Loan\s*-\s*/gi, '')
-                                                   .replace(/Regular Loan\s*-\s*/gi, '')}
+                                          <div className="flex justify-between items-center mb-2.5">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className="font-bold text-on-surface dark:text-white text-sm block tracking-tight">
+                                                {p.name
+                                                  .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
+                                                  .replace(/Short Term Loan\s*-\s*/gi, '')
+                                                  .replace(/Regular Loan\s*-\s*/gi, '')}
                                               </span>
-                                              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-normal mt-0.5">{details.desc}</p>
-                                              {details.helper && (
-                                                <p className="text-[9px] text-primary/70 dark:text-secondary/70 font-semibold mt-0.5">{details.helper}</p>
+                                              {isCalamityProduct && (
+                                                <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
+                                                  isCalamityDeclared
+                                                    ? 'bg-amber-500 text-white animate-pulse'
+                                                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                                                }`}>
+                                                  {isCalamityDeclared ? 'Calamity Active' : 'Calamity Only'}
+                                                </span>
                                               )}
                                             </div>
-                                            <span className="text-[10px] font-bold bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2 py-0.5 rounded-full uppercase whitespace-nowrap">
+                                            <span className="text-[9px] font-black bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap tracking-wider">
                                               {p.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing'}
                                             </span>
                                           </div>
-                                          <div className="mt-2 pt-2 border-t border-outline-variant/30 text-[11px] text-neutral-600 dark:text-neutral-400 flex justify-between">
-                                            <span>Interest: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months === 36 ? '2.0%-15.0%' : `${(parseFloat(p.interest_rate) * 100).toFixed(1)}%`} p.a.</strong></span>
-                                            <span>Term: <strong className="text-on-surface dark:text-white font-semibold">{p.term_months === 1 ? '1 mo' : `1-${p.term_months} mos`}</strong></span>
-                                            <span>Range: <strong className="text-on-surface dark:text-white font-semibold">₱{parseFloat(p.min_amount).toLocaleString()} - ₱{parseFloat(p.max_amount).toLocaleString()}</strong></span>
+
+                                          <div className="grid grid-cols-3 gap-2 text-center">
+                                            <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
+                                              <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Amount</span>
+                                              <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
+                                                {p.min_amount === p.max_amount
+                                                  ? `₱${parseFloat(p.min_amount).toLocaleString()}`
+                                                  : `₱${parseFloat(p.min_amount).toLocaleString()} - ₱${parseFloat(p.max_amount).toLocaleString()}`}
+                                              </strong>
+                                            </div>
+                                            <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
+                                              <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Interest</span>
+                                              <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
+                                                {p.term_months === 36 ? '2.0% - 15.0%' : `${(parseFloat(p.interest_rate) * 100).toFixed(1)}%`} p.a.
+                                              </strong>
+                                            </div>
+                                            <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
+                                              <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Term</span>
+                                              <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
+                                                {p.term_months === 1 ? '1 Month' : `1 - ${p.term_months} Months`}
+                                              </strong>
+                                            </div>
                                           </div>
+
+                                          {isDisabled && (
+                                            <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-2 flex items-center justify-center gap-1">
+                                              <AlertTriangle className="w-3 h-3 inline" /> Available only when State of Calamity is declared.
+                                            </p>
+                                          )}
                                         </button>
                                       );
                                     })}
@@ -1614,8 +1778,8 @@ function LoansPageContent() {
                         <Info className="w-5 h-5" /> Member progressive loan cap validation
                       </div>
                       <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                        Borrower is classified under <strong className="text-on-surface dark:text-white font-bold">{tierName}</strong>. 
-                        With Share Capital equity of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>, 
+                        Borrower is classified under <strong className="text-on-surface dark:text-white font-bold">{tierName}</strong>.
+                        With Share Capital equity of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>,
                         the progressive policy borrowing limit is capped at <strong className="text-on-surface dark:text-white font-bold">{multiplierText} ({formatCurrency(borrowLimit)})</strong>.
                       </p>
                     </div>
@@ -1715,7 +1879,7 @@ function LoansPageContent() {
                               <Users className="w-5 h-5" /> Co-Maker Requirement Triggered
                             </div>
                             <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                              Requested amount of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(currentAmountValue)}</strong> exceeds the member's Share Capital equity collateral (<strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>). 
+                              Requested amount of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(currentAmountValue)}</strong> exceeds the member's Share Capital equity collateral (<strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>).
                               A co-maker's signature is mandatory to book this contract.
                             </p>
                             <div className="space-y-3 pt-2">
@@ -2546,7 +2710,8 @@ function LoansPageContent() {
       )}
 
       {/* DYNAMIC STYLE INJECTION FOR CLEAN PRINTING */}
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @media print {
           body * {
             visibility: hidden !important;
@@ -2634,11 +2799,10 @@ function LoansPageContent() {
                   setDialogConfig((prev) => ({ ...prev, isOpen: false }));
                   dialogConfig.onConfirm();
                 }}
-                className={`flex-1 py-2.5 text-white dark:text-neutral-950 font-bold rounded-full text-xs hover:shadow-lg transition-all active:scale-95 cursor-pointer ${
-                  dialogConfig.type === 'danger'
+                className={`flex-1 py-2.5 text-white dark:text-neutral-950 font-bold rounded-full text-xs hover:shadow-lg transition-all active:scale-95 cursor-pointer ${dialogConfig.type === 'danger'
                     ? 'bg-tertiary'
                     : 'bg-primary dark:bg-secondary'
-                }`}
+                  }`}
               >
                 {dialogConfig.confirmText}
               </button>
