@@ -39,6 +39,7 @@ INSERT INTO loan_products (name, interest_rate, term_months, amortization_type, 
 VALUES 
     ('Regular Loan - Salary Deduction', 0.1200, 12, 'diminishing_balance', 10000.00, 75000.00, true),
     ('Regular Loan - Project Loan', 0.0700, 24, 'diminishing_balance', 76000.00, 300000.00, true),
+    ('Regular Loan - Calamity Loan', 0.0500, 24, 'diminishing_balance', 10000.00, 50000.00, true),
     ('Short Term Loan (STL) - Utility Loan', 0.0300, 1, 'diminishing_balance', 3000.00, 3000.00, true),
     ('Short Term Loan (STL) - Emergency Loan', 0.0400, 2, 'diminishing_balance', 5000.00, 5000.00, true),
     ('Short Term Loan (STL) - Cash Express', 0.0800, 2, 'diminishing_balance', 7000.00, 7000.00, true),
