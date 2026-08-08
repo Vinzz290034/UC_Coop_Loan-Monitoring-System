@@ -17,12 +17,28 @@ export const createAppointment = async (req, res, next) => {
     // If logged-in user is a member, enforce scheduling under their own profile
     if (req.user.role === 'member') {
       if (!req.user.profile?.id) {
-        return res.status(400).json({
-          success: false,
-          error: { message: 'Authenticated user session is not linked to a member profile.' }
-        });
+        // Fallback: look up member profile by user_id
+        const profileQuery = await query('SELECT * FROM members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+        if (profileQuery.rowCount > 0) {
+          req.user.profile = profileQuery.rows[0];
+        } else {
+          // Auto-create member profile if not yet existing
+          const newMember = await query(
+            `INSERT INTO members (user_id, first_name, last_name, email, phone, status)
+             VALUES ($1, $2, $3, $4, $5, 'active')
+             RETURNING *`,
+            [
+              req.user.id,
+              req.user.username.split('_')[0] || req.user.username,
+              req.user.username.split('_')[1] || 'Member',
+              `${req.user.username}@ucmetc.coop`,
+              '09170000000'
+            ]
+          );
+          req.user.profile = newMember.rows[0];
+        }
       }
-      member_id = req.user.profile.id;
+      member_id = req.user.profile?.id;
     }
 
     if (!member_id || !purpose || !appointment_date || !time_slot) {
@@ -40,7 +56,7 @@ export const createAppointment = async (req, res, next) => {
         error: { message: 'Member profile not found.' }
       });
     }
-    if (memberCheck.rows[0].status !== 'active') {
+    if (['suspended', 'inactive'].includes(memberCheck.rows[0].status)) {
       return res.status(400).json({
         success: false,
         error: { message: 'Cannot book appointments for inactive or suspended members.' }
@@ -70,18 +86,25 @@ export const createAppointment = async (req, res, next) => {
  */
 export const getMyAppointments = async (req, res, next) => {
   try {
-    if (!req.user.profile?.id) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'Authenticated user session is not linked to a member profile.' }
-      });
+    let memberProfileId = req.user.profile?.id;
+
+    if (!memberProfileId) {
+      const profileQuery = await query('SELECT id FROM members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+      if (profileQuery.rowCount > 0) {
+        memberProfileId = profileQuery.rows[0].id;
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Authenticated user session is not linked to a member profile.' }
+        });
+      }
     }
 
     const result = await query(
       `SELECT * FROM appointments 
        WHERE member_id = $1 
        ORDER BY appointment_date DESC, created_at DESC`,
-      [req.user.profile.id]
+      [memberProfileId]
     );
 
     res.status(200).json({
