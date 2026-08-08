@@ -1583,6 +1583,15 @@ function LoansPageContent() {
                                 );
                               })}
                             </div>
+
+                            <div className="text-[11px] font-bold text-neutral-500/90 flex items-center gap-2 mt-2.5 bg-neutral/5 dark:bg-neutral/10 p-2 px-3.5 rounded-2xl border border-outline-variant/30">
+                              <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                              {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
+                                <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time.</span>
+                              ) : (
+                                <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. Re-borrowing is allowed after 1 month of repayment on an active STL.</span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Available products under the category */}
