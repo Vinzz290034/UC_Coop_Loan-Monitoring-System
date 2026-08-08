@@ -859,8 +859,9 @@ export default function OverviewPage() {
                     {wizardStep === 1 && (() => {
                       const activeRegularCount = memberMetrics?.loans?.active_regular_count || 0;
                       const activeStlCount = memberMetrics?.loans?.active_stl_count || 0;
+                      const hasStl1MonthRepayment = memberMetrics?.loans?.has_stl_with_1month_repayment || false;
                       const isRegularLocked = selectedLoanCategory === LOAN_CATEGORIES.REGULAR && activeRegularCount >= 1;
-                      const isStlLocked = selectedLoanCategory === LOAN_CATEGORIES.STL && activeStlCount >= 3;
+                      const isStlLocked = selectedLoanCategory === LOAN_CATEGORIES.STL && activeStlCount >= 3 && !hasStl1MonthRepayment;
                       
                       let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
                       
@@ -917,7 +918,7 @@ export default function OverviewPage() {
                               {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
                                 <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
                               ) : (
-                                <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
+                                <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. Re-borrowing is allowed after 1 month of repayment on an active STL. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
                               )}
                             </div>
                           </div>
@@ -946,10 +947,16 @@ export default function OverviewPage() {
                                 <span>You cannot apply for a new Regular Loan because you already have an active Regular Loan.</span>
                               </div>
                             )}
+                            {activeStlCount >= 3 && hasStl1MonthRepayment && selectedLoanCategory === LOAN_CATEGORIES.STL && (
+                              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
+                                <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span><strong>STL Re-borrowing Unlocked:</strong> At least one of your 3 active STLs has reached 1 month of repayment, allowing you to apply for an additional Short Term Loan.</span>
+                              </div>
+                            )}
                             {isStlLocked && (
                               <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                                <span>You cannot apply for a new Short Term Loan (STL) because you have reached the maximum limit of 3 active Short Term Loans.</span>
+                                <span>You cannot apply for a new Short Term Loan (STL) because you have reached the maximum limit of 3 active Short Term Loans, and none have reached 1 month of repayment yet.</span>
                               </div>
                             )}
 
