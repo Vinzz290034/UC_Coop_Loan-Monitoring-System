@@ -537,6 +537,23 @@ export const getMemberDashboardSummary = async (req, res, next) => {
             AND (lp.name LIKE 'Short Term Loan%' OR lp.name LIKE 'STL%')
         ), 0) as active_stl_loans_count,
         COALESCE((
+          SELECT EXISTS (
+            SELECT 1
+            FROM loans l
+            JOIN loan_products lp ON l.loan_product_id = lp.id
+            WHERE l.member_id = $1 
+              AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+              AND (LOWER(lp.name) LIKE '%short term loan%' OR LOWER(lp.name) LIKE '%stl%')
+              AND (
+                COALESCE(l.disbursed_at, l.created_at) <= NOW() - INTERVAL '30 days'
+                OR EXISTS (
+                  SELECT 1 FROM repayment_schedules rs 
+                  WHERE rs.loan_id = l.id AND (rs.status = 'paid' OR rs.status = 'partially_paid' OR rs.principal_paid > 0)
+                )
+              )
+          )
+        ), false) as has_stl_with_1month_repayment,
+        COALESCE((
           SELECT SUM(principal_amount) 
           FROM loans 
           WHERE member_id = $1 
@@ -573,6 +590,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
           active_count: parseInt(metrics.active_loans_count, 10),
           active_regular_count: parseInt(metrics.active_regular_loans_count, 10),
           active_stl_count: parseInt(metrics.active_stl_loans_count, 10),
+          has_stl_with_1month_repayment: metrics.has_stl_with_1month_repayment === true || metrics.has_stl_with_1month_repayment === 't',
           active_principal: parseFloat(metrics.active_loans_principal_total),
           historical_count: parseInt(metrics.historical_loans_count, 10),
           original_principal: parseFloat(metrics.original_loan_principal),
