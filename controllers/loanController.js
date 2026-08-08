@@ -152,10 +152,35 @@ export const applyForLoan = async (req, res, next) => {
       });
     }
     if (!isRegularProduct && stlCount >= 3) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'This member cannot apply for a new Short Term Loan (STL) because they have reached the maximum limit of 3 active Short Term Loans.' }
-      });
+      // Check if at least one of the active STLs has completed 1 month of repayment term
+      // (active for >= 30 days OR has at least 1 paid/partially-paid repayment schedule)
+      const stlRepaymentCheck = await query(
+        `SELECT EXISTS (
+          SELECT 1
+          FROM loans l
+          JOIN loan_products lp ON l.loan_product_id = lp.id
+          WHERE l.member_id = $1 
+            AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+            AND (LOWER(lp.name) LIKE '%short term loan%' OR LOWER(lp.name) LIKE '%stl%')
+            AND (
+              COALESCE(l.disbursed_at, l.created_at) <= NOW() - INTERVAL '30 days'
+              OR EXISTS (
+                SELECT 1 FROM repayment_schedules rs 
+                WHERE rs.loan_id = l.id AND (rs.status = 'paid' OR rs.status = 'partially_paid' OR rs.principal_paid > 0)
+              )
+            )
+        ) as eligible`,
+        [member_id]
+      );
+
+      const hasStlWith1MonthRepayment = stlRepaymentCheck.rows[0]?.eligible || false;
+
+      if (!hasStlWith1MonthRepayment) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'This member cannot apply for a new Short Term Loan (STL) because they have 3 active STLs and none have completed 1 month of repayment yet.' }
+        });
+      }
     }
 
     // Fetch progressive loan limits first
