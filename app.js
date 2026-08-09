@@ -43,7 +43,7 @@ app.use(helmet());
 // Rate Limiter to guard against denial of service and brute force
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Limit each IP to 300 requests per 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 300 : 2000, // 2000 requests in dev mode to prevent throttling during testing
   message: {
     success: false,
     error: { message: 'Too many requests from this IP. Please try again after 15 minutes.' }
