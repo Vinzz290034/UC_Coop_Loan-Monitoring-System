@@ -88,17 +88,12 @@ export default function MembersPage() {
   const touchStartRef = useRef<number>(0);
 
   const handleCellSingleClick = (memberId: number) => {
-    if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
-    clickTimeoutRef.current = setTimeout(() => {
-      router.push(`/dashboard/members/${memberId}`);
-    }, 250);
+    router.push(`/dashboard/members/${memberId}`);
   };
 
-  const handleCellDoubleClick = (memberId: number, field: string, initialValues: any) => {
-    if (clickTimeoutRef.current) {
-      clearTimeout(clickTimeoutRef.current);
-      clickTimeoutRef.current = null;
-    }
+  // Trigger inline editing mode for a specific member field
+  const handleEditClick = (e: React.MouseEvent, memberId: number, field: string, initialValues: any) => {
+    e.stopPropagation(); // Prevent triggering row/cell click navigation
     setInlineError(null);
     setEditingCell({ memberId, field });
     setInlineData(initialValues);
@@ -538,13 +533,6 @@ export default function MembersPage() {
                           ) : (
                             <div
                               onClick={() => handleCellSingleClick(member.id)}
-                              onDoubleClick={() =>
-                                handleCellDoubleClick(member.id, 'name', {
-                                  first_name: member.first_name,
-                                  last_name: member.last_name,
-                                  middle_name: member.middle_name || '',
-                                })
-                              }
                               onTouchStart={handleTouchStart}
                               onTouchEnd={() =>
                                 handleTouchEnd(member.id, 'name', {
@@ -554,7 +542,7 @@ export default function MembersPage() {
                                 })
                               }
                               className="flex items-center gap-3 cursor-pointer group/cell"
-                              title="Double-click or long-press to edit inline"
+                              title="Click member to view profile, or click pencil to edit"
                             >
                               <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-primary/10 dark:bg-secondary/10 flex items-center justify-center border border-primary/20 dark:border-secondary/20 shadow-xs">
                                 {member.profile_picture_url ? (
@@ -573,7 +561,21 @@ export default function MembersPage() {
                                 <div className="font-semibold text-on-surface dark:text-white group-hover/cell:text-primary dark:group-hover/cell:text-secondary transition-colors whitespace-nowrap">
                                   {member.last_name}, {member.first_name} {member.middle_name ? `${member.middle_name}` : ''}
                                 </div>
-                                <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0" />
+                                <button
+                                  type="button"
+                                  onClick={(e) =>
+                                    handleEditClick(e, member.id, 'name', {
+                                      first_name: member.first_name,
+                                      last_name: member.last_name,
+                                      middle_name: member.middle_name || '',
+                                    })
+                                  }
+                                  className="p-1 rounded-md hover:bg-primary/10 dark:hover:bg-secondary/10 opacity-0 group-hover/cell:opacity-100 transition-all focus:opacity-100 flex-shrink-0"
+                                  title="Edit Name"
+                                  aria-label="Edit Name"
+                                >
+                                  <Pencil className="w-3 h-3 text-neutral-500 hover:text-primary dark:hover:text-secondary" />
+                                </button>
                               </div>
                             </div>
                           )}
@@ -613,12 +615,6 @@ export default function MembersPage() {
                           ) : (
                             <div
                               onClick={() => handleCellSingleClick(member.id)}
-                              onDoubleClick={() =>
-                                handleCellDoubleClick(member.id, 'age', {
-                                  date_of_birth: member.date_of_birth ? member.date_of_birth.split('T')[0] : '',
-                                  age: member.age || '',
-                                })
-                              }
                               onTouchStart={handleTouchStart}
                               onTouchEnd={() =>
                                 handleTouchEnd(member.id, 'age', {
@@ -627,7 +623,7 @@ export default function MembersPage() {
                                 })
                               }
                               className="cursor-pointer group/cell inline-flex items-center justify-center gap-1"
-                              title="Double-click or long-press to edit inline"
+                              title="Click member to view profile, or click pencil to edit"
                             >
                               {member.age != null ? (
                                 <span className="dark:bg-neutral-800 font-mono text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">
@@ -636,7 +632,20 @@ export default function MembersPage() {
                               ) : (
                                 <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
                               )}
-                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                              <button
+                                type="button"
+                                onClick={(e) =>
+                                  handleEditClick(e, member.id, 'age', {
+                                    date_of_birth: member.date_of_birth ? member.date_of_birth.split('T')[0] : '',
+                                    age: member.age || '',
+                                  })
+                                }
+                                className="p-1 rounded-md hover:bg-primary/10 dark:hover:bg-secondary/10 opacity-0 group-hover/cell:opacity-100 transition-all focus:opacity-100"
+                                title="Edit Age / Date of Birth"
+                                aria-label="Edit Age / Date of Birth"
+                              >
+                                <Pencil className="w-3 h-3 text-neutral-500 hover:text-primary dark:hover:text-secondary" />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -676,11 +685,10 @@ export default function MembersPage() {
                           ) : (
                             <div
                               onClick={() => handleCellSingleClick(member.id)}
-                              onDoubleClick={() => handleCellDoubleClick(member.id, 'gender', { gender: member.gender || '' })}
                               onTouchStart={handleTouchStart}
                               onTouchEnd={() => handleTouchEnd(member.id, 'gender', { gender: member.gender || '' })}
                               className="cursor-pointer group/cell flex items-center gap-1.5"
-                              title="Double-click or long-press to edit inline"
+                              title="Click member to view profile, or click pencil to edit"
                             >
                               {member.gender ? (
                                 <span className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800/60 font-semibold text-neutral-700 dark:text-neutral-300 text-[11px]">
@@ -689,7 +697,15 @@ export default function MembersPage() {
                               ) : (
                                 <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
                               )}
-                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                              <button
+                                type="button"
+                                onClick={(e) => handleEditClick(e, member.id, 'gender', { gender: member.gender || '' })}
+                                className="p-1 rounded-md hover:bg-primary/10 dark:hover:bg-secondary/10 opacity-0 group-hover/cell:opacity-100 transition-all focus:opacity-100"
+                                title="Edit Gender"
+                                aria-label="Edit Gender"
+                              >
+                                <Pencil className="w-3 h-3 text-neutral-500 hover:text-primary dark:hover:text-secondary" />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -732,11 +748,10 @@ export default function MembersPage() {
                           ) : (
                             <div
                               onClick={() => handleCellSingleClick(member.id)}
-                              onDoubleClick={() => handleCellDoubleClick(member.id, 'civil_status', { civil_status: member.civil_status || '' })}
                               onTouchStart={handleTouchStart}
                               onTouchEnd={() => handleTouchEnd(member.id, 'civil_status', { civil_status: member.civil_status || '' })}
                               className="cursor-pointer group/cell flex items-center gap-1.5"
-                              title="Double-click or long-press to edit inline"
+                              title="Click member to view profile, or click pencil to edit"
                             >
                               {member.civil_status ? (
                                 <span className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800/60 font-semibold text-neutral-700 dark:text-neutral-300 text-[11px]">
@@ -745,7 +760,15 @@ export default function MembersPage() {
                               ) : (
                                 <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
                               )}
-                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                              <button
+                                type="button"
+                                onClick={(e) => handleEditClick(e, member.id, 'civil_status', { civil_status: member.civil_status || '' })}
+                                className="p-1 rounded-md hover:bg-primary/10 dark:hover:bg-secondary/10 opacity-0 group-hover/cell:opacity-100 transition-all focus:opacity-100"
+                                title="Edit Civil Status"
+                                aria-label="Edit Civil Status"
+                              >
+                                <Pencil className="w-3 h-3 text-neutral-500 hover:text-primary dark:hover:text-secondary" />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -783,11 +806,10 @@ export default function MembersPage() {
                           ) : (
                             <div
                               onClick={() => handleCellSingleClick(member.id)}
-                              onDoubleClick={() => handleCellDoubleClick(member.id, 'phone', { phone: member.phone || '' })}
                               onTouchStart={handleTouchStart}
                               onTouchEnd={() => handleTouchEnd(member.id, 'phone', { phone: member.phone || '' })}
                               className="cursor-pointer group/cell flex items-center gap-1.5"
-                              title="Double-click or long-press to edit inline"
+                              title="Click member to view profile, or click pencil to edit"
                             >
                               {member.phone ? (
                                 <span className="flex items-center gap-1.5 font-mono text-[11px] text-neutral-700 dark:text-neutral-300">
@@ -797,7 +819,15 @@ export default function MembersPage() {
                               ) : (
                                 <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
                               )}
-                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                              <button
+                                type="button"
+                                onClick={(e) => handleEditClick(e, member.id, 'phone', { phone: member.phone || '' })}
+                                className="p-1 rounded-md hover:bg-primary/10 dark:hover:bg-secondary/10 opacity-0 group-hover/cell:opacity-100 transition-all focus:opacity-100"
+                                title="Edit Phone Number"
+                                aria-label="Edit Phone Number"
+                              >
+                                <Pencil className="w-3 h-3 text-neutral-500 hover:text-primary dark:hover:text-secondary" />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -835,11 +865,10 @@ export default function MembersPage() {
                           ) : (
                             <div
                               onClick={() => handleCellSingleClick(member.id)}
-                              onDoubleClick={() => handleCellDoubleClick(member.id, 'email', { email: member.email || '' })}
                               onTouchStart={handleTouchStart}
                               onTouchEnd={() => handleTouchEnd(member.id, 'email', { email: member.email || '' })}
                               className="cursor-pointer group/cell flex items-center gap-1.5 min-w-0"
-                              title="Double-click or long-press to edit inline"
+                              title="Click member to view profile, or click pencil to edit"
                             >
                               {member.email ? (
                                 <span className="flex items-center gap-1.5 text-[11px] text-neutral-700 dark:text-neutral-300 truncate">
@@ -849,7 +878,15 @@ export default function MembersPage() {
                               ) : (
                                 <span className="text-neutral-400 font-mono text-[11px]">N/A</span>
                               )}
-                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0" />
+                              <button
+                                type="button"
+                                onClick={(e) => handleEditClick(e, member.id, 'email', { email: member.email || '' })}
+                                className="p-1 rounded-md hover:bg-primary/10 dark:hover:bg-secondary/10 opacity-0 group-hover/cell:opacity-100 transition-all focus:opacity-100 flex-shrink-0"
+                                title="Edit Email Address"
+                                aria-label="Edit Email Address"
+                              >
+                                <Pencil className="w-3 h-3 text-neutral-500 hover:text-primary dark:hover:text-secondary" />
+                              </button>
                             </div>
                           )}
                         </td>
@@ -892,14 +929,21 @@ export default function MembersPage() {
                           ) : (
                             <div
                               onClick={() => handleCellSingleClick(member.id)}
-                              onDoubleClick={() => handleCellDoubleClick(member.id, 'status', { status: member.status })}
                               onTouchStart={handleTouchStart}
                               onTouchEnd={() => handleTouchEnd(member.id, 'status', { status: member.status })}
                               className="cursor-pointer group/cell flex items-center gap-1.5"
-                              title="Double-click or long-press to edit inline"
+                              title="Click member to view profile, or click pencil to edit"
                             >
                               {getStatusBadge(member.status)}
-                              <Pencil className="w-3 h-3 text-neutral-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                              <button
+                                type="button"
+                                onClick={(e) => handleEditClick(e, member.id, 'status', { status: member.status })}
+                                className="p-1 rounded-md hover:bg-primary/10 dark:hover:bg-secondary/10 opacity-0 group-hover/cell:opacity-100 transition-all focus:opacity-100"
+                                title="Edit Status"
+                                aria-label="Edit Status"
+                              >
+                                <Pencil className="w-3 h-3 text-neutral-500 hover:text-primary dark:hover:text-secondary" />
+                              </button>
                             </div>
                           )}
                         </td>
