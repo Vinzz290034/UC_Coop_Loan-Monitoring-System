@@ -1888,8 +1888,8 @@ function LoansPageContent() {
                               <Users className="w-5 h-5" /> Co-Maker Requirement Triggered
                             </div>
                             <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                              Requested amount of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(currentAmountValue)}</strong> exceeds the member's Share Capital equity collateral (<strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>).
-                              A co-maker's signature is mandatory to book this contract.
+                              Requested amount of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(currentAmountValue)}</strong> exceeds the member&apos;s Share Capital equity collateral (<strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>).
+                              A co-maker&apos;s signature is mandatory to book this contract.
                             </p>
                             <div className="space-y-3 pt-2">
                               <div className="space-y-1">
@@ -1921,7 +1921,7 @@ function LoansPageContent() {
                               <ShieldCheck className="w-5 h-5" /> Fully Collateralized Loan
                             </div>
                             <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                              This request is completely covered by the member's paid-up Share Capital (<strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>).
+                              This request is completely covered by the member&apos;s paid-up Share Capital (<strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>).
                             </p>
                             <p className="text-[11px] text-neutral-500 dark:text-neutral-500 leading-relaxed italic">
                               No co-maker details are required for this borrowing tier.
@@ -2697,7 +2697,7 @@ function LoansPageContent() {
 
               {/* Declaration Note */}
               <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '16px', border: '1px solid #f3f4f6', fontSize: '10px', lineHeight: '1.625', color: '#4b5563' }}>
-                <p style={{ margin: 0 }}><strong>RECEIPT STATUS:</strong> This is an official system-generated billing receipt acknowledging the payment booking of the specified amount under credit contract #{printLoan.id}. The borrower's outstanding amortization ledger has been credited accordingly.</p>
+                <p style={{ margin: 0 }}><strong>RECEIPT STATUS:</strong> This is an official system-generated billing receipt acknowledging the payment booking of the specified amount under credit contract #{printLoan.id}. The borrower&apos;s outstanding amortization ledger has been credited accordingly.</p>
               </div>
 
               {/* Signatures */}

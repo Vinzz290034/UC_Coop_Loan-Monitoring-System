@@ -807,7 +807,7 @@ export default function AccountingPage() {
             {/* Declaration Note */}
             <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '16px', border: '1px solid #f3f4f6', fontSize: '10px', lineHeight: '1.625', color: '#4b5563' }}>
               <p style={{ margin: 0 }}>
-                <strong>RECEIPT STATUS:</strong> This is an official system-generated transaction receipt acknowledging the ledger booking of the specified equity change. The member's share capital balance has been credited/debited and updated accordingly.
+                <strong>RECEIPT STATUS:</strong> This is an official system-generated transaction receipt acknowledging the ledger booking of the specified equity change. The member&apos;s share capital balance has been credited/debited and updated accordingly.
               </p>
             </div>
 

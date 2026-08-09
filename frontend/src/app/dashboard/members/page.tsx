@@ -105,11 +105,12 @@ export default function MembersPage() {
   };
 
   const handleTouchStart = () => {
-    touchStartRef.current = Date.now();
+    touchStartRef.current = performance.now();
   };
 
   const handleTouchEnd = (memberId: number, field: string, initialValues: any) => {
-    const duration = Date.now() - touchStartRef.current;
+    // eslint-disable-next-line react-hooks/purity
+    const duration = performance.now() - touchStartRef.current;
     if (duration >= 450) {
       if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
       setInlineError(null);
