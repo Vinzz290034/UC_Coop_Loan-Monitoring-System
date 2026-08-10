@@ -533,9 +533,9 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         COALESCE((SELECT SUM(current_balance) FROM investments WHERE member_id = $1 AND status = 'active'), 0) as active_investments_total,
         
         -- Outstanding Active Loans Summary
-        COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status = 'disbursed'), 0) as active_loans_count,
-        COALESCE((SELECT SUM(principal_amount) FROM loans WHERE member_id = $1 AND status = 'disbursed'), 0) as original_loan_principal,
-        COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status IN ('approved', 'disbursed', 'fully_paid', 'defaulted')), 0) as historical_loans_count,
+        COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status IN ('disbursed', 'approved', 'active')), 0) as active_loans_count,
+        COALESCE((SELECT SUM(principal_amount) FROM loans WHERE member_id = $1 AND status IN ('disbursed', 'approved', 'active')), 0) as original_loan_principal,
+        COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status IN ('approved', 'disbursed', 'active', 'fully_paid', 'defaulted')), 0) as historical_loans_count,
         
         -- Counts of active loans by category
         COALESCE((
@@ -543,7 +543,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
           FROM loans l
           JOIN loan_products lp ON l.loan_product_id = lp.id
           WHERE l.member_id = $1 
-            AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+            AND l.status IN ('pending_approval', 'approved', 'disbursed', 'active', 'defaulted')
             AND LOWER(lp.name) LIKE '%regular loan%'
         ), 0) as active_regular_loans_count,
         COALESCE((
@@ -551,7 +551,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
           FROM loans l
           JOIN loan_products lp ON l.loan_product_id = lp.id
           WHERE l.member_id = $1 
-            AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+            AND l.status IN ('pending_approval', 'approved', 'disbursed', 'active', 'defaulted')
             AND (LOWER(lp.name) LIKE '%short term loan%' OR LOWER(lp.name) LIKE '%stl%')
         ), 0) as active_stl_loans_count,
         COALESCE((
@@ -560,7 +560,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
             FROM loans l
             JOIN loan_products lp ON l.loan_product_id = lp.id
             WHERE l.member_id = $1 
-              AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+              AND l.status IN ('pending_approval', 'approved', 'disbursed', 'active', 'defaulted')
               AND (LOWER(lp.name) LIKE '%short term loan%' OR LOWER(lp.name) LIKE '%stl%')
               AND (
                 COALESCE(l.disbursed_at, l.created_at) <= NOW() - INTERVAL '30 days'
@@ -575,13 +575,13 @@ export const getMemberDashboardSummary = async (req, res, next) => {
           SELECT SUM(principal_amount) 
           FROM loans 
           WHERE member_id = $1 
-            AND status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+            AND status IN ('pending_approval', 'approved', 'disbursed', 'active', 'defaulted')
         ), 0) as active_loans_principal_total,
         
         -- Remaining Outstanding Principal
         COALESCE(
-          (SELECT SUM(l.principal_amount) FROM loans l WHERE l.member_id = $1 AND l.status = 'disbursed') - 
-          (SELECT COALESCE(SUM(rs.principal_paid), 0) FROM repayment_schedules rs JOIN loans l ON rs.loan_id = l.id WHERE l.member_id = $1 AND l.status = 'disbursed'),
+          (SELECT COALESCE(SUM(l.principal_amount), 0) FROM loans l WHERE l.member_id = $1 AND l.status IN ('disbursed', 'approved', 'active')) - 
+          (SELECT COALESCE(SUM(rs.principal_paid), 0) FROM repayment_schedules rs JOIN loans l ON rs.loan_id = l.id WHERE l.member_id = $1 AND l.status IN ('disbursed', 'approved', 'active')),
           0
         ) as outstanding_loan_balance
     `;
