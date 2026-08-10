@@ -227,7 +227,7 @@ function LoansPageContent() {
   // Excel Export Functions
   const exportLoansToExcel = () => {
     if (!loans || loans.length === 0) return;
-    
+
     const excelData = loans.map((l) => ({
       'Loan ID': `#${l.id}`,
       'Borrower Name': `${l.last_name || ''}, ${l.first_name || ''}`.trim() || 'N/A',
@@ -284,7 +284,7 @@ function LoansPageContent() {
     });
 
     const workbook = XLSX.utils.book_new();
-    
+
     // Schedule sheet
     const scheduleWs = XLSX.utils.json_to_sheet(scheduleRows);
     XLSX.utils.book_append_sheet(workbook, scheduleWs, 'Amortization Schedule');
@@ -450,7 +450,7 @@ function LoansPageContent() {
     }
   }, []);
 
-  const handleToggleProductStatus = async (productId: number, currentStatus: boolean) => {
+  const handleToggleProductStatus = async (productId: number | string, currentStatus: boolean) => {
     try {
       await api.patch(`/loans/products/${productId}/status`, { is_active: !currentStatus });
       fetchProducts();
@@ -1339,21 +1339,19 @@ function LoansPageContent() {
                       {isAdminOrManager ? (
                         <button
                           onClick={() => handleToggleProductStatus(prod.id, prod.is_active)}
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all active:scale-95 ${
-                            prod.is_active
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-100'
-                              : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300'
-                          }`}
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all active:scale-95 ${prod.is_active
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-100'
+                            : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300'
+                            }`}
                           title="Click to toggle product status"
                         >
                           {prod.is_active ? 'Active' : 'Inactive'}
                         </button>
                       ) : (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          prod.is_active
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400'
-                            : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
-                        }`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${prod.is_active
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400'
+                          : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                          }`}>
                           {prod.is_active ? 'Active' : 'Inactive'}
                         </span>
                       )}
@@ -1593,8 +1591,8 @@ function LoansPageContent() {
                                     }
                                   }}
                                   className={`p-3 rounded-2xl border text-center transition-all cursor-pointer text-xs font-bold ${isActive
-                                      ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
-                                      : 'border-outline-variant/65 text-neutral-600 dark:text-neutral-400 hover:border-neutral/30'
+                                    ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
+                                    : 'border-outline-variant/65 text-neutral-600 dark:text-neutral-400 hover:border-neutral/30'
                                     }`}
                                 >
                                   {label}
@@ -1647,7 +1645,7 @@ function LoansPageContent() {
                         {/* Available products under the category */}
                         {(() => {
                           let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
-                          
+
                           // Guarantee Calamity Loan product exists under Regular Loan category
                           if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
                             const calamityFallback: LoanProduct = {
@@ -1667,7 +1665,7 @@ function LoansPageContent() {
                             <div className="space-y-3 pt-2">
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
-                                
+
                                 {/* Interactive State of Calamity Toggle */}
                                 {selectedLoanCategory === LOAN_CATEGORIES.REGULAR && (
                                   <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
@@ -1692,7 +1690,7 @@ function LoansPageContent() {
                                     const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
                                     const isSelected = selectedProduct?.id === p.id;
                                     const isCalamityProduct = p.name.toLowerCase().includes('calamity');
-                                    
+
                                     const shareCap = selectedMemberSummary?.balances?.share_capital || 0;
                                     const histCount = selectedMemberSummary?.loans?.historical_count || 0;
                                     const actPrincipal = parseFloat(selectedMemberSummary?.loans?.active_principal || selectedMemberSummary?.loans?.outstanding_balance || 0);
@@ -1715,13 +1713,12 @@ function LoansPageContent() {
                                           setApplyAmount(parseFloat(p.min_amount));
                                           setApplyTermMonths(p.term_months);
                                         }}
-                                        className={`w-full p-3.5 rounded-2xl border text-left transition-all ${
-                                          isDisabled
-                                            ? 'border-outline-variant/40 bg-neutral-100/60 dark:bg-neutral-900/40 opacity-60 cursor-not-allowed'
-                                            : isSelected
+                                        className={`w-full p-3.5 rounded-2xl border text-left transition-all ${isDisabled
+                                          ? 'border-outline-variant/40 bg-neutral-100/60 dark:bg-neutral-900/40 opacity-60 cursor-not-allowed'
+                                          : isSelected
                                             ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20 cursor-pointer shadow-sm'
                                             : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 cursor-pointer'
-                                        }`}
+                                          }`}
                                       >
                                         <div className="flex justify-between items-center mb-2.5">
                                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -1732,11 +1729,10 @@ function LoansPageContent() {
                                                 .replace(/Regular Loan\s*-\s*/gi, '')}
                                             </span>
                                             {isCalamityProduct && (
-                                              <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
-                                                isCalamityDeclared
-                                                  ? 'bg-amber-500 text-white animate-pulse'
-                                                  : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
-                                              }`}>
+                                              <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${isCalamityDeclared
+                                                ? 'bg-amber-500 text-white animate-pulse'
+                                                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                                                }`}>
                                                 {isCalamityDeclared ? 'Calamity Active' : 'Calamity Only'}
                                               </span>
                                             )}
@@ -2895,8 +2891,8 @@ function LoansPageContent() {
                   dialogConfig.onConfirm();
                 }}
                 className={`flex-1 py-2.5 text-white dark:text-neutral-950 font-bold rounded-full text-xs hover:shadow-lg transition-all active:scale-95 cursor-pointer ${dialogConfig.type === 'danger'
-                    ? 'bg-tertiary'
-                    : 'bg-primary dark:bg-secondary'
+                  ? 'bg-tertiary'
+                  : 'bg-primary dark:bg-secondary'
                   }`}
               >
                 {dialogConfig.confirmText}
