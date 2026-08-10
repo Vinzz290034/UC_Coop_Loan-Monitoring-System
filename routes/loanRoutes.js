@@ -11,8 +11,9 @@ import {
   rejectLoanApplication,
   getLoanMetricsSummary,
   previewAmortizationSchedule,
-  getMyLoanHistory
-
+  getMyLoanHistory,
+  getCalamityStatus,
+  updateCalamityStatus
 } from '../controllers/loanController.js';
 import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
@@ -22,8 +23,12 @@ const router = express.Router();
 router.use(protect);
 
 // ==========================================
-// 1. LOAN PRODUCTS REGISTRY
+// 1. LOAN PRODUCTS REGISTRY & CALAMITY STATUS
 // ==========================================
+router.route('/calamity-status')
+  .get(getCalamityStatus)
+  .patch(restrictTo('admin', 'staff'), updateCalamityStatus);
+
 router.route('/products')
   .post(restrictTo('admin', 'staff'), createLoanProduct)
   .get(getLoanProducts);
