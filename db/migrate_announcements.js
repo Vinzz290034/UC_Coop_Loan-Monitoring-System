@@ -27,7 +27,7 @@ export async function migrateAnnouncements() {
         
         created_by UUID REFERENCES users(id) ON DELETE SET NULL,
         related_loan_product_id UUID REFERENCES loan_products(id) ON DELETE SET NULL,
-        calendar_event_id UUID REFERENCES calendar_events(id) ON DELETE SET NULL,
+        calendar_event_id INTEGER REFERENCES calendar_events(id) ON DELETE SET NULL,
         
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -47,7 +47,7 @@ export async function migrateAnnouncements() {
       ADD COLUMN IF NOT EXISTS image_url TEXT;
     `);
 
-    // Safely alter calendar_event_id column to UUID if it exists as integer or add it if missing
+    // Safely alter calendar_event_id column to INTEGER if it exists as UUID or add it if missing
     await client.query(`
       DO $$
       BEGIN
@@ -55,10 +55,10 @@ export async function migrateAnnouncements() {
           SELECT 1 FROM information_schema.columns 
           WHERE table_name = 'announcements' 
           AND column_name = 'calendar_event_id' 
-          AND data_type != 'uuid'
+          AND data_type != 'integer'
         ) THEN
           ALTER TABLE announcements DROP CONSTRAINT IF EXISTS announcements_calendar_event_id_fkey;
-          ALTER TABLE announcements ALTER COLUMN calendar_event_id TYPE UUID USING calendar_event_id::uuid;
+          ALTER TABLE announcements ALTER COLUMN calendar_event_id TYPE INTEGER USING NULL;
         END IF;
 
         IF NOT EXISTS (
@@ -66,7 +66,7 @@ export async function migrateAnnouncements() {
           WHERE table_name = 'announcements' 
           AND column_name = 'calendar_event_id'
         ) THEN
-          ALTER TABLE announcements ADD COLUMN calendar_event_id UUID REFERENCES calendar_events(id) ON DELETE SET NULL;
+          ALTER TABLE announcements ADD COLUMN calendar_event_id INTEGER REFERENCES calendar_events(id) ON DELETE SET NULL;
         END IF;
 
         IF NOT EXISTS (
