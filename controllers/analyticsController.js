@@ -29,8 +29,8 @@ export const getDashboardSummary = async (req, res, next) => {
         (SELECT COUNT(*) FROM loans WHERE status = 'rejected') as rejected_loans,
 
         -- Financial aggregates
-        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status = 'disbursed') as total_active_loan_principal,
-        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status IN ('disbursed', 'fully_paid', 'defaulted')) as total_capital_ever_deployed,
+        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status IN ('disbursed', 'approved', 'active')) as total_active_loan_principal,
+        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status IN ('disbursed', 'approved', 'active', 'fully_paid', 'defaulted')) as total_capital_ever_deployed,
         
         -- Share capital totals
         (SELECT COALESCE(SUM(b.bal), 0) FROM (
@@ -51,9 +51,9 @@ export const getDashboardSummary = async (req, res, next) => {
         (SELECT COALESCE(SUM(interest_paid), 0) FROM repayment_schedules) as total_interest_earned,
 
         -- Outstanding balance
-        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status = 'disbursed') -
+        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status IN ('disbursed', 'approved', 'active')) -
         (SELECT COALESCE(SUM(principal_paid), 0) FROM repayment_schedules rs 
-         JOIN loans l ON rs.loan_id = l.id WHERE l.status = 'disbursed') as total_outstanding_balance
+         JOIN loans l ON rs.loan_id = l.id WHERE l.status IN ('disbursed', 'approved', 'active')) as total_outstanding_balance
     `;
 
     const result = await query(summaryQuery);
