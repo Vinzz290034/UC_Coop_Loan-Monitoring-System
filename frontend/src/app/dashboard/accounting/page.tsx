@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
+import PendingPlacementsSection from '@/components/accounting/PendingPlacementsSection';
 import {
   Coins,
   TrendingUp,
@@ -111,38 +112,6 @@ export default function AccountingPage() {
     loadMembers();
   }, [isAdminOrManager]);
 
-  // Pending office payment placements queue (Admin/Manager)
-  const [pendingPlacements, setPendingPlacements] = useState<any[]>([]);
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
-
-  const loadPendingPlacements = useCallback(async () => {
-    if (!isAdminOrManager) return;
-    try {
-      const res = await api.get('/accounts/pending-placements');
-      setPendingPlacements(res.data.data?.all_pending || []);
-    } catch (err) {
-      console.error('Error fetching pending placements:', err);
-    }
-  }, [isAdminOrManager]);
-
-  useEffect(() => {
-    loadPendingPlacements();
-  }, [loadPendingPlacements]);
-
-  const handleConfirmPayment = async (type: string, id: string) => {
-    try {
-      setConfirmingId(id);
-      const endpointType = type === 'fixed_deposit' ? 'fixed-deposit' : 'share-capital';
-      await api.put(`/accounts/confirm-placement/${endpointType}/${id}`);
-      await loadPendingPlacements();
-      await loadLedgerData();
-    } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Error confirming cash payment.');
-    } finally {
-      setConfirmingId(null);
-    }
-  };
-
   // Set default member for member role
   useEffect(() => {
     if (user && user.role === 'member' && user.profile?.id) {
@@ -203,7 +172,6 @@ export default function AccountingPage() {
       setShareRemarks('');
       setIsShareModalOpen(false);
       loadLedgerData();
-      if (isAdminOrManager) loadPendingPlacements();
     } catch (err: any) {
       setShareError(err.response?.data?.error?.message || err.response?.data?.message || 'Share transaction failed.');
     } finally {
@@ -233,7 +201,6 @@ export default function AccountingPage() {
       setFdPrincipal('');
       setIsFDModalOpen(false);
       loadLedgerData();
-      if (isAdminOrManager) loadPendingPlacements();
     } catch (err: any) {
       setFdError(err.response?.data?.error?.message || err.response?.data?.message || 'Fixed deposit creation failed.');
     } finally {
@@ -492,48 +459,8 @@ export default function AccountingPage() {
         </button>
       </div>
 
-      {/* Pending Office Cash Payment Queue for Admins */}
-      {isAdminOrManager && pendingPlacements.length > 0 && (
-        <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-6 space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2 text-primary dark:text-secondary">
-              <Clock className="w-5 h-5" />
-              <h3 className="font-headline text-base font-extrabold">Pending Member Placements & Office Payments ({pendingPlacements.length})</h3>
-            </div>
-            <span className="text-xs font-bold text-neutral-500 bg-white dark:bg-surface-container-high px-3 py-1 rounded-full border border-outline-variant/40">Awaiting In-Person Office Cash Payment</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pendingPlacements.map((p) => (
-              <div key={p.id} className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-2xl flex items-center justify-between gap-4 shadow-xs hover:border-primary/40 transition-all">
-                <div className="space-y-1 text-xs">
-                  <span className="font-bold text-on-surface dark:text-white block text-sm">
-                    {p.first_name} {p.last_name} <span className="font-mono text-xs text-neutral-500 font-normal">({p.member_no})</span>
-                  </span>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="uppercase font-mono px-2 py-0.5 rounded-full bg-primary/10 dark:bg-secondary/15 text-[10px] font-extrabold text-primary dark:text-secondary">
-                      {p.placement_type === 'fixed_deposit' ? 'Fixed Deposit' : 'Share Capital'}
-                    </span>
-                    <span className="font-extrabold text-primary dark:text-secondary text-sm">₱{parseFloat(p.amount).toLocaleString()}</span>
-                  </div>
-                  <span className="text-[10px] text-neutral-400 block font-mono">
-                    Phone: {p.phone || 'N/A'} • Submitted: {new Date(p.created_at || p.placement_date).toLocaleDateString()}
-                  </span>
-                </div>
-
-                <button
-                  disabled={confirmingId === p.id}
-                  onClick={() => handleConfirmPayment(p.placement_type, p.id)}
-                  className="px-4 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs rounded-2xl hover:opacity-90 transition-all shadow-md active:scale-95 cursor-pointer whitespace-nowrap disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>{confirmingId === p.id ? 'Approving...' : 'Confirm Office Payment'}</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Pending Office Cash Payment Queue for Admins/Staff */}
+      <PendingPlacementsSection onConfirmed={loadLedgerData} />
 
       {/* Member Pending Office Payment Placements Banner */}
       {(!isAdminOrManager || selectedMemberId) && (() => {

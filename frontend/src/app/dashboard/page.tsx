@@ -49,6 +49,7 @@ import {
 } from 'lucide-react';
 import ProfileCompletionModal from '@/components/onboarding/ProfileCompletionModal';
 import IncompleteProfileBanner from '@/components/onboarding/IncompleteProfileBanner';
+import PendingPlacementsSection from '@/components/accounting/PendingPlacementsSection';
 import { useRouter } from 'next/navigation';
 
 const LOAN_CATEGORIES = {
@@ -1918,6 +1919,9 @@ export default function OverviewPage() {
           />
         </div>
       </div>
+
+      {/* Pending Member Placements & Office Payments Queue for Admin/Staff */}
+      <PendingPlacementsSection />
 
       {/* Operational Status */}
       <div className="space-y-4">
