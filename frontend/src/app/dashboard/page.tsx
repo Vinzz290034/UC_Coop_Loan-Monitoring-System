@@ -350,6 +350,14 @@ export default function OverviewPage() {
           setError('Could not associate authenticated session with member profile.');
         }
       }
+
+      // Fetch Calamity Status
+      try {
+        const calamityRes = await api.get('/loans/calamity-status');
+        setIsCalamityDeclared(calamityRes.data.is_calamity_declared || false);
+      } catch (calamityErr) {
+        console.error('Error fetching calamity status:', calamityErr);
+      }
     } catch (err: any) {
       console.error('Error fetching dashboard data:', err);
       setError(err.response?.data?.error?.message || 'Error loading dashboard metrics.');
@@ -943,8 +951,8 @@ export default function OverviewPage() {
                       
                       let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
                       
-                      // Guarantee Calamity Loan product exists under Regular Loan category
-                      if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
+                      // If State of Calamity is declared, guarantee Calamity Loan product exists under Regular Loan category
+                      if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && isCalamityDeclared && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
                         const calamityFallback: any = {
                           id: 999999,
                           name: 'Regular Loan - Calamity Loan',
@@ -956,6 +964,11 @@ export default function OverviewPage() {
                           is_active: true
                         };
                         categoryProducts = [...categoryProducts, calamityFallback];
+                      }
+
+                      // If State of Calamity is NOT declared, hide Calamity Loan products completely ("gone")
+                      if (!isCalamityDeclared) {
+                        categoryProducts = categoryProducts.filter(p => !p.name.toLowerCase().includes('calamity'));
                       }
 
                       return (
@@ -1004,19 +1017,6 @@ export default function OverviewPage() {
                           <div className="space-y-3 pt-2">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
-                              
-                              {/* Interactive State of Calamity Toggle */}
-                              {selectedLoanCategory === LOAN_CATEGORIES.REGULAR && (
-                                <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
-                                  <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">State of Calamity Declared:</span>
-                                  <input
-                                    type="checkbox"
-                                    checked={isCalamityDeclared}
-                                    onChange={(e) => setIsCalamityDeclared(e.target.checked)}
-                                    className="w-3.5 h-3.5 accent-amber-600 rounded cursor-pointer"
-                                  />
-                                </label>
-                              )}
                             </div>
 
                             {memberMetrics && parseFloat(memberMetrics?.balances?.share_capital || 0) === 0 && (
@@ -1069,7 +1069,7 @@ export default function OverviewPage() {
                                   const remCap = Math.max(0, baseLimit - actPrincipal);
 
                                   const isExceedingCap = Boolean(memberMetrics) && parseFloat(p.min_amount) > remCap;
-                                  const isDisabled = (isCalamityProduct && !isCalamityDeclared) || isRegularLocked || isStlLocked || isExceedingCap;
+                                  const isDisabled = isRegularLocked || isStlLocked || isExceedingCap;
 
                                   return (
                                     <button
