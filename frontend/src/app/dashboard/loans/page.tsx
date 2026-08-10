@@ -489,14 +489,40 @@ function LoansPageContent() {
     }
   }, [isAdminOrManager, user]);
 
+  const fetchCalamityStatus = useCallback(async () => {
+    try {
+      const response = await api.get('/loans/calamity-status');
+      setIsCalamityDeclared(response.data.is_calamity_declared || false);
+    } catch (err) {
+      console.error('Error fetching calamity status:', err);
+    }
+  }, []);
+
+  const handleToggleCalamityStatus = async (newStatus: boolean) => {
+    try {
+      await api.patch('/loans/calamity-status', { is_calamity_declared: newStatus });
+      setIsCalamityDeclared(newStatus);
+      showDialog(
+        newStatus ? 'State of Calamity Declared' : 'State of Calamity Deactivated',
+        newStatus
+          ? 'Calamity loan product is now automatically active and visible to all members.'
+          : 'Calamity loan product is now hidden from member applications.',
+        'success'
+      );
+    } catch (err: any) {
+      showDialog('Update Failed', err.response?.data?.message || 'Failed to update calamity status.', 'error');
+    }
+  };
+
   useEffect(() => {
     fetchLoans();
     fetchProducts();
     fetchMetrics();
+    fetchCalamityStatus();
     if (isAdminOrManager) {
       fetchMembersList();
     }
-  }, [fetchLoans, fetchProducts, fetchMetrics, isAdminOrManager]);
+  }, [fetchLoans, fetchProducts, fetchMetrics, fetchCalamityStatus, isAdminOrManager]);
 
   // Load selected member's CBU / financial summary reactively to enforce progressive limit & co-maker triggers
   useEffect(() => {
@@ -1315,6 +1341,34 @@ function LoansPageContent() {
               )}
             </div>
 
+            {isAdminOrManager && (
+              <div className="mb-6 p-4 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-2xl">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-headline font-bold text-sm text-on-surface dark:text-white">State of Calamity Status</h4>
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                      When declared by Admin, Calamity Loan is automatically activated and displayed to members.
+                    </p>
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-3 cursor-pointer bg-white dark:bg-surface-container-low px-4 py-2 rounded-full border border-amber-500/30 shadow-sm hover:border-amber-500 transition-all">
+                  <span className="text-xs font-bold text-amber-800 dark:text-amber-300">State of Calamity Declared:</span>
+                  <input
+                    type="checkbox"
+                    checked={isCalamityDeclared}
+                    onChange={(e) => handleToggleCalamityStatus(e.target.checked)}
+                    className="w-4 h-4 accent-amber-600 rounded cursor-pointer"
+                  />
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${isCalamityDeclared ? 'bg-amber-500 text-white' : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'}`}>
+                    {isCalamityDeclared ? 'ACTIVE' : 'INACTIVE'}
+                  </span>
+                </label>
+              </div>
+            )}
+
             {productsLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <SkeletonCard />
@@ -1646,8 +1700,8 @@ function LoansPageContent() {
                         {(() => {
                           let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
 
-                          // Guarantee Calamity Loan product exists under Regular Loan category
-                          if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
+                          // If State of Calamity is declared, guarantee Calamity Loan product exists under Regular Loan category
+                          if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && isCalamityDeclared && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
                             const calamityFallback: LoanProduct = {
                               id: 999999,
                               name: 'Regular Loan - Calamity Loan',
@@ -1661,23 +1715,15 @@ function LoansPageContent() {
                             categoryProducts = [...categoryProducts, calamityFallback];
                           }
 
+                          // If State of Calamity is NOT declared, hide Calamity Loan products completely ("gone")
+                          if (!isCalamityDeclared) {
+                            categoryProducts = categoryProducts.filter(p => !p.name.toLowerCase().includes('calamity'));
+                          }
+
                           return (
                             <div className="space-y-3 pt-2">
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
-
-                                {/* Interactive State of Calamity Toggle */}
-                                {selectedLoanCategory === LOAN_CATEGORIES.REGULAR && (
-                                  <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
-                                    <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">State of Calamity Declared:</span>
-                                    <input
-                                      type="checkbox"
-                                      checked={isCalamityDeclared}
-                                      onChange={(e) => setIsCalamityDeclared(e.target.checked)}
-                                      className="w-3.5 h-3.5 accent-amber-600 rounded cursor-pointer"
-                                    />
-                                  </label>
-                                )}
                               </div>
 
                               {categoryProducts.length === 0 ? (
@@ -1700,7 +1746,7 @@ function LoansPageContent() {
                                     const remCap = Math.max(0, baseLimit - actPrincipal);
 
                                     const isExceedingCap = Boolean(selectedMemberSummary) && parseFloat(p.min_amount) > remCap;
-                                    const isDisabled = (isCalamityProduct && !isCalamityDeclared) || isExceedingCap || isRegularLocked || isStlLocked;
+                                    const isDisabled = isExceedingCap || isRegularLocked || isStlLocked;
 
                                     return (
                                       <button
@@ -1773,10 +1819,6 @@ function LoansPageContent() {
                                         {isExceedingCap ? (
                                           <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
                                             <AlertTriangle className="w-3 h-3 inline" /> Min ₱{parseFloat(p.min_amount).toLocaleString()} exceeds remaining capacity (₱{remCap.toLocaleString()}).
-                                          </p>
-                                        ) : (isCalamityProduct && !isCalamityDeclared) ? (
-                                          <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-2 flex items-center justify-center gap-1">
-                                            <AlertTriangle className="w-3 h-3 inline" /> Available only when State of Calamity is declared.
                                           </p>
                                         ) : isRegularLocked ? (
                                           <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
