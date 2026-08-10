@@ -881,7 +881,7 @@ export default function OverviewPage() {
                       }
 
                       return (
-                        <div className="space-y-5">
+                        <div className="space-y-4">
                           <div className="space-y-2">
                             <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Select Loan Category:</span>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -918,7 +918,7 @@ export default function OverviewPage() {
                               {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
                                 <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
                               ) : (
-                                <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. Re-borrowing is allowed after 1 month of repayment on an active STL. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
+                                <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
                               )}
                             </div>
                           </div>
@@ -941,22 +941,33 @@ export default function OverviewPage() {
                               )}
                             </div>
 
+                            {memberMetrics && parseFloat(memberMetrics?.balances?.share_capital || 0) === 0 && (
+                              <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex items-start gap-2.5 font-semibold">
+                                <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                                <div className="space-y-1">
+                                  <p className="font-bold">No Share Capital Deposit Found (₱0.00)</p>
+                                  <p className="text-[11px] font-normal leading-relaxed text-on-surface/80 dark:text-neutral-300">
+                                    You have ₱0.00 in Share Capital. Under Cooperative Policy, your borrowing capacity is 80% of paid-up Share Capital (₱0.00), so loan applications are locked. Please post a Share Capital deposit first to enable loan borrowing.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
                             {isRegularLocked && (
                               <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0" />
                                 <span>You cannot apply for a new Regular Loan because you already have an active Regular Loan.</span>
                               </div>
                             )}
-                            {activeStlCount >= 3 && hasStl1MonthRepayment && selectedLoanCategory === LOAN_CATEGORIES.STL && (
+                            {hasStl1MonthRepayment && selectedLoanCategory === LOAN_CATEGORIES.STL && (
                               <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-                                <span><strong>STL Re-borrowing Unlocked:</strong> At least one of your 3 active STLs has reached 1 month of repayment, allowing you to apply for an additional Short Term Loan.</span>
+                                <span><strong>STL Re-borrowing Unlocked:</strong> Users can loan again on STL after 1 month term of repayment (even if the term is more than 1month and this applies if they have 3 current loans on STL). At least one of your active STLs has reached 1 month of repayment!</span>
                               </div>
                             )}
                             {isStlLocked && (
                               <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                                <span>You cannot apply for a new Short Term Loan (STL) because you have reached the maximum limit of 3 active Short Term Loans, and none have reached 1 month of repayment yet.</span>
+                                <span>You cannot apply for a new Short Term Loan (STL) because you have 3 active STLs, and none have reached 1 month of repayment yet.</span>
                               </div>
                             )}
 
@@ -970,7 +981,17 @@ export default function OverviewPage() {
                                   const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
                                   const isSelected = selectedProduct?.id === p.id;
                                   const isCalamityProduct = p.name.toLowerCase().includes('calamity');
-                                  const isDisabled = (isCalamityProduct && !isCalamityDeclared) || isRegularLocked || isStlLocked;
+                                  
+                                  const shareCap = memberMetrics?.balances?.share_capital || 0;
+                                  const histCount = memberMetrics?.loans?.historical_count || 0;
+                                  const actPrincipal = parseFloat(memberMetrics?.loans?.active_principal || memberMetrics?.loans?.outstanding_balance || 0);
+                                  const multiplier = histCount === 0 ? 0.8 : histCount === 1 ? 2.0 : 3.0;
+                                  const calculatedCap = multiplier * shareCap;
+                                  const baseLimit = calculatedCap;
+                                  const remCap = Math.max(0, baseLimit - actPrincipal);
+
+                                  const isExceedingCap = Boolean(memberMetrics) && parseFloat(p.min_amount) > remCap;
+                                  const isDisabled = (isCalamityProduct && !isCalamityDeclared) || isRegularLocked || isStlLocked || isExceedingCap;
 
                                   return (
                                     <button
@@ -1037,7 +1058,11 @@ export default function OverviewPage() {
                                         </div>
                                       </div>
 
-                                      {isCalamityProduct && !isCalamityDeclared && (
+                                      {isExceedingCap ? (
+                                        <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
+                                          <AlertTriangle className="w-3 h-3 inline" /> Min ₱{parseFloat(p.min_amount).toLocaleString()} exceeds remaining capacity (₱{remCap.toLocaleString()}).
+                                        </p>
+                                      ) : isCalamityProduct && !isCalamityDeclared && (
                                         <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-2 flex items-center justify-center gap-1">
                                           <AlertTriangle className="w-3 h-3 inline" /> Available only when State of Calamity is declared.
                                         </p>
@@ -1055,15 +1080,17 @@ export default function OverviewPage() {
                               if (selectedProduct) {
                                 const shareCapital = memberMetrics?.balances?.share_capital || 0;
                                 const historicalCount = memberMetrics?.loans?.historical_count || 0;
+                                const activePrincipal = parseFloat(memberMetrics?.loans?.active_principal || memberMetrics?.loans?.outstanding_balance || 0);
                                 let borrowLimit = 0;
                                 if (historicalCount === 0) {
-                                  borrowLimit = 0.8 * shareCapital;
+                                  borrowLimit = shareCapital > 0 ? Math.max(parseFloat(selectedProduct.max_amount), 0.8 * shareCapital) : parseFloat(selectedProduct.max_amount);
                                 } else if (historicalCount === 1) {
-                                  borrowLimit = 2.0 * shareCapital;
+                                  borrowLimit = Math.max(parseFloat(selectedProduct.max_amount), 2.0 * shareCapital);
                                 } else {
-                                  borrowLimit = 3.0 * shareCapital;
+                                  borrowLimit = Math.max(parseFloat(selectedProduct.max_amount), 3.0 * shareCapital);
                                 }
-                                const maxSliderCap = Math.min(parseFloat(selectedProduct.max_amount), borrowLimit);
+                                const remainingCapacity = Math.max(0, borrowLimit - activePrincipal);
+                                const maxSliderCap = Math.min(parseFloat(selectedProduct.max_amount), remainingCapacity);
                                 setLoanAmount(maxSliderCap);
                                 setLoanTerm(selectedProduct.term_months);
                               }
@@ -1087,22 +1114,25 @@ export default function OverviewPage() {
                       let tierName = '';
 
                       if (historicalCount === 0) {
-                        borrowLimit = 0.8 * shareCapital;
-                        multiplierText = '80% (0.8x)';
+                        borrowLimit = shareCapital > 0 ? Math.max(parseFloat(selectedProduct.max_amount), 0.8 * shareCapital) : parseFloat(selectedProduct.max_amount);
+                        multiplierText = shareCapital > 0 ? '80% (0.8x)' : 'Initial Credit Allowance';
                         tierName = '1st Loan (First-Time Borrower)';
                       } else if (historicalCount === 1) {
-                        borrowLimit = 2.0 * shareCapital;
+                        borrowLimit = Math.max(parseFloat(selectedProduct.max_amount), 2.0 * shareCapital);
                         multiplierText = '200% (2.0x)';
                         tierName = '2nd Loan (Established Track Record)';
                       } else {
-                        borrowLimit = 3.0 * shareCapital;
+                        borrowLimit = Math.max(parseFloat(selectedProduct.max_amount), 3.0 * shareCapital);
                         multiplierText = '300% (3.0x)';
                         tierName = '3rd Loan & Onwards (Maximum Tier)';
                       }
 
-                      // Adjust range max and loan amount if they exceed borrowLimit
+                      const activePrincipal = parseFloat(memberMetrics?.loans?.active_principal || memberMetrics?.loans?.outstanding_balance || 0);
+                      const remainingCapacity = Math.max(0, borrowLimit - activePrincipal);
+
+                      // Adjust range max and loan amount if they exceed remainingCapacity
                       const maxProductCap = parseFloat(selectedProduct.max_amount);
-                      const maxSliderCap = Math.min(maxProductCap, borrowLimit);
+                      const maxSliderCap = Math.min(maxProductCap, remainingCapacity);
 
                       // Safeguard current slider value
                       const currentLoanAmount = Math.min(loanAmount, maxSliderCap);

@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 
 interface LoanProduct {
-  id: number;
+  id: number | string;
   name: string;
   interest_rate: string;
   term_months: number;
@@ -48,8 +48,8 @@ interface LoanProduct {
 }
 
 interface Loan {
-  id: number;
-  member_id: number;
+  id: number | string;
+  member_id: number | string;
   first_name?: string;
   last_name?: string;
   product_name?: string;
@@ -141,7 +141,7 @@ function LoansPageContent() {
   const [metricsLoading, setMetricsLoading] = useState(true);
 
   // Active Loan Details Drawer/Collapsible state
-  const [expandedLoanId, setExpandedLoanId] = useState<number | null>(null);
+  const [expandedLoanId, setExpandedLoanId] = useState<number | string | null>(null);
   const [loanDetails, setLoanDetails] = useState<any>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
@@ -500,9 +500,6 @@ function LoansPageContent() {
         setLoadingMemberSummary(true);
         const res = await api.get(`/members/${applyMemberId}/dashboard-summary`);
         setSelectedMemberSummary(res.data.data);
-        if (res.data.data?.loans?.outstanding_balance && parseFloat(res.data.data.loans.outstanding_balance) > 0) {
-          setSelectedProduct(null);
-        }
       } catch (err) {
         console.error('Error fetching selected member summary:', err);
       } finally {
@@ -512,7 +509,7 @@ function LoansPageContent() {
     fetchSelectedMemberSummary();
   }, [applyMemberId]);
 
-  const toggleLoanExpand = async (loanId: number) => {
+  const toggleLoanExpand = async (loanId: number | string) => {
     if (expandedLoanId === loanId) {
       setExpandedLoanId(null);
       setLoanDetails(null);
@@ -535,7 +532,7 @@ function LoansPageContent() {
   };
 
   // Actions
-  const handleDisburseLoan = (loanId: number) => {
+  const handleDisburseLoan = (loanId: number | string) => {
     showDialog(
       'Confirm Disbursement',
       'Verify that principal funds are ready for disbursement. Proceed?',
@@ -559,7 +556,7 @@ function LoansPageContent() {
     );
   };
 
-  const handleRejectLoan = (loanId: number) => {
+  const handleRejectLoan = (loanId: number | string) => {
     showDialog(
       'Reject Application',
       'Are you sure you want to reject this application?',
@@ -621,7 +618,7 @@ function LoansPageContent() {
     setWizardStep(1);
     setSelectedProduct(null);
     setSelectedLoanCategory(LOAN_CATEGORIES.REGULAR);
-    setApplyMemberId('');
+    setApplyMemberId(!isAdminOrManager && user?.profile?.id ? String(user.profile.id) : '');
     setApplyAmount(0);
     setCoMakerName('');
     setCoMakerPhone('');
@@ -650,7 +647,7 @@ function LoansPageContent() {
 
     try {
       const response = await api.post('/loans', {
-        member_id: parseInt(applyMemberId, 10),
+        member_id: applyMemberId,
         loan_product_id: selectedProduct.id,
         principal_amount: applyAmount,
         term_months: applyTermMonths,
@@ -686,7 +683,7 @@ function LoansPageContent() {
 
     try {
       await api.post('/loans/repayments', {
-        loan_id: parseInt(repayLoanId, 10),
+        loan_id: repayLoanId,
         amount: parseFloat(repayAmount),
         payment_method: repayMethod,
         reference_no: repayRefNo || undefined
@@ -1538,209 +1535,268 @@ function LoansPageContent() {
                     </select>
                   </div>
 
-                  {applyMemberId && (
-                    <div className="space-y-4">
-                      {selectedMemberSummary?.loans?.outstanding_balance && parseFloat(selectedMemberSummary.loans.outstanding_balance) > 0 ? (
-                        <div className="bg-tertiary/10 border border-tertiary/20 rounded-3xl p-5 text-center space-y-2.5 animate-micro-elevate">
-                          <div className="flex items-center justify-center gap-2 font-bold text-sm text-tertiary">
-                            <AlertTriangle className="w-5 h-5" /> Active Loan Balance Detected
+                  {applyMemberId && (() => {
+                    const activeRegularCount = selectedMemberSummary?.loans?.active_regular_count || 0;
+                    const activeStlCount = selectedMemberSummary?.loans?.active_stl_count || 0;
+                    const hasStl1MonthRepayment = selectedMemberSummary?.loans?.has_stl_with_1month_repayment || false;
+                    const isRegularLocked = selectedLoanCategory === LOAN_CATEGORIES.REGULAR && activeRegularCount >= 1;
+                    const isStlLocked = selectedLoanCategory === LOAN_CATEGORIES.STL && activeStlCount >= 3 && !hasStl1MonthRepayment;
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Product Category pills */}
+                        <div className="space-y-2">
+                          <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Select Loan Category:</span>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            {Object.entries(LOAN_CATEGORIES).map(([key, label]) => {
+                              const isActive = selectedLoanCategory === label;
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedLoanCategory(label);
+                                    const filtered = products.filter(p => getProductCategory(p.name) === label);
+                                    if (filtered.length > 0) {
+                                      setSelectedProduct(filtered[0]);
+                                      setApplyAmount(parseFloat(filtered[0].min_amount));
+                                      setApplyTermMonths(filtered[0].term_months);
+                                    } else {
+                                      setSelectedProduct(null);
+                                    }
+                                  }}
+                                  className={`p-3 rounded-2xl border text-center transition-all cursor-pointer text-xs font-bold ${isActive
+                                      ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
+                                      : 'border-outline-variant/65 text-neutral-600 dark:text-neutral-400 hover:border-neutral/30'
+                                    }`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
                           </div>
-                          <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-lg mx-auto leading-relaxed">
-                            This member currently has an outstanding active loan balance of <strong>{formatCurrency(parseFloat(selectedMemberSummary.loans.outstanding_balance))}</strong>.
-                            According to cooperative lending policy, a borrower must settle all active loan balances in full before they can apply for a new loan.
-                          </p>
+
+                          <div className="text-[11px] font-bold text-neutral-500/90 flex items-center gap-2 mt-2.5 bg-neutral/5 dark:bg-neutral/10 p-2 px-3.5 rounded-2xl border border-outline-variant/30">
+                            <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                            {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
+                              <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
+                            ) : (
+                              <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
+                            )}
+                          </div>
                         </div>
-                      ) : (
-                        <>
-                          {/* Product Category pills */}
-                          <div className="space-y-2">
-                            <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Select Loan Category:</span>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                              {Object.entries(LOAN_CATEGORIES).map(([key, label]) => {
-                                const isActive = selectedLoanCategory === label;
-                                return (
-                                  <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedLoanCategory(label);
-                                      const filtered = products.filter(p => getProductCategory(p.name) === label);
-                                      if (filtered.length > 0) {
-                                        setSelectedProduct(filtered[0]);
-                                        setApplyAmount(parseFloat(filtered[0].min_amount));
-                                        setApplyTermMonths(filtered[0].term_months);
-                                      } else {
-                                        setSelectedProduct(null);
-                                      }
-                                    }}
-                                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer text-xs font-bold ${isActive
-                                        ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
-                                        : 'border-outline-variant/65 text-neutral-600 dark:text-neutral-400 hover:border-neutral/30'
-                                      }`}
-                                  >
-                                    {label}
-                                  </button>
-                                );
-                              })}
-                            </div>
 
-                            <div className="text-[11px] font-bold text-neutral-500/90 flex items-center gap-2 mt-2.5 bg-neutral/5 dark:bg-neutral/10 p-2 px-3.5 rounded-2xl border border-outline-variant/30">
-                              <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
-                              {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
-                                <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time.</span>
-                              ) : (
-                                <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. Re-borrowing is allowed after 1 month of repayment on an active STL.</span>
-                              )}
+                        {/* Lock / Re-borrowing Unlocked & Share Capital Banners */}
+                        {selectedMemberSummary && parseFloat(selectedMemberSummary?.balances?.share_capital || 0) === 0 && (
+                          <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex items-start gap-2.5 font-semibold">
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                            <div className="space-y-1">
+                              <p className="font-bold">No Share Capital Deposit Found (₱0.00)</p>
+                              <p className="text-[11px] font-normal leading-relaxed text-on-surface/80 dark:text-neutral-300">
+                                This member has ₱0.00 in Share Capital. Under Cooperative Policy, borrowing capacity is 80% of paid-up Share Capital (₱0.00), so loan applications are locked. Please post a Share Capital deposit first to enable loan borrowing.
+                              </p>
                             </div>
                           </div>
+                        )}
+                        {isRegularLocked && (
+                          <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                            <span>You cannot apply for a new Regular Loan because this member already has an active Regular Loan.</span>
+                          </div>
+                        )}
+                        {hasStl1MonthRepayment && selectedLoanCategory === LOAN_CATEGORIES.STL && (
+                          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
+                            <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                            <span><strong>STL Re-borrowing Unlocked:</strong> Users can loan again on STL after 1 month term of repayment (even if the term is more than 1month and this applies if they have 3 current loans on STL). At least one of your active STLs has reached 1 month of repayment!</span>
+                          </div>
+                        )}
+                        {isStlLocked && (
+                          <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                            <span>You cannot apply for a new Short Term Loan (STL) because this member has 3 active STLs, and none have reached 1 month of repayment yet.</span>
+                          </div>
+                        )}
 
-                          {/* Available products under the category */}
-                          {(() => {
-                            let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
-                            
-                            // Guarantee Calamity Loan product exists under Regular Loan category
-                            if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
-                              const calamityFallback: LoanProduct = {
-                                id: 999999,
-                                name: 'Regular Loan - Calamity Loan',
-                                interest_rate: '0.0500',
-                                term_months: 24,
-                                amortization_type: 'diminishing_balance',
-                                min_amount: '10000.00',
-                                max_amount: '50000.00',
-                                is_active: true
-                              };
-                              categoryProducts = [...categoryProducts, calamityFallback];
-                            }
+                        {/* Available products under the category */}
+                        {(() => {
+                          let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
+                          
+                          // Guarantee Calamity Loan product exists under Regular Loan category
+                          if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
+                            const calamityFallback: LoanProduct = {
+                              id: 999999,
+                              name: 'Regular Loan - Calamity Loan',
+                              interest_rate: '0.0500',
+                              term_months: 24,
+                              amortization_type: 'diminishing_balance',
+                              min_amount: '10000.00',
+                              max_amount: '50000.00',
+                              is_active: true
+                            };
+                            categoryProducts = [...categoryProducts, calamityFallback];
+                          }
 
-                            return (
-                              <div className="space-y-3 pt-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
-                                  
-                                  {/* Interactive State of Calamity Toggle */}
-                                  {selectedLoanCategory === LOAN_CATEGORIES.REGULAR && (
-                                    <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
-                                      <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">State of Calamity Declared:</span>
-                                      <input
-                                        type="checkbox"
-                                        checked={isCalamityDeclared}
-                                        onChange={(e) => setIsCalamityDeclared(e.target.checked)}
-                                        className="w-3.5 h-3.5 accent-amber-600 rounded cursor-pointer"
-                                      />
-                                    </label>
-                                  )}
-                                </div>
-
-                                {categoryProducts.length === 0 ? (
-                                  <div className="text-center py-8 text-xs text-neutral-500 italic bg-neutral-50 dark:bg-neutral-900/40 rounded-2xl border border-dashed border-outline-variant/60">
-                                    No active loan products in this category.
-                                  </div>
-                                ) : (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[350px] overflow-y-auto pr-1 pt-1">
-                                    {categoryProducts.map((p) => {
-                                      const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
-                                      const isSelected = selectedProduct?.id === p.id;
-                                      const isCalamityProduct = p.name.toLowerCase().includes('calamity');
-                                      const isDisabled = isCalamityProduct && !isCalamityDeclared;
-
-                                      return (
-                                        <button
-                                          key={p.id}
-                                          type="button"
-                                          disabled={isDisabled}
-                                          onClick={() => {
-                                            if (isDisabled) return;
-                                            setSelectedProduct(p);
-                                            setApplyAmount(parseFloat(p.min_amount));
-                                            setApplyTermMonths(p.term_months);
-                                          }}
-                                          className={`w-full p-3.5 rounded-2xl border text-left transition-all ${
-                                            isDisabled
-                                              ? 'border-outline-variant/40 bg-neutral-100/60 dark:bg-neutral-900/40 opacity-60 cursor-not-allowed'
-                                              : isSelected
-                                              ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20 cursor-pointer shadow-sm'
-                                              : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 cursor-pointer'
-                                          }`}
-                                        >
-                                          <div className="flex justify-between items-center mb-2.5">
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                              <span className="font-bold text-on-surface dark:text-white text-sm block tracking-tight">
-                                                {p.name
-                                                  .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
-                                                  .replace(/Short Term Loan\s*-\s*/gi, '')
-                                                  .replace(/Regular Loan\s*-\s*/gi, '')}
-                                              </span>
-                                              {isCalamityProduct && (
-                                                <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
-                                                  isCalamityDeclared
-                                                    ? 'bg-amber-500 text-white animate-pulse'
-                                                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
-                                                }`}>
-                                                  {isCalamityDeclared ? 'Calamity Active' : 'Calamity Only'}
-                                                </span>
-                                              )}
-                                            </div>
-                                            <span className="text-[9px] font-black bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap tracking-wider">
-                                              {p.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing'}
-                                            </span>
-                                          </div>
-
-                                          <div className="grid grid-cols-3 gap-2 text-center">
-                                            <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
-                                              <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Amount</span>
-                                              <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
-                                                {p.min_amount === p.max_amount
-                                                  ? `₱${parseFloat(p.min_amount).toLocaleString()}`
-                                                  : `₱${parseFloat(p.min_amount).toLocaleString()} - ₱${parseFloat(p.max_amount).toLocaleString()}`}
-                                              </strong>
-                                            </div>
-                                            <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
-                                              <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Interest</span>
-                                              <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
-                                                {p.term_months === 36 ? '2.0% - 15.0%' : `${(parseFloat(p.interest_rate) * 100).toFixed(1)}%`} p.a.
-                                              </strong>
-                                            </div>
-                                            <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
-                                              <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Term</span>
-                                              <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
-                                                {p.term_months === 1 ? '1 Month' : `1 - ${p.term_months} Months`}
-                                              </strong>
-                                            </div>
-                                          </div>
-
-                                          {isDisabled && (
-                                            <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-2 flex items-center justify-center gap-1">
-                                              <AlertTriangle className="w-3 h-3 inline" /> Available only when State of Calamity is declared.
-                                            </p>
-                                          )}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
+                          return (
+                            <div className="space-y-3 pt-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Available Loan Products:</span>
+                                
+                                {/* Interactive State of Calamity Toggle */}
+                                {selectedLoanCategory === LOAN_CATEGORIES.REGULAR && (
+                                  <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
+                                    <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300">State of Calamity Declared:</span>
+                                    <input
+                                      type="checkbox"
+                                      checked={isCalamityDeclared}
+                                      onChange={(e) => setIsCalamityDeclared(e.target.checked)}
+                                      className="w-3.5 h-3.5 accent-amber-600 rounded cursor-pointer"
+                                    />
+                                  </label>
                                 )}
                               </div>
-                            );
-                          })()}
-                        </>
-                      )}
-                    </div>
-                  )}
 
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      disabled={!applyMemberId || !selectedProduct}
-                      onClick={() => {
-                        if (selectedProduct) {
-                          setApplyTermMonths(selectedProduct.term_months);
-                        }
-                        setWizardStep(2);
-                      }}
-                      className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-sm animate-micro-elevate"
-                    >
-                      Continue to Amount
-                    </button>
-                  </div>
+                              {categoryProducts.length === 0 ? (
+                                <div className="text-center py-8 text-xs text-neutral-500 italic bg-neutral-50 dark:bg-neutral-900/40 rounded-2xl border border-dashed border-outline-variant/60">
+                                  No active loan products in this category.
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[350px] overflow-y-auto pr-1 pt-1">
+                                  {categoryProducts.map((p) => {
+                                    const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
+                                    const isSelected = selectedProduct?.id === p.id;
+                                    const isCalamityProduct = p.name.toLowerCase().includes('calamity');
+                                    
+                                    const shareCap = selectedMemberSummary?.balances?.share_capital || 0;
+                                    const histCount = selectedMemberSummary?.loans?.historical_count || 0;
+                                    const actPrincipal = parseFloat(selectedMemberSummary?.loans?.active_principal || selectedMemberSummary?.loans?.outstanding_balance || 0);
+                                    const multiplier = histCount === 0 ? 0.8 : histCount === 1 ? 2.0 : 3.0;
+                                    const calculatedCap = multiplier * shareCap;
+                                    const baseLimit = calculatedCap;
+                                    const remCap = Math.max(0, baseLimit - actPrincipal);
+
+                                    const isExceedingCap = Boolean(selectedMemberSummary) && parseFloat(p.min_amount) > remCap;
+                                    const isDisabled = (isCalamityProduct && !isCalamityDeclared) || isExceedingCap || isRegularLocked || isStlLocked;
+
+                                    return (
+                                      <button
+                                        key={p.id}
+                                        type="button"
+                                        disabled={isDisabled}
+                                        onClick={() => {
+                                          if (isDisabled) return;
+                                          setSelectedProduct(p);
+                                          setApplyAmount(parseFloat(p.min_amount));
+                                          setApplyTermMonths(p.term_months);
+                                        }}
+                                        className={`w-full p-3.5 rounded-2xl border text-left transition-all ${
+                                          isDisabled
+                                            ? 'border-outline-variant/40 bg-neutral-100/60 dark:bg-neutral-900/40 opacity-60 cursor-not-allowed'
+                                            : isSelected
+                                            ? 'border-primary/60 bg-primary/5 dark:border-secondary/60 dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20 cursor-pointer shadow-sm'
+                                            : 'border-outline-variant/65 bg-transparent hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-neutral/5 cursor-pointer'
+                                        }`}
+                                      >
+                                        <div className="flex justify-between items-center mb-2.5">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="font-bold text-on-surface dark:text-white text-sm block tracking-tight">
+                                              {p.name
+                                                .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
+                                                .replace(/Short Term Loan\s*-\s*/gi, '')
+                                                .replace(/Regular Loan\s*-\s*/gi, '')}
+                                            </span>
+                                            {isCalamityProduct && (
+                                              <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
+                                                isCalamityDeclared
+                                                  ? 'bg-amber-500 text-white animate-pulse'
+                                                  : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                                              }`}>
+                                                {isCalamityDeclared ? 'Calamity Active' : 'Calamity Only'}
+                                              </span>
+                                            )}
+                                            {isExceedingCap && (
+                                              <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-tertiary/15 text-tertiary border border-tertiary/30">
+                                                Exceeds Limit
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="text-[9px] font-black bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap tracking-wider">
+                                            {p.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing'}
+                                          </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-2 text-center">
+                                          <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
+                                            <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Amount</span>
+                                            <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
+                                              {p.min_amount === p.max_amount
+                                                ? `₱${parseFloat(p.min_amount).toLocaleString()}`
+                                                : `₱${parseFloat(p.min_amount).toLocaleString()} - ₱${parseFloat(p.max_amount).toLocaleString()}`}
+                                            </strong>
+                                          </div>
+                                          <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
+                                            <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Interest</span>
+                                            <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
+                                              {p.term_months === 36 ? '2.0% - 15.0%' : `${(parseFloat(p.interest_rate) * 100).toFixed(1)}%`} p.a.
+                                            </strong>
+                                          </div>
+                                          <div className="bg-neutral/5 dark:bg-neutral/10 p-2 rounded-xl">
+                                            <span className="text-[8px] text-neutral-500 uppercase font-black block tracking-wider mb-0.5">Term</span>
+                                            <strong className="text-on-surface dark:text-white font-bold block text-[11px] leading-tight">
+                                              {p.term_months === 1 ? '1 Month' : `1 - ${p.term_months} Months`}
+                                            </strong>
+                                          </div>
+                                        </div>
+
+                                        {isExceedingCap ? (
+                                          <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
+                                            <AlertTriangle className="w-3 h-3 inline" /> Min ₱{parseFloat(p.min_amount).toLocaleString()} exceeds remaining capacity (₱{remCap.toLocaleString()}).
+                                          </p>
+                                        ) : (isCalamityProduct && !isCalamityDeclared) ? (
+                                          <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-2 flex items-center justify-center gap-1">
+                                            <AlertTriangle className="w-3 h-3 inline" /> Available only when State of Calamity is declared.
+                                          </p>
+                                        ) : isRegularLocked ? (
+                                          <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
+                                            <AlertTriangle className="w-3 h-3 inline" /> Regular Loan category locked (Max 1 active).
+                                          </p>
+                                        ) : isStlLocked ? (
+                                          <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
+                                            <AlertTriangle className="w-3 h-3 inline" /> STL category locked (3 active without 1-month repayment).
+                                          </p>
+                                        ) : null}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        <div className="pt-2 flex justify-end">
+                          <button
+                            disabled={!applyMemberId || !selectedProduct || isRegularLocked || isStlLocked}
+                            onClick={() => {
+                              if (selectedProduct) {
+                                setApplyTermMonths(selectedProduct.term_months);
+                                const activePrincipal = parseFloat(selectedMemberSummary?.loans?.active_principal || selectedMemberSummary?.loans?.outstanding_balance || 0);
+                                const shareCap = selectedMemberSummary?.balances?.share_capital || 0;
+                                const histCount = selectedMemberSummary?.loans?.historical_count || 0;
+                                const mult = histCount === 0 ? 0.8 : histCount === 1 ? 2.0 : 3.0;
+                                const remainingCap = Math.max(0, (mult * shareCap) - activePrincipal);
+                                const initAmt = Math.min(parseFloat(selectedProduct.max_amount), remainingCap);
+                                setApplyAmount(initAmt);
+                              }
+                              setWizardStep(2);
+                            }}
+                            className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-sm animate-micro-elevate"
+                          >
+                            Continue to Amount
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1754,25 +1810,28 @@ function LoansPageContent() {
                 let tierName = '';
 
                 if (historicalCount === 0) {
-                  borrowLimit = 0.8 * shareCapital;
-                  multiplierText = '80% (0.8x)';
+                  borrowLimit = shareCapital > 0 ? Math.max(parseFloat(selectedProduct.max_amount), 0.8 * shareCapital) : parseFloat(selectedProduct.max_amount);
+                  multiplierText = shareCapital > 0 ? '80% (0.8x)' : 'Initial Credit Allowance';
                   tierName = '1st Loan (First-Time Borrower)';
                 } else if (historicalCount === 1) {
-                  borrowLimit = 2.0 * shareCapital;
+                  borrowLimit = Math.max(parseFloat(selectedProduct.max_amount), 2.0 * shareCapital);
                   multiplierText = '200% (2.0x)';
                   tierName = '2nd Loan (Established Track Record)';
                 } else {
-                  borrowLimit = 3.0 * shareCapital;
+                  borrowLimit = Math.max(parseFloat(selectedProduct.max_amount), 3.0 * shareCapital);
                   multiplierText = '300% (3.0x)';
                   tierName = '3rd Loan & Onwards (Maximum Tier)';
                 }
 
-                // Adjust slider cap
-                const maxProductCap = parseFloat(selectedProduct.max_amount) || borrowLimit;
-                const maxSliderCap = Math.max(1000, Math.min(maxProductCap, borrowLimit));
+                const activePrincipal = parseFloat(selectedMemberSummary?.loans?.active_principal || selectedMemberSummary?.loans?.outstanding_balance || 0);
+                const remainingCapacity = Math.max(0, borrowLimit - activePrincipal);
+
+                // Adjust slider cap based on remaining capacity
+                const maxProductCap = parseFloat(selectedProduct.max_amount) || remainingCapacity;
+                const maxSliderCap = Math.min(maxProductCap, remainingCapacity);
 
                 const rawMinProduct = parseFloat(selectedProduct.min_amount) || 1000;
-                const minSliderCap = Math.min(rawMinProduct, maxSliderCap > 1000 ? 1000 : maxSliderCap);
+                const minSliderCap = Math.min(rawMinProduct, maxSliderCap);
 
                 const currentAmountValue = Math.max(minSliderCap, Math.min(applyAmount || maxSliderCap, maxSliderCap));
 

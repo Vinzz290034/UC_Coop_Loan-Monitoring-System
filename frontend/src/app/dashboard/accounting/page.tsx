@@ -152,7 +152,7 @@ export default function AccountingPage() {
 
     try {
       await api.post('/accounts/share-capital', {
-        member_id: parseInt(selectedMemberId, 10),
+        member_id: selectedMemberId,
         transaction_type: shareTxType,
         amount: parseFloat(shareAmount),
         remarks: shareRemarks || undefined

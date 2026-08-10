@@ -405,7 +405,7 @@ export const updateMemberStatus = async (req, res, next) => {
 
     // 2. Update status & sync is_verified and profile_completed flags
     await client.query(
-      "UPDATE members SET status = $1, is_verified = (CASE WHEN $1 IN ('approved', 'active') THEN true ELSE false END), profile_completed = (CASE WHEN $1 IN ('approved', 'active') THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+      "UPDATE members SET status = $1::varchar, is_verified = (CASE WHEN $1::varchar IN ('approved', 'active') THEN true ELSE false END), profile_completed = (CASE WHEN $1::varchar IN ('approved', 'active') THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2",
       [status, id]
     );
 
@@ -526,7 +526,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
           JOIN loan_products lp ON l.loan_product_id = lp.id
           WHERE l.member_id = $1 
             AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
-            AND lp.name LIKE 'Regular Loan%'
+            AND LOWER(lp.name) LIKE '%regular loan%'
         ), 0) as active_regular_loans_count,
         COALESCE((
           SELECT COUNT(*) 
@@ -534,7 +534,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
           JOIN loan_products lp ON l.loan_product_id = lp.id
           WHERE l.member_id = $1 
             AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
-            AND (lp.name LIKE 'Short Term Loan%' OR lp.name LIKE 'STL%')
+            AND (LOWER(lp.name) LIKE '%short term loan%' OR LOWER(lp.name) LIKE '%stl%')
         ), 0) as active_stl_loans_count,
         COALESCE((
           SELECT EXISTS (
@@ -840,7 +840,7 @@ export const reviewMemberProfile = async (req, res, next) => {
 
     // Update status and mark profile_completed = true if approved
     const updateRes = await client.query(
-      `UPDATE members SET status = $1, profile_completed = (CASE WHEN $1 = 'approved' THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+      `UPDATE members SET status = $1::varchar, profile_completed = (CASE WHEN $1::varchar = 'approved' THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
       [targetStatus, id]
     );
 
