@@ -25,7 +25,8 @@ const signToken = (id) => {
 export const login = async (req, res, next) => {
   try {
     const { username, usernameOrEmail, password } = req.body;
-    const loginIdentifier = username || usernameOrEmail;
+    const rawIdentifier = username || usernameOrEmail;
+    const loginIdentifier = typeof rawIdentifier === 'string' ? rawIdentifier.trim() : '';
 
     const userAgentRaw = req.headers['user-agent'] || '';
     const ipAddress = getClientIp(req);
@@ -40,7 +41,7 @@ export const login = async (req, res, next) => {
 
     // Check if user exists (case-insensitive search by username or member email)
     const userResult = await query(
-      `SELECT u.id, u.username, u.password_hash, u.role, u.profile_picture_url 
+      `SELECT u.id, u.username, u.password_hash, u.role, u.is_active, u.profile_picture_url 
        FROM users u 
        LEFT JOIN members m ON m.user_id = u.id 
        WHERE LOWER(u.username) = LOWER($1) OR LOWER(m.email) = LOWER($1)`,
@@ -62,6 +63,22 @@ export const login = async (req, res, next) => {
     }
 
     const user = userResult.rows[0];
+
+    // Check if account is active
+    if (user.is_active === false) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Your account has been deactivated. Please contact an administrator.' }
+      });
+    }
+
+    // Check if account portal is frozen
+    if (user.password_hash && user.password_hash.startsWith('PORTAL_FROZEN_')) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'This portal account is currently locked or frozen. Contact management.' }
+      });
+    }
 
     // Check password
     const isMatch = await bcrypt.compare(password, user.password_hash);
