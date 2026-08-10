@@ -114,7 +114,25 @@ export const getAllMembers = async (req, res, next) => {
     const { search, status, sortBy } = req.query;
 
     let queryText = `
-      SELECT m.*, u.profile_picture_url
+      SELECT 
+        m.*, 
+        u.profile_picture_url,
+        COALESCE((
+          SELECT sct.balance_after 
+          FROM share_capital_transactions sct 
+          WHERE sct.member_id = m.id AND sct.status = 'completed' 
+          ORDER BY sct.transaction_date DESC LIMIT 1
+        ), 0) AS share_capital_balance,
+        COALESCE((
+          SELECT SUM(l.principal_amount) 
+          FROM loans l 
+          WHERE l.member_id = m.id AND l.status IN ('disbursed', 'active')
+        ), 0) AS total_loans_taken,
+        COALESCE((
+          SELECT COUNT(*) 
+          FROM loans l 
+          WHERE l.member_id = m.id AND l.status IN ('disbursed', 'active')
+        ), 0) AS active_loans_count
       FROM members m
       LEFT JOIN users u ON m.user_id = u.id
       WHERE 1=1
