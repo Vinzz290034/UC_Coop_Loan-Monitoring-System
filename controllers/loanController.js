@@ -1024,7 +1024,49 @@ export const previewAmortizationSchedule = async (req, res, next) => {
         amortization_type,
         schedule
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
+// @desc    Get state of calamity declared status
+// @route   GET /api/loans/calamity-status
+// @access  Protected (All logged in users)
+export const getCalamityStatus = async (req, res, next) => {
+  try {
+    const result = await query(
+      "SELECT setting_value FROM system_settings WHERE setting_key = 'state_of_calamity_declared'"
+    );
+    const isDeclared = result.rowCount > 0 && result.rows[0].setting_value === 'true';
+    res.status(200).json({
+      success: true,
+      is_calamity_declared: isDeclared
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update state of calamity declared status
+// @route   PATCH /api/loans/calamity-status
+// @access  Protected (Admin, Staff)
+export const updateCalamityStatus = async (req, res, next) => {
+  try {
+    const { is_calamity_declared } = req.body;
+    const valueStr = is_calamity_declared ? 'true' : 'false';
+
+    await query(
+      `INSERT INTO system_settings (setting_key, setting_value, updated_at)
+       VALUES ('state_of_calamity_declared', $1, CURRENT_TIMESTAMP)
+       ON CONFLICT (setting_key) DO UPDATE SET setting_value = $1, updated_at = CURRENT_TIMESTAMP`,
+      [valueStr]
+    );
+
+    res.status(200).json({
+      success: true,
+      is_calamity_declared: Boolean(is_calamity_declared),
+      message: `State of Calamity declared status updated to ${valueStr}.`
     });
   } catch (error) {
     next(error);
