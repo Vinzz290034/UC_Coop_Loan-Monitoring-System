@@ -12,6 +12,7 @@ import { migrateCalendarEvents } from './migrate_calendar.js';
 import { migrateRegistrationOtp } from './migrate_registration_otp.js';
 import { migrateLoansComaker } from './migrate_loans_comaker.js';
 import { migrateSeedDefaults } from './migrate_seed_defaults.js';
+import { migrateSystemSettings } from './migrate_system_settings.js';
 
 export async function runMigrations() {
   console.log('[System Startup] Running automated database migrations...');
@@ -29,6 +30,7 @@ export async function runMigrations() {
     await migrateContactMessages();
     await migrateRegistrationOtp();
     await migrateSeedDefaults();
+    await migrateSystemSettings();
     console.log('[System Startup] All database migrations completed successfully.');
   } catch (error) {
     console.error('[System Startup] Database migration error:', error);
