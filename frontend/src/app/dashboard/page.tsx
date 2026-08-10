@@ -2195,33 +2195,6 @@ export default function OverviewPage() {
             />
           </div>
 
-          {/* Analytics Performance */}
-          <div className="space-y-6">
-            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Analytics Performance</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ChartContainer
-                title="Monthly Loan Activity"
-                subtitle="Applications, disbursements & completions over the last 12 months"
-              >
-                <MonthlyTrendsChart data={loanTrends} />
-              </ChartContainer>
-
-              <ChartContainer title="Loan Status Distribution" subtitle="Current loan portfolio by status">
-                <LoanStatusChart data={loanDistribution} />
-              </ChartContainer>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ChartContainer title="Monthly Repayments" subtitle="Payment collection amounts over the last 12 months">
-                <RepaymentChart data={repaymentTrends} />
-              </ChartContainer>
-
-              <ChartContainer title="Member Growth" subtitle="New registrations and cumulative membership over time">
-                <MemberGrowthChart data={memberGrowth} />
-              </ChartContainer>
-            </div>
-          </div>
-
           {/* Financial Flow Analysis */}
           <div className="space-y-4">
             <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Financial Flow Analysis</h2>
@@ -2231,9 +2204,38 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        {/* RIGHT SIDEBAR COLUMN (Facebook-style layout for pending placements) */}
+        {/* RIGHT SIDEBAR COLUMN (Pending Placements + Analytics Performance) */}
         <div className="lg:col-span-4 xl:col-span-4 space-y-6 lg:sticky lg:top-6">
           <PendingPlacementsSection />
+
+          {/* Analytics Performance */}
+          <div className="space-y-6 pt-2 border-t border-outline-variant/40">
+            <div>
+              <h2 className="font-headline text-base font-bold text-on-surface dark:text-white">Analytics Performance</h2>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">Cooperative portfolio metrics & trends</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+              <ChartContainer
+                title="Monthly Loan Activity"
+                subtitle="Applications, disbursements & completions over 12 months"
+              >
+                <MonthlyTrendsChart data={loanTrends} />
+              </ChartContainer>
+
+              <ChartContainer title="Loan Status Distribution" subtitle="Current loan portfolio by status">
+                <LoanStatusChart data={loanDistribution} />
+              </ChartContainer>
+
+              <ChartContainer title="Monthly Repayments" subtitle="Payment collection amounts over 12 months">
+                <RepaymentChart data={repaymentTrends} />
+              </ChartContainer>
+
+              <ChartContainer title="Member Growth" subtitle="New registrations & cumulative membership">
+                <MemberGrowthChart data={memberGrowth} />
+              </ChartContainer>
+            </div>
+          </div>
         </div>
       </div>
 
