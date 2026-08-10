@@ -20,3 +20,6 @@ lerna-debug.log*
 # System files
 .DS_Store
 Thumbs.db
+
+# Uploaded files
+/uploads/avatars/
