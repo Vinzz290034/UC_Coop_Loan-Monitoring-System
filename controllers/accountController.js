@@ -637,3 +637,88 @@ export const confirmPlacementPayment = async (req, res, next) => {
     client.release();
   }
 };
+
+// @desc    Decline / cancel office cash payment for a placement with rejection reason
+// @route   PUT /api/accounts/decline-placement/:type/:id
+// @access  Protected (Admin, Manager)
+export const declinePlacementPayment = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { type, id } = req.params;
+    const { remarks } = req.body;
+
+    await client.query('BEGIN');
+
+    if (type === 'fixed-deposit') {
+      const fdCheck = await client.query('SELECT * FROM fixed_deposits WHERE id = $1 FOR UPDATE', [id]);
+      if (fdCheck.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ success: false, error: { message: 'Fixed deposit placement not found.' } });
+      }
+
+      const fd = fdCheck.rows[0];
+      if (fd.status !== 'pending_payment') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, error: { message: `Placement is already ${fd.status}.` } });
+      }
+
+      // Mark placement as cancelled
+      await client.query("UPDATE fixed_deposits SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [id]);
+
+      // Create notification for member user
+      const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [fd.member_id]);
+      if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
+        const reasonText = remarks ? ` Reason: ${remarks}` : '';
+        await client.query(
+          `INSERT INTO notifications (user_id, title, message, type)
+           VALUES ($1, 'Fixed Deposit Placement Declined', $2, 'account')`,
+          [memUserRes.rows[0].user_id, `Your cash placement request of ₱${parseFloat(fd.principal_amount).toLocaleString()} for Fixed Deposit was declined by office administration.${reasonText}`]
+        );
+      }
+
+    } else if (type === 'share-capital') {
+      const scCheck = await client.query('SELECT * FROM share_capital_transactions WHERE id = $1 FOR UPDATE', [id]);
+      if (scCheck.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ success: false, error: { message: 'Share capital placement not found.' } });
+      }
+
+      const sc = scCheck.rows[0];
+      if (sc.status !== 'pending_payment') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, error: { message: `Placement is already ${sc.status}.` } });
+      }
+
+      const updatedRemarks = remarks ? `DECLINED: ${remarks}` : (sc.remarks || 'Declined by office administration');
+
+      // Mark transaction cancelled
+      await client.query("UPDATE share_capital_transactions SET status = 'cancelled', remarks = $1 WHERE id = $2", [updatedRemarks, id]);
+
+      // Create notification for member user
+      const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [sc.member_id]);
+      if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
+        const reasonText = remarks ? ` Reason: ${remarks}` : '';
+        await client.query(
+          `INSERT INTO notifications (user_id, title, message, type)
+           VALUES ($1, 'Share Capital Placement Declined', $2, 'account')`,
+          [memUserRes.rows[0].user_id, `Your cash placement request of ₱${parseFloat(sc.amount).toLocaleString()} for Share Capital was declined by office administration.${reasonText}`]
+        );
+      }
+    } else {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: { message: 'Invalid placement type.' } });
+    }
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      message: 'Office cash payment request has been declined.'
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
+  }
+};

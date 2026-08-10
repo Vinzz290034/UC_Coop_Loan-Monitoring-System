@@ -8,7 +8,8 @@ import {
   postInvestmentTransaction,
   getInvestments,
   getPendingPlacements,
-  confirmPlacementPayment
+  confirmPlacementPayment,
+  declinePlacementPayment
 } from '../controllers/accountController.js';
 import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
@@ -41,11 +42,14 @@ router.route('/investments/:id/transactions')
 router.route('/investments/:memberId')
   .get(getInvestments);
 
-// 4. Pending placements & office cash payment confirmation
+// 4. Pending placements & office cash payment confirmation/decline
 router.route('/pending-placements')
   .get(restrictTo('admin', 'staff'), getPendingPlacements);
 
 router.route('/confirm-placement/:type/:id')
   .put(restrictTo('admin', 'staff'), confirmPlacementPayment);
+
+router.route('/decline-placement/:type/:id')
+  .put(restrictTo('admin', 'staff'), declinePlacementPayment);
 
 export default router;

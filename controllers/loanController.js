@@ -410,6 +410,16 @@ export const disburseLoan = async (req, res, next) => {
       ]);
     }
 
+    // 4. Create notification for member user
+    const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [loan.member_id]);
+    if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
+      await client.query(
+        `INSERT INTO notifications (user_id, title, message, type)
+         VALUES ($1, 'Loan Application Approved & Disbursed', $2, 'loan_approval')`,
+        [memUserRes.rows[0].user_id, `Your loan application for ₱${parseFloat(loan.principal_amount).toLocaleString()} has been approved and disbursed. You can view your repayment schedule in your dashboard.`]
+      );
+    }
+
     await client.query('COMMIT');
 
     res.status(200).json({
@@ -785,6 +795,17 @@ export const rejectLoanApplication = async (req, res, next) => {
       RETURNING *
     `;
     const updatedResult = await client.query(updateLoanQuery, [id]);
+
+    // Create notification for member user
+    const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [updatedResult.rows[0].member_id]);
+    if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
+      const reasonText = remarks ? ` Remarks: ${remarks}` : '';
+      await client.query(
+        `INSERT INTO notifications (user_id, title, message, type)
+         VALUES ($1, 'Loan Application Decision', $2, 'loan_decision')`,
+        [memUserRes.rows[0].user_id, `Your loan application for ₱${parseFloat(loan.principal_amount).toLocaleString()} was declined by credit underwriting.${reasonText}`]
+      );
+    }
 
     await client.query('COMMIT');
 
