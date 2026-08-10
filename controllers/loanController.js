@@ -487,9 +487,13 @@ export const getLoans = async (req, res, next) => {
     }
 
     if (status) {
-      queryText += ` AND l.status = $${paramIndex}`;
-      params.push(status);
-      paramIndex++;
+      if (status === 'disbursed') {
+        queryText += " AND l.status IN ('disbursed', 'approved', 'active')";
+      } else {
+        queryText += ` AND l.status = $${paramIndex}`;
+        params.push(status);
+        paramIndex++;
+      }
     }
 
     queryText += ' ORDER BY l.created_at DESC';
@@ -835,10 +839,10 @@ export const getLoanMetricsSummary = async (req, res, next) => {
     const metricsQuery = `
       SELECT
         -- Total number of all active loans disbursed
-        COUNT(CASE WHEN status = 'disbursed' THEN 1 END) as active_loans_count,
+        COUNT(CASE WHEN status IN ('disbursed', 'approved', 'active') THEN 1 END) as active_loans_count,
         
         -- Total principal capital ever deployed to members
-        COALESCE(SUM(CASE WHEN status = 'disbursed' THEN principal_amount ELSE 0 END), 0) as total_capital_deployed,
+        COALESCE(SUM(CASE WHEN status IN ('disbursed', 'approved', 'active') THEN principal_amount ELSE 0 END), 0) as total_capital_deployed,
         
         -- Cumulative principal recovered through payments
         COALESCE(
