@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import { SkeletonCard } from '@/components/ui/Skeleton';
@@ -46,10 +47,53 @@ import {
   X,
   ArrowRight,
   Pencil,
+  Eye,
 } from 'lucide-react';
 import ProfileCompletionModal from '@/components/onboarding/ProfileCompletionModal';
 import IncompleteProfileBanner from '@/components/onboarding/IncompleteProfileBanner';
+import PendingPlacementsSection from '@/components/accounting/PendingPlacementsSection';
 import { useRouter } from 'next/navigation';
+
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          Pending Review
+        </span>
+      );
+    case 'approved':
+    case 'active':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          {status === 'approved' ? 'Approved' : 'Active'}
+        </span>
+      );
+    case 'disapproved':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+          <X className="w-3.5 h-3.5" />
+          Disapproved
+        </span>
+      );
+    case 'suspended':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-tertiary/10 text-tertiary">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          Suspended
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral/15 text-neutral-600 dark:text-neutral-400">
+          <X className="w-3.5 h-3.5" />
+          Inactive
+        </span>
+      );
+  }
+};
 
 const LOAN_CATEGORIES = {
   REGULAR: 'Regular Loan',
@@ -199,6 +243,7 @@ export default function OverviewPage() {
   const [memberGrowth, setMemberGrowth] = useState<any[]>([]);
   const [loanDistribution, setLoanDistribution] = useState<any[]>([]);
   const [financialSummary, setFinancialSummary] = useState<any[]>([]);
+  const [adminMembersList, setAdminMembersList] = useState<any[]>([]);
 
   // --- MEMBER WIZARD FORM STATES ---
   // (Must be declared at the top level alongside other hooks, never after
@@ -238,6 +283,26 @@ export default function OverviewPage() {
 
   // Milestone goal editing states
   const [newGoalAmount, setNewGoalAmount] = useState<string>('');
+  const [isEditGoalModalOpen, setIsEditGoalModalOpen] = useState(false);
+  const [goalSubmitting, setGoalSubmitting] = useState(false);
+
+  const handleUpdateGoal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const memberId = user?.profile?.id;
+    if (!memberId || !newGoalAmount) return;
+    try {
+      setGoalSubmitting(true);
+      await api.patch(`/members/${memberId}/milestone-goal`, {
+        target_amount: parseFloat(newGoalAmount)
+      });
+      setIsEditGoalModalOpen(false);
+      fetchDashboardData();
+    } catch (err: any) {
+      alert(err.response?.data?.error?.message || 'Failed to update milestone goal.');
+    } finally {
+      setGoalSubmitting(false);
+    }
+  };
 
   // Appointment Form States
   const [appointmentPurpose, setAppointmentPurpose] = useState<string>('Discuss a Loan Application');
@@ -254,13 +319,14 @@ export default function OverviewPage() {
 
       if (user.role === 'admin' || user.role === 'staff') {
         // Fetch all analytics endpoints in parallel
-        const [summaryRes, trendsRes, repaymentRes, growthRes, distRes, finRes] = await Promise.all([
+        const [summaryRes, trendsRes, repaymentRes, growthRes, distRes, finRes, membersRes] = await Promise.all([
           api.get('/analytics/dashboard-summary'),
           api.get('/analytics/loan-trends'),
           api.get('/analytics/repayment-trends'),
           api.get('/analytics/member-growth'),
           api.get('/analytics/loan-status-distribution'),
           api.get('/analytics/financial-summary'),
+          api.get('/members'),
         ]);
 
         setDashboardSummary(summaryRes.data.data);
@@ -269,6 +335,7 @@ export default function OverviewPage() {
         setMemberGrowth(growthRes.data.data);
         setLoanDistribution(distRes.data.data);
         setFinancialSummary(finRes.data.data);
+        setAdminMembersList(membersRes.data.data || []);
       } else if (user.role === 'member') {
         const memberId = user.profile?.id;
         if (memberId) {
@@ -687,6 +754,17 @@ export default function OverviewPage() {
                       <div className="font-headline text-base font-bold text-on-surface dark:text-white">
                         {formatCurrency(milestoneTarget)}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewGoalAmount(milestoneTarget ? milestoneTarget.toString() : '50000');
+                          setIsEditGoalModalOpen(true);
+                        }}
+                        className="p-1 text-primary dark:text-secondary hover:bg-primary/10 rounded-lg transition-all cursor-pointer active:scale-95"
+                        title="Update Milestone Target Goal"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1852,201 +1930,394 @@ export default function OverviewPage() {
         </button>
       </div>
 
-      {/* Administrative Actions Quick-Desk */}
-      <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-4">
-        <h2 className="font-headline text-base font-bold text-on-surface dark:text-white flex items-center gap-2">
-          <span className="text-lg"></span> Administrative Actions Quick-Desk
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <button
-            onClick={() => router.push('/dashboard/members')}
-            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
-          >
-            <UserIcon className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
-            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Register Member</span>
-          </button>
+      {/* Grid Layout: Main Content (Cols 1-8) + Right Sidebar (Cols 9-12) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* MAIN DASHBOARD CONTENT COLUMN */}
+        <div className="lg:col-span-8 xl:col-span-8 space-y-8">
+          {/* Administrative Actions Quick-Desk */}
+          <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm space-y-4">
+            <h2 className="font-headline text-base font-bold text-on-surface dark:text-white flex items-center gap-2">
+              <span className="text-lg"></span> Administrative Actions Quick-Desk
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <button
+                onClick={() => router.push('/dashboard/members')}
+                className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95 cursor-pointer"
+              >
+                <UserIcon className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
+                <span className="font-body text-xs font-bold text-on-surface dark:text-white">Register Member</span>
+              </button>
 
-          <button
-            onClick={() => router.push('/dashboard/billing')}
-            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
-          >
-            <CalendarCheck className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
-            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Billing Collection Queue</span>
-          </button>
+              <button
+                onClick={() => router.push('/dashboard/billing')}
+                className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95 cursor-pointer"
+              >
+                <CalendarCheck className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
+                <span className="font-body text-xs font-bold text-on-surface dark:text-white">Billing Collection Queue</span>
+              </button>
 
-          <button
-            onClick={() => router.push('/dashboard/reports')}
-            className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95"
-          >
-            <FileCheck className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
-            <span className="font-body text-xs font-bold text-on-surface dark:text-white">Export Reports</span>
-          </button>
-        </div>
-      </div>
+              <button
+                onClick={() => router.push('/dashboard/reports')}
+                className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95 cursor-pointer"
+              >
+                <FileCheck className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
+                <span className="font-body text-xs font-bold text-on-surface dark:text-white">Export Reports</span>
+              </button>
+            </div>
+          </div>
 
-      {/* Financial Health */}
-      <div className="space-y-4">
-        <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Financial Health</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <KpiCard
-            label="Total Capital Deployed"
-            value={formatCurrency(ds.total_capital_ever_deployed)}
-            icon={TrendingUp}
-            description="Cumulative disbursed principal volume"
-          />
-          <KpiCard
-            label="Outstanding Balance"
-            value={formatCurrency(ds.total_outstanding_balance)}
-            icon={TrendingDown}
-            variant="danger"
-            description="Remaining active credit exposure"
-          />
-          <KpiCard
-            label="Interest Earned"
-            value={formatCurrency(ds.total_interest_earned)}
-            icon={Percent}
-            variant="warning"
-            description="Cumulative interest collected"
-          />
-          <KpiCard
-            label="Recovery Rate"
-            value={`${recoveryRate.toFixed(1)}%`}
-            icon={ShieldCheck}
-            variant="primary"
-            description={`Recovered ${formatCurrency(ds.total_repayments_collected)}`}
-          />
-        </div>
-      </div>
+          {/* Financial Health */}
+          <div className="space-y-4">
+            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Financial Health</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <KpiCard
+                label="Total Capital Deployed"
+                value={formatCurrency(ds.total_capital_ever_deployed)}
+                icon={TrendingUp}
+                description="Cumulative disbursed principal volume"
+              />
+              <KpiCard
+                label="Outstanding Balance"
+                value={formatCurrency(ds.total_outstanding_balance)}
+                icon={TrendingDown}
+                variant="danger"
+                description="Remaining active credit exposure"
+              />
+              <KpiCard
+                label="Interest Earned"
+                value={formatCurrency(ds.total_interest_earned)}
+                icon={Percent}
+                variant="warning"
+                description="Cumulative interest collected"
+              />
+              <KpiCard
+                label="Recovery Rate"
+                value={`${recoveryRate.toFixed(1)}%`}
+                icon={ShieldCheck}
+                variant="primary"
+                description={`Recovered ${formatCurrency(ds.total_repayments_collected)}`}
+              />
+            </div>
+          </div>
 
-      {/* Operational Status */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Operational Status</h2>
-          <span className="text-xs text-neutral-500 font-semibold hidden sm:inline">Click any card to filter view</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Total Members -> Redirect to /dashboard/members */}
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard/members')}
-            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
-            title="Click to view Members Directory"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Total Members</span>
+          {/* Operational Status */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Operational Status</h2>
+              <span className="text-xs text-neutral-500 font-semibold hidden sm:inline">Click any card to filter view</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Total Members */}
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard/members')}
+                className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                title="Click to view Members Directory"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Total Members</span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
+                <div className="flex items-center gap-2 mt-1.5 text-[10px]">
+                  <span className="flex items-center gap-0.5 text-green-600"><UserCheck className="w-3 h-3" />{ds.active_members || 0} active</span>
+                  <span className="flex items-center gap-0.5 text-neutral-500"><UserX className="w-3 h-3" />{ds.inactive_members || 0} inactive</span>
+                </div>
+              </button>
+
+              {/* Active Loans */}
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard/loans?status=disbursed')}
+                className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                title="Click to view Active/Disbursed Loans"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Banknote className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Active Loans</span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.disbursed_loans || 0}</div>
+              </button>
+
+              {/* Pending Approval */}
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard/loans?status=pending_approval')}
+                className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-amber-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                title="Click to view Pending Approval Loans"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Pending Approval</span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <div className={`font-headline text-xl font-extrabold ${(ds.pending_loans || 0) > 0 ? 'text-amber-500' : 'text-on-surface dark:text-white'}`}>
+                  {ds.pending_loans || 0}
+                </div>
+              </button>
+
+              {/* Defaulted */}
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard/loans?status=defaulted')}
+                className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-red-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                title="Click to view Defaulted Loans"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Defaulted</span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <div className={`font-headline text-xl font-extrabold ${(ds.defaulted_loans || 0) > 0 ? 'text-red-500' : 'text-on-surface dark:text-white'}`}>
+                  {ds.defaulted_loans || 0}
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Member Financial Overview Table */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary dark:text-secondary" />
+                  Member Financial Overview
+                </h2>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                  Roster overview of member share capital equity balances and active loan amounts
+                </p>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Link
+                href="/dashboard/members"
+                className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-1"
+              >
+                <span>View Full Roster</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
-            <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
-            <div className="flex items-center gap-2 mt-1.5 text-[10px]">
-              <span className="flex items-center gap-0.5 text-green-600"><UserCheck className="w-3 h-3" />{ds.active_members || 0} active</span>
-              <span className="flex items-center gap-0.5 text-neutral-500"><UserX className="w-3 h-3" />{ds.inactive_members || 0} inactive</span>
-            </div>
-          </button>
 
-          {/* Active Loans -> Redirect to /dashboard/loans?status=disbursed */}
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard/loans?status=disbursed')}
-            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
-            title="Click to view Active/Disbursed Loans"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Banknote className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Active Loans</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.disbursed_loans || 0}</div>
-          </button>
+            {/* Member Financial Overview Table Card */}
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                      <th className="px-5 py-3.5">Member Profile</th>
+                      <th className="px-4 py-3.5 text-right">Account Balance</th>
+                      <th className="px-4 py-3.5 text-right">Loan Amount</th>
+                      <th className="px-4 py-3.5 text-center">Status</th>
+                      <th className="px-5 py-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                    {adminMembersList.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-neutral-500 italic">
+                          No members recorded in directory.
+                        </td>
+                      </tr>
+                    ) : (
+                      adminMembersList.slice(0, 6).map((m: any) => (
+                        <tr key={m.id} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
+                          {/* Member Profile */}
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-bold flex items-center justify-center text-xs flex-shrink-0">
+                                {m.first_name?.[0] || 'M'}{m.last_name?.[0] || ''}
+                              </div>
+                              <div>
+                                <Link
+                                  href={`/dashboard/members/${m.id}`}
+                                  className="font-bold text-on-surface dark:text-white hover:text-primary dark:hover:text-secondary block"
+                                >
+                                  {m.last_name}, {m.first_name} {m.middle_name ? `${m.middle_name[0]}.` : ''}
+                                </Link>
+                                <span className="text-[10px] text-neutral-500 font-mono">Member ID: #{m.id}</span>
+                              </div>
+                            </div>
+                          </td>
 
-          {/* Pending Approval -> Redirect to /dashboard/loans?status=pending_approval */}
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard/loans?status=pending_approval')}
-            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-amber-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-            title="Click to view Pending Approval Loans"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Pending Approval</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-            <div className={`font-headline text-xl font-extrabold ${(ds.pending_loans || 0) > 0 ? 'text-amber-500' : 'text-on-surface dark:text-white'}`}>
-              {ds.pending_loans || 0}
-            </div>
-          </button>
+                          {/* Account Balance (Share Capital) */}
+                          <td className="px-4 py-3.5 text-right font-extrabold text-primary dark:text-secondary font-mono">
+                            {formatCurrency(parseFloat(m.share_capital_balance || 0))}
+                          </td>
 
-          {/* Defaulted -> Redirect to /dashboard/loans?status=defaulted */}
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard/loans?status=defaulted')}
-            className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-red-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-            title="Click to view Defaulted Loans"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Defaulted</span>
+                          {/* Loan Amount */}
+                          <td className="px-4 py-3.5 text-right font-extrabold text-on-surface dark:text-white font-mono">
+                            {formatCurrency(parseFloat(m.total_loans_taken || 0))}
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            {getStatusBadge(m.status)}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-5 py-3.5 text-right whitespace-nowrap space-x-2">
+                            {m.status === 'pending' && (
+                              <>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await api.patch(`/members/${m.id}/approval`, { status: 'approved' });
+                                      fetchDashboardData(true);
+                                    } catch (err: any) {
+                                      alert(err.response?.data?.error?.message || 'Failed to approve profile.');
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/20 cursor-pointer"
+                                  title="Approve Member Profile"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await api.patch(`/members/${m.id}/approval`, { status: 'disapproved' });
+                                      fetchDashboardData(true);
+                                    } catch (err: any) {
+                                      alert(err.response?.data?.error?.message || 'Failed to disapprove profile.');
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20 cursor-pointer"
+                                  title="Disapprove Member Profile"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                            <Link
+                              href={`/dashboard/members/${m.id}`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              View Profile
+                            </Link>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-            <div className={`font-headline text-xl font-extrabold ${(ds.defaulted_loans || 0) > 0 ? 'text-red-500' : 'text-on-surface dark:text-white'}`}>
-              {ds.defaulted_loans || 0}
+          </div>
+
+          {/* Financial Assets */}
+          <div className="grid grid-cols-1 gap-6">
+            <KpiCard
+              label="Total Share Capital"
+              value={formatCurrency(ds.total_share_capital)}
+              icon={Building}
+              description="Combined member equity contributions"
+            />
+          </div>
+
+          {/* Financial Flow Analysis */}
+          <div className="space-y-4">
+            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Financial Flow Analysis</h2>
+            <ChartContainer title="Capital Flow" subtitle="Share capital contributions vs loan disbursements over time">
+              <FinancialSummaryChart data={financialSummary} />
+            </ChartContainer>
+          </div>
+        </div>
+
+        {/* RIGHT SIDEBAR COLUMN (Pending Placements + Analytics Performance) */}
+        <div className="lg:col-span-4 xl:col-span-4 space-y-6 lg:sticky lg:top-6">
+          <PendingPlacementsSection />
+
+          {/* Analytics Performance */}
+          <div className="space-y-6 pt-2 border-t border-outline-variant/40">
+            <div>
+              <h2 className="font-headline text-base font-bold text-on-surface dark:text-white">Analytics Performance</h2>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">Cooperative portfolio metrics & trends</p>
             </div>
-          </button>
+
+            <div className="grid grid-cols-1 gap-6">
+              <ChartContainer
+                title="Monthly Loan Activity"
+                subtitle="Applications, disbursements & completions over 12 months"
+              >
+                <MonthlyTrendsChart data={loanTrends} />
+              </ChartContainer>
+
+              <ChartContainer title="Loan Status Distribution" subtitle="Current loan portfolio by status">
+                <LoanStatusChart data={loanDistribution} />
+              </ChartContainer>
+
+              <ChartContainer title="Monthly Repayments" subtitle="Payment collection amounts over 12 months">
+                <RepaymentChart data={repaymentTrends} />
+              </ChartContainer>
+
+              <ChartContainer title="Member Growth" subtitle="New registrations & cumulative membership">
+                <MemberGrowthChart data={memberGrowth} />
+              </ChartContainer>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Financial Assets */}
-      <div className="grid grid-cols-1 gap-6">
-        <KpiCard
-          label="Total Share Capital"
-          value={formatCurrency(ds.total_share_capital)}
-          icon={Building}
-          description="Combined member equity contributions"
-        />
-      </div>
+      {/* EDIT MILESTONE GOAL MODAL */}
+      {isEditGoalModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
+            <button
+              onClick={() => setIsEditGoalModalOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-2">Update Investment Goal</h2>
+            <p className="text-xs text-neutral-500 mb-4">Set your personal target equity accumulation goal.</p>
 
-      {/* Analytics Performance */}
-      <div className="space-y-6">
-        <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Analytics Performance</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartContainer
-            title="Monthly Loan Activity"
-            subtitle="Applications, disbursements & completions over the last 12 months"
-          >
-            <MonthlyTrendsChart data={loanTrends} />
-          </ChartContainer>
+            <form onSubmit={handleUpdateGoal} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-label text-neutral-600 dark:text-neutral-400 px-1">Target Milestone Amount (₱) *</label>
+                <input
+                  type="number"
+                  step="5000"
+                  min="1000"
+                  required
+                  value={newGoalAmount}
+                  onChange={(e) => setNewGoalAmount(e.target.value)}
+                  placeholder="e.g. 100000"
+                  className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none text-on-surface dark:text-white"
+                />
+              </div>
 
-          <ChartContainer title="Loan Status Distribution" subtitle="Current loan portfolio by status">
-            <LoanStatusChart data={loanDistribution} />
-          </ChartContainer>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChartContainer title="Monthly Repayments" subtitle="Payment collection amounts over the last 12 months">
-            <RepaymentChart data={repaymentTrends} />
-          </ChartContainer>
-
-          <ChartContainer title="Member Growth" subtitle="New registrations and cumulative membership over time">
-            <MemberGrowthChart data={memberGrowth} />
-          </ChartContainer>
-        </div>
-      </div>
-
-      {/* Financial Flow Analysis */}
-      <div className="space-y-4">
-        <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Financial Flow Analysis</h2>
-        <ChartContainer title="Capital Flow" subtitle="Share capital contributions vs loan disbursements over time">
-          <FinancialSummaryChart data={financialSummary} />
-        </ChartContainer>
-      </div>
+              <div className="pt-4 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditGoalModalOpen(false)}
+                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={goalSubmitting}
+                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                >
+                  {goalSubmitting ? 'Saving...' : 'Save Target Goal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

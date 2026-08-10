@@ -65,6 +65,42 @@ export const getLoanProducts = async (req, res, next) => {
   }
 };
 
+// @desc    Toggle loan product active status
+// @route   PATCH /api/loans/products/:id/status
+// @access  Protected (Admin, Manager)
+export const updateLoanProductStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { is_active } = req.body;
+
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide boolean is_active status.' }
+      });
+    }
+
+    const result = await query(
+      'UPDATE loan_products SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [is_active, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Loan product not found.' }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ==========================================
 // 2. LOAN LIFECYCLE & DISBURSEMENT
 // ==========================================
@@ -372,6 +408,16 @@ export const disburseLoan = async (req, res, next) => {
         inst.interest_due,
         inst.total_due
       ]);
+    }
+
+    // 4. Create notification for member user
+    const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [loan.member_id]);
+    if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
+      await client.query(
+        `INSERT INTO notifications (user_id, title, message, type)
+         VALUES ($1, 'Loan Application Approved & Disbursed', $2, 'loan_approval')`,
+        [memUserRes.rows[0].user_id, `Your loan application for ₱${parseFloat(loan.principal_amount).toLocaleString()} has been approved and disbursed. You can view your repayment schedule in your dashboard.`]
+      );
     }
 
     await client.query('COMMIT');
@@ -749,6 +795,17 @@ export const rejectLoanApplication = async (req, res, next) => {
       RETURNING *
     `;
     const updatedResult = await client.query(updateLoanQuery, [id]);
+
+    // Create notification for member user
+    const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [updatedResult.rows[0].member_id]);
+    if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
+      const reasonText = remarks ? ` Remarks: ${remarks}` : '';
+      await client.query(
+        `INSERT INTO notifications (user_id, title, message, type)
+         VALUES ($1, 'Loan Application Decision', $2, 'loan_decision')`,
+        [memUserRes.rows[0].user_id, `Your loan application for ₱${parseFloat(loan.principal_amount).toLocaleString()} was declined by credit underwriting.${reasonText}`]
+      );
+    }
 
     await client.query('COMMIT');
 

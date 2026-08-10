@@ -2,6 +2,7 @@ import express from 'express';
 import {
   createLoanProduct,
   getLoanProducts,
+  updateLoanProductStatus,
   applyForLoan,
   disburseLoan,
   getLoans,
@@ -26,6 +27,8 @@ router.use(protect);
 router.route('/products')
   .post(restrictTo('admin', 'staff'), createLoanProduct)
   .get(getLoanProducts);
+
+router.patch('/products/:id/status', restrictTo('admin', 'staff'), updateLoanProductStatus);
 
 // ==========================================
 // 2. AMORTIZATION PREVIEW & CALCULATIONS

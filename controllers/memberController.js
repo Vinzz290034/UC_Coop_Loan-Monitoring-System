@@ -114,7 +114,25 @@ export const getAllMembers = async (req, res, next) => {
     const { search, status, sortBy } = req.query;
 
     let queryText = `
-      SELECT m.*, u.profile_picture_url
+      SELECT 
+        m.*, 
+        u.profile_picture_url,
+        COALESCE((
+          SELECT sct.balance_after 
+          FROM share_capital_transactions sct 
+          WHERE sct.member_id = m.id AND sct.status = 'completed' 
+          ORDER BY sct.transaction_date DESC LIMIT 1
+        ), 0) AS share_capital_balance,
+        COALESCE((
+          SELECT SUM(l.principal_amount) 
+          FROM loans l 
+          WHERE l.member_id = m.id AND l.status IN ('disbursed', 'active')
+        ), 0) AS total_loans_taken,
+        COALESCE((
+          SELECT COUNT(*) 
+          FROM loans l 
+          WHERE l.member_id = m.id AND l.status IN ('disbursed', 'active')
+        ), 0) AS active_loans_count
       FROM members m
       LEFT JOIN users u ON m.user_id = u.id
       WHERE 1=1
@@ -405,7 +423,7 @@ export const updateMemberStatus = async (req, res, next) => {
 
     // 2. Update status & sync is_verified and profile_completed flags
     await client.query(
-      "UPDATE members SET status = $1::varchar, is_verified = (CASE WHEN $1::varchar IN ('approved', 'active') THEN true ELSE false END), profile_completed = (CASE WHEN $1::varchar IN ('approved', 'active') THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+      "UPDATE members SET status = $1::text::varchar, is_verified = (CASE WHEN $1::text::varchar IN ('approved', 'active') THEN true ELSE false END), profile_completed = (CASE WHEN $1::text::varchar IN ('approved', 'active') THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2",
       [status, id]
     );
 
@@ -457,8 +475,8 @@ export const deleteMember = async (req, res, next) => {
     if (parseInt(loan_count, 10) > 0 || parseInt(transaction_count, 10) > 0) {
       return res.status(400).json({
         success: false,
-        error: { 
-          message: 'Cannot delete member. This profile has historical financial ledger records or loans attached to it. Please update their status to "inactive" instead.' 
+        error: {
+          message: 'Cannot delete member. This profile has historical financial ledger records or loans attached to it. Please update their status to "inactive" instead.'
         }
       });
     }
@@ -840,7 +858,7 @@ export const reviewMemberProfile = async (req, res, next) => {
 
     // Update status and mark profile_completed = true if approved
     const updateRes = await client.query(
-      `UPDATE members SET status = $1::varchar, profile_completed = (CASE WHEN $1::varchar = 'approved' THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+      `UPDATE members SET status = $1::text::varchar, profile_completed = (CASE WHEN $1::text::varchar = 'approved' THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
       [targetStatus, id]
     );
 

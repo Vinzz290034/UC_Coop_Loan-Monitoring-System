@@ -149,7 +149,8 @@ function EditUserModal({
               type="text"
               id="edit-username"
               value={username}
-              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ''))}
+              /* Preserve user capitalization preferences while preventing whitespace */
+              onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))}
               disabled={success}
               className="w-full px-4 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/65 rounded-xl text-sm font-body font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-secondary/30 disabled:opacity-50 transition-all"
             />
