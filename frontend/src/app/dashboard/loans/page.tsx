@@ -450,6 +450,15 @@ function LoansPageContent() {
     }
   }, []);
 
+  const handleToggleProductStatus = async (productId: number, currentStatus: boolean) => {
+    try {
+      await api.patch(`/loans/products/${productId}/status`, { is_active: !currentStatus });
+      fetchProducts();
+    } catch (err: any) {
+      alert(err.response?.data?.error?.message || 'Failed to update product status');
+    }
+  };
+
   // Pre-load members list for dropdown autocomplete
   const fetchMembersList = async () => {
     try {
@@ -1330,9 +1339,27 @@ function LoansPageContent() {
                         <h4 className="font-headline font-bold text-base text-on-surface dark:text-white">{prod.name}</h4>
                         <p className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-0.5 capitalize">{prod.amortization_type?.replace('_', ' ')} Formula</p>
                       </div>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
-                        Active
-                      </span>
+                      {isAdminOrManager ? (
+                        <button
+                          onClick={() => handleToggleProductStatus(prod.id, prod.is_active)}
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all active:scale-95 ${
+                            prod.is_active
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-100'
+                              : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300'
+                          }`}
+                          title="Click to toggle product status"
+                        >
+                          {prod.is_active ? 'Active' : 'Inactive'}
+                        </button>
+                      ) : (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          prod.is_active
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400'
+                            : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                        }`}>
+                          {prod.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/40 pt-4 text-xs font-body">

@@ -65,6 +65,42 @@ export const getLoanProducts = async (req, res, next) => {
   }
 };
 
+// @desc    Toggle loan product active status
+// @route   PATCH /api/loans/products/:id/status
+// @access  Protected (Admin, Manager)
+export const updateLoanProductStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { is_active } = req.body;
+
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide boolean is_active status.' }
+      });
+    }
+
+    const result = await query(
+      'UPDATE loan_products SET is_active = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [is_active, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Loan product not found.' }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ==========================================
 // 2. LOAN LIFECYCLE & DISBURSEMENT
 // ==========================================

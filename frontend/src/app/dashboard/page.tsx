@@ -238,6 +238,26 @@ export default function OverviewPage() {
 
   // Milestone goal editing states
   const [newGoalAmount, setNewGoalAmount] = useState<string>('');
+  const [isEditGoalModalOpen, setIsEditGoalModalOpen] = useState(false);
+  const [goalSubmitting, setGoalSubmitting] = useState(false);
+
+  const handleUpdateGoal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const memberId = user?.profile?.id;
+    if (!memberId || !newGoalAmount) return;
+    try {
+      setGoalSubmitting(true);
+      await api.patch(`/members/${memberId}/milestone-goal`, {
+        target_amount: parseFloat(newGoalAmount)
+      });
+      setIsEditGoalModalOpen(false);
+      fetchDashboardData();
+    } catch (err: any) {
+      alert(err.response?.data?.error?.message || 'Failed to update milestone goal.');
+    } finally {
+      setGoalSubmitting(false);
+    }
+  };
 
   // Appointment Form States
   const [appointmentPurpose, setAppointmentPurpose] = useState<string>('Discuss a Loan Application');
@@ -687,6 +707,17 @@ export default function OverviewPage() {
                       <div className="font-headline text-base font-bold text-on-surface dark:text-white">
                         {formatCurrency(milestoneTarget)}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewGoalAmount(milestoneTarget ? milestoneTarget.toString() : '50000');
+                          setIsEditGoalModalOpen(true);
+                        }}
+                        className="p-1 text-primary dark:text-secondary hover:bg-primary/10 rounded-lg transition-all cursor-pointer active:scale-95"
+                        title="Update Milestone Target Goal"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -2017,6 +2048,56 @@ export default function OverviewPage() {
           <FinancialSummaryChart data={financialSummary} />
         </ChartContainer>
       </div>
+
+      {/* EDIT MILESTONE GOAL MODAL */}
+      {isEditGoalModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
+            <button
+              onClick={() => setIsEditGoalModalOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-2">Update Investment Goal</h2>
+            <p className="text-xs text-neutral-500 mb-4">Set your personal target equity accumulation goal.</p>
+
+            <form onSubmit={handleUpdateGoal} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-label text-neutral-600 dark:text-neutral-400 px-1">Target Milestone Amount (₱) *</label>
+                <input
+                  type="number"
+                  step="5000"
+                  min="1000"
+                  required
+                  value={newGoalAmount}
+                  onChange={(e) => setNewGoalAmount(e.target.value)}
+                  placeholder="e.g. 100000"
+                  className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none text-on-surface dark:text-white"
+                />
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditGoalModalOpen(false)}
+                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={goalSubmitting}
+                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                >
+                  {goalSubmitting ? 'Saving...' : 'Save Target Goal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
