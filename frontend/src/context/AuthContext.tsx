@@ -144,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push('/dashboard');
       return receivedUser;
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Login failed. Please check credentials.';
+      const message = error.response?.data?.error?.message || error.response?.data?.message || 'Login failed. Please check credentials.';
       throw new Error(message);
     }
   };
