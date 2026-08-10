@@ -606,7 +606,8 @@ export default function RegisterPage() {
                       required
                       autoComplete="username"
                       value={username}
-                      onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ''))}
+                      /* Allow user free choice of capitalization (uppercase/lowercase) while stripping whitespace */
+                      onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))}
                       placeholder="Choose a unique username"
                       className="w-full pl-12 pr-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
                     />

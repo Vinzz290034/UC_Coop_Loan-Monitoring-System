@@ -38,12 +38,12 @@ export const login = async (req, res, next) => {
       });
     }
 
-    // Check if user exists (by username or member email)
+    // Check if user exists (case-insensitive search by username or member email)
     const userResult = await query(
       `SELECT u.id, u.username, u.password_hash, u.role, u.profile_picture_url 
        FROM users u 
        LEFT JOIN members m ON m.user_id = u.id 
-       WHERE u.username = $1 OR m.email = $1`,
+       WHERE LOWER(u.username) = LOWER($1) OR LOWER(m.email) = LOWER($1)`,
       [loginIdentifier]
     );
 
@@ -601,7 +601,8 @@ export const memberRegister = async (req, res, next) => {
     }
 
     // --- Duplicate checks ---
-    const usernameCheck = await query('SELECT id FROM users WHERE username = $1', [username.toLowerCase()]);
+    /* Perform case-insensitive check to prevent duplicate username registration regardless of case */
+    const usernameCheck = await query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username.trim()]);
     if (usernameCheck.rowCount > 0) {
       return res.status(400).json({
         success: false,
@@ -609,7 +610,7 @@ export const memberRegister = async (req, res, next) => {
       });
     }
 
-    const emailCheck = await query('SELECT id FROM members WHERE email = $1', [email.toLowerCase()]);
+    const emailCheck = await query('SELECT id FROM members WHERE LOWER(email) = LOWER($1)', [email.trim()]);
     if (emailCheck.rowCount > 0) {
       return res.status(400).json({
         success: false,
@@ -641,7 +642,8 @@ export const memberRegister = async (req, res, next) => {
       gender: gender || null,
       civil_status: civil_status || null,
       phone: phone ? phone.trim() : null,
-      username: username.toLowerCase(),
+      /* Preserve exact capitalization chosen by user */
+      username: username.trim(),
       password_hash: passwordHash,
       email: email.toLowerCase(),
     };
