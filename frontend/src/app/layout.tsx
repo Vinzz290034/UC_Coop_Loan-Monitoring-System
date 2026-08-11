@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: "Coop Sync | Cooperative Finance",
   description: "Institutional-grade automated finance and loan monitoring system for cooperatives.",
   icons: {
-    icon: "logo.ico",
+    icon: "/favicon.ico",
   }
 };
 
