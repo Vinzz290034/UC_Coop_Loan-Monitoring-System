@@ -1063,6 +1063,27 @@ export const updateCalamityStatus = async (req, res, next) => {
       [valueStr]
     );
 
+    // Record explicit audit event for state of calamity status changes
+    if (req.user) {
+      await query(
+        `INSERT INTO audit_logs (user_id, username, action, module, method, endpoint, status_code, status, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          req.user.id,
+          req.user.username || req.user.email || 'system_user',
+          'UPDATE_CALAMITY_STATUS',
+          'LOANS',
+          'PATCH',
+          '/api/loans/calamity-status',
+          200,
+          'success',
+          JSON.stringify({ is_calamity_declared: Boolean(is_calamity_declared) })
+        ]
+      ).catch((auditErr) => {
+        console.warn('Failed to insert explicit calamity audit log:', auditErr.message);
+      });
+    }
+
     res.status(200).json({
       success: true,
       is_calamity_declared: Boolean(is_calamity_declared),

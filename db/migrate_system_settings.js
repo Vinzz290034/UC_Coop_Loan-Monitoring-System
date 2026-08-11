@@ -32,6 +32,7 @@ export async function migrateSystemSettings() {
     console.log('[Migration] system_settings table checked/initialized successfully.');
   } catch (error) {
     console.error('[Migration] Error in migrateSystemSettings:', error);
+    throw error;
   } finally {
     client.release();
   }
