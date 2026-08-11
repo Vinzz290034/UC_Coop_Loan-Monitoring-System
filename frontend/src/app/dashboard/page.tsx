@@ -2229,10 +2229,10 @@ export default function OverviewPage() {
                       <tr className="text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                         <th className="px-5 py-3.5">Member Profile</th>
                         <th className="px-4 py-3.5 text-right">Account Balance</th>
-                        <th className="px-4 py-3.5 text-left">Loan Product</th>
-                        <th className="px-4 py-3.5 text-right">Loan Amount</th>
-                        <th className="px-4 py-3.5 text-center">Loan Status</th>
                         <th className="px-4 py-3.5 text-center">Member Status</th>
+                        <th className="px-4 py-3.5 text-right">Loan Amount</th>
+                        <th className="px-4 py-3.5 text-left">Loan Product</th>
+                        <th className="px-4 py-3.5 text-center">Loan Status</th>
                         <th className="px-5 py-3.5 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -2321,31 +2321,6 @@ export default function OverviewPage() {
                               )}
                             </td>
 
-                            {/* Loan Product */}
-                            <td className="px-4 py-3.5 text-left whitespace-nowrap">
-                              {m.latest_loan_product_name && m.latest_loan_product_name !== 'N/A' ? (
-                                <span
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-on-surface dark:text-white border border-outline-variant/40 max-w-[170px] truncate"
-                                  title={m.latest_loan_product_name}
-                                >
-                                  <FileSpreadsheet className="w-3 h-3 text-primary dark:text-secondary flex-shrink-0" />
-                                  <span className="truncate">{m.latest_loan_product_name}</span>
-                                </span>
-                              ) : (
-                                <span className="text-neutral-400 text-xs italic">N/A</span>
-                              )}
-                            </td>
-
-                            {/* Loan Amount */}
-                            <td className="px-4 py-3.5 text-right font-extrabold text-on-surface dark:text-white font-mono">
-                              {formatCurrency(parseFloat(m.total_loans_taken || 0))}
-                            </td>
-
-                            {/* Loan Status */}
-                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                              {getLoanStatusBadge(m.latest_loan_status)}
-                            </td>
-
                             {/* Member Status (Editable) */}
                             <td className="px-4 py-3.5 text-center whitespace-nowrap group/edit">
                               {editingCell?.memberId === m.id && editingCell?.field === 'status' ? (
@@ -2402,6 +2377,46 @@ export default function OverviewPage() {
                                     <Pencil className="w-3 h-3" />
                                   </button>
                                 </div>
+                              )}
+                            </td>
+
+                            {/* Loan Amount */}
+                            <td className="px-4 py-3.5 text-right font-extrabold text-on-surface dark:text-white font-mono">
+                              {formatCurrency(parseFloat(m.total_loans_taken || 0))}
+                            </td>
+
+                            {/* Loan Product (Supports Multiple Loans) */}
+                            <td className="px-4 py-3.5 text-left whitespace-nowrap">
+                              {m.member_loans && m.member_loans.length > 0 ? (
+                                <div className="flex flex-col gap-1 items-start">
+                                  {m.member_loans.map((loan: any, idx: number) => (
+                                    <span
+                                      key={loan.loan_id || idx}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-on-surface dark:text-white border border-outline-variant/40 max-w-[170px] truncate"
+                                      title={loan.product_name}
+                                    >
+                                      <FileSpreadsheet className="w-3 h-3 text-primary dark:text-secondary flex-shrink-0" />
+                                      <span className="truncate">{loan.product_name}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-neutral-400 text-xs italic">N/A</span>
+                              )}
+                            </td>
+
+                            {/* Loan Status (Supports Multiple Loan Statuses) */}
+                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                              {m.member_loans && m.member_loans.length > 0 ? (
+                                <div className="flex flex-col gap-1 items-center justify-center">
+                                  {m.member_loans.map((loan: any, idx: number) => (
+                                    <React.Fragment key={loan.loan_id || idx}>
+                                      {getLoanStatusBadge(loan.status)}
+                                    </React.Fragment>
+                                  ))}
+                                </div>
+                              ) : (
+                                getLoanStatusBadge('none')
                               )}
                             </td>
 
