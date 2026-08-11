@@ -2221,234 +2221,250 @@ export default function OverviewPage() {
               </div>
             )}
 
-            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm flex flex-col">
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                      <th className="px-5 py-3.5">Member Profile</th>
-                      <th className="px-4 py-3.5 text-right">Account Balance</th>
-                      <th className="px-4 py-3.5 text-left">Loan Product</th>
-                      <th className="px-4 py-3.5 text-right">Loan Amount</th>
-                      <th className="px-4 py-3.5 text-center">Loan Status</th>
-                      <th className="px-4 py-3.5 text-center">Member Status</th>
-                      <th className="px-5 py-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
-                    {adminMembersList.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-neutral-500 italic">
-                          No members recorded in directory.
-                        </td>
+                <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 z-10 bg-neutral-50/95 dark:bg-neutral-800/95 backdrop-blur-xs border-b border-outline-variant/50">
+                      <tr className="text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                        <th className="px-5 py-3.5">Member Profile</th>
+                        <th className="px-4 py-3.5 text-right">Account Balance</th>
+                        <th className="px-4 py-3.5 text-left">Loan Product</th>
+                        <th className="px-4 py-3.5 text-right">Loan Amount</th>
+                        <th className="px-4 py-3.5 text-center">Loan Status</th>
+                        <th className="px-4 py-3.5 text-center">Member Status</th>
+                        <th className="px-5 py-3.5 text-right">Actions</th>
                       </tr>
-                    ) : (
-                      adminMembersList.slice(0, 6).map((m: any) => (
-                        <tr key={m.id} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
-                          {/* Member Profile */}
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-bold flex items-center justify-center text-xs flex-shrink-0">
-                                {m.first_name?.[0] || 'M'}{m.last_name?.[0] || ''}
-                              </div>
-                              <div>
-                                <Link
-                                  href={`/dashboard/members/${m.id}`}
-                                  className="font-bold text-on-surface dark:text-white hover:text-primary dark:hover:text-secondary block"
-                                >
-                                  {m.last_name}, {m.first_name} {m.middle_name ? `${m.middle_name[0]}.` : ''}
-                                </Link>
-                                <span className="text-[10px] text-neutral-500 font-mono">Member ID: #{m.id}</span>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Account Balance (Share Capital - Editable) */}
-                          <td className="px-4 py-3.5 text-right font-extrabold text-primary dark:text-secondary font-mono group/edit">
-                            {editingCell?.memberId === m.id && editingCell?.field === 'share_capital_balance' ? (
-                              <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    value={inlineData.share_capital_balance ?? m.share_capital_balance ?? 0}
-                                    onChange={(e) => setInlineData({ ...inlineData, share_capital_balance: e.target.value })}
-                                    className="w-28 px-2 py-1 text-xs font-mono font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-right focus:outline-none focus:ring-1 focus:ring-primary text-on-surface dark:text-white"
-                                    placeholder="0.00"
-                                    disabled={inlineSaving}
-                                    autoFocus
-                                  />
-                                  <button
-                                    onClick={() => handleSaveInlineFinancial(m.id, 'share_capital_balance')}
-                                    disabled={inlineSaving}
-                                    className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
-                                    title="Save Balance"
-                                  >
-                                    {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                                  </button>
-                                  <button
-                                    onClick={() => { setEditingCell(null); setInlineError(null); }}
-                                    disabled={inlineSaving}
-                                    className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
-                                    title="Cancel"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                                {inlineError && (
-                                  <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-end gap-1.5">
-                                <span>{formatCurrency(parseFloat(m.share_capital_balance || 0))}</span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setInlineError(null);
-                                    setEditingCell({ memberId: m.id, field: 'share_capital_balance' });
-                                    setInlineData({ share_capital_balance: m.share_capital_balance || 0 });
-                                  }}
-                                  className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
-                                  title="Edit Account Balance"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Loan Product */}
-                          <td className="px-4 py-3.5 text-left whitespace-nowrap">
-                            {m.latest_loan_product_name && m.latest_loan_product_name !== 'N/A' ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-on-surface dark:text-white border border-outline-variant/40">
-                                <FileSpreadsheet className="w-3 h-3 text-primary dark:text-secondary" />
-                                {m.latest_loan_product_name}
-                              </span>
-                            ) : (
-                              <span className="text-neutral-400 text-xs italic">N/A</span>
-                            )}
-                          </td>
-
-                          {/* Loan Amount */}
-                          <td className="px-4 py-3.5 text-right font-extrabold text-on-surface dark:text-white font-mono">
-                            {formatCurrency(parseFloat(m.total_loans_taken || 0))}
-                          </td>
-
-                          {/* Loan Status */}
-                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                            {getLoanStatusBadge(m.latest_loan_status)}
-                          </td>
-
-                          {/* Member Status (Editable) */}
-                          <td className="px-4 py-3.5 text-center whitespace-nowrap group/edit">
-                            {editingCell?.memberId === m.id && editingCell?.field === 'status' ? (
-                              <div className="flex flex-col items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <select
-                                    value={inlineData.status || m.status}
-                                    onChange={(e) => setInlineData({ ...inlineData, status: e.target.value })}
-                                    className="px-2 py-1 text-xs font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-on-surface dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
-                                    disabled={inlineSaving}
-                                    autoFocus
-                                  >
-                                    <option value="active">Active</option>
-                                    <option value="pending">Pending</option>
-                                    <option value="approved">Approved</option>
-                                    <option value="suspended">Suspended</option>
-                                    <option value="inactive">Inactive</option>
-                                    <option value="disapproved">Disapproved</option>
-                                  </select>
-                                  <button
-                                    onClick={() => handleSaveInlineFinancial(m.id, 'status')}
-                                    disabled={inlineSaving}
-                                    className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
-                                    title="Save Status"
-                                  >
-                                    {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                                  </button>
-                                  <button
-                                    onClick={() => { setEditingCell(null); setInlineError(null); }}
-                                    disabled={inlineSaving}
-                                    className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
-                                    title="Cancel"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                                {inlineError && (
-                                  <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center gap-1.5">
-                                {getStatusBadge(m.status)}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setInlineError(null);
-                                    setEditingCell({ memberId: m.id, field: 'status' });
-                                    setInlineData({ status: m.status });
-                                  }}
-                                  className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
-                                  title="Edit Member Status"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Actions */}
-                          <td className="px-5 py-3.5 text-right whitespace-nowrap space-x-2">
-                            {m.status === 'pending' && (
-                              <>
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      await api.patch(`/members/${m.id}/approval`, { status: 'approved' });
-                                      fetchDashboardData(true);
-                                    } catch (err: any) {
-                                      alert(err.response?.data?.error?.message || 'Failed to approve profile.');
-                                    }
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/20 cursor-pointer"
-                                  title="Approve Member Profile"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      await api.patch(`/members/${m.id}/approval`, { status: 'disapproved' });
-                                      fetchDashboardData(true);
-                                    } catch (err: any) {
-                                      alert(err.response?.data?.error?.message || 'Failed to disapprove profile.');
-                                    }
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20 cursor-pointer"
-                                  title="Disapprove Member Profile"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                  Reject
-                                </button>
-                              </>
-                            )}
-                            <Link
-                              href={`/dashboard/members/${m.id}`}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              View Profile
-                            </Link>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                      {adminMembersList.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-8 text-center text-neutral-500 italic">
+                            No members recorded in directory.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        adminMembersList.map((m: any) => (
+                          <tr key={m.id} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
+                            {/* Member Profile */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-bold flex items-center justify-center text-xs flex-shrink-0">
+                                  {m.first_name?.[0] || 'M'}{m.last_name?.[0] || ''}
+                                </div>
+                                <div>
+                                  <Link
+                                    href={`/dashboard/members/${m.id}`}
+                                    className="font-bold text-on-surface dark:text-white hover:text-primary dark:hover:text-secondary block"
+                                  >
+                                    {m.last_name}, {m.first_name} {m.middle_name ? `${m.middle_name[0]}.` : ''}
+                                  </Link>
+                                  <span className="text-[10px] text-neutral-500 font-mono block truncate max-w-[140px]" title={`Member ID: #${m.id}`}>
+                                    Member ID: #{typeof m.id === 'string' && m.id.length > 8 ? `${m.id.substring(0, 8)}...` : m.id}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Account Balance (Share Capital - Editable) */}
+                            <td className="px-4 py-3.5 text-right font-extrabold text-primary dark:text-secondary font-mono group/edit">
+                              {editingCell?.memberId === m.id && editingCell?.field === 'share_capital_balance' ? (
+                                <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={inlineData.share_capital_balance ?? m.share_capital_balance ?? 0}
+                                      onChange={(e) => setInlineData({ ...inlineData, share_capital_balance: e.target.value })}
+                                      className="w-28 px-2 py-1 text-xs font-mono font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-right focus:outline-none focus:ring-1 focus:ring-primary text-on-surface dark:text-white"
+                                      placeholder="0.00"
+                                      disabled={inlineSaving}
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => handleSaveInlineFinancial(m.id, 'share_capital_balance')}
+                                      disabled={inlineSaving}
+                                      className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+                                      title="Save Balance"
+                                    >
+                                      {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingCell(null); setInlineError(null); }}
+                                      disabled={inlineSaving}
+                                      className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
+                                      title="Cancel"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  {inlineError && (
+                                    <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <span>{formatCurrency(parseFloat(m.share_capital_balance || 0))}</span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInlineError(null);
+                                      setEditingCell({ memberId: m.id, field: 'share_capital_balance' });
+                                      setInlineData({ share_capital_balance: m.share_capital_balance || 0 });
+                                    }}
+                                    className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
+                                    title="Edit Account Balance"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Loan Product */}
+                            <td className="px-4 py-3.5 text-left whitespace-nowrap">
+                              {m.latest_loan_product_name && m.latest_loan_product_name !== 'N/A' ? (
+                                <span
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-on-surface dark:text-white border border-outline-variant/40 max-w-[170px] truncate"
+                                  title={m.latest_loan_product_name}
+                                >
+                                  <FileSpreadsheet className="w-3 h-3 text-primary dark:text-secondary flex-shrink-0" />
+                                  <span className="truncate">{m.latest_loan_product_name}</span>
+                                </span>
+                              ) : (
+                                <span className="text-neutral-400 text-xs italic">N/A</span>
+                              )}
+                            </td>
+
+                            {/* Loan Amount */}
+                            <td className="px-4 py-3.5 text-right font-extrabold text-on-surface dark:text-white font-mono">
+                              {formatCurrency(parseFloat(m.total_loans_taken || 0))}
+                            </td>
+
+                            {/* Loan Status */}
+                            <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                              {getLoanStatusBadge(m.latest_loan_status)}
+                            </td>
+
+                            {/* Member Status (Editable) */}
+                            <td className="px-4 py-3.5 text-center whitespace-nowrap group/edit">
+                              {editingCell?.memberId === m.id && editingCell?.field === 'status' ? (
+                                <div className="flex flex-col items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <select
+                                      value={inlineData.status || m.status}
+                                      onChange={(e) => setInlineData({ ...inlineData, status: e.target.value })}
+                                      className="px-2 py-1 text-xs font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-on-surface dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                                      disabled={inlineSaving}
+                                      autoFocus
+                                    >
+                                      <option value="active">Active</option>
+                                      <option value="pending">Pending</option>
+                                      <option value="approved">Approved</option>
+                                      <option value="suspended">Suspended</option>
+                                      <option value="inactive">Inactive</option>
+                                      <option value="disapproved">Disapproved</option>
+                                    </select>
+                                    <button
+                                      onClick={() => handleSaveInlineFinancial(m.id, 'status')}
+                                      disabled={inlineSaving}
+                                      className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+                                      title="Save Status"
+                                    >
+                                      {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingCell(null); setInlineError(null); }}
+                                      disabled={inlineSaving}
+                                      className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
+                                      title="Cancel"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  {inlineError && (
+                                    <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {getStatusBadge(m.status)}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInlineError(null);
+                                      setEditingCell({ memberId: m.id, field: 'status' });
+                                      setInlineData({ status: m.status });
+                                    }}
+                                    className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
+                                    title="Edit Member Status"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="px-5 py-3.5 text-right whitespace-nowrap space-x-2">
+                              {m.status === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await api.patch(`/members/${m.id}/approval`, { status: 'approved' });
+                                        fetchDashboardData(true);
+                                      } catch (err: any) {
+                                        alert(err.response?.data?.error?.message || 'Failed to approve profile.');
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/20 cursor-pointer"
+                                    title="Approve Member Profile"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await api.patch(`/members/${m.id}/approval`, { status: 'disapproved' });
+                                        fetchDashboardData(true);
+                                      } catch (err: any) {
+                                        alert(err.response?.data?.error?.message || 'Failed to disapprove profile.');
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20 cursor-pointer"
+                                    title="Disapprove Member Profile"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                              <Link
+                                href={`/dashboard/members/${m.id}`}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                View Profile
+                              </Link>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+              {adminMembersList.length > 5 && (
+                <div className="px-5 py-2.5 bg-neutral-50/90 dark:bg-neutral-800/90 border-t border-outline-variant/40 text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
+                  <span>Showing 5 visible of {adminMembersList.length} total members</span>
+                  <span className="text-primary dark:text-secondary flex items-center gap-1 text-[10px] uppercase tracking-wider font-extrabold">
+                    <span>Scroll table for full roster</span>
+                    <ChevronDown className="w-3.5 h-3.5 animate-bounce" />
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
