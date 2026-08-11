@@ -48,6 +48,8 @@ import {
   ArrowRight,
   Pencil,
   Eye,
+  Loader2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import ProfileCompletionModal from '@/components/onboarding/ProfileCompletionModal';
 import IncompleteProfileBanner from '@/components/onboarding/IncompleteProfileBanner';
@@ -90,6 +92,46 @@ const getStatusBadge = (status: string) => {
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral/15 text-neutral-600 dark:text-neutral-400">
           <X className="w-3.5 h-3.5" />
           Inactive
+        </span>
+      );
+  }
+};
+
+const getLoanStatusBadge = (status: string) => {
+  switch (status) {
+    case 'disbursed':
+    case 'active':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+          <CheckCircle2 className="w-3 h-3" />
+          Active / Disbursed
+        </span>
+      );
+    case 'pending_approval':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+          <Clock className="w-3 h-3" />
+          Pending Approval
+        </span>
+      );
+    case 'fully_paid':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary dark:text-secondary border border-primary/20">
+          <CheckCircle2 className="w-3 h-3" />
+          Fully Paid
+        </span>
+      );
+    case 'defaulted':
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+          <AlertTriangle className="w-3 h-3" />
+          Defaulted
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400">
+          No Active Loan
         </span>
       );
   }
@@ -244,6 +286,66 @@ export default function OverviewPage() {
   const [loanDistribution, setLoanDistribution] = useState<any[]>([]);
   const [financialSummary, setFinancialSummary] = useState<any[]>([]);
   const [adminMembersList, setAdminMembersList] = useState<any[]>([]);
+
+  // Inline financial overview editing state
+  const [editingCell, setEditingCell] = useState<{ memberId: number; field: string } | null>(null);
+  const [inlineData, setInlineData] = useState<any>({});
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleSaveInlineFinancial = async (memberId: number, field: string) => {
+    try {
+      setInlineSaving(true);
+      setInlineError(null);
+
+      if (field === 'status') {
+        await api.patch(`/members/${memberId}/status`, {
+          status: inlineData.status,
+          remarks: 'Updated status via financial overview table',
+        });
+        setAdminMembersList((prev) =>
+          prev.map((m) => (m.id === memberId ? { ...m, status: inlineData.status } : m))
+        );
+      } else if (field === 'share_capital_balance') {
+        const numAmount = parseFloat(inlineData.share_capital_balance);
+        if (isNaN(numAmount) || numAmount < 0) {
+          setInlineError('Please enter a valid balance amount.');
+          setInlineSaving(false);
+          return;
+        }
+
+        const targetMember = adminMembersList.find((m) => m.id === memberId);
+        const currentBal = parseFloat(targetMember?.share_capital_balance || 0);
+        const diff = numAmount - currentBal;
+
+        if (Math.abs(diff) > 0.01) {
+          await api.post('/accounts/share-capital', {
+            member_id: memberId,
+            transaction_type: diff >= 0 ? 'credit' : 'debit',
+            amount: Math.abs(diff),
+            remarks: 'Adjusted balance via Financial Overview table inline edit',
+          });
+        }
+
+        setAdminMembersList((prev) =>
+          prev.map((m) => (m.id === memberId ? { ...m, share_capital_balance: numAmount } : m))
+        );
+      }
+
+      setEditingCell(null);
+      setToastMessage('Member financial overview updated successfully!');
+      setTimeout(() => setToastMessage(null), 3500);
+      fetchDashboardData(true);
+    } catch (err: any) {
+      console.error('Inline save financial error:', err);
+      setInlineError(
+        err.response?.data?.error?.message || err.response?.data?.message || 'Failed to update financial detail.'
+      );
+    } finally {
+      setInlineSaving(false);
+    }
+  };
 
   // --- MEMBER WIZARD FORM STATES ---
   // (Must be declared at the top level alongside other hooks, never after
@@ -2107,6 +2209,18 @@ export default function OverviewPage() {
             </div>
 
             {/* Member Financial Overview Table Card */}
+            {toastMessage && (
+              <div className="px-4 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span>{toastMessage}</span>
+                </div>
+                <button onClick={() => setToastMessage(null)} className="text-emerald-500 hover:text-emerald-700 cursor-pointer">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -2114,15 +2228,17 @@ export default function OverviewPage() {
                     <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                       <th className="px-5 py-3.5">Member Profile</th>
                       <th className="px-4 py-3.5 text-right">Account Balance</th>
+                      <th className="px-4 py-3.5 text-left">Loan Product</th>
                       <th className="px-4 py-3.5 text-right">Loan Amount</th>
-                      <th className="px-4 py-3.5 text-center">Status</th>
+                      <th className="px-4 py-3.5 text-center">Loan Status</th>
+                      <th className="px-4 py-3.5 text-center">Member Status</th>
                       <th className="px-5 py-3.5 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
                     {adminMembersList.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-neutral-500 italic">
+                        <td colSpan={7} className="px-6 py-8 text-center text-neutral-500 italic">
                           No members recorded in directory.
                         </td>
                       </tr>
@@ -2147,9 +2263,71 @@ export default function OverviewPage() {
                             </div>
                           </td>
 
-                          {/* Account Balance (Share Capital) */}
-                          <td className="px-4 py-3.5 text-right font-extrabold text-primary dark:text-secondary font-mono">
-                            {formatCurrency(parseFloat(m.share_capital_balance || 0))}
+                          {/* Account Balance (Share Capital - Editable) */}
+                          <td className="px-4 py-3.5 text-right font-extrabold text-primary dark:text-secondary font-mono group/edit">
+                            {editingCell?.memberId === m.id && editingCell?.field === 'share_capital_balance' ? (
+                              <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={inlineData.share_capital_balance ?? m.share_capital_balance ?? 0}
+                                    onChange={(e) => setInlineData({ ...inlineData, share_capital_balance: e.target.value })}
+                                    className="w-28 px-2 py-1 text-xs font-mono font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-right focus:outline-none focus:ring-1 focus:ring-primary text-on-surface dark:text-white"
+                                    placeholder="0.00"
+                                    disabled={inlineSaving}
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleSaveInlineFinancial(m.id, 'share_capital_balance')}
+                                    disabled={inlineSaving}
+                                    className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+                                    title="Save Balance"
+                                  >
+                                    {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                  </button>
+                                  <button
+                                    onClick={() => { setEditingCell(null); setInlineError(null); }}
+                                    disabled={inlineSaving}
+                                    className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                {inlineError && (
+                                  <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span>{formatCurrency(parseFloat(m.share_capital_balance || 0))}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineError(null);
+                                    setEditingCell({ memberId: m.id, field: 'share_capital_balance' });
+                                    setInlineData({ share_capital_balance: m.share_capital_balance || 0 });
+                                  }}
+                                  className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
+                                  title="Edit Account Balance"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Loan Product */}
+                          <td className="px-4 py-3.5 text-left whitespace-nowrap">
+                            {m.latest_loan_product_name && m.latest_loan_product_name !== 'N/A' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-on-surface dark:text-white border border-outline-variant/40">
+                                <FileSpreadsheet className="w-3 h-3 text-primary dark:text-secondary" />
+                                {m.latest_loan_product_name}
+                              </span>
+                            ) : (
+                              <span className="text-neutral-400 text-xs italic">N/A</span>
+                            )}
                           </td>
 
                           {/* Loan Amount */}
@@ -2157,9 +2335,68 @@ export default function OverviewPage() {
                             {formatCurrency(parseFloat(m.total_loans_taken || 0))}
                           </td>
 
-                          {/* Status */}
+                          {/* Loan Status */}
                           <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                            {getStatusBadge(m.status)}
+                            {getLoanStatusBadge(m.latest_loan_status)}
+                          </td>
+
+                          {/* Member Status (Editable) */}
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap group/edit">
+                            {editingCell?.memberId === m.id && editingCell?.field === 'status' ? (
+                              <div className="flex flex-col items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <select
+                                    value={inlineData.status || m.status}
+                                    onChange={(e) => setInlineData({ ...inlineData, status: e.target.value })}
+                                    className="px-2 py-1 text-xs font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-on-surface dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                                    disabled={inlineSaving}
+                                    autoFocus
+                                  >
+                                    <option value="active">Active</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="suspended">Suspended</option>
+                                    <option value="inactive">Inactive</option>
+                                    <option value="disapproved">Disapproved</option>
+                                  </select>
+                                  <button
+                                    onClick={() => handleSaveInlineFinancial(m.id, 'status')}
+                                    disabled={inlineSaving}
+                                    className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+                                    title="Save Status"
+                                  >
+                                    {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                  </button>
+                                  <button
+                                    onClick={() => { setEditingCell(null); setInlineError(null); }}
+                                    disabled={inlineSaving}
+                                    className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                {inlineError && (
+                                  <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1.5">
+                                {getStatusBadge(m.status)}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineError(null);
+                                    setEditingCell({ memberId: m.id, field: 'status' });
+                                    setInlineData({ status: m.status });
+                                  }}
+                                  className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
+                                  title="Edit Member Status"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
                           </td>
 
                           {/* Actions */}

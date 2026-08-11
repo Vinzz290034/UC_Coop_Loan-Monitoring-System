@@ -132,7 +132,24 @@ export const getAllMembers = async (req, res, next) => {
           SELECT COUNT(*) 
           FROM loans l 
           WHERE l.member_id = m.id AND l.status IN ('disbursed', 'active')
-        ), 0) AS active_loans_count
+        ), 0) AS active_loans_count,
+        COALESCE((
+          SELECT l.status 
+          FROM loans l 
+          WHERE l.member_id = m.id 
+          ORDER BY 
+            CASE WHEN l.status IN ('disbursed', 'active') THEN 1 WHEN l.status = 'pending_approval' THEN 2 ELSE 3 END,
+            l.created_at DESC LIMIT 1
+        ), 'none') AS latest_loan_status,
+        COALESCE((
+          SELECT lp.name 
+          FROM loans l 
+          JOIN loan_products lp ON l.loan_product_id = lp.id 
+          WHERE l.member_id = m.id 
+          ORDER BY 
+            CASE WHEN l.status IN ('disbursed', 'active') THEN 1 WHEN l.status = 'pending_approval' THEN 2 ELSE 3 END,
+            l.created_at DESC LIMIT 1
+        ), 'N/A') AS latest_loan_product_name
       FROM members m
       LEFT JOIN users u ON m.user_id = u.id
       WHERE 1=1
