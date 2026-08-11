@@ -32,6 +32,27 @@ export async function migrateCalendarEvents() {
       CREATE INDEX IF NOT EXISTS idx_calendar_events_type ON calendar_events(type);
     `;
     await client.query(createTableQuery);
+
+    // Safely alter id column to UUID if it exists as integer or non-uuid
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'calendar_events' 
+          AND column_name = 'id' 
+          AND udt_name != 'uuid'
+        ) THEN
+          ALTER TABLE announcements DROP CONSTRAINT IF EXISTS announcements_calendar_event_id_fkey;
+          ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS calendar_events_pkey CASCADE;
+          ALTER TABLE calendar_events ALTER COLUMN id DROP DEFAULT;
+          ALTER TABLE calendar_events ALTER COLUMN id TYPE UUID USING gen_random_uuid();
+          ALTER TABLE calendar_events ALTER COLUMN id SET DEFAULT gen_random_uuid();
+          ALTER TABLE calendar_events ADD PRIMARY KEY (id);
+        END IF;
+      END $$;
+    `);
+
     console.log('[Migration] calendar_events table is ready.');
   } catch (error) {
     console.error('[Migration] Failed to migrate calendar_events:', error);
