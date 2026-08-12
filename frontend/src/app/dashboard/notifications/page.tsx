@@ -132,7 +132,7 @@ export default function NotificationsPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-extrabold text-on-surface dark:text-white flex items-center gap-2.5">
+          <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white flex items-center gap-2.5">
             {/* <div className="w-10 h-10 rounded-xl bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary">
               <Bell className="w-5 h-5" />
             </div> */}

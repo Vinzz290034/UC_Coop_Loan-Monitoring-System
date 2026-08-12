@@ -329,7 +329,7 @@ export default function SupportPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white flex items-center gap-2">
-            <LifeBuoy className="w-7 h-7 text-primary dark:text-secondary" />
+            {/* <LifeBuoy className="w-7 h-7 text-primary dark:text-secondary" /> */}
             {isAdminOrManager ? 'Support Desk Management' : 'Help & Support Center'}
           </h1>
           <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 mt-1">
@@ -369,33 +369,30 @@ export default function SupportPage() {
       <div className="flex items-center gap-2 border-b border-outline-variant/40 pb-3">
         <button
           onClick={() => setActiveTab('tickets')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'tickets'
+          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'tickets'
               ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-sm'
               : 'bg-white dark:bg-surface-container-low text-neutral-600 dark:text-neutral-400 border border-outline-variant/50 hover:bg-neutral/5'
-          }`}
+            }`}
         >
           <MessageSquareText className="w-4 h-4" />
           {isAdminOrManager ? 'Support Tickets Queue' : 'My Tickets'} ({tickets.length})
         </button>
         <button
           onClick={() => setActiveTab('faqs')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'faqs'
+          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'faqs'
               ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-sm'
               : 'bg-white dark:bg-surface-container-low text-neutral-600 dark:text-neutral-400 border border-outline-variant/50 hover:bg-neutral/5'
-          }`}
+            }`}
         >
           <HelpCircle className="w-4 h-4" />
           FAQs ({faqsAndGuides.filter(i => i.type === 'faq').length})
         </button>
         <button
           onClick={() => setActiveTab('guides')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-            activeTab === 'guides'
+          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'guides'
               ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-sm'
               : 'bg-white dark:bg-surface-container-low text-neutral-600 dark:text-neutral-400 border border-outline-variant/50 hover:bg-neutral/5'
-          }`}
+            }`}
         >
           <BookOpen className="w-4 h-4" />
           User Guides ({faqsAndGuides.filter(i => i.type === 'guide').length})
@@ -439,11 +436,10 @@ export default function SupportPage() {
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
-                    statusFilter === status
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${statusFilter === status
                       ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-sm'
                       : 'bg-transparent text-neutral-600 dark:text-neutral-300 border-outline-variant/50 hover:bg-neutral/5'
-                  }`}
+                    }`}
                 >
                   {status === 'all' ? 'All' : status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
                 </button>

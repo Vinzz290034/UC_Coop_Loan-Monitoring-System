@@ -77,7 +77,7 @@ export default function AuditTrailPage() {
     if (user?.role === 'admin') {
       api.get('/audit/filters')
         .then(res => setFilterOptions(res.data.data))
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [user]);
 
@@ -170,8 +170,8 @@ export default function AuditTrailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-extrabold text-on-surface dark:text-white flex items-center gap-3">
-            <ScrollText className="w-7 h-7 sm:w-8 sm:h-8 text-primary dark:text-secondary flex-shrink-0" />
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
+            {/* <ScrollText className="w-7 h-7 sm:w-8 sm:h-8 text-primary dark:text-secondary flex-shrink-0" /> */}
             Audit Trail
           </h1>
           <p className="font-body text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 mt-1">
@@ -400,11 +400,10 @@ export default function AuditTrailPage() {
                 <button
                   key={pageNum}
                   onClick={() => fetchLogs(pageNum)}
-                  className={`w-9 h-9 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                    pageNum === pagination.page
+                  className={`w-9 h-9 rounded-xl text-xs font-bold transition-colors cursor-pointer ${pageNum === pagination.page
                       ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950'
                       : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5'
-                  }`}
+                    }`}
                 >
                   {pageNum}
                 </button>

@@ -382,7 +382,7 @@ export default function UsersPage() {
     if (user?.role === 'admin') {
       fetchUsers();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
@@ -390,7 +390,7 @@ export default function UsersPage() {
       const debounce = setTimeout(() => fetchUsers(), 300);
       return () => clearTimeout(debounce);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, roleFilter, statusFilter]);
 
   // Auto-dismiss success messages
@@ -432,12 +432,12 @@ export default function UsersPage() {
       Phone: u.member_profile?.phone || 'N/A',
       'Last Login': u.last_login_at
         ? new Date(u.last_login_at).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
         : 'Never',
       'Registered Date': new Date(u.created_at).toLocaleDateString('en-US', {
         month: 'short',
@@ -501,7 +501,7 @@ export default function UsersPage() {
         {/* Page Header */}
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <h1 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white">
+            <h1 className="font-headline text-3xl font-bold text-on-surface dark:text-white">
               User Management
             </h1>
             <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
