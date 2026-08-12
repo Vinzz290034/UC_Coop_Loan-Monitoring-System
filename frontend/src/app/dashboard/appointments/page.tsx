@@ -269,7 +269,7 @@ export default function AppointmentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white flex items-center gap-2">
-            <CalendarDays className="w-7 h-7 text-primary dark:text-secondary" />
+            {/* <CalendarDays className="w-7 h-7 text-primary dark:text-secondary" /> */}
             {isAdminOrManager ? 'Appointment Desk' : 'My Appointments'}
           </h1>
           <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 mt-1">
@@ -341,11 +341,10 @@ export default function AppointmentsPage() {
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
-                statusFilter === status
+              className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${statusFilter === status
                   ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-sm'
                   : 'bg-transparent text-neutral-600 dark:text-neutral-300 border-outline-variant/50 hover:bg-neutral/5 dark:hover:bg-neutral/10'
-              }`}
+                }`}
             >
               {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
             </button>

@@ -85,7 +85,7 @@ export default function AnnouncementsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
-  
+
   // Fullscreen Image Lightbox State
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
 
@@ -201,7 +201,7 @@ export default function AnnouncementsPage() {
       data.append('content', formData.content);
       data.append('priority', formData.priority);
       data.append('is_active', String(formData.is_active));
-      
+
       if (formData.related_loan_product_id) {
         data.append('related_loan_product_id', formData.related_loan_product_id);
       }
@@ -295,7 +295,7 @@ export default function AnnouncementsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white flex items-center gap-2">
-            <Megaphone className="w-7 h-7 text-primary dark:text-secondary" />
+            {/* <Megaphone className="w-7 h-7 text-primary dark:text-secondary" /> */}
             Announcements Board
           </h1>
           <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 mt-1">
@@ -327,11 +327,10 @@ export default function AnnouncementsPage() {
             <button
               key={prio}
               onClick={() => setPriorityFilter(prio)}
-              className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
-                priorityFilter === prio
+              className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${priorityFilter === prio
                   ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-sm'
                   : 'bg-transparent text-neutral-600 dark:text-neutral-300 border-outline-variant/50 hover:bg-neutral/5 dark:hover:bg-neutral/10'
-              }`}
+                }`}
             >
               {prio.charAt(0).toUpperCase() + prio.slice(1)}
             </button>
@@ -442,7 +441,7 @@ export default function AnnouncementsPage() {
               {/* Attached Announcement Image - Full Picture Uncropped */}
               {ann.image_url && (
                 <div className="pt-2">
-                  <div 
+                  <div
                     onClick={() => setLightboxImage({ url: getImageUrl(ann.image_url), title: ann.title })}
                     className="relative group rounded-2xl overflow-hidden border border-outline-variant/40 bg-neutral-900/5 dark:bg-neutral-950/40 p-1 flex items-center justify-center cursor-pointer transition-all hover:border-primary/50"
                   >
@@ -682,12 +681,12 @@ export default function AnnouncementsPage() {
 
       {/* Fullscreen Image Lightbox Modal */}
       {lightboxImage && mounted && createPortal(
-        <div 
+        <div
           onClick={() => setLightboxImage(null)}
           className="fixed inset-0 z-110 flex items-center justify-center bg-neutral-950/90 backdrop-blur-md p-4 animate-modal-backdrop cursor-zoom-out"
         >
-          <div 
-            onClick={(e) => e.stopPropagation()} 
+          <div
+            onClick={(e) => e.stopPropagation()}
             className="relative max-w-5xl max-h-[92vh] w-full flex flex-col items-center justify-center"
           >
             <button

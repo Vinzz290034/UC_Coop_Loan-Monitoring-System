@@ -68,12 +68,12 @@ export default function MessagesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
-  
+
   // Admin Reply States
   const [replyContent, setReplyContent] = useState('');
   const [replying, setReplying] = useState(false);
   const [replySuccess, setReplySuccess] = useState(false);
-  
+
   // Member Inquiry States
   const [isNewInquiryOpen, setIsNewInquiryOpen] = useState(false);
   const [inquiryContent, setInquiryContent] = useState('');
@@ -238,14 +238,12 @@ export default function MessagesPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-headline text-2xl font-extrabold text-on-surface dark:text-white flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary animate-micro-elevate">
-              <MessageSquare className="w-5 h-5" />
-            </div>
+
             {isMember ? 'Support messages' : 'Contact Messages'}
           </h1>
           <p className="font-body text-xs text-neutral-500 dark:text-neutral-400 mt-1 ml-13">
-            {isMember 
-              ? 'Send inquiries or request support from the cooperative management.' 
+            {isMember
+              ? 'Send inquiries or request support from the cooperative management.'
               : 'Manage and respond to public inquiries from the contact form.'}
           </p>
         </div>
@@ -304,11 +302,10 @@ export default function MessagesPage() {
                 <button
                   key={tab.key}
                   onClick={() => setStatusFilter(tab.key)}
-                  className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
-                    statusFilter === tab.key
-                      ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-sm'
-                      : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral/5 dark:hover:bg-neutral/10'
-                  }`}
+                  className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${statusFilter === tab.key
+                    ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-sm'
+                    : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral/5 dark:hover:bg-neutral/10'
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -334,8 +331,8 @@ export default function MessagesPage() {
                 <Inbox className="w-10 h-10 opacity-30" />
                 <p className="text-sm font-semibold">No messages found</p>
                 <p className="text-xs">
-                  {isMember 
-                    ? "You haven't submitted any messages yet. Click 'Compose Message' to start." 
+                  {isMember
+                    ? "You haven't submitted any messages yet. Click 'Compose Message' to start."
                     : "Contact form submissions will appear here."}
                 </p>
               </div>
@@ -344,21 +341,19 @@ export default function MessagesPage() {
                 <button
                   key={msg.id}
                   onClick={() => handleOpenMessage(msg)}
-                  className={`w-full text-left bg-white dark:bg-surface-container-low border rounded-3xl p-5 transition-all hover:shadow-md cursor-pointer ${
-                    selectedMessage?.id === msg.id
-                      ? 'border-primary dark:border-secondary ring-2 ring-primary/10 dark:ring-secondary/10'
-                      : 'border-outline-variant/65 hover:border-primary/30 dark:hover:border-secondary/30'
-                  } ${msg.status === 'unread' ? 'bg-primary/1 dark:bg-secondary/1' : ''}`}
+                  className={`w-full text-left bg-white dark:bg-surface-container-low border rounded-3xl p-5 transition-all hover:shadow-md cursor-pointer ${selectedMessage?.id === msg.id
+                    ? 'border-primary dark:border-secondary ring-2 ring-primary/10 dark:ring-secondary/10'
+                    : 'border-outline-variant/65 hover:border-primary/30 dark:hover:border-secondary/30'
+                    } ${msg.status === 'unread' ? 'bg-primary/1 dark:bg-secondary/1' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3.5 min-w-0">
-                      <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
-                        msg.status === 'unread'
-                          ? 'bg-tertiary/10 text-tertiary'
-                          : msg.status === 'read'
+                      <div className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${msg.status === 'unread'
+                        ? 'bg-tertiary/10 text-tertiary'
+                        : msg.status === 'read'
                           ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                           : 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary'
-                      }`}>
+                        }`}>
                         {msg.status === 'unread' ? <Mail className="w-4.5 h-4.5" /> : <MailOpen className="w-4.5 h-4.5" />}
                       </div>
                       <div className="min-w-0 flex-1">

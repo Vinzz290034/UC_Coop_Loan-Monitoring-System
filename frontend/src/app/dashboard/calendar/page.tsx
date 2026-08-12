@@ -337,7 +337,7 @@ export default function CalendarPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm transition-all">
         <div>
           <h1 className="font-headline text-2xl font-black text-on-surface dark:text-white flex items-center gap-2">
-            <CalendarDays className="w-7 h-7 text-primary dark:text-secondary" />
+            {/* <CalendarDays className="w-7 h-7 text-primary dark:text-secondary" /> */}
             Calendar & Event Scheduler
           </h1>
           <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400 mt-1">
