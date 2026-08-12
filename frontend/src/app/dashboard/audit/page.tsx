@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import BackButton from '@/components/BackButton';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import {
   ScrollText,
@@ -167,6 +168,10 @@ export default function AuditTrailPage() {
 
   return (
     <div className="space-y-6 animate-micro-elevate">
+      <div>
+        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -401,8 +406,8 @@ export default function AuditTrailPage() {
                   key={pageNum}
                   onClick={() => fetchLogs(pageNum)}
                   className={`w-9 h-9 rounded-xl text-xs font-bold transition-colors cursor-pointer ${pageNum === pagination.page
-                      ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950'
-                      : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5'
+                    ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5'
                     }`}
                 >
                   {pageNum}

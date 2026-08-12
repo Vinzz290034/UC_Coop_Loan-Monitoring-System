@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import BackButton from '@/components/BackButton';
 import * as XLSX from 'xlsx';
 import {
   MessageSquare,
@@ -233,11 +234,15 @@ export default function MessagesPage() {
   const unreadCount = messages.filter((m) => m.status === 'unread').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-micro-elevate">
+      <div>
+        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+      </div>
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-extrabold text-on-surface dark:text-white flex items-center gap-2.5">
+          <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white flex items-center gap-2.5">
 
             {isMember ? 'Support messages' : 'Contact Messages'}
           </h1>
