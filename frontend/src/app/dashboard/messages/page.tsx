@@ -242,11 +242,11 @@ export default function MessagesPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white flex items-center gap-2.5">
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
 
             {isMember ? 'Support messages' : 'Contact Messages'}
           </h1>
-          <p className="font-body text-xs text-neutral-500 dark:text-neutral-400 mt-1 ml-13">
+          <p className="font-body text-xs text-neutral-500 dark:text-neutral-400">
             {isMember
               ? 'Send inquiries or request support from the cooperative management.'
               : 'Manage and respond to public inquiries from the contact form.'}

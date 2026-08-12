@@ -135,7 +135,7 @@ export default function ReportsPage() {
 
   // Search filter
   const [search, setSearch] = useState('');
-  
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -145,7 +145,7 @@ export default function ReportsPage() {
     try {
       setLoading(true);
       setError(null);
-      
+
       let endpoint = '';
       if (activeTab === 'disbursement') {
         endpoint = '/reports/cash-disbursement';
@@ -225,12 +225,12 @@ export default function ReportsPage() {
       const status = (row.status || '').toLowerCase();
       const action = (row.type || '').toLowerCase();
 
-      const matchesSearch = !query || 
-        mName.includes(query) || 
-        pName.includes(query) || 
-        lType.includes(query) || 
-        desc.includes(query) || 
-        tId.includes(query) || 
+      const matchesSearch = !query ||
+        mName.includes(query) ||
+        pName.includes(query) ||
+        lType.includes(query) ||
+        desc.includes(query) ||
+        tId.includes(query) ||
         status.includes(query) ||
         action.includes(query);
 
@@ -254,12 +254,12 @@ export default function ReportsPage() {
         const rowDate = new Date(rowDateStr);
         if (startDate) {
           const start = new Date(startDate);
-          start.setHours(0,0,0,0);
+          start.setHours(0, 0, 0, 0);
           if (rowDate < start) return false;
         }
         if (endDate) {
           const end = new Date(endDate);
-          end.setHours(23,59,59,999);
+          end.setHours(23, 59, 59, 999);
           if (rowDate > end) return false;
         }
       }
@@ -341,7 +341,7 @@ export default function ReportsPage() {
       {/* Header and Download/Upload Button */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white">Analytical Reports</h1>
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Analytical Reports</h1>
           <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
             Query read-optimized financial audits and download institutional OpenXML files.
           </p>
@@ -393,11 +393,10 @@ export default function ReportsPage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as any)}
-            className={`px-4 sm:px-5 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === tab.key
+            className={`px-4 sm:px-5 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === tab.key
                 ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
                 : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-            }`}
+              }`}
           >
             {tab.label}
           </button>
@@ -522,7 +521,7 @@ export default function ReportsPage() {
         <div className="space-y-4">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
-              
+
               {/* TABLE 1: CASH DISBURSEMENT REPORT */}
               {activeTab === 'disbursement' && (
                 <table className="w-full text-left border-collapse">
@@ -611,11 +610,10 @@ export default function ReportsPage() {
                     {currentItems.map((row: any, index: number) => (
                       <tr key={index} className="hover:bg-neutral/5">
                         <td className="px-6 py-3.5">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                            row.ledger_type === 'Share Capital' ? 'bg-primary/10 text-primary' : 
-                            row.ledger_type === 'Fixed Deposit' ? 'bg-indigo-600/10 text-indigo-600' :
-                            row.ledger_type === 'Investment' ? 'bg-amber-500/10 text-amber-600' : 'bg-neutral/15 text-neutral-600 dark:text-neutral-400'
-                          }`}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${row.ledger_type === 'Share Capital' ? 'bg-primary/10 text-primary' :
+                              row.ledger_type === 'Fixed Deposit' ? 'bg-indigo-600/10 text-indigo-600' :
+                                row.ledger_type === 'Investment' ? 'bg-amber-500/10 text-amber-600' : 'bg-neutral/15 text-neutral-600 dark:text-neutral-400'
+                            }`}>
                             {row.ledger_type}
                           </span>
                         </td>
@@ -652,11 +650,10 @@ export default function ReportsPage() {
                   <button
                     key={idx}
                     onClick={() => setCurrentPage(idx + 1)}
-                    className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors ${
-                      currentPage === idx + 1
+                    className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors ${currentPage === idx + 1
                         ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary'
                         : 'border-outline-variant hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400'
-                    }`}
+                      }`}
                   >
                     {idx + 1}
                   </button>
@@ -796,7 +793,7 @@ export default function ReportsPage() {
                 All records have been successfully saved.
               </p>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-3.5 pt-2 text-xs font-body">
               <div className="bg-neutral-50 dark:bg-neutral-900/50 p-3 rounded-2xl border border-outline-variant/30 text-center">
                 <span className="text-[10px] text-neutral-500 font-bold uppercase block tracking-wider">Members</span>
@@ -843,7 +840,7 @@ export default function ReportsPage() {
                 The spreadsheet could not be processed.
               </p>
             </div>
-            
+
             <div className="p-3 bg-tertiary/5 border border-tertiary/15 text-xs text-tertiary rounded-2xl font-medium">
               {importError}
             </div>

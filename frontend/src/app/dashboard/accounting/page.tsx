@@ -70,8 +70,8 @@ export default function AccountingPage() {
   const [completedReceiptTx, setCompletedReceiptTx] = useState<any | null>(null);
   const [completedReceiptMode, setCompletedReceiptMode] = useState<'receipt' | null>(null);
 
-  const auditedMember = user?.role === 'member' && user.profile 
-    ? user.profile 
+  const auditedMember = user?.role === 'member' && user.profile
+    ? user.profile
     : (members.find((m: any) => m.id.toString() === selectedMemberId) || null);
 
   // Form Fields: Share Capital
@@ -287,7 +287,7 @@ export default function AccountingPage() {
     const receiptNo = `TXN-${new Date(txObj.transaction_date).getFullYear()}-${String(txObj.id).padStart(6, '0')}`;
 
     const alreadyConfigured = completedReceiptTx?.id === txObj.id && completedReceiptMode === 'receipt';
-    
+
     if (!alreadyConfigured) {
       setCompletedReceiptTx(txObj);
       setCompletedReceiptMode('receipt');
@@ -352,7 +352,7 @@ export default function AccountingPage() {
       {/* Header and Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-bold text-on-surface dark:text-white">Capital & Asset Accounts Ledger</h1>
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Capital & Asset Accounts Ledger</h1>
           <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
             Monitor member share capital equity, fixed term deposits, and cooperative investment accounts.
           </p>
@@ -414,11 +414,10 @@ export default function AccountingPage() {
       <div className="flex items-center gap-2 p-1.5 bg-neutral-100 dark:bg-neutral-800/60 rounded-2xl w-fit border border-outline-variant/30 overflow-x-auto max-w-full">
         <button
           onClick={() => setActiveTab('share_capital')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'share_capital'
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'share_capital'
               ? 'bg-white dark:bg-neutral-900 text-primary dark:text-secondary shadow-xs'
               : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-          }`}
+            }`}
         >
           <Coins className="w-4 h-4" />
           <span>Share Capital Ledger</span>
@@ -426,11 +425,10 @@ export default function AccountingPage() {
 
         <button
           onClick={() => setActiveTab('fixed_deposits')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'fixed_deposits'
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'fixed_deposits'
               ? 'bg-white dark:bg-neutral-900 text-primary dark:text-secondary shadow-xs'
               : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-          }`}
+            }`}
         >
           <Building className="w-4 h-4" />
           <span>Fixed Deposits</span>
@@ -443,11 +441,10 @@ export default function AccountingPage() {
 
         <button
           onClick={() => setActiveTab('investments')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'investments'
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'investments'
               ? 'bg-white dark:bg-neutral-900 text-primary dark:text-secondary shadow-xs'
               : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-          }`}
+            }`}
         >
           <PiggyBank className="w-4 h-4" />
           <span>Investments Ledger</span>
@@ -1348,7 +1345,8 @@ export default function AccountingPage() {
         </div>
       )}
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @media print {
           body * {
             visibility: hidden !important;
