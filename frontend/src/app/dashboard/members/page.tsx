@@ -25,7 +25,8 @@ import {
 } from 'lucide-react';
 
 interface Member {
-  id: number;
+  id: number | string;
+  member_no?: string;
   first_name: string;
   last_name: string;
   middle_name?: string;
@@ -78,7 +79,7 @@ export default function MembersPage() {
   const router = useRouter();
 
   // Inline editing state
-  const [editingCell, setEditingCell] = useState<{ memberId: number; field: string } | null>(null);
+  const [editingCell, setEditingCell] = useState<{ memberId: number | string; field: string } | null>(null);
   const [inlineData, setInlineData] = useState<any>({});
   const [inlineSaving, setInlineSaving] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
@@ -88,12 +89,12 @@ export default function MembersPage() {
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const touchStartRef = useRef<number>(0);
 
-  const handleCellSingleClick = (memberId: number) => {
+  const handleCellSingleClick = (memberId: number | string) => {
     router.push(`/dashboard/members/${memberId}`);
   };
 
   // Trigger inline editing mode for a specific member field
-  const handleEditClick = (e: React.MouseEvent, memberId: number, field: string, initialValues: any) => {
+  const handleEditClick = (e: React.MouseEvent, memberId: number | string, field: string, initialValues: any) => {
     e.stopPropagation(); // Prevent triggering row/cell click navigation
     setInlineError(null);
     setEditingCell({ memberId, field });
@@ -104,7 +105,7 @@ export default function MembersPage() {
     touchStartRef.current = performance.now();
   };
 
-  const handleTouchEnd = (memberId: number, field: string, initialValues: any) => {
+  const handleTouchEnd = (memberId: number | string, field: string, initialValues: any) => {
     // eslint-disable-next-line react-hooks/purity
     const duration = performance.now() - touchStartRef.current;
     if (duration >= 450) {
@@ -115,7 +116,7 @@ export default function MembersPage() {
     }
   };
 
-  const handleSaveInline = async (memberId: number, field: string) => {
+  const handleSaveInline = async (memberId: number | string, field: string) => {
     try {
       setInlineSaving(true);
       setInlineError(null);
@@ -239,7 +240,7 @@ export default function MembersPage() {
       if (members.length === 0) return;
 
       const excelData = members.map((m) => ({
-        'Member ID': `#${m.id}`,
+        'Member ID': m.member_no || `#${m.id}`,
         'Last Name': m.last_name || '',
         'First Name': m.first_name || '',
         'Middle Name': m.middle_name || '',
@@ -474,6 +475,7 @@ export default function MembersPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                      <th className="px-5 py-3.5">Member ID</th>
                       <th className="px-5 py-3.5">Member Profile</th>
                       <th className="px-4 py-3.5 text-center">Age</th>
                       <th className="px-4 py-3.5 hidden xl:table-cell">Sex / Gender</th>
@@ -495,6 +497,13 @@ export default function MembersPage() {
 
                       return (
                         <tr key={member.id} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
+                          {/* Member ID Cell */}
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-primary/10 text-primary dark:bg-secondary/10 dark:text-secondary border border-primary/20 dark:border-secondary/20">
+                              {member.member_no || `2026-${member.id}`}
+                            </span>
+                          </td>
+
                           {/* Member Profile Cell (Name) */}
                           <td className="px-5 py-3.5 relative group">
                             {isEditingName ? (

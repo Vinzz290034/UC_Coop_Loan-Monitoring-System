@@ -1,5 +1,6 @@
 import pool, { query } from '../config/db.js';
-import { exportToExcel } from '../services/reportExporter.js'; // Ensure this line is present
+import { exportToExcel } from '../services/reportExporter.js';
+import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
 
 // @desc    Create a new member profile
 // @route   POST /api/members
@@ -47,13 +48,17 @@ export const createMember = async (req, res, next) => {
     // Start Transaction
     await client.query('BEGIN');
 
+    // Generate atomic sequential Member ID (YYYY-N)
+    const memberNo = await generateNextMemberNo(client, new Date().getFullYear());
+
     // 1. Insert Member
     const insertMemberQuery = `
-      INSERT INTO members (first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      INSERT INTO members (member_no, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `;
     const memberResult = await client.query(insertMemberQuery, [
+      memberNo,
       first_name.trim(),
       last_name.trim(),
       middle_name?.trim() || null,
@@ -161,6 +166,7 @@ export const getAllMembers = async (req, res, next) => {
 
     if (search) {
       queryText += ` AND (
+        COALESCE(m.member_no, '') ILIKE $${paramIndex} OR
         m.first_name ILIKE $${paramIndex} OR 
         m.last_name ILIKE $${paramIndex} OR 
         COALESCE(m.middle_name, '') ILIKE $${paramIndex} OR
@@ -644,7 +650,7 @@ export const exportMembersReport = async (req, res, next) => {
   try {
     const { search, status } = req.query;
 
-    let queryText = 'SELECT id, first_name, middle_name, last_name, age, gender, civil_status, email, phone, status, created_at FROM members WHERE 1=1';
+    let queryText = 'SELECT id, member_no, first_name, middle_name, last_name, age, gender, civil_status, email, phone, status, created_at FROM members WHERE 1=1';
     const queryParams = [];
     let paramIndex = 1;
 
@@ -655,7 +661,7 @@ export const exportMembersReport = async (req, res, next) => {
     }
 
     if (search) {
-      queryText += ` AND (first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR COALESCE(middle_name, '') ILIKE $${paramIndex} OR COALESCE(email, '') ILIKE $${paramIndex} OR COALESCE(phone, '') ILIKE $${paramIndex} OR COALESCE(gender, '') ILIKE $${paramIndex} OR COALESCE(civil_status, '') ILIKE $${paramIndex})`;
+      queryText += ` AND (COALESCE(member_no, '') ILIKE $${paramIndex} OR first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR COALESCE(middle_name, '') ILIKE $${paramIndex} OR COALESCE(email, '') ILIKE $${paramIndex} OR COALESCE(phone, '') ILIKE $${paramIndex} OR COALESCE(gender, '') ILIKE $${paramIndex} OR COALESCE(civil_status, '') ILIKE $${paramIndex})`;
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
@@ -665,6 +671,7 @@ export const exportMembersReport = async (req, res, next) => {
 
     const formattedMembers = result.rows.map(row => ({
       ...row,
+      member_id_display: row.member_no || row.id,
       full_name: `${row.last_name}, ${row.first_name}${row.middle_name ? ' ' + row.middle_name : ''}`,
       age: row.age != null ? row.age : 'N/A',
       gender: row.gender || 'N/A',
@@ -675,7 +682,7 @@ export const exportMembersReport = async (req, res, next) => {
     }));
 
     const columns = [
-      { header: 'Member ID', key: 'id', width: 15 },
+      { header: 'Member ID', key: 'member_id_display', width: 15 },
       { header: 'Full Name', key: 'full_name', width: 28 },
       { header: 'Age', key: 'age', width: 10 },
       { header: 'Sex / Gender', key: 'gender', width: 15 },

@@ -271,7 +271,12 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
               <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">
                 {member.first_name} {member.middle_name ? `${member.middle_name} ` : ''}{member.last_name}
               </h2>
-              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">Joined {new Date(member.created_at).toLocaleDateString()}</p>
+              <div className="flex items-center justify-center gap-2 mt-1">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary dark:bg-secondary/10 dark:text-secondary border border-primary/20 dark:border-secondary/20">
+                  Member ID: {member.member_no || `2026-${member.id}`}
+                </span>
+              </div>
+              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">Joined {new Date(member.created_at).toLocaleDateString()}</p>
             </div>
             <div className="flex flex-col items-center gap-1.5 w-full">
               {getStatusBadge(member.status, member.is_verified || member.status === 'approved' || member.status === 'active') ? <div>{getStatusBadge(member.status, member.is_verified || member.status === 'approved' || member.status === 'active')}</div> : null}
@@ -320,6 +325,12 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
           </div>
 
           <div className="border-t border-outline-variant/40 pt-6 space-y-4 text-xs font-body">
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-neutral-600 dark:text-neutral-400 w-24">Member ID:</span>
+              <span className="text-on-surface dark:text-white font-mono font-bold text-primary dark:text-secondary">
+                {member.member_no || `2026-${member.id}`}
+              </span>
+            </div>
             <div className="flex items-center gap-3">
               <span className="font-bold text-neutral-600 dark:text-neutral-400 w-24">Title:</span>
               <span className="text-on-surface dark:text-white font-semibold">{member.title || <span className="italic text-neutral-600 dark:text-neutral-400/50">Not set</span>}</span>

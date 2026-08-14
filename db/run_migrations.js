@@ -13,6 +13,7 @@ import { migrateRegistrationOtp } from './migrate_registration_otp.js';
 import { migrateLoansComaker } from './migrate_loans_comaker.js';
 import { migrateSeedDefaults } from './migrate_seed_defaults.js';
 import { migrateSystemSettings } from './migrate_system_settings.js';
+import { migrateMemberIdFormalization } from './migrate_member_id_formalization.js';
 
 export async function runMigrations() {
   console.log('[System Startup] Running automated database migrations...');
@@ -31,6 +32,7 @@ export async function runMigrations() {
     await migrateRegistrationOtp();
     await migrateSeedDefaults();
     await migrateSystemSettings();
+    await migrateMemberIdFormalization();
     console.log('[System Startup] All database migrations completed successfully.');
   } catch (error) {
     console.error('[System Startup] Database migration error:', error);

@@ -3,6 +3,7 @@ import pool from '../config/db.js';
 import { exportToExcel } from '../services/reportExporter.js';
 import XLSX from 'xlsx';
 import fs from 'fs';
+import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
 
 // ==========================================
 // 1. CASH DISBURSEMENT REFERENCE REPORT
@@ -555,10 +556,11 @@ export const importExcelLedger = async (req, res, next) => {
       if (memberCheck.rowCount > 0) {
         memberId = memberCheck.rows[0].id;
       } else {
+        const memberNo = await generateNextMemberNo(client, new Date().getFullYear());
         const insertMemberRes = await client.query(
-          `INSERT INTO members (user_id, first_name, last_name, email, phone, date_of_birth, status)
-           VALUES (NULL, $1, $2, $3, $4, $5, 'active') RETURNING id`,
-          [firstName, lastName, null, phone || null, birthDateRaw]
+          `INSERT INTO members (member_no, user_id, first_name, last_name, email, phone, date_of_birth, status)
+           VALUES ($1, NULL, $2, $3, $4, $5, $6, 'active') RETURNING id`,
+          [memberNo, firstName, lastName, null, phone || null, birthDateRaw]
         );
         memberId = insertMemberRes.rows[0].id;
         membersImported++;

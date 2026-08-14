@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import pool, { query } from '../config/db.js';
 import { generateOtp, sendOtpEmail, sendContactReply } from '../services/emailService.js';
 import { parseUserAgent, getClientIp } from '../utils/userAgentParser.js';
+import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -201,7 +202,7 @@ export const getMe = async (req, res, next) => {
     // Fetch linked member/profile for ALL roles (admin/manager may also have one)
     let memberProfile = null;
     const memberResult = await query(
-      'SELECT id, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified FROM members WHERE user_id = $1',
+      'SELECT id, member_no, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified FROM members WHERE user_id = $1',
       [user.id]
     );
     if (memberResult.rowCount > 0) {
@@ -797,11 +798,15 @@ export const verifyRegistrationOtp = async (req, res, next) => {
     );
     const newUser = userResult.rows[0];
 
-     // 2. Create member profile linked to user
+    // Generate atomic sequential Member ID (YYYY-N)
+    const memberNo = await generateNextMemberNo(client, new Date().getFullYear());
+
+    // 2. Create member profile linked to user
     await client.query(
-      `INSERT INTO members (user_id, first_name, last_name, middle_name, date_of_birth, age, gender, civil_status, phone, email, status, profile_completed, is_verified)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', false, false)`,
+      `INSERT INTO members (member_no, user_id, first_name, last_name, middle_name, date_of_birth, age, gender, civil_status, phone, email, status, profile_completed, is_verified)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', false, false)`,
       [
+        memberNo,
         newUser.id,
         regData.first_name,
         regData.last_name,

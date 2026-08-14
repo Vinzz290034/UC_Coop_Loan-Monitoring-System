@@ -471,7 +471,7 @@ export const getLoans = async (req, res, next) => {
 
     // Admin/Manager view
     let queryText = `
-      SELECT l.*, lp.name as product_name, m.first_name, m.last_name 
+      SELECT l.*, lp.name as product_name, m.first_name, m.last_name, m.member_no
       FROM loans l
       LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
       LEFT JOIN members m ON l.member_id = m.id
@@ -517,7 +517,7 @@ export const getLoanById = async (req, res, next) => {
     const { id } = req.params;
 
     const loanResult = await query(
-      `SELECT l.*, lp.name as product_name, m.first_name, m.last_name 
+      `SELECT l.*, lp.name as product_name, m.first_name, m.last_name, m.member_no
        FROM loans l
        LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
        LEFT JOIN members m ON l.member_id = m.id

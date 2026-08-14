@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
-import { query } from '../config/db.js';
+import pool, { query } from '../config/db.js';
+import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
 
+// @desc    Protect routes - verify JWT token and extract user context
+// @access  Internal Middleware
 export const protect = async (req, res, next) => {
   try {
     let token;
@@ -43,19 +46,31 @@ export const protect = async (req, res, next) => {
     } else {
       // Auto-create or link fallback member profile if role is member
       if (req.user.role === 'member') {
-        const newMember = await query(
-          `INSERT INTO members (user_id, first_name, last_name, email, phone, status)
-           VALUES ($1, $2, $3, $4, $5, 'active')
-           RETURNING *`,
-          [
-            req.user.id,
-            req.user.username.split('_')[0] || req.user.username,
-            req.user.username.split('_')[1] || 'Member',
-            `${req.user.username}@ucmetc.coop`,
-            '09170000000'
-          ]
-        );
-        req.user.profile = newMember.rows[0];
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const memberNo = await generateNextMemberNo(client, new Date().getFullYear());
+          const newMember = await client.query(
+            `INSERT INTO members (member_no, user_id, first_name, last_name, email, phone, status)
+             VALUES ($1, $2, $3, $4, $5, $6, 'active')
+             RETURNING *`,
+            [
+              memberNo,
+              req.user.id,
+              req.user.username.split('_')[0] || req.user.username,
+              req.user.username.split('_')[1] || 'Member',
+              `${req.user.username}@ucmetc.coop`,
+              '09170000000'
+            ]
+          );
+          await client.query('COMMIT');
+          req.user.profile = newMember.rows[0];
+        } catch (e) {
+          await client.query('ROLLBACK');
+          throw e;
+        } finally {
+          client.release();
+        }
       } else {
         // For admin/manager fallback, get first active member ID if needed
         const firstMember = await query('SELECT * FROM members ORDER BY created_at ASC LIMIT 1');
