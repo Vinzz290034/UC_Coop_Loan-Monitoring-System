@@ -8,6 +8,7 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import BackButton from '@/components/BackButton';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import * as XLSX from 'xlsx';
 import {
   FileText,
   FileSpreadsheet,
@@ -173,32 +174,53 @@ export default function ReportsPage() {
 
   const handleExportExcel = async () => {
     try {
-      let endpoint = '';
-      let filename = '';
-      if (activeTab === 'disbursement') {
-        endpoint = '/reports/cash-disbursement';
-        filename = 'Cash_Disbursements_Report';
-      } else if (activeTab === 'monitoring') {
-        endpoint = '/reports/loan-monitoring';
-        filename = 'Loan_Monitoring_Report';
-      } else if (activeTab === 'transactions') {
-        endpoint = '/reports/transactions';
-        filename = 'Master_Transactions_Report';
-      }
+      if (filteredRecords.length === 0) return;
 
-      const response = await api.get(endpoint, {
-        params: { export: 'excel' },
-        responseType: 'blob'
+      const excelData = filteredRecords.map((row) => {
+        if (activeTab === 'disbursement') {
+          return {
+            'Member Name': row.member_name || 'N/A',
+            'Loan Product': row.product_name || 'N/A',
+            'Principal Disbursed (PHP)': parseFloat(row.principal_amount || 0),
+            'Interest Rate': row.interest_rate || 'N/A',
+            'Term (Months)': row.term_months || 'N/A',
+            'Disbursement Date': row.disbursed_at ? new Date(row.disbursed_at).toLocaleDateString() : 'N/A',
+            'Maturity Date': row.maturity_date ? new Date(row.maturity_date).toLocaleDateString() : 'N/A',
+            'Status': (row.status || '').toUpperCase()
+          };
+        } else if (activeTab === 'monitoring') {
+          return {
+            'Member Name': row.member_name || 'N/A',
+            'Loan Product': row.product_name || 'N/A',
+            'Original Capital (PHP)': parseFloat(row.principal_amount || 0),
+            'Principal Recovered (PHP)': parseFloat(row.principal_paid || 0),
+            'Outstanding Capital (PHP)': parseFloat(row.outstanding_principal || 0),
+            'Interest Paid (PHP)': parseFloat(row.interest_paid || 0),
+            'Outstanding Interest (PHP)': parseFloat(row.outstanding_interest || 0),
+            'Total Exposure (PHP)': parseFloat(row.total_outstanding || 0),
+            'Past Due Days': row.days_past_due || 0,
+            'Status': (row.status || '').toUpperCase()
+          };
+        } else {
+          return {
+            'Ledger Category': row.ledger_type || 'N/A',
+            'Transaction ID': row.transaction_id || 'N/A',
+            'Member Name': row.member_name || 'N/A',
+            'Transaction Type': row.type || 'N/A',
+            'Amount (PHP)': parseFloat(row.amount || 0),
+            'Date': row.date || 'N/A',
+            'Remarks': row.description || ''
+          };
+        }
       });
 
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      const sheetName = activeTab === 'disbursement' ? 'Disbursements' : activeTab === 'monitoring' ? 'Portfolio Monitoring' : 'Master Transactions';
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+      const filename = activeTab === 'disbursement' ? 'Cash_Disbursements_Report' : activeTab === 'monitoring' ? 'Loan_Monitoring_Report' : 'Master_Transactions_Report';
+      XLSX.writeFile(workbook, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err) {
       console.error('Excel export failed:', err);
       alert('Failed to export Excel spreadsheet. Please try again.');

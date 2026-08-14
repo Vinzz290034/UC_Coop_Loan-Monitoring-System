@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import SearchInput from '@/components/SearchInput';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import * as XLSX from 'xlsx';
 import {
   UserPlus,
   Mail,
@@ -235,19 +236,31 @@ export default function MembersPage() {
 
   const handleExportExcel = async () => {
     try {
-      const response = await api.get('/members/export/excel', {
-        responseType: 'blob'
-      });
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Members_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      if (members.length === 0) return;
+
+      const excelData = members.map((m) => ({
+        'Member ID': `#${m.id}`,
+        'Last Name': m.last_name || '',
+        'First Name': m.first_name || '',
+        'Middle Name': m.middle_name || '',
+        'Email': m.email || 'N/A',
+        'Phone': m.phone || 'N/A',
+        'Gender': m.gender || 'N/A',
+        'Civil Status': m.civil_status || 'N/A',
+        'Date of Birth': m.date_of_birth ? new Date(m.date_of_birth).toLocaleDateString() : 'N/A',
+        'Age': m.age || 'N/A',
+        'Address': m.address || 'N/A',
+        'Status': (m.status || '').toUpperCase(),
+        'Registration Date': m.created_at ? new Date(m.created_at).toLocaleDateString() : 'N/A'
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Members Directory');
+      XLSX.writeFile(workbook, `Members_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err: any) {
-      alert('Failed to export report. Verify you have administrative permissions.');
+      console.error('Export error:', err);
+      alert('Failed to export report. Please try again.');
     }
   };
 

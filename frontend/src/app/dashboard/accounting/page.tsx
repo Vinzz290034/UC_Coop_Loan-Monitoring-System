@@ -88,6 +88,12 @@ export default function AccountingPage() {
   const [fdSubmitting, setFdSubmitting] = useState(false);
   const [fdError, setFdError] = useState<string | null>(null);
 
+  // Fixed Deposit Status Action Modal State (Early Withdrawal / Payout)
+  const [selectedFDForAction, setSelectedFDForAction] = useState<any | null>(null);
+  const [fdActionRemarks, setFdActionRemarks] = useState('');
+  const [fdActionSubmitting, setFdActionSubmitting] = useState(false);
+  const [fdActionError, setFdActionError] = useState<string | null>(null);
+
   // Form Fields: New Investment Account
   const [invName, setInvName] = useState('');
   const [invPrincipal, setInvPrincipal] = useState('');
@@ -205,6 +211,33 @@ export default function AccountingPage() {
       setFdError(err.response?.data?.error?.message || err.response?.data?.message || 'Fixed deposit creation failed.');
     } finally {
       setFdSubmitting(false);
+    }
+  };
+
+  // Submission Handler: Fixed Deposit Withdrawal / Payout
+  const handleFDActionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFDForAction) return;
+
+    setFdActionError(null);
+    setFdActionSubmitting(true);
+
+    try {
+      // Record withdrawal transaction on fixed deposit
+      await api.post('/accounts/share-capital', {
+        member_id: selectedFDForAction.member_id,
+        transaction_type: 'credit',
+        amount: parseFloat(selectedFDForAction.principal_amount),
+        remarks: fdActionRemarks || `Fixed Deposit #${selectedFDForAction.id} Principal Liquidation Payout`
+      });
+
+      setSelectedFDForAction(null);
+      setFdActionRemarks('');
+      loadLedgerData();
+    } catch (err: any) {
+      setFdActionError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to process Fixed Deposit payout.');
+    } finally {
+      setFdActionSubmitting(false);
     }
   };
 
@@ -633,12 +666,13 @@ export default function AccountingPage() {
                         <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Yield Rate</th>
                         <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Maturity Date</th>
                         <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
                       {fixedDeposits.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-6 text-center text-neutral-600 dark:text-neutral-400 italic">No fixed deposit placements recorded.</td>
+                          <td colSpan={6} className="px-6 py-6 text-center text-neutral-600 dark:text-neutral-400 italic">No fixed deposit placements recorded.</td>
                         </tr>
                       ) : (
                         fixedDeposits.map((fd: any) => (
@@ -652,8 +686,26 @@ export default function AccountingPage() {
                                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">Active</span>
                               ) : fd.status === 'pending_payment' ? (
                                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">Pending Office Cash</span>
+                              ) : fd.status === 'matured' ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-700 dark:text-blue-300">Matured</span>
+                              ) : fd.status === 'withdrawn' ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">Withdrawn</span>
                               ) : (
                                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">{fd.status}</span>
+                              )}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 text-right">
+                              {isAdminOrManager && (fd.status === 'active' || fd.status === 'matured') && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedFDForAction(fd);
+                                    setFdActionRemarks('');
+                                    setFdActionError(null);
+                                  }}
+                                  className="px-3 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-250/30 hover:bg-amber-100 hover:border-amber-400 rounded-lg text-[10px] font-bold tracking-wide transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+                                >
+                                  {fd.status === 'matured' ? 'Payout Maturity' : 'Early Withdrawal'}
+                                </button>
                               )}
                             </td>
                           </tr>
@@ -932,6 +984,82 @@ export default function AccountingPage() {
                   className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
                 >
                   {fdSubmitting ? 'Submitting...' : 'Create Placement'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL 2B: FIXED DEPOSIT LIQUIDATION / PAYOUT ACTION */}
+      {selectedFDForAction && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
+            <button
+              onClick={() => setSelectedFDForAction(null)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
+              aria-label="Close modal"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-1">
+              {selectedFDForAction.status === 'matured' ? 'Process Maturity Payout' : 'Process Early Withdrawal'}
+            </h2>
+            <p className="text-xs text-neutral-500 mb-4">
+              {selectedFDForAction.status === 'matured'
+                ? 'Liquidate matured fixed deposit principal and post final distribution to member equity.'
+                : 'Withdraw principal funds prior to maturity date. Liquidated amount will be credited back.'}
+            </p>
+
+            {fdActionError && (
+              <div className="p-3 mb-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2">
+                <AlertTriangle className="w-4.5 h-4.5 flex-shrink-0" />
+                <span>{fdActionError}</span>
+              </div>
+            )}
+
+            <div className="p-4 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-outline-variant/40 space-y-2 mb-4 text-xs font-body">
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Placement Principal:</span>
+                <span className="font-bold text-primary dark:text-secondary">{formatCurrency(parseFloat(selectedFDForAction.principal_amount))}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Agreed Yield Rate:</span>
+                <span className="font-bold">{(parseFloat(selectedFDForAction.interest_rate) * 100).toFixed(2)}% p.a.</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Maturity Date:</span>
+                <span className="font-mono">{selectedFDForAction.maturity_date ? new Date(selectedFDForAction.maturity_date).toLocaleDateString() : 'N/A'}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleFDActionSubmit} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-label text-neutral-600 dark:text-neutral-400 px-1">Auditing Remarks / Voucher Ref</label>
+                <input
+                  type="text"
+                  value={fdActionRemarks}
+                  onChange={(e) => setFdActionRemarks(e.target.value)}
+                  placeholder="e.g. Approved maturity release / check #1234"
+                  className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none text-on-surface dark:text-white"
+                />
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedFDForAction(null)}
+                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={fdActionSubmitting}
+                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                >
+                  {fdActionSubmitting ? 'Processing...' : 'Confirm Payout'}
                 </button>
               </div>
             </form>
