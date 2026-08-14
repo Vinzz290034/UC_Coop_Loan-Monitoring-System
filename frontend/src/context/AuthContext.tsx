@@ -86,8 +86,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const freshUser = response.data.data || response.data.user;
           setUser(freshUser);
           localStorage.setItem('user', JSON.stringify(freshUser));
-        } catch (error) {
-          console.error('Failed to verify session token or parse stored user', error);
+        } catch (error: any) {
+          if (error?.response?.status === 401) {
+            console.warn('Session token expired or invalid, clearing local session.');
+          } else {
+            console.warn('Failed to verify session token or parse stored user:', error?.message || error);
+          }
           // Token expired or invalid, or stored user is corrupted JSON
           logout();
         }
@@ -251,8 +255,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== 'undefined') {
         localStorage.setItem('user', JSON.stringify(freshUser));
       }
-    } catch (error) {
-      console.error('Failed to refresh user profile:', error);
+    } catch (error: any) {
+      if (error?.response?.status === 401) {
+        console.warn('Session token expired or invalid during profile refresh.');
+      } else {
+        console.warn('Failed to refresh user profile:', error?.message || error);
+      }
     }
   };
 

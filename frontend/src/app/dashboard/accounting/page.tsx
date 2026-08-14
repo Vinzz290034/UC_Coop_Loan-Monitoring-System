@@ -423,21 +423,6 @@ export default function AccountingPage() {
           <span>Share Capital Ledger</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('fixed_deposits')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'fixed_deposits'
-              ? 'bg-white dark:bg-neutral-900 text-primary dark:text-secondary shadow-xs'
-              : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-            }`}
-        >
-          <Building className="w-4 h-4" />
-          <span>Fixed Deposits</span>
-          {fixedDeposits.length > 0 && (
-            <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-extrabold">
-              {fixedDeposits.length}
-            </span>
-          )}
-        </button>
 
         <button
           onClick={() => setActiveTab('investments')}

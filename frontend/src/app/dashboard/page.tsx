@@ -357,14 +357,7 @@ export default function OverviewPage() {
   const [successData, setSuccessData] = useState<any>(null);
   const [modalError, setModalError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user && user.role === 'member') {
-      const isCompleted = user.profile?.profile_completed;
-      if (!isCompleted) {
-        setIsOnboardingModalOpen(true);
-      }
-    }
-  }, [user]);
+
 
   // Loan Form States
   const [products, setProducts] = useState<any[]>([]);
@@ -867,7 +860,7 @@ export default function OverviewPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setNewGoalAmount(milestoneTarget ? milestoneTarget.toString() : '50000');
+                          setNewGoalAmount(milestoneTarget ? milestoneTarget.toString() : '5000');
                           setIsEditGoalModalOpen(true);
                         }}
                         className="p-1 text-primary dark:text-secondary hover:bg-primary/10 rounded-lg transition-all cursor-pointer active:scale-95"
@@ -1882,7 +1875,7 @@ export default function OverviewPage() {
                           Hello, {user?.profile?.first_name || 'Member'}!
                         </h4>
                         <p className="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed max-w-md mx-auto">
-                          Welcome to the UC-METC Cooperative Loan Monitoring & Financial Management System.
+                          Welcome to the UC-METC Cooperative Loan Monitoring System.
                           We are excited to help you track your share capital, loan balance, and loan applications in one unified, secure platform.
                         </p>
                         <div className="pt-4">
@@ -1911,16 +1904,16 @@ export default function OverviewPage() {
                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 font-bold">₱</span>
                             <input
                               type="number"
-                              min={50000}
+                              min={5000}
                               max={150000}
                               value={newGoalAmount}
                               onChange={(e) => setNewGoalAmount(e.target.value)}
-                              placeholder="e.g. 50000"
+                              placeholder="e.g. 5000"
                               className="w-full bg-transparent pl-8 pr-4 py-3 text-sm font-bold text-on-surface dark:text-white focus:outline-none placeholder-neutral-400"
                             />
                           </div>
                           <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-bold px-1">
-                            Min: ₱50,000 | Max: ₱150,000
+                            Min: ₱5,000 | Max: ₱150,000
                           </p>
                         </div>
 
@@ -1928,8 +1921,8 @@ export default function OverviewPage() {
                           <button
                             onClick={async () => {
                               const goalVal = parseFloat(newGoalAmount);
-                              if (isNaN(goalVal) || goalVal < 50000 || goalVal > 150000) {
-                                setModalError('Milestone target goal must be between ₱50,000 and ₱150,000.');
+                              if (isNaN(goalVal) || goalVal < 5000 || goalVal > 150000) {
+                                setModalError('Milestone target goal must be between ₱5,000 and ₱150,000.');
                                 return;
                               }
                               setSubmitting(true);
@@ -1970,13 +1963,13 @@ export default function OverviewPage() {
 
                         <div className="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed space-y-3 text-left">
                           <p>
-                            To unlock loan privileges, you must fill out your <strong>full credentials</strong>. You will only be allowed to apply for loans once your account has been fully verified.
+                            To unlock loan privileges, you must fill out your <strong>full credentials</strong>. You will only be allowed to apply for loans and invest once your account has been fully verified.
                           </p>
                           <p>
                             Please note that verification may take up to <strong>24 hours</strong> as our administrators must manually review your submitted credentials.
                           </p>
                           <p>
-                            Once fully verified, you can apply for loans. Your maximum loanable amount will be calculated based on your total <strong>Share Capital</strong> balance.
+                            Once fully verified, you can apply for loans and invest. Your maximum loanable amount will be calculated based on your total <strong>Share Capital</strong> balance.
                           </p>
                         </div>
 

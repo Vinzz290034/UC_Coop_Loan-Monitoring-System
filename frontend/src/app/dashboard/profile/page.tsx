@@ -885,7 +885,7 @@ const computeAgeFromDob = (dobString: string): string => {
               </p>
             </div>
             <p className="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed">
-              Your profile updates have been successfully submitted to the Cooperative Administrator. Please wait up to <strong>24 hours</strong> while the admin reviews and verifies your credentials. You will be notified as soon as you are fully verified.
+              Your profile updates have been successfully submitted to the System Administrator. Please wait up to <strong>24 hours</strong> while the admin reviews and verifies your credentials. You will be notified as soon as you are fully verified.
             </p>
             <div className="pt-2">
               <button

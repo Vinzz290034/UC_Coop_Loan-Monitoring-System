@@ -1535,6 +1535,7 @@ export const updateProfile = async (req, res, next) => {
            civil_status = $10,
            title = $11,
            tin = $12,
+           profile_completed = true,
            status = (CASE WHEN status IN ('approved', 'active') THEN status ELSE 'pending' END),
            is_verified = (CASE WHEN status IN ('approved', 'active') THEN true ELSE false END),
            updated_at = CURRENT_TIMESTAMP

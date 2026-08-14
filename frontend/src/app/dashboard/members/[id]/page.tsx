@@ -193,11 +193,14 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
     }).format(val || 0);
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, isVerified?: boolean) => {
+    if (isVerified || status === 'pending' || status === 'approved') {
+      return null;
+    }
     switch (status) {
       case 'active':
         return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
             <CheckCircle className="w-3.5 h-3.5" />
             Active
           </span>
@@ -209,13 +212,9 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
             Suspended
           </span>
         );
+      case 'inactive':
       default:
-        return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-neutral/15 text-neutral-600 dark:text-neutral-400">
-            <X className="w-3.5 h-3.5" />
-            Inactive
-          </span>
-        );
+        return null;
     }
   };
 
@@ -275,8 +274,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
               <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">Joined {new Date(member.created_at).toLocaleDateString()}</p>
             </div>
             <div className="flex flex-col items-center gap-1.5 w-full">
-              <div>{getStatusBadge(member.status)}</div>
-              {member.is_verified ? (
+              {getStatusBadge(member.status, member.is_verified || member.status === 'approved' || member.status === 'active') ? <div>{getStatusBadge(member.status, member.is_verified || member.status === 'approved' || member.status === 'active')}</div> : null}
+              {(member.is_verified || member.status === 'approved' || member.status === 'active') ? (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary dark:bg-secondary/10 dark:text-secondary border border-primary/20 dark:border-secondary/20">
                   <ShieldCheck className="w-3 h-3" /> Fully Verified
                 </span>
@@ -303,6 +302,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                             address: member.address,
                             date_of_birth: member.date_of_birth ? new Date(member.date_of_birth).toISOString().split('T')[0] : null,
                             is_verified: true,
+                            status: 'approved',
                           });
                           fetchProfileAndBalances();
                         } catch (err: any) {

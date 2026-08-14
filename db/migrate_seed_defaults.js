@@ -16,47 +16,55 @@ export async function migrateSeedDefaults() {
   console.log('[Migration] Checking default seed accounts and products...');
   const client = await pool.connect();
   try {
+    // Helper function to safely seed user if neither ID nor username exists
+    const seedUser = async (id, username, passwordHash, role) => {
+      const existing = await client.query(
+        `SELECT id FROM users WHERE id = $1 OR username = $2`,
+        [id, username]
+      );
+      if (existing.rowCount === 0) {
+        await client.query(
+          `INSERT INTO users (id, username, password_hash, role) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+          [id, username, passwordHash, role]
+        );
+      }
+    };
+
     // 1. Seed Default Users (Password: password123)
     // Admin
-    await client.query(`
-      INSERT INTO users (id, username, password_hash, role)
-      VALUES ('11111111-1111-1111-1111-111111111111', 'admin', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'admin')
-      ON CONFLICT (username) DO NOTHING;
-    `);
+    await seedUser('11111111-1111-1111-1111-111111111111', 'admin', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'admin');
 
     // Staff
-    await client.query(`
-      INSERT INTO users (id, username, password_hash, role)
-      VALUES ('22222222-2222-2222-2222-222222222222', 'manager', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'staff')
-      ON CONFLICT (username) DO NOTHING;
-    `);
+    await seedUser('22222222-2222-2222-2222-222222222222', 'manager', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'staff');
 
     // Member User
-    await client.query(`
-      INSERT INTO users (id, username, password_hash, role)
-      VALUES ('33333333-3333-3333-3333-333333333333', 'member1', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'member')
-      ON CONFLICT (username) DO NOTHING;
-    `);
+    await seedUser('33333333-3333-3333-3333-333333333333', 'member1', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'member');
 
     // 2. Seed Member Profile linked to the member user
-    await client.query(`
-      INSERT INTO members (id, user_id, first_name, last_name, middle_name, email, phone, address, date_of_birth, gender, civil_status, status)
-      VALUES (
-          '44444444-4444-4444-4444-444444444444', 
-          '33333333-3333-3333-3333-333333333333', 
-          'John', 
-          'Doe', 
-          'Smith', 
-          'johndoe@example.com', 
-          '+639123456789', 
-          '123 Mambaling Street, Cebu City', 
-          '1990-01-15', 
-          'Male',
-          'Single',
-          'active'
-      )
-      ON CONFLICT (email) DO NOTHING;
-    `);
+    const memberProfileCheck = await client.query(
+      `SELECT id FROM members WHERE id = $1 OR email = $2 OR user_id = $3`,
+      ['44444444-4444-4444-4444-444444444444', 'johndoe@example.com', '33333333-3333-3333-3333-333333333333']
+    );
+    if (memberProfileCheck.rowCount === 0) {
+      await client.query(`
+        INSERT INTO members (id, user_id, first_name, last_name, middle_name, email, phone, address, date_of_birth, gender, civil_status, status)
+        VALUES (
+            '44444444-4444-4444-4444-444444444444', 
+            '33333333-3333-3333-3333-333333333333', 
+            'John', 
+            'Doe', 
+            'Smith', 
+            'johndoe@example.com', 
+            '+639123456789', 
+            '123 Mambaling Street, Cebu City', 
+            '1990-01-15', 
+            'Male',
+            'Single',
+            'active'
+        )
+        ON CONFLICT DO NOTHING;
+      `);
+    }
 
     // 3. Seed Default Loan Products
     await client.query(`

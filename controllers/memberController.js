@@ -326,7 +326,10 @@ export const updateMember = async (req, res, next) => {
     if (isVerifiedVal !== undefined) {
       updateQuery = `
         UPDATE members
-        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, tin = $11, title = $12, is_verified = $13, updated_at = CURRENT_TIMESTAMP
+        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, tin = $11, title = $12, is_verified = $13,
+            status = (CASE WHEN $13 = true AND status = 'pending' THEN 'approved' ELSE status END),
+            profile_completed = (CASE WHEN $13 = true THEN true ELSE profile_completed END),
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = $14
         RETURNING *
       `;
