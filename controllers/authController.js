@@ -117,7 +117,7 @@ export const login = async (req, res, next) => {
     let memberProfile = null;
     if (user.role === 'member') {
       const memberResult = await query(
-        'SELECT id, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified FROM members WHERE user_id = $1',
+        'SELECT id, member_no, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified FROM members WHERE user_id = $1',
         [user.id]
       );
       if (memberResult.rowCount > 0) {

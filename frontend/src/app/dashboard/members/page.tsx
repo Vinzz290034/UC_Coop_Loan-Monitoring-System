@@ -240,7 +240,7 @@ export default function MembersPage() {
       if (members.length === 0) return;
 
       const excelData = members.map((m) => ({
-        'Member ID': m.member_no || `#${m.id}`,
+        'Member ID': m.member_no || 'N/A',
         'Last Name': m.last_name || '',
         'First Name': m.first_name || '',
         'Middle Name': m.middle_name || '',
@@ -500,7 +500,7 @@ export default function MembersPage() {
                           {/* Member ID Cell */}
                           <td className="px-5 py-3.5 whitespace-nowrap">
                             <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-primary/10 text-primary dark:bg-secondary/10 dark:text-secondary border border-primary/20 dark:border-secondary/20">
-                              {member.member_no || `2026-${member.id}`}
+                              {member.member_no || 'N/A'}
                             </span>
                           </td>
 

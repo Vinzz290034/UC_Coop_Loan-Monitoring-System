@@ -515,7 +515,7 @@ export const getPendingPlacements = async (req, res, next) => {
     const fixedDeposits = await query(
       `SELECT fd.id, fd.member_id, fd.principal_amount as amount, fd.interest_rate, fd.placement_date, fd.status, fd.created_at,
               'fixed_deposit' as placement_type,
-              m.id as member_no, m.first_name, m.last_name, m.email, m.phone
+              m.member_no, m.first_name, m.last_name, m.email, m.phone
        FROM fixed_deposits fd
        JOIN members m ON fd.member_id = m.id
        WHERE fd.status = 'pending_payment'
@@ -525,7 +525,7 @@ export const getPendingPlacements = async (req, res, next) => {
     const shareCapital = await query(
       `SELECT sct.id, sct.member_id, sct.amount, sct.transaction_date as placement_date, sct.status, sct.remarks, sct.transaction_date as created_at,
               'share_capital' as placement_type,
-              m.id as member_no, m.first_name, m.last_name, m.email, m.phone
+              m.member_no, m.first_name, m.last_name, m.email, m.phone
        FROM share_capital_transactions sct
        JOIN members m ON sct.member_id = m.id
        WHERE sct.status = 'pending_payment'

@@ -10,7 +10,8 @@ export interface User {
   role: 'admin' | 'staff' | 'member';
   profile_picture_url?: string | null;
   profile?: {
-    id: number;
+    id: number | string;
+    member_no?: string | null;
     first_name: string;
     last_name: string;
     middle_name?: string | null;

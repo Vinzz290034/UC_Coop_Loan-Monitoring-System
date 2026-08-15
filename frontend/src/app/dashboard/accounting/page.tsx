@@ -436,7 +436,7 @@ export default function AccountingPage() {
             <option value="">-- Choose Member Profile --</option>
             {members.map((m: any) => (
               <option key={m.id} value={m.id}>
-                {m.last_name}, {m.first_name} (Member ID: {m.member_no || `2026-${m.id}`})
+                {m.last_name}, {m.first_name} (Member ID: {m.member_no || 'N/A'})
               </option>
             ))}
           </select>
@@ -1379,7 +1379,7 @@ export default function AccountingPage() {
                 <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>
                   {auditedMember.last_name}, {auditedMember.first_name}
                 </p>
-                <p style={{ fontSize: '9px', color: '#6b7280', fontFamily: 'monospace', margin: '2px 0 0 0' }}>Member ID: {auditedMember.member_no || `2026-${auditedMember.id}`}</p>
+                <p style={{ fontSize: '9px', color: '#6b7280', fontFamily: 'monospace', margin: '2px 0 0 0' }}>Member ID: {auditedMember.member_no || 'N/A'}</p>
               </div>
               <div style={{ flex: 1 }}>
                 <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Transaction Type</span>

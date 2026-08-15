@@ -1608,7 +1608,7 @@ function LoansPageContent() {
                       <option value="">-- Choose Member Profile --</option>
                       {members.map((m: any) => (
                         <option key={m.id} value={m.id}>
-                          {m.last_name}, {m.first_name} (ID: #{m.id})
+                          {m.last_name}, {m.first_name} (ID: {m.member_no || 'N/A'})
                         </option>
                       ))}
                     </select>

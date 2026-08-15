@@ -534,7 +534,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
     }
 
     // Verify member exists first
-    const memberCheck = await query('SELECT first_name, last_name, status, investment_goal FROM members WHERE id = $1', [id]);
+    const memberCheck = await query('SELECT member_no, first_name, last_name, status, investment_goal FROM members WHERE id = $1', [id]);
     if (memberCheck.rowCount === 0) {
       return res.status(404).json({
         success: false,
@@ -615,6 +615,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
       success: true,
       data: {
         member_id: id,
+        member_no: memberCheck.rows[0].member_no,
         first_name: memberCheck.rows[0].first_name,
         last_name: memberCheck.rows[0].last_name,
         full_name: `${memberCheck.rows[0].first_name} ${memberCheck.rows[0].last_name}`,

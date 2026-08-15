@@ -10,9 +10,10 @@ import {
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
 import path from 'path';
+import os from 'os';
 
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, '/tmp'),
+  destination: (_req, _file, cb) => cb(null, os.tmpdir()),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname);
     cb(null, `import_ledger_${Date.now()}${ext}`);

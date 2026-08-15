@@ -273,7 +273,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
               </h2>
               <div className="flex items-center justify-center gap-2 mt-1">
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary dark:bg-secondary/10 dark:text-secondary border border-primary/20 dark:border-secondary/20">
-                  Member ID: {member.member_no || `2026-${member.id}`}
+                  Member ID: {member.member_no || 'N/A'}
                 </span>
               </div>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">Joined {new Date(member.created_at).toLocaleDateString()}</p>
@@ -328,7 +328,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
             <div className="flex items-center gap-3">
               <span className="font-bold text-neutral-600 dark:text-neutral-400 w-24">Member ID:</span>
               <span className="text-on-surface dark:text-white font-mono font-bold text-primary dark:text-secondary">
-                {member.member_no || `2026-${member.id}`}
+                {member.member_no || 'N/A'}
               </span>
             </div>
             <div className="flex items-center gap-3">

@@ -2252,8 +2252,8 @@ export default function OverviewPage() {
                                   >
                                     {m.last_name}, {m.first_name} {m.middle_name ? `${m.middle_name[0]}.` : ''}
                                   </Link>
-                                  <span className="text-[10px] text-primary dark:text-secondary font-mono font-bold block truncate max-w-[140px]" title={`Member ID: ${m.member_no || m.id}`}>
-                                    Member ID: {m.member_no || (typeof m.id === 'string' && m.id.length > 8 ? `2026-${m.id.substring(0, 4)}` : m.id)}
+                                  <span className="text-[10px] text-primary dark:text-secondary font-mono font-bold block truncate max-w-[140px]" title={`Member ID: ${m.member_no || 'N/A'}`}>
+                                    Member ID: {m.member_no || 'N/A'}
                                   </span>
                                 </div>
                               </div>

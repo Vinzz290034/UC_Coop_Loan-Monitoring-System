@@ -389,11 +389,16 @@ const computeAgeFromDob = (dobString: string): string => {
               <h1 className="font-headline text-xl font-extrabold text-on-surface dark:text-white">
                 {displayName}
               </h1>
-              <div className="flex items-center justify-center sm:justify-start gap-3 mt-1">
+              <div className="flex items-center justify-center sm:justify-start gap-3 mt-1 flex-wrap">
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary text-[10px] font-bold uppercase">
                   <Shield className="w-3 h-3" />
                   {user.role}
                 </span>
+                {user.profile?.member_no && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary/10 dark:bg-secondary/20 text-secondary dark:text-secondary text-[10px] font-mono font-bold">
+                    ID: {user.profile.member_no}
+                  </span>
+                )}
                 <span className="text-[11px] text-neutral-500 dark:text-neutral-400 font-semibold">
                   @{user.username}
                 </span>
