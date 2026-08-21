@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import BackButton from '@/components/BackButton';
+import Link from 'next/link';
 
 function AuthBackground() {
   return (
@@ -92,7 +93,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
   ];
 
   return (
-    <div className="flex items-center justify-center gap-2 mb-6">
+    <div className="flex items-center justify-center gap-2 mb-8">
       {steps.map((step, i) => (
         <React.Fragment key={step.num}>
           <div className="flex items-center gap-1.5">
@@ -346,7 +347,7 @@ export default function ForgotPasswordPage() {
         <ThemeToggle />
       </header>
 
-      <main className="w-full max-w-md z-10 space-y-6 pt-16 py-10">
+      <main className="w-full max-w-md z-10 space-y-6 pt-16">
         <div className="text-center space-y-2 flex flex-col items-center">
           <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-20 h-10 object-contain mb-1" />
           <h1 className="font-brandname text-4xl font-bold text-primary dark:text-secondary tracking-tight">
@@ -357,30 +358,23 @@ export default function ForgotPasswordPage() {
           </p>
         </div>
 
-        <div className="glass-card rounded-3xl p-8 md:p-10 border border-outline-variant/70 shadow-2xl bg-white/95 dark:bg-neutral-900/95">
-          <StepIndicator currentStep={step} />
+        <div className="glass-card rounded-3xl p-8 md:p-10 border border-outline-variant/70 shadow-2xl bg-white/95 dark:bg-neutral-900/95 min-h-[500px] flex flex-col justify-between">
+          <div>
+            <StepIndicator currentStep={step} />
 
-          {/* ═══════════════════ STEP 1: Email Check ═══════════════════ */}
-          {step === 1 && (
-            <>
-              <header className="mb-6">
-                <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
-                  Forgot Password?
-                </h2>
-                <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
-                  Enter your email address below. We will send a verification code to your registered email.
-                </p>
-              </header>
+            {/* ═══════════════════ STEP 1: Email Check ═══════════════════ */}
+            {step === 1 && (
+              <>
+                <header className="mb-6">
+                  <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
+                    Forgot Password?
+                  </h2>
+                  <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
+                    Enter your email address below. We will send a verification code to your registered email.
+                  </p>
+                </header>
 
-              <form onSubmit={handleStep1Submit} className="space-y-4">
-                {error && (
-                  <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs font-bold flex items-center gap-2.5">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
+                <div className="space-y-2 mt-4">
                   <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="reset-email">
                     Email Address
                   </label>
@@ -395,200 +389,227 @@ export default function ForgotPasswordPage() {
                       autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="member@email.com"
-                      className="w-full pl-12 pr-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleStep1Submit(e);
+                      }}
+                      placeholder="Enter your registered email"
+                      className="w-full pl-12 pr-4 py-3.5 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
                     />
                   </div>
                 </div>
+              </>
+            )}
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full py-4 mt-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-extrabold rounded-xl shadow hover:translate-y-[-1px] active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  {submitting ? (
-                    <>
-                      <RotateCw className="w-4 h-4 animate-spin" /> Resolving Account...
-                    </>
-                  ) : (
-                    <>
-                      Find Account <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-            </>
-          )}
-
-          {/* ═══════════════════ STEP 2: OTP Verification ═══════════════════ */}
-          {step === 2 && (
-            <>
-              <header className="mb-6">
-                <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
-                  Verify Reset OTP
-                </h2>
-                <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
-                  We have dispatched a 6-digit OTP code to the registered email: <strong className="text-primary dark:text-secondary break-all">{email}</strong>.
-                </p>
-              </header>
-
-              <form onSubmit={handleVerifyOtp} className="space-y-6">
-                {error && (
-                  <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs font-bold flex items-center gap-2.5">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                    <span>{error}</span>
-                  </div>
-                )}
+            {/* ═══════════════════ STEP 2: OTP Verification ═══════════════════ */}
+            {step === 2 && (
+              <>
+                <header className="mb-6">
+                  <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
+                    Verify Reset OTP
+                  </h2>
+                  <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
+                    We dispatched a code to: <strong className="text-primary dark:text-secondary break-all">{email}</strong>.
+                  </p>
+                </header>
 
                 {devOtp && (
-                  <div className="p-4 bg-primary/10 border border-primary/20 text-primary dark:text-secondary rounded-2xl text-xs font-bold flex items-start gap-2.5">
-                    <ShieldCheck className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                  <div className="p-3 bg-primary/10 border border-primary/20 text-primary dark:text-secondary rounded-xl text-xs font-bold flex items-start gap-2 mb-4">
+                    <ShieldCheck className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="font-extrabold">DEV MODE — Auto OTP Payload Received</p>
-                      <p className="font-mono mt-1 text-sm bg-white/40 dark:bg-black/35 px-2 py-0.5 rounded w-fit">
+                      <p className="font-extrabold">DEV MODE — OTP Code</p>
+                      <p className="font-mono mt-0.5 text-xs bg-white/40 dark:bg-black/35 px-1.5 py-0.5 rounded w-fit">
                         {devOtp}
                       </p>
                     </div>
                   </div>
                 )}
 
-                <div className="space-y-3">
+                <div className="space-y-2 mt-2">
                   <label className="font-label text-xs uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400 block text-center">
                     Enter Verification Code
                   </label>
                   <OtpInput value={otpValue} onChange={setOtpValue} />
                 </div>
+              </>
+            )}
 
-                <div className="flex flex-col gap-2.5 text-center mt-2">
-                  <button
-                    type="submit"
-                    disabled={submitting || otpTimer <= 0}
-                    className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-extrabold rounded-xl shadow hover:translate-y-[-1px] active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    {submitting ? (
-                      <>
-                        <RotateCw className="w-4 h-4 animate-spin" /> Verifying...
-                      </>
-                    ) : (
-                      <>
-                        Verify OTP <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-
-                  <div className="flex justify-between items-center text-xs mt-2 px-1">
-                    <span className="text-neutral-400 dark:text-neutral-500 font-bold">
-                      Code expires in: <span className="font-mono">{formatTimer(otpTimer)}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleResendOtp}
-                      disabled={resendCooldown > 0 || submitting}
-                      className="text-primary dark:text-secondary font-bold hover:underline disabled:text-neutral-400 dark:disabled:text-neutral-600 disabled:no-underline transition-colors"
-                    >
-                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </>
-          )}
-
-          {/* ═══════════════════ STEP 3: Create New Password ═══════════════════ */}
-          {step === 3 && (
-            <>
-              <header className="mb-6">
-                <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
-                  New Password
-                </h2>
-                <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
-                  Please create a new secure password for your account.
-                </p>
-              </header>
-
-              <form onSubmit={handleStep3Submit} className="space-y-4">
-                {error && (
-                  <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs font-bold flex items-center gap-2.5">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                {/* New Password */}
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="new-password">
+            {/* ═══════════════════ STEP 3: Create New Password ═══════════════════ */}
+            {step === 3 && (
+              <>
+                <header className="mb-6">
+                  <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
                     New Password
-                  </label>
-                  <div className="relative group">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">
-                      <Lock className="w-5 h-5" />
-                    </span>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      id="new-password"
-                      required
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full pl-12 pr-12 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40 dark:text-neutral-500 hover:text-primary dark:hover:text-secondary transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
-                  </div>
-                  <PasswordStrength password={newPassword} />
-                </div>
+                  </h2>
+                  <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
+                    Please create a new secure password for your account.
+                  </p>
+                </header>
 
-                {/* Confirm Password */}
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="confirm-password">
-                    Confirm New Password
-                  </label>
-                  <div className="relative group">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">
-                      <Lock className="w-5 h-5" />
-                    </span>
-                    <input
-                      type={showConfirm ? 'text' : 'password'}
-                      id="confirm-password"
-                      required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full pl-12 pr-12 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirm((v) => !v)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40 dark:text-neutral-500 hover:text-primary dark:hover:text-secondary transition-colors"
-                    >
-                      {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
+                <div className="space-y-4">
+                  {/* New Password */}
+                  <div className="space-y-2">
+                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="new-password">
+                      New Password
+                    </label>
+                    <div className="relative group">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">
+                        <Lock className="w-5 h-5" />
+                      </span>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        id="new-password"
+                        required
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="w-full pl-12 pr-12 py-3.5 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40 dark:text-neutral-500 hover:text-primary dark:hover:text-secondary transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    <PasswordStrength password={newPassword} />
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div className="space-y-2">
+                    <label className="font-label text-xs uppercase tracking-wider font-extrabold text-on-surface dark:text-neutral-200 px-1" htmlFor="confirm-password">
+                      Confirm New Password
+                    </label>
+                    <div className="relative group">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface/50 dark:text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary transition-colors pointer-events-none">
+                        <Lock className="w-5 h-5" />
+                      </span>
+                      <input
+                        type={showConfirm ? 'text' : 'password'}
+                        id="confirm-password"
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="w-full pl-12 pr-12 py-3.5 bg-neutral-50 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-700 rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none transition-all font-body text-sm font-semibold text-on-surface dark:text-white placeholder:text-on-surface/40 dark:placeholder:text-neutral-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirm((v) => !v)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40 dark:text-neutral-500 hover:text-primary dark:hover:text-secondary transition-colors"
+                      >
+                        {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
+              </>
+            )}
+          </div>
 
+          {/* ═══════════════════ BOTTOM ACTION SECTION ═══════════════════ */}
+          <div className="mt-8">
+            {error && (
+              <div className="p-4 mb-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs font-bold flex items-center gap-2.5">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {step === 1 && (
+              <form onSubmit={handleStep1Submit} className="space-y-4">
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full py-4 mt-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-extrabold rounded-xl shadow hover:translate-y-[-1px] active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-base font-extrabold rounded-full shadow-lg hover:shadow-primary/25 dark:hover:shadow-secondary/25 hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {submitting ? (
                     <>
-                      <RotateCw className="w-4 h-4 animate-spin" /> Saving Password...
+                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin mr-2" />
+                      Resolving Account…
                     </>
                   ) : (
                     <>
-                      Update Password <ArrowRight className="w-4 h-4" />
+                      Find Account <ArrowRight className="w-5 h-5" />
                     </>
                   )}
                 </button>
+                <p className="text-center text-xs text-on-surface/50 dark:text-neutral-400 font-semibold">
+                  Remember your password?{' '}
+                  <Link href="/login" className="text-primary dark:text-secondary font-bold hover:underline">
+                    Log in
+                  </Link>
+                </p>
               </form>
-            </>
-          )}
+            )}
+
+            {step === 2 && (
+              <form onSubmit={handleVerifyOtp} className="space-y-3">
+                <button
+                  type="submit"
+                  disabled={submitting || otpTimer <= 0}
+                  className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-base font-extrabold rounded-full shadow-lg hover:shadow-primary/25 dark:hover:shadow-secondary/25 hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {submitting ? (
+                    <>
+                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin mr-2" />
+                      Verifying…
+                    </>
+                  ) : (
+                    <>
+                      Verify OTP <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
+                </button>
+
+                <div className="flex justify-between items-center text-xs px-1">
+                  <span className="text-neutral-400 dark:text-neutral-500 font-bold">
+                    Code expires in: <span className="font-mono">{formatTimer(otpTimer)}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resendCooldown > 0 || submitting}
+                    className="text-primary dark:text-secondary font-bold hover:underline disabled:text-neutral-400 dark:disabled:text-neutral-600 disabled:no-underline transition-colors"
+                  >
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {step === 3 && (
+              <form onSubmit={handleStep3Submit} className="space-y-4">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-base font-extrabold rounded-full shadow-lg hover:shadow-primary/25 dark:hover:shadow-secondary/25 hover:scale-[1.01] active:scale-95 disabled:opacity-60 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {submitting ? (
+                    <>
+                      <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin mr-2" />
+                      Saving Password…
+                    </>
+                  ) : (
+                    <>
+                      Update Password <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
+                </button>
+                <p className="text-center text-xs text-on-surface/50 dark:text-neutral-400 font-semibold">
+                  Back to{' '}
+                  <Link href="/login" className="text-primary dark:text-secondary font-bold hover:underline">
+                    Log in
+                  </Link>
+                </p>
+              </form>
+            )}
+          </div>
+        </div>
+
+        <div className="text-center font-body text-xs text-on-surface/50 dark:text-neutral-400 leading-relaxed font-semibold">
+          <p>Protected by LendFlow Automated Multi-Key Encryption protocol.</p>
+          <p className="mt-1">For support, contact coop-security@lendflow.net</p>
         </div>
       </main>
     </div>

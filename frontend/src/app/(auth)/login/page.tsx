@@ -81,7 +81,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="glass-card rounded-3xl p-8 md:p-10 border border-outline-variant/70 shadow-2xl bg-white/95 dark:bg-neutral-900/95">
+    <div className="glass-card rounded-3xl p-8 md:p-10 border border-outline-variant/70 shadow-2xl bg-white/95 dark:bg-neutral-900/95 min-h-[500px] flex flex-col justify-between">
       <header className="mb-8">
         <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
           Cooperative Portal Login
