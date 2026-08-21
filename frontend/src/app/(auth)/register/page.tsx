@@ -24,18 +24,6 @@ import ThemeToggle from '@/components/ThemeToggle';
 import BackButton from '@/components/BackButton';
 import Link from 'next/link';
 
-// ─── Shared animated background (same as login page) ─────────────────────────
-const FLOATERS = [
-  { symbol: '₱', x: '8%', y: '15%', size: 'text-3xl', delay: '0s', dur: '14s', opacity: 0.07 },
-  { symbol: '$', x: '85%', y: '10%', size: 'text-2xl', delay: '2s', dur: '18s', opacity: 0.06 },
-  { symbol: '₱', x: '70%', y: '75%', size: 'text-4xl', delay: '4s', dur: '16s', opacity: 0.08 },
-  { symbol: '%', x: '20%', y: '80%', size: 'text-xl', delay: '1s', dur: '20s', opacity: 0.05 },
-  { symbol: '$', x: '50%', y: '5%', size: 'text-3xl', delay: '6s', dur: '15s', opacity: 0.06 },
-  { symbol: '₱', x: '92%', y: '50%', size: 'text-2xl', delay: '3s', dur: '22s', opacity: 0.07 },
-  { symbol: '$', x: '3%', y: '55%', size: 'text-xl', delay: '8s', dur: '17s', opacity: 0.05 },
-  { symbol: '%', x: '60%', y: '90%', size: 'text-2xl', delay: '5s', dur: '13s', opacity: 0.06 },
-];
-
 function AuthBackground() {
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden bg-neutral-50 dark:bg-neutral-950">
@@ -67,21 +55,6 @@ function AuthBackground() {
           animation: 'aurora-shift 26s ease-in-out infinite reverse',
         }}
       />
-      {FLOATERS.map((f, i) => (
-        <span
-          key={i}
-          className={`absolute font-headline font-black select-none pointer-events-none text-primary dark:text-secondary ${f.size}`}
-          style={{
-            left: f.x,
-            top: f.y,
-            opacity: f.opacity,
-            animation: `particle-drift-${(i % 3) + 1} ${f.dur} ease-in-out infinite`,
-            animationDelay: f.delay,
-          }}
-        >
-          {f.symbol}
-        </span>
-      ))}
     </div>
   );
 }
