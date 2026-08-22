@@ -6,6 +6,8 @@
 - Make use of the folder and file structure that is already made
 - make sure to use all the codes that is already made
 - make sure that it will work on both mobile and desktop screen (Be concise with the responsiveness [Desktop, Tablet, Mobile])
+- Create an implementation plan with proceed button before making changes.
+
 
 ```
 ## Development Guidelines

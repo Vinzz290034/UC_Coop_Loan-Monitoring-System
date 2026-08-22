@@ -49,11 +49,11 @@
   --color-neutral-950: #0d0f0d;
 
   /* ── Typography ────────────────────────────────────────────── */
-  --font-sans: 'Hanken Grotesk', sans-serif;
-  --font-headline: 'Plus Jakarta Sans', sans-serif;
-  --font-body: 'Hanken Grotesk', sans-serif;
-  --font-label: 'Hanken Grotesk', sans-serif;
-  --font-brandname: 'Montserrat', sans-serif;
+  --font-sans: 'Hanken Grotesk', 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-headline: 'Plus Jakarta Sans', 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-body: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-label: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-brandname: 'Montserrat', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   /* ── Animations ─────────────────────────────────────────────── */
   --animate-float: float 6s ease-in-out infinite;

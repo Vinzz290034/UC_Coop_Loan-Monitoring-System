@@ -588,7 +588,7 @@ export default function UserDetailPage() {
       {memberSummary && (
         <div>
           <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-4">Financial Summary</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
             <KpiCard label="Share Capital" value={formatCurrency(balances.share_capital)} icon={Building} description="Equity contributions" />
             <KpiCard label="Fixed Deposits" value={formatCurrency(balances.fixed_deposits)} icon={PiggyBank} description="Timed placements" />
             <KpiCard label="Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Investment portfolios" />

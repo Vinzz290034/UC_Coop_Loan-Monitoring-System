@@ -841,68 +841,68 @@ function LoansPageContent() {
 
         {/* Dynamic Dashboard KPI Cards */}
         {!metricsLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 items-stretch">
             {isAdminOrManager ? (
               <>
                 {/* Card 1: Active Portfolio */}
-                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
                   <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
                     <Banknote className="w-6 h-6" />
                   </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Active Portfolio</span>
-                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Active Portfolio</span>
+                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
                       {formatCurrency(adminMetrics?.ledger_aggregates?.current_outstanding_balance || 0)}
                     </span>
-                    <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
+                    <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
                       Deployed: {formatCurrency(adminMetrics?.ledger_aggregates?.total_capital_deployed || 0)} ({adminMetrics?.portfolio_health?.active_loans || 0} loans)
                     </span>
                   </div>
                 </div>
 
                 {/* Card 2: Interest Collected */}
-                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
                   <div className="w-12 h-12 rounded-2xl bg-secondary/10 dark:bg-secondary/15 text-primary dark:text-secondary flex items-center justify-center flex-shrink-0">
                     <Percent className="w-6 h-6" />
                   </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Interest Revenue</span>
-                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Interest Revenue</span>
+                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
                       {formatCurrency(adminMetrics?.ledger_aggregates?.total_interest_earned || 0)}
                     </span>
-                    <span className="text-[9px] font-bold text-green-600 dark:text-green-400 block mt-0.5">
+                    <span className="text-[9px] font-bold text-green-600 dark:text-green-400 block mt-0.5 truncate">
                       Cumulative interest earned p.a.
                     </span>
                   </div>
                 </div>
 
                 {/* Card 3: Pending Underwriting */}
-                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
                   <div className="w-12 h-12 rounded-2xl bg-tertiary/10 text-tertiary flex items-center justify-center flex-shrink-0">
                     <Clock className="w-6 h-6" />
                   </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Underwriting Queue</span>
-                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Underwriting Queue</span>
+                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
                       {adminMetrics?.portfolio_health?.pending_applications || 0} Applications
                     </span>
-                    <span className="text-[9px] font-bold text-tertiary block mt-0.5">
+                    <span className="text-[9px] font-bold text-tertiary block mt-0.5 truncate">
                       Awaiting manager review/disbursement
                     </span>
                   </div>
                 </div>
 
                 {/* Card 4: Default Risks */}
-                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
                   <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center flex-shrink-0">
                     <AlertTriangle className="w-6 h-6" />
                   </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Delinquency Risk</span>
-                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Delinquency Risk</span>
+                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
                       {adminMetrics?.portfolio_health?.defaulted_loans || 0} Accounts Defaulted
                     </span>
-                    <span className="text-[9px] font-bold text-red-500 block mt-0.5">
+                    <span className="text-[9px] font-bold text-red-500 block mt-0.5 truncate">
                       Rate: {(((adminMetrics?.portfolio_health?.defaulted_loans || 0) / ((adminMetrics?.portfolio_health?.active_loans || 0) + (adminMetrics?.portfolio_health?.defaulted_loans || 0) || 1)) * 100).toFixed(2)}% of portfolio
                     </span>
                   </div>
@@ -911,32 +911,32 @@ function LoansPageContent() {
             ) : (
               <>
                 {/* Member Card 1: Active Loan Count */}
-                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
                   <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
                     <FileCheck className="w-6 h-6" />
                   </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">My Credit Status</span>
-                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">My Credit Status</span>
+                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
                       {memberMetrics?.loans?.active_count || 0} Active Loans
                     </span>
-                    <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
+                    <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
                       Approved cooperative contracts list
                     </span>
                   </div>
                 </div>
 
                 {/* Member Card 2: Outstanding Balance */}
-                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
                   <div className="w-12 h-12 rounded-2xl bg-secondary/10 dark:bg-secondary/15 text-primary dark:text-secondary flex items-center justify-center flex-shrink-0">
                     <Banknote className="w-6 h-6" />
                   </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Outstanding Balance</span>
-                    <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Outstanding Balance</span>
+                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
                       {formatCurrency(memberMetrics?.loans?.outstanding_balance || 0)}
                     </span>
-                    <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
+                    <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
                       Initial Deployed: {formatCurrency(memberMetrics?.loans?.original_principal || 0)}
                     </span>
                   </div>
@@ -948,16 +948,16 @@ function LoansPageContent() {
                   const tierName = historicalCount === 0 ? '1st Loan (New)' : historicalCount === 1 ? '2nd Loan (Track Record)' : '3rd Loan+ (Max Tier)';
                   const desc = historicalCount === 0 ? 'Fully collateralized' : historicalCount === 1 ? 'Co-maker for excess' : '3.0x Share Capital cap';
                   return (
-                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
+                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
                       <div className="w-12 h-12 rounded-2xl bg-tertiary/10 text-tertiary flex items-center justify-center flex-shrink-0">
                         <User className="w-6 h-6" />
                       </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Borrower Policy Tier</span>
-                        <span className="text-xl font-headline font-extrabold text-on-surface dark:text-white block mt-0.5">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Borrower Policy Tier</span>
+                        <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
                           {tierName}
                         </span>
-                        <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
+                        <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
                           {desc} ({historicalCount} past approvals)
                         </span>
                       </div>
@@ -973,21 +973,17 @@ function LoansPageContent() {
                   const limit = historicalCount === 0 ? 0.8 * shareCapital : historicalCount === 1 ? 2.0 * shareCapital : 3.0 * shareCapital;
                   const remaining = outstandingBalance > 0 ? 0 : limit;
                   return (
-                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-                      <div className="w-12 h-12 rounded-2xl bg-green-500/10 text-green-600 flex items-center justify-center flex-shrink-0">
-                        <Clock className="w-6 h-6" />
+                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+                        <ShieldCheck className="w-6 h-6" />
                       </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label">Remaining Borrowable Limit</span>
-                        <span className="text-xl font-headline font-extrabold text-green-600 dark:text-green-500 block mt-0.5">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Max Credit Line Limit</span>
+                        <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 block mt-0.5 truncate">
                           {formatCurrency(remaining)}
                         </span>
-                        <span className="text-[9px] font-bold text-neutral-500 block mt-0.5">
-                          {outstandingBalance > 0 ? (
-                            <span className="text-tertiary">Active loan balance remaining. Clear balance to unlock limit.</span>
-                          ) : (
-                            `Total Cap Limit: ${formatCurrency(limit)}`
-                          )}
+                        <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
+                          Policy Multiplier Limit: {formatCurrency(limit)}
                         </span>
                       </div>
                     </div>

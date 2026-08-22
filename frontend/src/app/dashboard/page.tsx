@@ -479,7 +479,7 @@ export default function OverviewPage() {
         <div className="flex items-center justify-between">
           <div className="h-8 bg-neutral/20 w-48 rounded animate-pulse"></div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
@@ -686,7 +686,7 @@ export default function OverviewPage() {
         {/* Account Balances Section */}
         <div className="space-y-4">
           <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Account Balances</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 items-stretch">
             <KpiCard
               label="Share Capital"
               value={formatCurrency(balances.share_capital)}
@@ -2064,7 +2064,7 @@ export default function OverviewPage() {
           {/* Financial Health */}
           <div className="space-y-4">
             <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Financial Health</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 items-stretch">
               <KpiCard
                 label="Total Capital Deployed"
                 value={formatCurrency(ds.total_capital_ever_deployed)}
@@ -2101,25 +2101,27 @@ export default function OverviewPage() {
               <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Operational Status</h2>
               <span className="text-xs text-neutral-500 font-semibold hidden sm:inline">Click any card to filter view</span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
               {/* Total Members */}
               <button
                 type="button"
                 onClick={() => router.push('/dashboard/members')}
-                className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="p-4 sm:p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full h-full min-h-[128px] flex flex-col justify-between group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
                 title="Click to view Members Directory"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Total Members</span>
+                    <Users className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform flex-shrink-0" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label">Total Members</span>
                   </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                 </div>
-                <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
-                <div className="flex items-center gap-2 mt-1.5 text-[10px]">
-                  <span className="flex items-center gap-0.5 text-green-600"><UserCheck className="w-3 h-3" />{ds.active_members || 0} active</span>
-                  <span className="flex items-center gap-0.5 text-neutral-500"><UserX className="w-3 h-3" />{ds.inactive_members || 0} inactive</span>
+                <div className="my-auto py-1">
+                  <div className="font-headline text-xl sm:text-2xl font-extrabold tabular-nums text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
+                </div>
+                <div className="flex items-center gap-2 mt-auto pt-1.5 text-[10px]">
+                  <span className="flex items-center gap-0.5 text-green-600 dark:text-green-400 font-semibold"><UserCheck className="w-3 h-3" />{ds.active_members || 0} active</span>
+                  <span className="flex items-center gap-0.5 text-neutral-500 font-semibold"><UserX className="w-3 h-3" />{ds.inactive_members || 0} inactive</span>
                 </div>
               </button>
 
@@ -2127,35 +2129,45 @@ export default function OverviewPage() {
               <button
                 type="button"
                 onClick={() => router.push('/dashboard/loans?status=disbursed')}
-                className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="p-4 sm:p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs hover:shadow-md hover:border-primary/50 dark:hover:border-secondary/50 transition-all cursor-pointer text-left w-full h-full min-h-[128px] flex flex-col justify-between group active:scale-98 focus:outline-none focus:ring-2 focus:ring-primary/20"
                 title="Click to view Active/Disbursed Loans"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Banknote className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Active Loans</span>
+                    <Banknote className="w-4 h-4 text-primary dark:text-secondary group-hover:scale-110 transition-transform flex-shrink-0" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label">Active Loans</span>
                   </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                 </div>
-                <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.disbursed_loans || 0}</div>
+                <div className="my-auto py-1">
+                  <div className="font-headline text-xl sm:text-2xl font-extrabold tabular-nums text-on-surface dark:text-white">{ds.disbursed_loans || 0}</div>
+                </div>
+                <div className="flex items-center gap-1.5 mt-auto pt-1.5 text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
+                  <span>Disbursed & performing</span>
+                </div>
               </button>
 
               {/* Pending Approval */}
               <button
                 type="button"
                 onClick={() => router.push('/dashboard/loans?status=pending_approval')}
-                className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-amber-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                className="p-4 sm:p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs hover:shadow-md hover:border-amber-500/50 transition-all cursor-pointer text-left w-full h-full min-h-[128px] flex flex-col justify-between group active:scale-98 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
                 title="Click to view Pending Approval Loans"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Pending Approval</span>
+                    <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform flex-shrink-0" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label">Pending Approval</span>
                   </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                 </div>
-                <div className={`font-headline text-xl font-extrabold ${(ds.pending_loans || 0) > 0 ? 'text-amber-500' : 'text-on-surface dark:text-white'}`}>
-                  {ds.pending_loans || 0}
+                <div className="my-auto py-1">
+                  <div className={`font-headline text-xl sm:text-2xl font-extrabold tabular-nums ${(ds.pending_loans || 0) > 0 ? 'text-amber-500' : 'text-on-surface dark:text-white'}`}>
+                    {ds.pending_loans || 0}
+                  </div>
+                </div>
+                <div className={`flex items-center gap-1.5 mt-auto pt-1.5 text-[10px] ${(ds.pending_loans || 0) > 0 ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-neutral-500 dark:text-neutral-400 font-medium'}`}>
+                  <span>{(ds.pending_loans || 0) > 0 ? 'Action required' : 'Queue cleared'}</span>
                 </div>
               </button>
 
@@ -2163,18 +2175,23 @@ export default function OverviewPage() {
               <button
                 type="button"
                 onClick={() => router.push('/dashboard/loans?status=defaulted')}
-                className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl shadow-xs hover:shadow-md hover:border-red-500/50 transition-all cursor-pointer text-left w-full group active:scale-98 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                className="p-4 sm:p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs hover:shadow-md hover:border-red-500/50 transition-all cursor-pointer text-left w-full h-full min-h-[128px] flex flex-col justify-between group active:scale-98 focus:outline-none focus:ring-2 focus:ring-red-500/20"
                 title="Click to view Defaulted Loans"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Defaulted</span>
+                    <AlertTriangle className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform flex-shrink-0" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label">Defaulted</span>
                   </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                 </div>
-                <div className={`font-headline text-xl font-extrabold ${(ds.defaulted_loans || 0) > 0 ? 'text-red-500' : 'text-on-surface dark:text-white'}`}>
-                  {ds.defaulted_loans || 0}
+                <div className="my-auto py-1">
+                  <div className={`font-headline text-xl sm:text-2xl font-extrabold tabular-nums ${(ds.defaulted_loans || 0) > 0 ? 'text-red-500' : 'text-on-surface dark:text-white'}`}>
+                    {ds.defaulted_loans || 0}
+                  </div>
+                </div>
+                <div className={`flex items-center gap-1.5 mt-auto pt-1.5 text-[10px] ${(ds.defaulted_loans || 0) > 0 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-neutral-500 dark:text-neutral-400 font-medium'}`}>
+                  <span>{(ds.defaulted_loans || 0) > 0 ? 'Risk exposure' : 'Zero delinquencies'}</span>
                 </div>
               </button>
             </div>
