@@ -390,7 +390,7 @@ export default function PrivacyPage() {
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               {/* DPO contact */}
               <a
-                href="mailto:privacy@lendflowpro.com"
+                href="mailto:privacy@coopsync.ph"
                 className="flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold shadow-lg shadow-primary/25 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/30 transition-all active:scale-95"
               >
                 <Mail className="w-4 h-4" />

@@ -175,10 +175,10 @@ export default function TermsPage() {
                     Questions about our terms? Our legal team is here to help institutional partners.
                   </p>
                   <a
-                    href="mailto:legal@lendflowpro.com"
+                    href="mailto:legal@coopsync.ph"
                     className="text-sm font-bold text-primary dark:text-secondary hover:underline underline-offset-2"
                   >
-                    legal@lendflowpro.com
+                    legal@coopsync.ph
                   </a>
                 </div>
               </div>

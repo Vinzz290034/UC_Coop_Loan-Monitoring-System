@@ -785,7 +785,8 @@ export default function RegisterPage() {
         </div>
 
         <div className="text-center font-body text-xs text-on-surface/50 dark:text-neutral-400 leading-relaxed font-semibold">
-          <p>Protected by LendFlow Automated Multi-Key Encryption protocol.</p>
+          <p>Protected by UC Coop Loans Secure Encryption protocol.</p>
+          <p className="mt-1">For support, contact support@coopsync.ph or visit the UC METC Coop Office</p>
         </div>
       </main>
     </div>
