@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -42,9 +42,6 @@ import {
   PhoneCall,
   Mail,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
   ChevronDown,
   Check,
   X,
@@ -359,29 +356,6 @@ export default function OverviewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [successData, setSuccessData] = useState<any>(null);
   const [modalError, setModalError] = useState<string | null>(null);
-
-  // Scroll Reference & Handler for Member Financial Overview Table
-  const memberTableScrollRef = useRef<HTMLDivElement>(null);
-  const handleMemberTableScroll = (direction: 'left' | 'right' | 'up' | 'down') => {
-    if (!memberTableScrollRef.current) return;
-    const horizontalStep = 260;
-    const verticalStep = 140;
-
-    switch (direction) {
-      case 'left':
-        memberTableScrollRef.current.scrollBy({ left: -horizontalStep, behavior: 'smooth' });
-        break;
-      case 'right':
-        memberTableScrollRef.current.scrollBy({ left: horizontalStep, behavior: 'smooth' });
-        break;
-      case 'up':
-        memberTableScrollRef.current.scrollBy({ top: -verticalStep, behavior: 'smooth' });
-        break;
-      case 'down':
-        memberTableScrollRef.current.scrollBy({ top: verticalStep, behavior: 'smooth' });
-        break;
-    }
-  };
 
 
 
@@ -2225,7 +2199,7 @@ export default function OverviewPage() {
 
           {/* Member Financial Overview Table */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
                 <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary dark:text-secondary" />
@@ -2236,60 +2210,13 @@ export default function OverviewPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
-                {/* Scroll Control Arrows Toolbar */}
-                <div className="flex items-center gap-1 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-2xl p-1 shadow-2xs">
-                  <span className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider px-1.5 hidden sm:inline">
-                    Scroll Table:
-                  </span>
-                  {/* Horizontal Arrows */}
-                  <div className="flex items-center gap-0.5 border-r border-outline-variant/40 pr-1 mr-0.5">
-                    <button
-                      type="button"
-                      onClick={() => handleMemberTableScroll('left')}
-                      className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 cursor-pointer"
-                      title="Scroll Table Left (◀)"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMemberTableScroll('right')}
-                      className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 cursor-pointer"
-                      title="Scroll Table Right (▶)"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {/* Vertical Arrows */}
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => handleMemberTableScroll('up')}
-                      className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 cursor-pointer"
-                      title="Scroll Table Up (▲)"
-                    >
-                      <ChevronUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMemberTableScroll('down')}
-                      className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 cursor-pointer"
-                      title="Scroll Table Down (▼)"
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <Link
-                  href="/dashboard/members"
-                  className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-1 flex-shrink-0"
-                >
-                  <span>View Full Roster</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
+              <Link
+                href="/dashboard/members"
+                className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-1 flex-shrink-0"
+              >
+                <span>View Full Roster</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
 
             {/* Member Financial Overview Table Card */}
@@ -2305,12 +2232,9 @@ export default function OverviewPage() {
               </div>
             )}
 
-            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm flex flex-col relative group/table">
-              {/* Scrollable Container with Smooth Directional Controls */}
-              <div
-                ref={memberTableScrollRef}
-                className="max-h-[360px] overflow-x-auto overflow-y-auto custom-scrollbar relative"
-              >
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm flex flex-col">
+              {/* Scrollable Container with Integrated End-Arrow Stepper Scrollbars */}
+              <div className="max-h-[360px] overflow-x-auto overflow-y-auto custom-scrollbar">
                 <table className="w-full text-left border-collapse min-w-[920px]">
                   <thead className="sticky top-0 z-10 bg-neutral-50/95 dark:bg-neutral-800/95 backdrop-blur-xs border-b border-outline-variant/50">
                     <tr className="text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
@@ -2558,61 +2482,16 @@ export default function OverviewPage() {
                 </table>
               </div>
 
-              {/* Table Footer with Summary and Directional Scroll Toolbar */}
-              <div className="px-5 py-3 bg-neutral-50/90 dark:bg-neutral-800/90 border-t border-outline-variant/40 text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span>Showing {adminMembersList.length} total recorded members</span>
-                  {adminMembersList.length > 5 && (
-                    <span className="hidden sm:inline-block text-[10px] font-normal text-neutral-400">
-                      • Use scroll buttons or drag to view full columns & roster
-                    </span>
-                  )}
-                </div>
-
-                {/* Footer Directional Arrows Bar */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-semibold uppercase tracking-wider hidden sm:inline">
-                    Scroll Bar Controls:
+              {/* Table Footer with Summary */}
+              {adminMembersList.length > 5 && (
+                <div className="px-5 py-2.5 bg-neutral-50/90 dark:bg-neutral-800/90 border-t border-outline-variant/40 text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
+                  <span>Showing 5 visible of {adminMembersList.length} total members</span>
+                  <span className="text-primary dark:text-secondary flex items-center gap-1 text-[10px] uppercase tracking-wider font-extrabold">
+                    <span>Scroll table for full roster</span>
+                    <ChevronDown className="w-3.5 h-3.5 animate-bounce" />
                   </span>
-                  <div className="inline-flex items-center gap-1 bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl p-1 shadow-2xs">
-                    {/* Horizontal Arrows */}
-                    <button
-                      type="button"
-                      onClick={() => handleMemberTableScroll('left')}
-                      className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 cursor-pointer"
-                      title="Scroll Left (◀)"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMemberTableScroll('right')}
-                      className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 cursor-pointer"
-                      title="Scroll Right (▶)"
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                    <div className="w-[1px] h-3.5 bg-outline-variant/50 mx-0.5"></div>
-                    {/* Vertical Arrows */}
-                    <button
-                      type="button"
-                      onClick={() => handleMemberTableScroll('up')}
-                      className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 cursor-pointer"
-                      title="Scroll Up (▲)"
-                    >
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMemberTableScroll('down')}
-                      className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:text-primary dark:hover:text-secondary transition-all active:scale-95 cursor-pointer"
-                      title="Scroll Down (▼)"
-                    >
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 

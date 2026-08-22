@@ -530,42 +530,125 @@ select:focus {
   box-shadow: 0 4px 12px rgba(5, 150, 105, 0.15);
 }
 
-/* 7. Themed Custom Scrollbar Utility */
+/* 7. Themed Custom Scrollbar Utility with End Arrow Steppers */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(4, 120, 87, 0.35) transparent;
+  scrollbar-color: #8ec5b6 transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 11px;
+  height: 11px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.02);
   border-radius: 9999px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(4, 120, 87, 0.28);
+  background: #8ec5b6;
   border-radius: 9999px;
-  border: 1.5px solid transparent;
+  border: 2px solid transparent;
   background-clip: padding-box;
   transition: background 0.2s ease;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(4, 120, 87, 0.55);
+  background: #5ea894;
 }
 
+/* Scrollbar Stepper Arrow Buttons at Each End */
+.custom-scrollbar::-webkit-scrollbar-button {
+  display: block;
+  background-size: 8px 8px;
+  background-repeat: no-repeat;
+  background-position: center;
+  width: 12px;
+  height: 12px;
+  background-color: transparent;
+  cursor: pointer;
+}
+
+/* Horizontal Scrollbar: Left & Right End Arrows */
+.custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238ec5b6' viewBox='0 0 24 24'%3E%3Cpath d='M15 19l-7-7 7-7v14z'/%3E%3C/svg%3E");
+}
+
+.custom-scrollbar::-webkit-scrollbar-button:horizontal:increment {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238ec5b6' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7V5z'/%3E%3C/svg%3E");
+}
+
+.custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23047857' viewBox='0 0 24 24'%3E%3Cpath d='M15 19l-7-7 7-7v14z'/%3E%3C/svg%3E");
+}
+
+.custom-scrollbar::-webkit-scrollbar-button:horizontal:increment:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23047857' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7V5z'/%3E%3C/svg%3E");
+}
+
+/* Vertical Scrollbar: Top & Bottom End Arrows */
+.custom-scrollbar::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238ec5b6' viewBox='0 0 24 24'%3E%3Cpath d='M5 15l7-7 7 7H5z'/%3E%3C/svg%3E");
+}
+
+.custom-scrollbar::-webkit-scrollbar-button:vertical:increment {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238ec5b6' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7H5z'/%3E%3C/svg%3E");
+}
+
+.custom-scrollbar::-webkit-scrollbar-button:vertical:decrement:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23047857' viewBox='0 0 24 24'%3E%3Cpath d='M5 15l7-7 7 7H5z'/%3E%3C/svg%3E");
+}
+
+.custom-scrollbar::-webkit-scrollbar-button:vertical:increment:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23047857' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7H5z'/%3E%3C/svg%3E");
+}
+
+/* Dark Mode Support */
 .dark .custom-scrollbar {
-  scrollbar-color: rgba(52, 211, 153, 0.3) transparent;
+  scrollbar-color: #4e8c7c transparent;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(52, 211, 153, 0.25);
+  background: #4e8c7c;
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(52, 211, 153, 0.45);
+  background: #5ea894;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%234e8c7c' viewBox='0 0 24 24'%3E%3Cpath d='M15 19l-7-7 7-7v14z'/%3E%3C/svg%3E");
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:increment {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%234e8c7c' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7V5z'/%3E%3C/svg%3E");
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2334D399' viewBox='0 0 24 24'%3E%3Cpath d='M15 19l-7-7 7-7v14z'/%3E%3C/svg%3E");
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:increment:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2334D399' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7V5z'/%3E%3C/svg%3E");
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:decrement {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%234e8c7c' viewBox='0 0 24 24'%3E%3Cpath d='M5 15l7-7 7 7H5z'/%3E%3C/svg%3E");
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:increment {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%234e8c7c' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7H5z'/%3E%3C/svg%3E");
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:decrement:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2334D399' viewBox='0 0 24 24'%3E%3Cpath d='M5 15l7-7 7 7H5z'/%3E%3C/svg%3E");
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:increment:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2334D399' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7H5z'/%3E%3C/svg%3E");
 }
