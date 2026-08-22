@@ -20,6 +20,8 @@ import {
   FileSpreadsheet,
   BadgePercent,
   Layers,
+  Banknote,
+  Coins,
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -73,53 +75,99 @@ export default function LandingPage() {
               }}
             />
 
-            {/* Philippine Peso & Financial floating elements */}
+            {/* Philippine Peso, Money Bill, and Coin Floating Elements */}
+            
+            {/* 1. Floating Peso Badge - Top Left */}
             <div
-              className="absolute top-[12%] left-[6%] font-headline font-extrabold text-2xl text-primary/30 dark:text-secondary/25 select-none"
-              style={{ animation: 'peso-float-1 10s ease-in-out infinite' }}
+              className="absolute top-[10%] left-[5%] select-none z-0"
+              style={{ animation: 'peso-float-1 9s ease-in-out infinite' }}
             >
-              <div className="w-11 h-11 rounded-full border border-primary/20 dark:border-secondary/20 bg-primary/5 dark:bg-secondary/5 flex items-center justify-center backdrop-blur-xs">
+              <div className="w-12 h-12 rounded-full border border-primary/25 dark:border-secondary/25 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs flex items-center justify-center shadow-lg shadow-primary/10 text-primary dark:text-secondary font-headline font-extrabold text-2xl">
                 ₱
               </div>
             </div>
 
+            {/* 2. Floating Money Bill - Mid-Left */}
             <div
-              className="absolute top-[58%] left-[4%] font-headline font-bold text-lg text-secondary/40 dark:text-secondary/25 select-none"
-              style={{ animation: 'peso-float-2 14s ease-in-out infinite 1s' }}
+              className="absolute top-[32%] left-[12%] select-none z-0"
+              style={{ animation: 'bill-float-1 12s ease-in-out infinite 0.5s' }}
             >
-              <div className="w-9 h-9 rounded-full border border-secondary/30 bg-secondary/10 flex items-center justify-center">
+              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-primary/20 dark:border-secondary/20 bg-white/45 dark:bg-neutral-900/45 backdrop-blur-xs shadow-md shadow-primary/5">
+                <Banknote className="w-6 h-6 text-primary dark:text-secondary" />
+                <span className="text-[11px] font-bold font-mono text-primary/70 dark:text-secondary/70">₱1,000</span>
+              </div>
+            </div>
+
+            {/* 3. Floating Coins Badge - Bottom Left */}
+            <div
+              className="absolute bottom-[22%] left-[6%] select-none z-0"
+              style={{ animation: 'coin-float-1 10s ease-in-out infinite 1.2s' }}
+            >
+              <div className="w-11 h-11 rounded-full border border-tertiary/25 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs flex items-center justify-center shadow-md shadow-tertiary/10 text-tertiary">
+                <Coins className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* 4. Floating Small Peso Sign - Center Left */}
+            <div
+              className="absolute top-[62%] left-[2%] select-none z-0"
+              style={{ animation: 'peso-float-2 13s ease-in-out infinite 2s' }}
+            >
+              <div className="w-8 h-8 rounded-full border border-secondary/30 bg-secondary/10 flex items-center justify-center text-secondary font-headline font-bold text-base">
                 ₱
               </div>
             </div>
 
+            {/* 5. Floating Money Bill - Bottom Right */}
             <div
-              className="absolute top-[20%] right-[8%] font-headline font-extrabold text-xl text-primary/35 dark:text-secondary/30 select-none"
-              style={{ animation: 'peso-float-1 12s ease-in-out infinite 2s' }}
+              className="absolute bottom-[20%] right-[10%] select-none z-0"
+              style={{ animation: 'bill-float-2 11s ease-in-out infinite 1s' }}
             >
-              <div className="w-10 h-10 rounded-full border border-primary/25 dark:border-secondary/25 bg-primary/5 dark:bg-secondary/5 flex items-center justify-center">
+              <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-secondary/25 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs shadow-lg shadow-secondary/10">
+                <Banknote className="w-6 h-6 text-secondary" />
+                <span className="text-[11px] font-bold font-mono text-secondary">₱500</span>
+              </div>
+            </div>
+
+            {/* 6. Floating Coin Icon - Top Right */}
+            <div
+              className="absolute top-[14%] right-[18%] select-none z-0"
+              style={{ animation: 'coin-float-2 11s ease-in-out infinite 2.2s' }}
+            >
+              <div className="w-10 h-10 rounded-full border border-primary/25 dark:border-secondary/25 bg-white/45 dark:bg-neutral-900/45 backdrop-blur-xs flex items-center justify-center shadow-md shadow-primary/10 text-primary dark:text-secondary">
+                <Coins className="w-4 h-4" />
+              </div>
+            </div>
+
+            {/* 7. Floating Peso Badge - Top Far Right */}
+            <div
+              className="absolute top-[22%] right-[6%] select-none z-0"
+              style={{ animation: 'peso-float-1 14s ease-in-out infinite 1.8s' }}
+            >
+              <div className="w-11 h-11 rounded-full border border-primary/20 dark:border-secondary/20 bg-primary/5 dark:bg-secondary/5 flex items-center justify-center text-primary dark:text-secondary font-headline font-extrabold text-xl">
+                ₱
+              </div>
+            </div>
+
+            {/* 8. Floating Small Peso Sign - Bottom Center */}
+            <div
+              className="absolute bottom-[10%] left-[28%] select-none z-0"
+              style={{ animation: 'peso-float-2 15s ease-in-out infinite 3s' }}
+            >
+              <div className="w-9 h-9 rounded-full border border-tertiary/20 bg-tertiary/5 flex items-center justify-center text-tertiary font-headline font-bold text-sm">
                 ₱
               </div>
             </div>
 
             {/* Abstract financial flow rings & ledger lines */}
             <div
-              className="absolute bottom-[18%] right-[16%] text-primary/20 dark:text-secondary/15"
+              className="absolute bottom-[16%] right-[24%] text-primary/20 dark:text-secondary/15"
               style={{ animation: 'particle-drift-1 18s ease-in-out infinite' }}
             >
               <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
                 <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
                 <circle cx="24" cy="24" r="12" stroke="currentColor" strokeWidth="1" />
                 <circle cx="24" cy="24" r="4" fill="currentColor" opacity="0.5" />
-              </svg>
-            </div>
-
-            <div
-              className="absolute bottom-[10%] left-[24%] text-tertiary/25 dark:text-tertiary/20"
-              style={{ animation: 'particle-drift-3 20s ease-in-out infinite 2s' }}
-            >
-              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                <rect x="8" y="8" width="24" height="24" rx="6" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M14 16H26M14 20H22M14 24H26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
 
