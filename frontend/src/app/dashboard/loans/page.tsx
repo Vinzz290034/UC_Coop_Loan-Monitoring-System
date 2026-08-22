@@ -899,7 +899,10 @@ function LoansPageContent() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Delinquency Risk</span>
-                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
+                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate"
+                      title={
+                        `Accounts Defaulted: ${adminMetrics?.portfolio_health?.defaulted_loans || 0}`
+                      }>
                       {adminMetrics?.portfolio_health?.defaulted_loans || 0} Accounts Defaulted
                     </span>
                     <span className="text-[9px] font-bold text-red-500 block mt-0.5 truncate">
