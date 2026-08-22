@@ -2237,10 +2237,10 @@ export default function OverviewPage() {
                   <thead className="sticky top-0 z-10 bg-neutral-50/95 dark:bg-neutral-800/95 backdrop-blur-xs border-b border-outline-variant/50">
                     <tr className="text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                       <th className="px-5 py-3.5">Member Profile</th>
-                      <th className="px-4 py-3.5 text-right">Account Balance</th>
+                      <th className="px-4 py-3.5 text-center">Account Balance</th>
                       <th className="px-4 py-3.5 text-center">Member Status</th>
-                      <th className="px-4 py-3.5 text-right">Loan Amount</th>
-                      <th className="px-4 py-3.5 text-left">Loan Product</th>
+                      <th className="px-4 py-3.5 text-center">Loan Amount</th>
+                      <th className="px-4 py-3.5 text-center">Loan Product</th>
                       <th className="px-4 py-3.5 text-center">Loan Status</th>
                       <th className="px-5 py-3.5 text-right">Actions</th>
                     </tr>
@@ -2395,7 +2395,7 @@ export default function OverviewPage() {
                           </td>
 
                           {/* Loan Product (Supports Multiple Loans) */}
-                          <td className="px-4 py-3.5 text-left whitespace-nowrap">
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
                             {m.member_loans && m.member_loans.length > 0 ? (
                               <div className="flex flex-col gap-1 items-start">
                                 {m.member_loans.map((loan: any, idx: number) => (
