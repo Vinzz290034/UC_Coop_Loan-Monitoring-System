@@ -18,42 +18,8 @@ import {
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import BackButton from '@/components/BackButton';
+import AuthBackground from '@/components/AuthBackground';
 import Link from 'next/link';
-
-function AuthBackground() {
-  return (
-    <div className="fixed inset-0 -z-10 overflow-hidden bg-neutral-50 dark:bg-neutral-950">
-      <div
-        className="absolute w-[600px] h-[600px] rounded-full"
-        style={{
-          left: '-15%',
-          top: '-20%',
-          background: 'radial-gradient(circle, rgba(4,120,87,0.12) 0%, rgba(52,211,153,0.06) 60%, transparent 80%)',
-          animation: 'aurora-shift 18s ease-in-out infinite',
-        }}
-      />
-      <div
-        className="absolute w-[500px] h-[500px] rounded-full"
-        style={{
-          right: '-10%',
-          bottom: '-15%',
-          background: 'radial-gradient(circle, rgba(164,80,73,0.10) 0%, rgba(52,211,153,0.05) 60%, transparent 80%)',
-          animation: 'aurora-shift-alt 22s ease-in-out infinite',
-        }}
-      />
-      <div
-        className="absolute w-[400px] h-[400px] rounded-full"
-        style={{
-          left: '40%',
-          top: '35%',
-          transform: 'translate(-50%, -50%)',
-          background: 'radial-gradient(circle, rgba(4,120,87,0.07) 0%, transparent 70%)',
-          animation: 'aurora-shift 26s ease-in-out infinite reverse',
-        }}
-      />
-    </div>
-  );
-}
 
 function PasswordStrength({ password }: { password: string }) {
   if (!password) return null;
