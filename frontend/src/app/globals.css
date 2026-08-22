@@ -180,6 +180,56 @@
   }
 }
 
+@keyframes peso-float-1 {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.28;
+  }
+  50% {
+    transform: translateY(-16px) rotate(4deg) scale(1.04);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.28;
+  }
+}
+
+@keyframes peso-float-2 {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.22;
+  }
+  50% {
+    transform: translateY(14px) rotate(-5deg) scale(0.96);
+    opacity: 0.48;
+  }
+  100% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.22;
+  }
+}
+
+@keyframes flow-dash {
+  0% {
+    stroke-dashoffset: 60;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ============================================================
    Light Mode (default)
    ============================================================ */

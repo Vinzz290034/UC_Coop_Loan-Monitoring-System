@@ -10,9 +10,30 @@ interface LandingFooterProps {
 
 // ── Footer column config ──────────────────────────────────────────────────────
 const FOOTER_COLUMNS = [
-  { title: 'Account', links: ['Personal Dashboard', 'Business Profile', 'Treasury Access'] },
-  { title: 'Company', links: ['About Us', 'Careers', 'Privacy Policy'] },
-  { title: 'Help', links: ['Support Center', 'API Status', 'Documentation'] },
+  {
+    title: 'Loan Products',
+    links: [
+      { label: 'Regular Cash Loans', href: '/features' },
+      { label: 'Short-Term Loans (STL)', href: '/features' },
+      { label: 'Product & Appliance Loans', href: '/features' },
+    ],
+  },
+  {
+    title: 'Member Services',
+    links: [
+      { label: 'Share Capital Ledger', href: '/features' },
+      { label: 'Fixed Deposit Registry', href: '/features' },
+      { label: 'Loan Schedule Calculator', href: '/how-it-works' },
+    ],
+  },
+  {
+    title: 'Cooperative',
+    links: [
+      { label: 'About UC METC Coop', href: '/about' },
+      { label: 'Office & Contact Info', href: '/contact' },
+      { label: 'Terms & Conditions', href: '/terms' },
+    ],
+  },
 ] as const;
 
 export default function LandingFooter({ activeLegal = null }: LandingFooterProps) {
@@ -29,21 +50,21 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
               <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-8 h-8 object-contain" />
               <span className="font-brandname text-lg font-extrabold text-primary dark:text-secondary">Coop Sync</span>
             </Link>
-            <p className="font-body text-xs text-neutral-500 dark:text-neutral-500 max-w-xs leading-relaxed">
-              Institutional excellence in automated finance. Empowering the next generation of lenders with precision and reliability.
+            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 max-w-xs leading-relaxed">
+              Transparent loan monitoring, automated amortization computation, and member ledger management for the <span className="font-semibold text-on-surface dark:text-neutral-200">University of Cebu - METC Multipurpose Cooperative</span>.
             </p>
 
             {/* Social/contact icon links */}
             <div className="flex gap-3">
               {[
-                { icon: <Globe className="w-4 h-4" />, label: 'Website' },
-                { icon: <Mail className="w-4 h-4" />, label: 'Email' },
+                { icon: <Globe className="w-4 h-4" />, label: 'About Us', href: '/about' },
+                { icon: <Mail className="w-4 h-4" />, label: 'Contact Office', href: '/contact' },
               ].map(s => (
                 <Link
                   key={s.label}
-                  href="#"
+                  href={s.href}
                   aria-label={s.label}
-                  className="w-9 h-9 rounded-xl bg-white dark:bg-neutral-800 flex items-center justify-center text-neutral-400 hover:text-primary dark:hover:text-secondary border border-outline-variant/30 dark:border-neutral-700 transition-all hover:scale-105 active:scale-95"
+                  className="w-9 h-9 rounded-xl bg-white dark:bg-neutral-800 flex items-center justify-center text-neutral-500 hover:text-primary dark:hover:text-secondary border border-outline-variant/30 dark:border-neutral-700 transition-all hover:scale-105 active:scale-95"
                 >
                   {s.icon}
                 </Link>
@@ -59,12 +80,12 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
               </h4>
               <ul className="space-y-3">
                 {col.links.map(l => (
-                  <li key={l}>
+                  <li key={l.label}>
                     <Link
-                      href="#"
-                      className="text-xs text-neutral-500 dark:text-neutral-500 hover:text-primary dark:hover:text-secondary font-semibold transition-colors"
+                      href={l.href}
+                      className="text-xs text-neutral-600 dark:text-neutral-400 hover:text-primary dark:hover:text-secondary font-medium transition-colors"
                     >
-                      {l}
+                      {l.label}
                     </Link>
                   </li>
                 ))}
@@ -74,9 +95,9 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
         </div>
 
         {/* ── Bottom bar ──────────────────────────────────────────── */}
-        <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-neutral-400">
+        <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-neutral-500 dark:text-neutral-400">
           <div className="flex flex-col gap-1.5 text-left w-full sm:w-auto">
-            <div>© 2026 Coop Sync. All rights reserved.</div>
+            <div>© 2026 UC Coop Loans / Coop Sync. All rights reserved.</div>
             <div className="text-[10px] text-neutral-500 flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-primary dark:text-secondary" />
               Engineered &amp; Maintained by{' '}

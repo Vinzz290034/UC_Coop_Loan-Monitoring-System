@@ -1,26 +1,25 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  CreditCard,
-  Wallet,
-  Coins,
   Shield,
   ShieldCheck,
-  Fingerprint,
-  Building2,
   Award,
   Zap,
-  Cloud,
-  Cpu,
-  Database,
-  GitMerge,
-  Code,
-  Hexagon,
   ArrowRight,
   TrendingUp,
   Lock,
   CheckCircle2,
-  Calculator, PiggyBank, Clock
+  Calculator,
+  PiggyBank,
+  Clock,
+  FileText,
+  Receipt,
+  Users,
+  Check,
+  Building2,
+  FileSpreadsheet,
+  BadgePercent,
+  Layers,
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -29,9 +28,9 @@ export default function LandingPage() {
       <main className="pt-20 w-full overflow-x-clip">
 
         {/* ── Hero Section ─────────────────────────────────────────── */}
-        <section className="relative overflow-hidden py-16 sm:py-24 md:py-36">
+        <section className="relative overflow-hidden py-16 sm:py-24 md:py-32">
 
-          {/* Animated background */}
+          {/* Animated financial background */}
           <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
             {/* Base gradient */}
             <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-secondary/5 dark:from-primary/12 dark:via-neutral-950 dark:to-secondary/8" />
@@ -74,31 +73,54 @@ export default function LandingPage() {
               }}
             />
 
-            {/* Particles */}
-            <div className="absolute top-[14%] left-[7%] text-primary/35 dark:text-secondary/30" style={{ animation: 'particle-drift-1 14s ease-in-out infinite' }}>
-              <svg width="44" height="44" viewBox="0 0 44 44" fill="none"><polygon points="22,2 40,12 40,32 22,42 4,32 4,12" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
+            {/* Philippine Peso & Financial floating elements */}
+            <div
+              className="absolute top-[12%] left-[6%] font-headline font-extrabold text-2xl text-primary/30 dark:text-secondary/25 select-none"
+              style={{ animation: 'peso-float-1 10s ease-in-out infinite' }}
+            >
+              <div className="w-11 h-11 rounded-full border border-primary/20 dark:border-secondary/20 bg-primary/5 dark:bg-secondary/5 flex items-center justify-center backdrop-blur-xs">
+                ₱
+              </div>
             </div>
-            <div className="absolute top-[62%] left-[4%] text-secondary/40 dark:text-secondary/25" style={{ animation: 'particle-drift-2 18s ease-in-out infinite' }}>
-              <svg width="30" height="30" viewBox="0 0 30 30" fill="none"><rect x="15" y="1" width="20" height="20" rx="2" transform="rotate(45 15 1)" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
+
+            <div
+              className="absolute top-[58%] left-[4%] font-headline font-bold text-lg text-secondary/40 dark:text-secondary/25 select-none"
+              style={{ animation: 'peso-float-2 14s ease-in-out infinite 1s' }}
+            >
+              <div className="w-9 h-9 rounded-full border border-secondary/30 bg-secondary/10 flex items-center justify-center">
+                ₱
+              </div>
             </div>
-            <div className="absolute top-[32%] left-[20%] text-primary/25 dark:text-primary/20" style={{ animation: 'particle-drift-3 20s ease-in-out infinite' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
+
+            <div
+              className="absolute top-[20%] right-[8%] font-headline font-extrabold text-xl text-primary/35 dark:text-secondary/30 select-none"
+              style={{ animation: 'peso-float-1 12s ease-in-out infinite 2s' }}
+            >
+              <div className="w-10 h-10 rounded-full border border-primary/25 dark:border-secondary/25 bg-primary/5 dark:bg-secondary/5 flex items-center justify-center">
+                ₱
+              </div>
             </div>
-            <div className="absolute top-[18%] right-[10%] text-secondary/30 dark:text-secondary/20" style={{ animation: 'particle-drift-2 16s ease-in-out infinite 2s' }}>
-              <svg width="34" height="34" viewBox="0 0 34 34" fill="none"><polygon points="17,2 31,10 31,24 17,32 3,24 3,10" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
-            </div>
-            <div className="absolute bottom-[22%] right-[18%] text-primary/35 dark:text-secondary/25" style={{ animation: 'particle-drift-1 12s ease-in-out infinite 1s' }}>
-              <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
-                <circle cx="8" cy="8" r="3.5" fill="currentColor" />
-                <circle cx="25" cy="8" r="2.5" fill="currentColor" opacity="0.6" />
-                <circle cx="8" cy="25" r="2.5" fill="currentColor" opacity="0.6" />
-                <circle cx="25" cy="25" r="3.5" fill="currentColor" />
-                <circle cx="42" cy="16" r="2" fill="currentColor" opacity="0.4" />
-                <circle cx="16" cy="42" r="2" fill="currentColor" opacity="0.4" />
+
+            {/* Abstract financial flow rings & ledger lines */}
+            <div
+              className="absolute bottom-[18%] right-[16%] text-primary/20 dark:text-secondary/15"
+              style={{ animation: 'particle-drift-1 18s ease-in-out infinite' }}
+            >
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 4" />
+                <circle cx="24" cy="24" r="12" stroke="currentColor" strokeWidth="1" />
+                <circle cx="24" cy="24" r="4" fill="currentColor" opacity="0.5" />
               </svg>
             </div>
-            <div className="absolute bottom-[8%] left-[28%] text-tertiary/25 dark:text-tertiary/18" style={{ animation: 'particle-drift-3 24s ease-in-out infinite 3s' }}>
-              <svg width="38" height="38" viewBox="0 0 38 38" fill="none"><polygon points="19,3 35,32 3,32" stroke="currentColor" strokeWidth="1.5" fill="none" /></svg>
+
+            <div
+              className="absolute bottom-[10%] left-[24%] text-tertiary/25 dark:text-tertiary/20"
+              style={{ animation: 'particle-drift-3 20s ease-in-out infinite 2s' }}
+            >
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <rect x="8" y="8" width="24" height="24" rx="6" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M14 16H26M14 20H22M14 24H26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
             </div>
 
             {/* Top radial mesh glow */}
@@ -112,39 +134,44 @@ export default function LandingPage() {
           </div>
 
           {/* Hero content */}
-          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 md:px-12 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            <div className="space-y-6 sm:space-y-8">
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 md:px-12 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-14 items-center">
+            
+            {/* Left Copy */}
+            <div className="lg:col-span-7 space-y-6 sm:space-y-8 text-center lg:text-left">
               {/* Trust badge */}
               <div className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 text-primary dark:text-secondary text-[11px] sm:text-xs font-bold font-label tracking-wide">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary dark:bg-secondary animate-pulse" />
-                Trusted by 15,000+ Active Cooperative Members
+                Designed for Cooperative Lending &amp; Member Transparency
               </div>
 
               {/* Headline */}
               <h1 className="font-headline text-4xl sm:text-6xl lg:text-7xl leading-[1.08] font-extrabold tracking-tight">
-                <span className="text-on-surface dark:text-white">Elevate Your</span>
+                <span className="text-on-surface dark:text-white">Empower Your</span>
                 <br />
                 <span
                   className="text-3xl sm:text-5xl lg:text-6xl text-transparent bg-clip-text"
                   style={{ backgroundImage: 'linear-gradient(135deg, #047857 0%, #34D399 60%, #059669 100%)' }}
                 >
-                  Financial Growth
+                  Cooperative Journey
                 </span>
               </h1>
 
               {/* Sub-copy */}
-              <p className="text-on-surface/65 dark:text-neutral-400 font-body text-base sm:text-lg max-w-lg leading-relaxed">
-                Transparent online loan applications, secure share capital tracking, and automatic monthly amortization schedules built for your peace of mind.
+              <p className="text-on-surface/75 dark:text-neutral-300 font-body text-base sm:text-lg max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                Apply for loans online, track real-time monthly amortization schedules, and monitor your share capital contributions in one secure portal.
               </p>
 
               {/* Feature pills */}
-              <div className="flex flex-wrap gap-2.5">
+              <div className="flex flex-wrap justify-center lg:justify-start gap-2.5">
                 {[
-                  { icon: <Lock className="w-3.5 h-3.5" />, label: 'Automated Computation' },
-                  { icon: <TrendingUp className="w-3.5 h-3.5" />, label: 'Online Loan Tracking' },
-                  { icon: <Zap className="w-3.5 h-3.5" />, label: 'Secured Share Capital' },
+                  { icon: <Calculator className="w-3.5 h-3.5" />, label: 'Auto-Calculated Amortization' },
+                  { icon: <TrendingUp className="w-3.5 h-3.5" />, label: 'Diminishing & Flat Interest' },
+                  { icon: <FileText className="w-3.5 h-3.5" />, label: 'Real-Time Ledger Records' },
                 ].map(f => (
-                  <div key={f.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-neutral-800/80 border border-outline-variant/50 text-on-surface/70 dark:text-neutral-300 text-xs font-semibold shadow-sm">
+                  <div
+                    key={f.label}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-neutral-800/80 border border-outline-variant/50 text-on-surface/80 dark:text-neutral-200 text-xs font-semibold shadow-xs"
+                  >
                     <span className="text-primary dark:text-secondary">{f.icon}</span>
                     {f.label}
                   </div>
@@ -152,128 +179,192 @@ export default function LandingPage() {
               </div>
 
               {/* CTAs */}
-              <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row justify-center lg:justify-start flex-wrap gap-3 sm:gap-4 pt-2">
                 <Link
                   href="/login"
                   className="group flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold shadow-xl shadow-primary/30 dark:shadow-secondary/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/35 transition-all duration-300 active:scale-95 text-center"
                 >
-                  Get Started Free
+                  Apply for a Loan
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
-                  href="/login"
+                  href="/how-it-works"
                   className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-full bg-white/80 dark:bg-neutral-800/60 backdrop-blur border border-outline-variant/60 dark:border-neutral-700 text-on-surface dark:text-white font-label text-sm font-bold hover:bg-white dark:hover:bg-neutral-700/80 hover:shadow-lg transition-all duration-300 active:scale-95 text-center"
                 >
-                  View Live Demo
+                  Calculate Repayment
                 </Link>
               </div>
             </div>
 
-            {/* Floating visual */}
-            <div className="relative h-[380px] sm:h-[450px] md:h-[500px] flex items-center justify-center scale-90 sm:scale-100 max-w-full overflow-hidden sm:overflow-visible">
-              {/* Glow base */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-[300px] sm:w-[420px] h-[300px] sm:h-[420px] rounded-full bg-primary/12 dark:bg-secondary/8 blur-[70px] sm:blur-[90px]" />
+            {/* Right Visual: UC Coop Digital Passbook */}
+            <div className="lg:col-span-5 relative h-[380px] sm:h-[440px] md:h-[480px] flex items-center justify-center scale-95 sm:scale-100 max-w-full overflow-hidden sm:overflow-visible">
+              
+              {/* Ambient Glow */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-[300px] sm:w-[400px] h-[300px] sm:h-[400px] rounded-full bg-primary/12 dark:bg-secondary/10 blur-[75px]" />
               </div>
 
-              {/* Main card */}
-              <div className="animate-float z-20 relative">
-                <div className="w-[280px] sm:w-[320px] h-[170px] sm:h-[190px] bg-gradient-to-tr from-primary via-emerald-500 to-secondary rounded-2xl shadow-2xl shadow-primary/40 relative overflow-hidden flex flex-col justify-between p-5 sm:p-6 transform -rotate-6 border border-white/25">
-                  {/* Sheen */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-transparent rounded-2xl" />
-                  <div className="flex justify-between items-start relative z-10">
-                    <CreditCard className="text-white w-8 h-8 sm:w-9 sm:h-9 drop-shadow" />
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="w-10 sm:w-12 h-6 sm:h-7 bg-white/20 rounded-md backdrop-blur-sm border border-white/20" />
-                      <div className="text-white/70 text-[9px] font-mono tracking-widest">VISA</div>
+              {/* Main Passbook Card */}
+              <div className="animate-float z-20 relative w-full max-w-[340px] sm:max-w-[370px]">
+                <div className="bg-gradient-to-br from-neutral-900 via-neutral-900 to-neutral-950 text-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl shadow-primary/25 border border-white/15 relative overflow-hidden backdrop-blur-md">
+                  {/* Subtle card gradient highlight */}
+                  <div className="absolute top-0 right-0 w-44 h-44 bg-gradient-to-bl from-secondary/20 via-primary/15 to-transparent rounded-full blur-2xl pointer-events-none" />
+                  
+                  {/* Passbook Header */}
+                  <div className="flex justify-between items-start border-b border-white/10 pb-3 mb-4 relative z-10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-primary/25 border border-primary/40 flex items-center justify-center">
+                        <Building2 className="w-4 h-4 text-secondary" />
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-secondary">Digital Passbook</div>
+                        <div className="text-xs font-extrabold tracking-tight">UC METC COOPERATIVE</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-neutral-300">
+                      ID: #2026-9938
+                    </span>
+                  </div>
+
+                  {/* Member Details */}
+                  <div className="space-y-3.5 relative z-10">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-neutral-400 font-medium">Member Account:</span>
+                      <span className="font-bold text-white tracking-wide">John Doe (Regular)</span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-neutral-400">Share Capital:</span>
+                        <span className="font-extrabold text-emerald-400 font-headline text-sm">₱25,000.00</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-neutral-400">Outstanding Loan:</span>
+                        <span className="font-bold text-white font-headline">₱30,000.00</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs pt-1.5 border-t border-white/10">
+                        <span className="text-neutral-300 font-semibold">Next Monthly Due:</span>
+                        <span className="font-extrabold text-secondary font-headline text-sm">₱2,500.00</span>
+                      </div>
+                    </div>
+
+                    {/* Status footer */}
+                    <div className="flex items-center justify-between text-[11px] pt-1">
+                      <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Account In Good Standing</span>
+                      </div>
+                      <span className="text-[10px] text-neutral-400">Due: Aug 15</span>
                     </div>
                   </div>
-                  <div className="text-white space-y-1 sm:space-y-1.5 relative z-10">
-                    <div className="text-[10px] opacity-75 tracking-[0.2em] font-mono font-semibold">LENDFLOW ELITE</div>
-                    <div className="font-mono text-sm sm:text-base font-bold tracking-widest">•••• •••• •••• 8842</div>
-                  </div>
                 </div>
               </div>
 
-              {/* Wallet badge */}
-              <div className="absolute top-4 right-2 sm:top-8 sm:right-8 animate-float z-30" style={{ animationDelay: '1.2s' }}>
-                <div className="p-3 sm:p-4 bg-white dark:bg-neutral-800 rounded-2xl shadow-2xl shadow-black/10 border border-outline-variant/30 backdrop-blur">
-                  <Wallet className="text-primary dark:text-secondary w-7 h-7 sm:w-9 sm:h-9" />
-                </div>
-              </div>
-
-              {/* Coins badge */}
-              <div className="absolute bottom-8 left-2 sm:bottom-12 sm:left-8 animate-float z-30" style={{ animationDelay: '2.2s' }}>
-                <div className="p-3 sm:p-3.5 bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-black/10 border border-outline-variant/30">
-                  <Coins className="text-tertiary w-6 h-6 sm:w-7 sm:h-7" />
-                </div>
-              </div>
-
-              {/* Live stat pop-up */}
-              <div className="absolute bottom-4 right-2 sm:bottom-6 sm:right-6 animate-float z-30" style={{ animationDelay: '0.5s' }}>
-                <div className="bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-black/10 border border-outline-variant/30 px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3">
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
-                    <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
+              {/* Floating Badge 1: Target Dividend Yield */}
+              <div
+                className="absolute top-2 right-0 sm:-right-4 animate-float z-30"
+                style={{ animationDelay: '1s' }}
+              >
+                <div className="bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-black/10 border border-outline-variant/40 dark:border-neutral-700 px-3.5 py-2.5 flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    <TrendingUp className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-[9px] sm:text-[10px] text-neutral-400 font-semibold">Portfolio Return</div>
-                    <div className="text-xs sm:text-sm font-extrabold text-emerald-500">+24.7% YTD</div>
+                    <div className="text-[9px] text-neutral-500 dark:text-neutral-400 font-semibold">Share Capital Yield</div>
+                    <div className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">5.0% Target Dividend</div>
                   </div>
                 </div>
               </div>
+
+              {/* Floating Badge 2: Verified Record */}
+              <div
+                className="absolute bottom-2 left-0 sm:-left-4 animate-float z-30"
+                style={{ animationDelay: '2s' }}
+              >
+                <div className="bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-black/10 border border-outline-variant/40 dark:border-neutral-700 px-3.5 py-2.5 flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center text-primary dark:text-secondary">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-[9px] text-neutral-500 dark:text-neutral-400 font-semibold">Repayment Ledger</div>
+                    <div className="text-xs font-extrabold text-on-surface dark:text-white">Admin-Verified Receipts</div>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </section>
 
-        {/* ── Metrics Bar ──────────────────────────────────────────── */}
+        {/* ── Cooperative Value Highlights ─────────────────────────── */}
         <section className="relative border-y border-outline-variant/40 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 py-8 sm:py-10">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-8 md:gap-10 w-full">
-              {/* Stats */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 md:gap-10 items-center w-full md:flex-1">
-                {[
-                  { value: '15K+', label: 'Active Cooperative Members' },
-                  { value: '95%', label: 'Loan Recovery Rate' },
-                  { value: '₱24.5M', label: 'Cooperative Funds Under Management' },
-                ].map((stat, i) => (
-                  <div
-                    key={i}
-                    className={`text-center sm:text-left ${i > 0
-                      ? 'sm:pl-6 md:pl-10 sm:border-l border-outline-variant/40 dark:border-neutral-700'
-                      : ''
-                      }`}
-                  >
-                    <div className="font-headline text-3xl md:text-4xl font-extrabold text-primary dark:text-secondary">
-                      {stat.value}
-                    </div>
-                    <div className="font-label text-xs text-on-surface/60 dark:text-neutral-400 font-semibold mt-1">
-                      {stat.label}
-                    </div>
-                  </div>
-                ))}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 py-10 sm:py-12">
+            
+            {/* 3-Pillar Value Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
+              
+              {/* Pillar 1 */}
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 dark:bg-primary/20 border border-primary/20 flex items-center justify-center text-primary dark:text-secondary flex-shrink-0">
+                  <Calculator className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-headline text-base sm:text-lg font-bold text-on-surface dark:text-white">
+                    Digital Loan Journey
+                  </h3>
+                  <p className="font-body text-xs sm:text-sm text-on-surface/65 dark:text-neutral-400 leading-relaxed">
+                    Submit applications online and monitor approval stages from submission to cash release.
+                  </p>
+                </div>
               </div>
 
-              {/* Trusted by logos */}
-              <div className="flex flex-col items-center md:items-end gap-2 w-full md:w-auto md:ml-10">
-                <div className="text-[10px] font-bold text-neutral-400 tracking-widest uppercase">
-                  Affiliated:
+              {/* Pillar 2 */}
+              <div className="flex items-start gap-4 md:border-l md:border-outline-variant/40 dark:md:border-neutral-800 md:pl-8">
+                <div className="w-12 h-12 rounded-2xl bg-secondary/15 dark:bg-secondary/20 border border-secondary/30 flex items-center justify-center text-primary dark:text-secondary flex-shrink-0">
+                  <BadgePercent className="w-6 h-6" />
                 </div>
-                <div className="flex flex-wrap justify-center gap-4 sm:gap-6 opacity-40 dark:opacity-30">
-                  {['UC METC', 'NATCCO COOP FEDERATION', 'LGU UNION BANK'].map((b) => (
-                    <span
-                      key={b}
-                      className="font-headline text-xs sm:text-sm font-extrabold tracking-tighter text-on-surface dark:text-white"
-                    >
-                      {b}
-                    </span>
-                  ))}
+                <div className="space-y-1">
+                  <h3 className="font-headline text-base sm:text-lg font-bold text-on-surface dark:text-white">
+                    Transparent Amortization
+                  </h3>
+                  <p className="font-body text-xs sm:text-sm text-on-surface/65 dark:text-neutral-400 leading-relaxed">
+                    Clear breakdown of principal, interest, and monthly amortization with zero hidden fees.
+                  </p>
                 </div>
               </div>
+
+              {/* Pillar 3 */}
+              <div className="flex items-start gap-4 md:border-l md:border-outline-variant/40 dark:md:border-neutral-800 md:pl-8">
+                <div className="w-12 h-12 rounded-2xl bg-tertiary/10 border border-tertiary/20 flex items-center justify-center text-tertiary flex-shrink-0">
+                  <FileSpreadsheet className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-headline text-base sm:text-lg font-bold text-on-surface dark:text-white">
+                    Secure Member Ledger
+                  </h3>
+                  <p className="font-body text-xs sm:text-sm text-on-surface/65 dark:text-neutral-400 leading-relaxed">
+                    Track share capital, fixed deposits, and admin-verified payment records with exportable receipts.
+                  </p>
+                </div>
+              </div>
+
             </div>
+
+            {/* Cooperative Community Banner */}
+            <div className="mt-8 pt-6 border-t border-outline-variant/30 dark:border-neutral-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+              <div className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                Supporting Transparent Financial Management for Cooperative Communities
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/8 dark:bg-secondary/10 text-primary dark:text-secondary font-headline text-xs font-bold">
+                <Building2 className="w-3.5 h-3.5" />
+                UC METC Multipurpose Cooperative
+              </div>
+            </div>
+
           </div>
         </section>
 
-        {/* ── Strategic Choice ─────────────────────────────────────── */}
+        {/* ── The Cooperative Choice Section ───────────────────────── */}
         <section className="py-16 sm:py-24 md:py-28 bg-white dark:bg-neutral-950 relative overflow-hidden">
           {/* Subtle background tint */}
           <div className="absolute inset-0 bg-gradient-to-b from-primary/3 via-transparent to-transparent pointer-events-none" />
@@ -283,14 +374,16 @@ export default function LandingPage() {
             <div className="text-center mb-12 sm:mb-20 space-y-3 sm:space-y-4">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary text-xs font-bold font-label border border-primary/15 dark:border-secondary/15">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Built for Cooperatives
+                Modern Cooperative Services
               </div>
               <h2 className="font-headline text-3xl sm:text-4xl md:text-5xl font-extrabold text-on-surface dark:text-white leading-tight">
                 The Strategic Choice for<br />
-                <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg, #047857 0%, #34D399 100%)' }}>Modern Members</span>
+                <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg, #047857 0%, #34D399 100%)' }}>
+                  Modern Members
+                </span>
               </h2>
-              <p className="font-body text-sm sm:text-base text-on-surface/60 dark:text-neutral-400 max-w-xl mx-auto leading-relaxed">
-                Our system is built on four pillars of cooperative excellence, ensuring your capital and credit needs are always optimized.
+              <p className="font-body text-sm sm:text-base text-on-surface/65 dark:text-neutral-400 max-w-xl mx-auto leading-relaxed">
+                Built on four essential pillars of cooperative financial management, ensuring accessible credit and transparent record-keeping for all.
               </p>
             </div>
 
@@ -298,59 +391,90 @@ export default function LandingPage() {
               {/* Left pillars */}
               <div className="space-y-8 sm:space-y-12 lg:space-y-14 lg:text-right">
                 {[
-                  { icon: <CreditCard className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Credit Assistance', desc: 'Access multiple loan types: Regular, STL, and Product loans.' },
-                  { icon: <Calculator className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Smart Computation', desc: 'Instant interest calculation with diminishing or flat-rate logic.' },
+                  {
+                    icon: <Layers className="text-primary dark:text-secondary w-6 h-6" />,
+                    title: 'Credit Assistance',
+                    desc: 'Tailored loan options including Regular Cash, Short-Term (STL), and Appliance/Product loans.',
+                  },
+                  {
+                    icon: <Calculator className="text-primary dark:text-secondary w-6 h-6" />,
+                    title: 'Automated Computation',
+                    desc: 'Instant computation of monthly schedules using verified flat or diminishing interest rates.',
+                  },
                 ].map(p => (
                   <div key={p.title} className="group space-y-2.5 flex flex-col items-center text-center sm:items-start sm:text-left lg:items-end lg:text-right">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 dark:bg-primary/15 border border-primary/20 shadow-sm group-hover:scale-110 group-hover:shadow-md group-hover:shadow-primary/20 transition-all duration-300">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 dark:bg-primary/15 border border-primary/20 shadow-xs group-hover:scale-110 group-hover:shadow-md group-hover:shadow-primary/20 transition-all duration-300">
                       {p.icon}
                     </div>
                     <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">{p.title}</h3>
-                    <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400 leading-relaxed max-w-xs">{p.desc}</p>
+                    <p className="font-body text-sm text-on-surface/65 dark:text-neutral-400 leading-relaxed max-w-xs">{p.desc}</p>
                   </div>
                 ))}
               </div>
 
-              {/* Center phone mockup */}
+              {/* Center phone mockup (UC Coop Passbook Mobile) */}
               <div className="relative flex justify-center scale-90 sm:scale-100">
                 {/* Glow */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="w-72 h-[500px] bg-primary/8 dark:bg-secondary/6 rounded-full blur-3xl" />
                 </div>
-                <div className="relative w-72 h-[500px] rounded-[2.8rem] border-[8px] border-neutral-800 dark:border-neutral-900 bg-neutral-950 overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.35)]">
+                <div className="relative w-72 h-[510px] rounded-[2.8rem] border-[8px] border-neutral-800 dark:border-neutral-900 bg-neutral-950 overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.35)]">
                   {/* Notch */}
                   <div className="absolute top-0 w-full h-9 flex justify-center pt-2.5 z-10">
                     <div className="w-20 h-5 bg-neutral-900 rounded-full" />
                   </div>
                   {/* Screen content */}
-                  <div className="p-5 pt-14 space-y-5 h-full bg-neutral-950">
-                    {/* Card widget */}
-                    <div className="h-36 w-full rounded-2xl bg-gradient-to-tr from-primary to-secondary p-5 flex flex-col justify-between shadow-lg border border-white/15 relative overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
-                      <div className="flex justify-between items-center relative z-10">
-                        <div className="w-9 h-6 bg-white/25 rounded backdrop-blur" />
-                        <span className="text-white font-extrabold text-xs tracking-widest">VISA</span>
+                  <div className="p-5 pt-12 space-y-4 h-full bg-neutral-950 text-white">
+                    {/* Top bar */}
+                    <div className="flex justify-between items-center pt-1 text-[11px] font-bold text-neutral-400">
+                      <span>UC COOP MOBILE</span>
+                      <span className="text-emerald-400">ONLINE</span>
+                    </div>
+
+                    {/* Loan Overview Widget */}
+                    <div className="rounded-2xl bg-gradient-to-tr from-primary to-emerald-600 p-4 space-y-2.5 shadow-lg border border-white/15 relative overflow-hidden">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-white/80 font-medium">Active Loan Balance</span>
+                        <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">REGULAR</span>
                       </div>
-                      <div className="text-white text-xs tracking-[0.15em] font-mono font-bold relative z-10">•••• •••• •••• 4412</div>
-                    </div>
-                    {/* Balance row */}
-                    <div className="flex items-center justify-between px-2">
-                      <div className="space-y-1">
-                        <div className="h-2.5 w-16 bg-neutral-800 rounded" />
-                        <div className="text-white font-extrabold text-xl font-headline">₱24,210</div>
+                      <div className="text-2xl font-extrabold font-headline tracking-tight">₱30,000.00</div>
+                      <div className="flex justify-between items-center text-[11px] text-white/85 pt-1 border-t border-white/15">
+                        <span>Next Due: Aug 15</span>
+                        <span className="font-bold">₱2,500.00</span>
                       </div>
-                      <div className="text-emerald-400 text-xs font-bold bg-emerald-400/10 px-2.5 py-1 rounded-full border border-emerald-400/20">+4.2%</div>
                     </div>
-                    {/* Skeleton inputs */}
-                    <div className="space-y-2.5">
-                      <div className="h-2 w-20 bg-neutral-800 rounded" />
-                      <div className="h-11 w-full bg-neutral-900 rounded-xl border border-neutral-800" />
-                      <div className="h-11 w-full bg-neutral-900 rounded-xl border border-neutral-800" />
+
+                    {/* Amortization Split Breakdown */}
+                    <div className="p-3.5 rounded-xl bg-neutral-900 border border-neutral-800 space-y-2">
+                      <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Installment Breakdown</div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-neutral-400">Principal Allocation:</span>
+                        <span className="font-bold text-white">₱2,100.00</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-neutral-400">Interest (Diminishing):</span>
+                        <span className="font-bold text-emerald-400">₱400.00</span>
+                      </div>
                     </div>
-                    {/* CTA */}
-                    <div className="h-11 w-full rounded-xl bg-gradient-to-r from-primary to-secondary flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">Transfer Funds</span>
+
+                    {/* Share Capital Mini Widget */}
+                    <div className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 flex justify-between items-center text-xs">
+                      <div>
+                        <div className="text-[10px] text-neutral-400">Share Capital</div>
+                        <div className="font-bold text-white">₱25,000.00</div>
+                      </div>
+                      <div className="text-emerald-400 text-[10px] font-bold bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
+                        +5.0% Yield
+                      </div>
                     </div>
+
+                    {/* Action button */}
+                    <Link
+                      href="/how-it-works"
+                      className="h-10 w-full rounded-xl bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-neutral-950 text-xs font-bold shadow-md hover:opacity-90 transition-opacity"
+                    >
+                      View Full Schedule
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -358,15 +482,25 @@ export default function LandingPage() {
               {/* Right pillars */}
               <div className="space-y-8 sm:space-y-12 lg:space-y-14">
                 {[
-                  { icon: <PiggyBank className="text-tertiary w-6 h-6" />, color: 'tertiary', title: 'Savings Programs', desc: 'High-yield timed deposits, revolving funds, and secure accumulated share capital.' },
-                  { icon: <Clock className="text-primary dark:text-secondary w-6 h-6" />, color: 'primary', title: 'Real-Time Tracking', desc: 'Monitor payment histories, due dates, and printable transaction receipts.' },
+                  {
+                    icon: <PiggyBank className="text-tertiary w-6 h-6" />,
+                    color: 'tertiary',
+                    title: 'Capital & Savings',
+                    desc: 'Build long-term equity with share capital contributions and high-yield fixed deposits.',
+                  },
+                  {
+                    icon: <Clock className="text-primary dark:text-secondary w-6 h-6" />,
+                    color: 'primary',
+                    title: 'Verified History',
+                    desc: 'Access complete repayment ledgers and downloadable PDF transaction receipts.',
+                  },
                 ].map(p => (
                   <div key={p.title} className="group space-y-2.5 flex flex-col items-center text-center sm:items-start sm:text-left">
-                    <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl ${p.color === 'tertiary' ? 'bg-tertiary/10 border-tertiary/20' : 'bg-primary/10 dark:bg-primary/15 border-primary/20'} border shadow-sm group-hover:scale-110 group-hover:shadow-md transition-all duration-300`}>
+                    <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl ${p.color === 'tertiary' ? 'bg-tertiary/10 border-tertiary/20' : 'bg-primary/10 dark:bg-primary/15 border-primary/20'} border shadow-xs group-hover:scale-110 group-hover:shadow-md transition-all duration-300`}>
                       {p.icon}
                     </div>
                     <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">{p.title}</h3>
-                    <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400 leading-relaxed max-w-xs">{p.desc}</p>
+                    <p className="font-body text-sm text-on-surface/65 dark:text-neutral-400 leading-relaxed max-w-xs">{p.desc}</p>
                   </div>
                 ))}
               </div>
@@ -383,43 +517,46 @@ export default function LandingPage() {
                 <Award className="w-3.5 h-3.5" />
                 Platform Capabilities
               </div>
-              <h2 className="font-headline text-3xl sm:text-4xl font-extrabold text-on-surface dark:text-white">Everything you need to grow</h2>
+              <h2 className="font-headline text-3xl sm:text-4xl font-extrabold text-on-surface dark:text-white">
+                Everything you need to grow
+              </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
 
-              {/* Card 1: Earn Rewards */}
+              {/* Card 1: Share Capital & Dividends */}
               <div className="md:col-span-6 lg:col-span-4 group bg-white dark:bg-neutral-800/70 p-6 sm:p-8 rounded-3xl border border-outline-variant/50 dark:border-neutral-700/60 flex flex-col justify-between hover:shadow-2xl hover:shadow-primary/8 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/3 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-3xl" />
                 <div className="space-y-3 relative z-10">
                   <div className="w-11 h-11 rounded-2xl bg-primary/12 dark:bg-primary/20 flex items-center justify-center border border-primary/20">
                     <Award className="text-primary dark:text-secondary w-5 h-5" />
                   </div>
-                  <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white">Earn Dividends</h3>
-                  <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400 leading-relaxed">
-                    Build your share capital account to earn competitive annual dividends.
+                  <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white">Share Capital &amp; Savings</h3>
+                  <p className="font-body text-sm text-on-surface/65 dark:text-neutral-400 leading-relaxed">
+                    Accumulate member equity contributions and monitor cooperative dividend yields with transparent balances.
                   </p>
                 </div>
                 <div className="mt-8 relative z-10">
                   <div className="h-28 w-full bg-gradient-to-br from-primary/10 to-secondary/10 dark:from-primary/15 dark:to-secondary/10 rounded-2xl flex items-center justify-center border border-primary/15">
                     <div className="text-center">
                       <div className="text-primary dark:text-secondary font-headline text-3xl font-extrabold">+5.0%</div>
-                      <div className="text-primary/60 dark:text-secondary/60 text-xs font-bold mt-0.5">Target Dividend Yield</div>
+                      <div className="text-primary/75 dark:text-secondary/75 text-xs font-bold mt-0.5">Target Annual Yield</div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Card 2: Always Protected */}
+              {/* Card 2: Protected & Accountable */}
               <div className="md:col-span-6 lg:col-span-8 bg-neutral-950 text-white p-6 sm:p-8 rounded-3xl overflow-hidden relative group border border-neutral-800">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-transparent to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 <div className="z-10 relative lg:w-1/2 space-y-4">
                   <div className="w-11 h-11 rounded-2xl bg-white/10 flex items-center justify-center border border-white/15">
                     <Shield className="w-5 h-5 text-secondary" />
                   </div>
-                  <h3 className="font-headline text-2xl font-bold">Always Protected</h3>
+                  <h3 className="font-headline text-2xl font-bold">Protected &amp; Accountable</h3>
                   <p className="text-neutral-400 font-body text-sm leading-relaxed">
-                    Role-based access control (Admin, Staff, Accountant), data encryption, and comprehensive secure activity logs.</p>
+                    Multi-role administration (Admin, Manager, Member, Accountant) with granular audit logs tracking loan approvals, payment postings, and official records.
+                  </p>
                   <Link
                     href="/terms"
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/25 hover:bg-white hover:text-neutral-950 transition-all font-label text-xs font-bold group/btn"
@@ -428,6 +565,7 @@ export default function LandingPage() {
                     <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
                   </Link>
                 </div>
+
                 {/* Mock dashboard panel */}
                 <div className="absolute right-[-8%] bottom-[-12%] w-[55%] h-[130%] rotate-[-8deg] transition-all group-hover:rotate-0 group-hover:right-[-4%] duration-700 hidden lg:block">
                   <div className="w-full h-full bg-neutral-900 border border-white/8 rounded-2xl p-5 shadow-2xl">
@@ -443,8 +581,8 @@ export default function LandingPage() {
                       </div>
                       <div className="h-2.5 w-full bg-white/8 rounded" />
                       <div className="h-24 w-full bg-primary/15 rounded-xl border border-primary/30 flex items-end p-2.5 gap-1.5">
-                        {[2, 4, 6, 8, 5, 7, 9].map((v, i) => (
-                          <div key={i} className="flex-1 bg-gradient-to-t from-primary to-secondary rounded-sm opacity-80" style={{ height: `${v * 10}%` }} />
+                        {[3, 5, 7, 9, 6, 8, 10].map((v, i) => (
+                          <div key={i} className="flex-1 bg-gradient-to-t from-primary to-secondary rounded-xs opacity-80" style={{ height: `${v * 9}%` }} />
                         ))}
                       </div>
                       <div className="flex gap-2">
@@ -456,16 +594,16 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Card 3: No Volatility */}
+              {/* Card 3: Transparent Loan Amortization */}
               <div className="md:col-span-12 lg:col-span-7 bg-gradient-to-br from-primary to-emerald-600 text-white p-6 sm:p-8 rounded-3xl flex flex-col sm:flex-row items-center gap-6 border border-white/10 shadow-lg shadow-primary/25 relative overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <div className="w-full sm:w-1/2 space-y-3 relative z-10 text-center sm:text-left">
                   <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center border border-white/20 mx-auto sm:mx-0">
                     <TrendingUp className="w-5 h-5 text-white" />
                   </div>
-                  <h3 className="font-headline text-xl font-bold">No Hidden Charges</h3>
-                  <p className="text-white/75 font-body text-sm leading-relaxed">
-                    View your outstanding balance, principal splits, and amortizations clearly.
+                  <h3 className="font-headline text-xl font-bold">Transparent Loan Amortization</h3>
+                  <p className="text-white/80 font-body text-sm leading-relaxed">
+                    Clear visibility into remaining principal, interest splits, and scheduled installments with zero hidden deductions.
                   </p>
                 </div>
                 <div className="w-full sm:w-1/2 flex justify-center relative z-10">
@@ -483,7 +621,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Card 4: Get Paid Faster */}
+              {/* Card 4: Fast Loan Cash Disbursement */}
               <div className="md:col-span-12 lg:col-span-5 group bg-white dark:bg-neutral-800/70 p-6 sm:p-8 rounded-3xl border border-outline-variant/50 dark:border-neutral-700/60 flex flex-col justify-center hover:shadow-2xl hover:shadow-primary/8 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-secondary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-3xl" />
                 <div className="relative z-10">
@@ -492,22 +630,26 @@ export default function LandingPage() {
                       <Zap className="w-5 h-5 text-primary dark:text-secondary" />
                     </div>
                     <div className="space-y-1">
-                      <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white">Faster Loan Disbursement</h3>
-                      <p className="font-body text-sm text-on-surface/60 dark:text-neutral-400">
-                        Approved loans are tracked automatically for lightning-fast cash release.
+                      <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white">Fast Cash Disbursement</h3>
+                      <p className="font-body text-sm text-on-surface/65 dark:text-neutral-400">
+                        Smooth application reviews, remarks, and scheduled cash releases managed directly through the coop desk.
                       </p>
                     </div>
                   </div>
                   {/* Transaction notification */}
                   <div className="p-3.5 sm:p-4 bg-neutral-50 dark:bg-neutral-900/80 rounded-2xl flex items-center gap-3 border border-outline-variant/40 dark:border-neutral-700/50">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center font-extrabold text-white text-sm shadow-md shadow-primary/30 flex-shrink-0">L</div>
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center font-extrabold text-white text-sm shadow-md shadow-primary/30 flex-shrink-0">
+                      ₱
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-bold text-neutral-400 tracking-wide">Coop Sync</div>
-                      <div className="text-xs sm:text-sm font-bold text-on-surface dark:text-white truncate">Disbursement Ready: ₱50,000.00</div>
+                      <div className="text-[10px] font-bold text-neutral-400 tracking-wide">Disbursement Queue</div>
+                      <div className="text-xs sm:text-sm font-bold text-on-surface dark:text-white truncate">
+                        Ready for Disbursement: ₱50,000.00
+                      </div>
                     </div>
                     <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                       <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <div className="text-[10px] font-semibold text-neutral-400">OK</div>
+                      <div className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">Approved</div>
                     </div>
                   </div>
                 </div>
@@ -516,55 +658,76 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── Integration CTA ──────────────────────────────────────── */}
+        {/* ── Member Workflow & Onboarding CTA ─────────────────────── */}
         <section className="py-16 sm:py-24 md:py-28 bg-white dark:bg-neutral-950">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12">
             <div className="relative bg-gradient-to-br from-primary via-emerald-600 to-secondary/90 rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-12 md:p-16 lg:p-20 flex flex-col md:flex-row items-center gap-10 md:gap-16 overflow-hidden border border-white/10 shadow-2xl shadow-primary/20">
-              {/* Decorative elements */}
+              {/* Decorative background rings */}
               <div className="absolute -right-24 -bottom-24 w-96 h-96 border-[3px] border-white/8 rounded-full pointer-events-none" />
               <div className="absolute -right-6 -bottom-6 w-48 h-48 border-[3px] border-white/12 rounded-full pointer-events-none" />
               <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-transparent to-transparent pointer-events-none" />
 
               <div className="w-full md:w-1/2 z-10 space-y-5 sm:space-y-6 text-center md:text-left">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/15 border border-white/20 text-white text-xs font-bold font-label">
-                  <Code className="w-3.5 h-3.5" />
-                  Enterprise API
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Digital Cooperative Access
                 </div>
                 <h2 className="font-headline text-2xl sm:text-3xl md:text-4xl font-extrabold text-white leading-tight">
-                  Seamless Integration<br />with your Stack
+                  A Simpler Way to Manage<br />Your Cooperative Loans
                 </h2>
-                <p className="text-white/75 font-body text-sm sm:text-base max-w-md mx-auto md:mx-0 leading-relaxed">
-                  Connect Coop Sync to your existing CRM, accounting software, and treasury systems with our enterprise-grade API.
+                <p className="text-white/80 font-body text-sm sm:text-base max-w-md mx-auto md:mx-0 leading-relaxed">
+                  From initial online loan filing to automated payment recording and downloadable official receipts, manage your full financial relationship in one unified hub.
                 </p>
                 <div className="flex flex-wrap justify-center md:justify-start gap-3 sm:gap-4">
                   <Link
                     href="/login"
                     className="flex items-center gap-2 px-6 py-3 bg-white text-primary font-label text-sm font-bold rounded-full shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-95 transition-all"
                   >
-                    Explore Docs
+                    Apply for a Loan
                     <ArrowRight className="w-4 h-4" />
                   </Link>
                   <Link
-                    href="/login"
+                    href="/how-it-works"
                     className="px-6 py-3 bg-white/12 text-white font-label text-sm font-bold rounded-full border border-white/20 hover:bg-white/20 active:scale-95 transition-all backdrop-blur"
                   >
-                    Get API Keys
+                    Explore How It Works
                   </Link>
                 </div>
               </div>
 
+              {/* 6-Step Workflow Stage Badges */}
               <div className="w-full md:w-1/2 flex justify-center z-10">
-                <div className="grid grid-cols-3 gap-3 sm:gap-4 md:gap-5 transform rotate-3 sm:rotate-6 hover:rotate-0 transition-transform duration-700">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-4 w-full max-w-sm">
                   {[
-                    { icon: <Cloud className="w-6 h-6 sm:w-7 sm:h-7 text-white" />, glass: true },
-                    { icon: <Cpu className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />, glass: false },
-                    { icon: <Database className="w-6 h-6 sm:w-7 sm:h-7 text-white" />, glass: true },
-                    { icon: <GitMerge className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-500" />, glass: false },
-                    { icon: <Code className="w-6 h-6 sm:w-7 sm:h-7 text-white" />, glass: true },
-                    { icon: <Hexagon className="w-6 h-6 sm:w-7 sm:h-7 text-emerald-500" />, glass: false },
-                  ].map((b, i) => (
-                    <div key={i} className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center shadow-xl hover:scale-110 transition-transform duration-200 cursor-default ${b.glass ? 'bg-white/12 backdrop-blur border border-white/20' : 'bg-white shadow-lg'}`}>
-                      {b.icon}
+                    { step: '01', title: 'Apply', subtitle: 'Online Loan Filing', icon: <FileText className="w-5 h-5 text-white" />, glass: true },
+                    { step: '02', title: 'Review', subtitle: 'Credit Assessment', icon: <Calculator className="w-5 h-5 text-primary" />, glass: false },
+                    { step: '03', title: 'Disburse', subtitle: 'Ledger Crediting', icon: <Zap className="w-5 h-5 text-white" />, glass: true },
+                    { step: '04', title: 'Repay', subtitle: 'Scheduled Dues', icon: <Clock className="w-5 h-5 text-emerald-600" />, glass: false },
+                    { step: '05', title: 'Receipt', subtitle: 'Verified Posting', icon: <Receipt className="w-5 h-5 text-white" />, glass: true },
+                    { step: '06', title: 'Ledger', subtitle: 'Share Growth', icon: <TrendingUp className="w-5 h-5 text-primary" />, glass: false },
+                  ].map((s, i) => (
+                    <div
+                      key={i}
+                      className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between h-28 shadow-lg transition-transform duration-200 hover:scale-105 cursor-default ${
+                        s.glass
+                          ? 'bg-white/12 backdrop-blur border border-white/20 text-white'
+                          : 'bg-white text-neutral-900 shadow-md'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        {s.icon}
+                        <span className={`text-[10px] font-mono font-bold ${s.glass ? 'text-white/60' : 'text-neutral-400'}`}>
+                          {s.step}
+                        </span>
+                      </div>
+                      <div>
+                        <div className={`text-xs font-extrabold ${s.glass ? 'text-white' : 'text-neutral-900'}`}>
+                          {s.title}
+                        </div>
+                        <div className={`text-[10px] truncate ${s.glass ? 'text-white/70' : 'text-neutral-500'}`}>
+                          {s.subtitle}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
