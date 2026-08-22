@@ -76,7 +76,7 @@ export default function LandingPage() {
             />
 
             {/* Philippine Peso, Money Bill, and Coin Floating Elements */}
-            
+
             {/* 1. Floating Peso Badge - Top Left */}
             <div
               className="absolute top-[10%] left-[5%] select-none z-0"
@@ -183,7 +183,7 @@ export default function LandingPage() {
 
           {/* Hero content */}
           <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 md:px-12 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-14 items-center">
-            
+
             {/* Left Copy */}
             <div className="lg:col-span-7 space-y-6 sm:space-y-8 text-center lg:text-left">
               {/* Trust badge */}
@@ -239,14 +239,14 @@ export default function LandingPage() {
                   href="/how-it-works"
                   className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 rounded-full bg-white/80 dark:bg-neutral-800/60 backdrop-blur border border-outline-variant/60 dark:border-neutral-700 text-on-surface dark:text-white font-label text-sm font-bold hover:bg-white dark:hover:bg-neutral-700/80 hover:shadow-lg transition-all duration-300 active:scale-95 text-center"
                 >
-                  Calculate Repayment
+                  View Live Demo
                 </Link>
               </div>
             </div>
 
             {/* Right Visual: UC Coop Digital Passbook */}
             <div className="lg:col-span-5 relative h-[380px] sm:h-[440px] md:h-[480px] flex items-center justify-center scale-95 sm:scale-100 max-w-full overflow-hidden sm:overflow-visible">
-              
+
               {/* Ambient Glow */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="w-[300px] sm:w-[400px] h-[300px] sm:h-[400px] rounded-full bg-primary/12 dark:bg-secondary/10 blur-[75px]" />
@@ -257,7 +257,7 @@ export default function LandingPage() {
                 <div className="bg-gradient-to-br from-neutral-900 via-neutral-900 to-neutral-950 text-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl shadow-primary/25 border border-white/15 relative overflow-hidden backdrop-blur-md">
                   {/* Subtle card gradient highlight */}
                   <div className="absolute top-0 right-0 w-44 h-44 bg-gradient-to-bl from-secondary/20 via-primary/15 to-transparent rounded-full blur-2xl pointer-events-none" />
-                  
+
                   {/* Passbook Header */}
                   <div className="flex justify-between items-start border-b border-white/10 pb-3 mb-4 relative z-10">
                     <div className="flex items-center gap-2">
@@ -347,10 +347,10 @@ export default function LandingPage() {
         {/* ── Cooperative Value Highlights ─────────────────────────── */}
         <section className="relative border-y border-outline-variant/40 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 py-10 sm:py-12">
-            
+
             {/* 3-Pillar Value Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
-              
+
               {/* Pillar 1 */}
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-primary/10 dark:bg-primary/20 border border-primary/20 flex items-center justify-center text-primary dark:text-secondary flex-shrink-0">
@@ -756,11 +756,10 @@ export default function LandingPage() {
                   ].map((s, i) => (
                     <div
                       key={i}
-                      className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between h-28 shadow-lg transition-transform duration-200 hover:scale-105 cursor-default ${
-                        s.glass
+                      className={`p-3.5 sm:p-4 rounded-2xl flex flex-col justify-between h-28 shadow-lg transition-transform duration-200 hover:scale-105 cursor-default ${s.glass
                           ? 'bg-white/12 backdrop-blur border border-white/20 text-white'
                           : 'bg-white text-neutral-900 shadow-md'
-                      }`}
+                        }`}
                     >
                       <div className="flex justify-between items-start">
                         {s.icon}
