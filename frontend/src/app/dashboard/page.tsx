@@ -1043,9 +1043,9 @@ export default function OverviewPage() {
                       const hasStl1MonthRepayment = memberMetrics?.loans?.has_stl_with_1month_repayment || false;
                       const isRegularLocked = selectedLoanCategory === LOAN_CATEGORIES.REGULAR && activeRegularCount >= 1;
                       const isStlLocked = selectedLoanCategory === LOAN_CATEGORIES.STL && activeStlCount >= 3 && !hasStl1MonthRepayment;
-                      
+
                       let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
-                      
+
                       // If State of Calamity is declared, guarantee Calamity Loan product exists under Regular Loan category
                       if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && isCalamityDeclared && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
                         const calamityFallback: any = {
@@ -1154,7 +1154,7 @@ export default function OverviewPage() {
                                   const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
                                   const isSelected = selectedProduct?.id === p.id;
                                   const isCalamityProduct = p.name.toLowerCase().includes('calamity');
-                                  
+
                                   const shareCap = memberMetrics?.balances?.share_capital || 0;
                                   const histCount = memberMetrics?.loans?.historical_count || 0;
                                   const actPrincipal = parseFloat(memberMetrics?.loans?.active_principal || memberMetrics?.loans?.outstanding_balance || 0);
@@ -1177,13 +1177,12 @@ export default function OverviewPage() {
                                         setLoanAmount(parseFloat(p.min_amount));
                                         setLoanTerm(p.term_months);
                                       }}
-                                      className={`w-full p-3.5 rounded-2xl border text-left transition-all ${
-                                        isDisabled
-                                          ? 'border-outline-variant/40 bg-neutral-100/60 dark:bg-neutral-900/40 opacity-60 cursor-not-allowed'
-                                          : isSelected
+                                      className={`w-full p-3.5 rounded-2xl border text-left transition-all ${isDisabled
+                                        ? 'border-outline-variant/40 bg-neutral-100/60 dark:bg-neutral-900/40 opacity-60 cursor-not-allowed'
+                                        : isSelected
                                           ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5 ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm cursor-pointer'
                                           : 'border-outline-variant/65 bg-transparent hover:border-primary/45 dark:hover:border-secondary/45 hover:bg-neutral/5 cursor-pointer'
-                                      }`}
+                                        }`}
                                     >
                                       <div className="flex justify-between items-center mb-2.5">
                                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -1194,11 +1193,10 @@ export default function OverviewPage() {
                                               .replace(/Regular Loan\s*-\s*/gi, '')}
                                           </span>
                                           {isCalamityProduct && (
-                                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
-                                              isCalamityDeclared
-                                                ? 'bg-amber-500 text-white animate-pulse'
-                                                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
-                                            }`}>
+                                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${isCalamityDeclared
+                                              ? 'bg-amber-500 text-white animate-pulse'
+                                              : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                                              }`}>
                                               {isCalamityDeclared ? 'Calamity Active' : 'Calamity Only'}
                                             </span>
                                           )}
@@ -2232,7 +2230,7 @@ export default function OverviewPage() {
               </div>
             )}
 
-            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm flex flex-col">
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm flex flex-col p-1.5">
               {/* Scrollable Container with Integrated End-Arrow Stepper Scrollbars */}
               <div className="max-h-[360px] overflow-x-auto overflow-y-auto custom-scrollbar">
                 <table className="w-full text-left border-collapse min-w-[920px]">
