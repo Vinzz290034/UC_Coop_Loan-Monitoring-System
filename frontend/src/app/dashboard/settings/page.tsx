@@ -5,6 +5,7 @@ import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useRouter } from 'next/navigation';
+import api from '@/lib/api';
 import {
   Settings,
   Sun,
@@ -24,6 +25,9 @@ import {
   Cpu,
   ExternalLink,
   HelpCircle,
+  AlertTriangle,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -34,6 +38,15 @@ export default function SettingsPage() {
   // Notification preferences (localStorage-only for now)
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [inAppNotifications, setInAppNotifications] = useState(true);
+
+  // State of Calamity status
+  const [isCalamityDeclared, setIsCalamityDeclared] = useState(false);
+  const [loadingCalamity, setLoadingCalamity] = useState(false);
+  const [savingCalamity, setSavingCalamity] = useState(false);
+  const [calamityMsg, setCalamityMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const isAdmin = user?.role === 'admin';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -50,6 +63,49 @@ export default function SettingsPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (isAdminOrManager) {
+      const fetchCalamityStatus = async () => {
+        try {
+          setLoadingCalamity(true);
+          const res = await api.get('/loans/calamity-status');
+          if (res.data && typeof res.data.is_calamity_declared === 'boolean') {
+            setIsCalamityDeclared(res.data.is_calamity_declared);
+          }
+        } catch (err) {
+          console.error('Failed to fetch calamity status:', err);
+        } finally {
+          setLoadingCalamity(false);
+        }
+      };
+      fetchCalamityStatus();
+    }
+  }, [isAdminOrManager]);
+
+  const handleToggleCalamity = async (newStatus: boolean) => {
+    try {
+      setSavingCalamity(true);
+      setCalamityMsg(null);
+      await api.patch('/loans/calamity-status', { is_calamity_declared: newStatus });
+      setIsCalamityDeclared(newStatus);
+      setCalamityMsg({
+        type: 'success',
+        text: newStatus
+          ? 'State of Calamity is now DECLARED. Calamity Loan applications are now active.'
+          : 'State of Calamity status set to Normal/Inactive.'
+      });
+      setTimeout(() => setCalamityMsg(null), 5000);
+    } catch (err: any) {
+      console.error('Failed to update calamity status:', err);
+      setCalamityMsg({
+        type: 'error',
+        text: err?.response?.data?.error?.message || 'Failed to update State of Calamity status.'
+      });
+    } finally {
+      setSavingCalamity(false);
+    }
+  };
+
   const saveNotifPrefs = (email: boolean, inApp: boolean) => {
     setEmailNotifications(email);
     setInAppNotifications(inApp);
@@ -59,9 +115,6 @@ export default function SettingsPage() {
   };
 
   if (!user) return null;
-
-  const isAdmin = user.role === 'admin';
-  const isAdminOrManager = user.role === 'admin' || user.role === 'staff';
 
   const themeOptions = [
     { key: 'light', label: 'Light', icon: Sun, desc: 'Bright, clean interface' },
@@ -225,7 +278,65 @@ export default function SettingsPage() {
             <Cpu className="w-4 h-4 text-primary dark:text-secondary" />
             <h2 className="font-headline text-sm font-bold text-on-surface dark:text-white">Administration</h2>
           </div>
-          <div className="p-6 space-y-2">
+          <div className="p-6 space-y-3">
+            {/* State of Calamity Policy Toggle */}
+            <div className="p-4 rounded-xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/30 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-800 dark:text-amber-300 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-xs font-bold text-on-surface dark:text-white">State of Calamity Declaration</h4>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase tracking-wider ${
+                        isCalamityDeclared
+                          ? 'bg-amber-500 text-white animate-pulse'
+                          : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                      }`}>
+                        {loadingCalamity ? 'Checking...' : isCalamityDeclared ? 'ACTIVE / DECLARED' : 'INACTIVE'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-1">
+                      Enable emergency loan eligibility across the cooperative system during natural disasters or local crises.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={savingCalamity || loadingCalamity}
+                  onClick={() => handleToggleCalamity(!isCalamityDeclared)}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer disabled:opacity-50 flex-shrink-0 ${
+                    isCalamityDeclared ? 'bg-amber-600 dark:bg-amber-500' : 'bg-neutral-300 dark:bg-neutral-600'
+                  }`}
+                  title={isCalamityDeclared ? 'Deactivate State of Calamity' : 'Declare State of Calamity'}
+                >
+                  {savingCalamity ? (
+                    <span className="absolute inset-0 flex items-center justify-center text-white">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    </span>
+                  ) : (
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                        isCalamityDeclared ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  )}
+                </button>
+              </div>
+
+              {calamityMsg && (
+                <div className={`p-2.5 rounded-lg text-xs font-medium flex items-center gap-2 ${
+                  calamityMsg.type === 'success'
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                    : 'bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/30'
+                }`}>
+                  {calamityMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+                  <span>{calamityMsg.text}</span>
+                </div>
+              )}
+            </div>
             {isAdmin && (
               <button
                 onClick={() => router.push('/dashboard/users')}
