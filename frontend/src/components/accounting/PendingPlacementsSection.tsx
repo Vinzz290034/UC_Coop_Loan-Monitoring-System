@@ -144,6 +144,8 @@ export default function PendingPlacementsSection({
           {pendingPlacements.map((p) => {
           const rawMemberNo = p.member_no?.toString() || '';
           const displayMemberNo = rawMemberNo.length > 10 ? `#${rawMemberNo.slice(0, 8)}...` : `#${rawMemberNo}`;
+          const submittedDate = p.created_at || p.placement_date;
+          const displaySubmittedDate = submittedDate ? new Date(submittedDate).toLocaleDateString() : 'N/A';
 
           return (
             <div
@@ -188,7 +190,7 @@ export default function PendingPlacementsSection({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-3 h-3 text-neutral-400 flex-shrink-0" />
-                  <span>Submitted: {new Date(p.created_at || p.placement_date || Date.now()).toLocaleDateString()}</span>
+                  <span>Submitted: {displaySubmittedDate}</span>
                 </div>
               </div>
 
