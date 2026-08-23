@@ -446,7 +446,7 @@ export default function OverviewPage() {
         }
       }
 
-      // Fetch Calamity Status
+      // Fetch Calamity & Maintenance Status
       try {
         const calamityRes = await api.get('/loans/calamity-status');
         setIsCalamityDeclared(calamityRes.data.is_calamity_declared || false);
