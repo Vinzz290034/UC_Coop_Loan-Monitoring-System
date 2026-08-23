@@ -176,7 +176,7 @@ function LoansPageContent() {
   const [coMakerPhone, setCoMakerPhone] = useState('');
   const [applyTermMonths, setApplyTermMonths] = useState<number>(1);
 
-  // State of Calamity declaration toggle
+  // State of Calamity toggle
   const [isCalamityDeclared, setIsCalamityDeclared] = useState(false);
 
   // Selected Member CBU & details
