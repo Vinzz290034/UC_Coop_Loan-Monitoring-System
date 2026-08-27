@@ -73,8 +73,10 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
 
   const getAvatarUrl = (path?: string | null) => {
     if (!path) return null;
-    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace('/api', '');
-    return `${baseUrl}${path}`;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) return path;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || '';
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `${baseUrl}${cleanPath}`;
   };
 
   const fetchProfileAndBalances = async () => {
