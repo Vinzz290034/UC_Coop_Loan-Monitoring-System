@@ -90,11 +90,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error: any) {
           if (error?.response?.status === 401) {
             console.warn('Session token expired or invalid, clearing local session.');
+            logout();
           } else {
-            console.warn('Failed to verify session token or parse stored user:', error?.message || error);
+            console.warn('Network issue verifying session with /auth/me, keeping cached session:', error?.message || error);
           }
-          // Token expired or invalid, or stored user is corrupted JSON
-          logout();
         }
       }
       setLoading(false);
