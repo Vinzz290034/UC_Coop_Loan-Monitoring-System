@@ -2231,8 +2231,8 @@ export default function OverviewPage() {
             )}
 
             <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm flex flex-col p-1.5">
-              {/* Scrollable Container with Integrated End-Arrow Stepper Scrollbars */}
-              <div className="max-h-[360px] overflow-x-auto overflow-y-auto custom-scrollbar">
+              {/* Scrollable Container with Integrated End-Arrow Stepper Scrollbars (vertical scroll triggers when entries exceed 8) */}
+              <div className={`overflow-x-auto custom-scrollbar ${adminMembersList.length > 8 ? 'max-h-[640px] overflow-y-auto' : 'overflow-y-visible'}`}>
                 <table className="w-full text-left border-collapse min-w-[920px]">
                   <thead className="sticky top-0 z-10 bg-neutral-50/95 dark:bg-neutral-800/95 backdrop-blur-xs border-b border-outline-variant/50">
                     <tr className="text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
