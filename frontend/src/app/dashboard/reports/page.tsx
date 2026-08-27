@@ -33,7 +33,7 @@ export default function ReportsPage() {
     }
   }, [user, router]);
 
-  const [activeTab, setActiveTab] = useState<'disbursement' | 'monitoring' | 'transactions'>('disbursement');
+  const [activeTab, setActiveTab] = useState<'disbursement' | 'monitoring' | 'transactions' | 'revenue'>('disbursement');
 
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -154,6 +154,8 @@ export default function ReportsPage() {
         endpoint = '/reports/loan-monitoring';
       } else if (activeTab === 'transactions') {
         endpoint = '/reports/transactions';
+      } else if (activeTab === 'revenue') {
+        endpoint = '/reports/revenue';
       }
 
       const response = await api.get(endpoint);
@@ -201,6 +203,17 @@ export default function ReportsPage() {
             'Past Due Days': row.days_past_due || 0,
             'Status': (row.status || '').toUpperCase()
           };
+        } else if (activeTab === 'revenue') {
+          return {
+            'Loan Product': row.product_name || 'N/A',
+            'Active Loans Count': row.active_loans_count || 0,
+            'Expected Principal (PHP)': parseFloat(row.expected_principal || 0),
+            'Expected Interest (PHP)': parseFloat(row.expected_interest || 0),
+            'Collected Principal (PHP)': parseFloat(row.collected_principal || 0),
+            'Collected Interest (PHP)': parseFloat(row.collected_revenue_interest || 0),
+            'Uncollected Variance (PHP)': parseFloat(row.uncollected_interest_variance || 0),
+            'Realization Rate': row.revenue_realization_rate || 'N/A'
+          };
         } else {
           return {
             'Ledger Category': row.ledger_type || 'N/A',
@@ -216,10 +229,22 @@ export default function ReportsPage() {
 
       const worksheet = XLSX.utils.json_to_sheet(excelData);
       const workbook = XLSX.utils.book_new();
-      const sheetName = activeTab === 'disbursement' ? 'Disbursements' : activeTab === 'monitoring' ? 'Portfolio Monitoring' : 'Master Transactions';
+      const sheetName = activeTab === 'disbursement' 
+        ? 'Disbursements' 
+        : activeTab === 'monitoring' 
+          ? 'Portfolio Monitoring' 
+          : activeTab === 'revenue' 
+            ? 'Revenue Collections' 
+            : 'Master Transactions';
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 
-      const filename = activeTab === 'disbursement' ? 'Cash_Disbursements_Report' : activeTab === 'monitoring' ? 'Loan_Monitoring_Report' : 'Master_Transactions_Report';
+      const filename = activeTab === 'disbursement' 
+        ? 'Cash_Disbursements_Report' 
+        : activeTab === 'monitoring' 
+          ? 'Loan_Monitoring_Report' 
+          : activeTab === 'revenue' 
+            ? 'Revenue_Collection_Report' 
+            : 'Master_Transactions_Report';
       XLSX.writeFile(workbook, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err) {
       console.error('Excel export failed:', err);
@@ -300,23 +325,23 @@ export default function ReportsPage() {
         return dateA - dateB;
       }
       if (sortBy === 'amount-desc') {
-        const amtA = parseFloat(a.amount || a.principal_amount || a.outstanding_balance || 0);
-        const amtB = parseFloat(b.amount || b.principal_amount || b.outstanding_balance || 0);
+        const amtA = parseFloat(a.amount || a.principal_amount || a.outstanding_balance || a.collected_revenue_interest || 0);
+        const amtB = parseFloat(b.amount || b.principal_amount || b.outstanding_balance || b.collected_revenue_interest || 0);
         return amtB - amtA;
       }
       if (sortBy === 'amount-asc') {
-        const amtA = parseFloat(a.amount || a.principal_amount || a.outstanding_balance || 0);
-        const amtB = parseFloat(b.amount || b.principal_amount || b.outstanding_balance || 0);
+        const amtA = parseFloat(a.amount || a.principal_amount || a.outstanding_balance || a.collected_revenue_interest || 0);
+        const amtB = parseFloat(b.amount || b.principal_amount || b.outstanding_balance || b.collected_revenue_interest || 0);
         return amtA - amtB;
       }
       if (sortBy === 'name-asc') {
-        const nameA = (a.member_name || '').toLowerCase();
-        const nameB = (b.member_name || '').toLowerCase();
+        const nameA = (a.member_name || a.product_name || '').toLowerCase();
+        const nameB = (b.member_name || b.product_name || '').toLowerCase();
         return nameA.localeCompare(nameB);
       }
       if (sortBy === 'name-desc') {
-        const nameA = (a.member_name || '').toLowerCase();
-        const nameB = (b.member_name || '').toLowerCase();
+        const nameA = (a.member_name || a.product_name || '').toLowerCase();
+        const nameB = (b.member_name || b.product_name || '').toLowerCase();
         return nameB.localeCompare(nameA);
       }
       return 0;
@@ -410,6 +435,7 @@ export default function ReportsPage() {
         {[
           { key: 'disbursement', label: 'Disbursement Reports' },
           { key: 'monitoring', label: 'Loan Portfolio Status' },
+          { key: 'revenue', label: 'Revenue Collection' },
           { key: 'transactions', label: 'Master Transactions Log' }
         ].map((tab) => (
           <button
@@ -614,7 +640,52 @@ export default function ReportsPage() {
                 </table>
               )}
 
-              {/* TABLE 3: MASTER TRANSACTIONS LOG */}
+              {/* TABLE 3: REVENUE COLLECTION REPORT */}
+              {activeTab === 'revenue' && (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
+                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
+                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-center">Active Loans</th>
+                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Expected Principal</th>
+                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Expected Interest</th>
+                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-primary">Collected Principal</th>
+                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-emerald-600 dark:text-emerald-400">Collected Interest</th>
+                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-amber-600 dark:text-amber-400">Variance</th>
+                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Realization Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
+                    {currentItems.map((row: any, index: number) => {
+                      const rateNum = parseFloat(row.revenue_realization_rate || '0');
+                      return (
+                        <tr key={index} className="hover:bg-neutral/5">
+                          <td className="px-6 py-3.5 font-bold text-primary dark:text-secondary">{row.product_name}</td>
+                          <td className="px-6 py-3.5 font-mono text-center font-bold">{row.active_loans_count}</td>
+                          <td className="px-6 py-3.5 font-mono">{formatCurrency(row.expected_principal)}</td>
+                          <td className="px-6 py-3.5 font-mono">{formatCurrency(row.expected_interest)}</td>
+                          <td className="px-6 py-3.5 font-mono text-primary">{formatCurrency(row.collected_principal)}</td>
+                          <td className="px-6 py-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.collected_revenue_interest)}</td>
+                          <td className="px-6 py-3.5 font-mono font-bold text-amber-600 dark:text-amber-400">{formatCurrency(row.uncollected_interest_variance)}</td>
+                          <td className="px-6 py-3.5 text-right">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                              rateNum >= 90
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                : rateNum >= 50
+                                ? 'bg-primary/10 text-primary dark:text-secondary border border-primary/20'
+                                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                            }`}>
+                              {row.revenue_realization_rate || '0%'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+
+              {/* TABLE 4: MASTER TRANSACTIONS LOG */}
               {activeTab === 'transactions' && (
                 <table className="w-full text-left border-collapse">
                   <thead>
