@@ -171,7 +171,7 @@ export default function LoanBillingLedgerModal({
               </div>
 
               {/* Installment Schedule Table */}
-              <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
+              <div className="border border-outline-variant/50 rounded-2xl overflow-hidden p-1.5">
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>

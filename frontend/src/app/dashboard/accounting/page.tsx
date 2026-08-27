@@ -563,7 +563,7 @@ export default function AccountingPage() {
                 <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Locked member equity value contributions</p>
               </div>
 
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
+              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
                 <h4 className="px-6 py-4 font-headline text-sm font-bold text-on-surface dark:text-white border-b border-outline-variant/40 flex items-center gap-2">
                   <History className="w-4 h-4 text-primary" /> Share Capital Postings
                 </h4>
@@ -653,7 +653,7 @@ export default function AccountingPage() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
+              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
                 <h4 className="px-6 py-4 font-headline text-sm font-bold text-on-surface dark:text-white border-b border-outline-variant/40 flex items-center gap-2">
                   <Building className="w-4 h-4 text-primary" /> Fixed Term Deposits
                 </h4>

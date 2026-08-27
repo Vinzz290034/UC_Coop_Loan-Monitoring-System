@@ -1062,7 +1062,7 @@ function LoansPageContent() {
                 <p className="text-xs text-neutral-600 dark:text-neutral-400">No loans found matching the status filter.</p>
               </div>
             ) : (
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
+              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
@@ -1200,7 +1200,7 @@ function LoansPageContent() {
                                         {loanDetails.schedule && loanDetails.schedule.length === 0 ? (
                                           <p className="text-[11px] text-neutral-600 dark:text-neutral-400 italic">No schedules generated yet (needs disbursement).</p>
                                         ) : (
-                                          <div className="border border-outline-variant/60 rounded-2xl overflow-x-auto custom-scrollbar bg-white dark:bg-surface">
+                                          <div className="border border-outline-variant/60 rounded-2xl overflow-x-auto custom-scrollbar bg-white dark:bg-surface p-1.5">
                                             <table className="w-full text-left border-collapse text-[11px]">
                                               <thead>
                                                 <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
@@ -1265,7 +1265,7 @@ function LoansPageContent() {
                                         {loanDetails.payments && loanDetails.payments.length === 0 ? (
                                           <p className="text-[11px] text-neutral-600 dark:text-neutral-400 italic">No payments logged yet.</p>
                                         ) : (
-                                          <div className="border border-outline-variant/60 rounded-2xl overflow-x-auto custom-scrollbar bg-white dark:bg-surface">
+                                          <div className="border border-outline-variant/60 rounded-2xl overflow-x-auto custom-scrollbar bg-white dark:bg-surface p-1.5">
                                             <table className="w-full text-left border-collapse text-[11px]">
                                               <thead>
                                                 <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">

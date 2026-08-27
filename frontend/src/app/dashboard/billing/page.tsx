@@ -222,7 +222,7 @@ export default function BillingPage() {
                 <p className="text-xs text-neutral-600 dark:text-neutral-400">No installments falling due within this period range.</p>
               </div>
             ) : (
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
+              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
@@ -381,7 +381,7 @@ export default function BillingPage() {
                 </div>
 
                 {/* Selected Tranche Accounts Table */}
-                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
                   <h4 className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase border-b border-outline-variant/40">
                     Accounts aged: {agingData.tranches?.[selectedTranche]?.label}
                   </h4>
