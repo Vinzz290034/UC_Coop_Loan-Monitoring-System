@@ -568,7 +568,7 @@ export default function ReportsPage() {
       ) : (
         <div className="space-y-4">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto custom-scrollbar">
 
               {/* TABLE 1: CASH DISBURSEMENT REPORT */}
               {activeTab === 'disbursement' && (
@@ -802,7 +802,7 @@ export default function ReportsPage() {
                 We found <strong>{previewData.membersCount} member tabs</strong> in the spreadsheet. Confirming will create user accounts and populate their respective share capital balances and credit portfolio details.
               </div>
 
-              <div className="border border-outline-variant/40 rounded-2xl overflow-hidden bg-neutral-50 dark:bg-neutral-900">
+              <div className="border border-outline-variant/40 rounded-2xl overflow-x-auto custom-scrollbar bg-neutral-50 dark:bg-neutral-900">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-neutral-100 dark:bg-neutral-800 text-[10px] uppercase font-bold text-neutral-500 tracking-wider">

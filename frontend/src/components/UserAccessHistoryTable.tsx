@@ -249,7 +249,7 @@ export default function UserAccessHistoryTable({
       ) : (
         <>
           {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto rounded-xl border border-outline-variant/40">
+          <div className="hidden md:block overflow-x-auto custom-scrollbar rounded-xl border border-outline-variant/40">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-surface-container-low dark:bg-surface-container-high/50 text-neutral-600 dark:text-neutral-300 font-bold border-b border-outline-variant/40">

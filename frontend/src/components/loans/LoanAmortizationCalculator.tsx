@@ -276,7 +276,7 @@ export default function LoanAmortizationCalculator() {
           {/* Full Schedule Table */}
           {showSchedule && (
             <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto max-h-80 overflow-y-auto">
+              <div className="overflow-x-auto max-h-80 overflow-y-auto custom-scrollbar">
                 <table className="w-full text-left border-collapse">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/45">

@@ -396,7 +396,7 @@ export default function AppointmentsPage() {
       ) : (
         /* Appointments Table */
         <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">

@@ -552,23 +552,27 @@ select:focus {
   box-shadow: 0 4px 12px rgba(5, 150, 105, 0.15);
 }
 
-/* 7. Themed Custom Scrollbar Utility with End Arrow Steppers */
-.custom-scrollbar {
+/* 7. Themed Custom Scrollbar Utility with End Arrow Steppers (Applied to Tables and Custom Scrollbar Containers) */
+.custom-scrollbar,
+div:has(> table) {
   scrollbar-width: thin;
   scrollbar-color: #8ec5b6 transparent;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
+.custom-scrollbar::-webkit-scrollbar,
+div:has(> table)::-webkit-scrollbar {
   width: 11px;
   height: 11px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
+.custom-scrollbar::-webkit-scrollbar-track,
+div:has(> table)::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.02);
   border-radius: 9999px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
+.custom-scrollbar::-webkit-scrollbar-thumb,
+div:has(> table)::-webkit-scrollbar-thumb {
   background: #8ec5b6;
   border-radius: 9999px;
   border: 2px solid transparent;
@@ -576,12 +580,14 @@ select:focus {
   transition: background 0.2s ease;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+div:has(> table)::-webkit-scrollbar-thumb:hover {
   background: #5ea894;
 }
 
 /* Scrollbar Stepper Arrow Buttons at Each End */
-.custom-scrollbar::-webkit-scrollbar-button {
+.custom-scrollbar::-webkit-scrollbar-button,
+div:has(> table)::-webkit-scrollbar-button {
   display: block;
   background-size: 8px 8px;
   background-repeat: no-repeat;
@@ -593,84 +599,104 @@ select:focus {
 }
 
 /* Horizontal Scrollbar: Left & Right End Arrows */
-.custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement {
+.custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement,
+div:has(> table)::-webkit-scrollbar-button:horizontal:decrement {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238ec5b6' viewBox='0 0 24 24'%3E%3Cpath d='M15 19l-7-7 7-7v14z'/%3E%3C/svg%3E");
 }
 
-.custom-scrollbar::-webkit-scrollbar-button:horizontal:increment {
+.custom-scrollbar::-webkit-scrollbar-button:horizontal:increment,
+div:has(> table)::-webkit-scrollbar-button:horizontal:increment {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238ec5b6' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7V5z'/%3E%3C/svg%3E");
 }
 
-.custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement:hover {
+.custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement:hover,
+div:has(> table)::-webkit-scrollbar-button:horizontal:decrement:hover {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23047857' viewBox='0 0 24 24'%3E%3Cpath d='M15 19l-7-7 7-7v14z'/%3E%3C/svg%3E");
 }
 
-.custom-scrollbar::-webkit-scrollbar-button:horizontal:increment:hover {
+.custom-scrollbar::-webkit-scrollbar-button:horizontal:increment:hover,
+div:has(> table)::-webkit-scrollbar-button:horizontal:increment:hover {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23047857' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7V5z'/%3E%3C/svg%3E");
 }
 
 /* Vertical Scrollbar: Top & Bottom End Arrows */
-.custom-scrollbar::-webkit-scrollbar-button:vertical:decrement {
+.custom-scrollbar::-webkit-scrollbar-button:vertical:decrement,
+div:has(> table)::-webkit-scrollbar-button:vertical:decrement {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238ec5b6' viewBox='0 0 24 24'%3E%3Cpath d='M5 15l7-7 7 7H5z'/%3E%3C/svg%3E");
 }
 
-.custom-scrollbar::-webkit-scrollbar-button:vertical:increment {
+.custom-scrollbar::-webkit-scrollbar-button:vertical:increment,
+div:has(> table)::-webkit-scrollbar-button:vertical:increment {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238ec5b6' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7H5z'/%3E%3C/svg%3E");
 }
 
-.custom-scrollbar::-webkit-scrollbar-button:vertical:decrement:hover {
+.custom-scrollbar::-webkit-scrollbar-button:vertical:decrement:hover,
+div:has(> table)::-webkit-scrollbar-button:vertical:decrement:hover {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23047857' viewBox='0 0 24 24'%3E%3Cpath d='M5 15l7-7 7 7H5z'/%3E%3C/svg%3E");
 }
 
-.custom-scrollbar::-webkit-scrollbar-button:vertical:increment:hover {
+.custom-scrollbar::-webkit-scrollbar-button:vertical:increment:hover,
+div:has(> table)::-webkit-scrollbar-button:vertical:increment:hover {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23047857' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7H5z'/%3E%3C/svg%3E");
 }
 
 /* Dark Mode Support */
-.dark .custom-scrollbar {
+.dark .custom-scrollbar,
+.dark div:has(> table) {
   scrollbar-color: #4e8c7c transparent;
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-track {
+.dark .custom-scrollbar::-webkit-scrollbar-track,
+.dark div:has(> table)::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+.dark .custom-scrollbar::-webkit-scrollbar-thumb,
+.dark div:has(> table)::-webkit-scrollbar-thumb {
   background: #4e8c7c;
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.dark div:has(> table)::-webkit-scrollbar-thumb:hover {
   background: #5ea894;
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement {
+.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement,
+.dark div:has(> table)::-webkit-scrollbar-button:horizontal:decrement {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%234e8c7c' viewBox='0 0 24 24'%3E%3Cpath d='M15 19l-7-7 7-7v14z'/%3E%3C/svg%3E");
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:increment {
+.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:increment,
+.dark div:has(> table)::-webkit-scrollbar-button:horizontal:increment {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%234e8c7c' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7V5z'/%3E%3C/svg%3E");
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement:hover {
+.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:decrement:hover,
+.dark div:has(> table)::-webkit-scrollbar-button:horizontal:decrement:hover {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2334D399' viewBox='0 0 24 24'%3E%3Cpath d='M15 19l-7-7 7-7v14z'/%3E%3C/svg%3E");
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:increment:hover {
+.dark .custom-scrollbar::-webkit-scrollbar-button:horizontal:increment:hover,
+.dark div:has(> table)::-webkit-scrollbar-button:horizontal:increment:hover {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2334D399' viewBox='0 0 24 24'%3E%3Cpath d='M9 5l7 7-7 7V5z'/%3E%3C/svg%3E");
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:decrement {
+.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:decrement,
+.dark div:has(> table)::-webkit-scrollbar-button:vertical:decrement {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%234e8c7c' viewBox='0 0 24 24'%3E%3Cpath d='M5 15l7-7 7 7H5z'/%3E%3C/svg%3E");
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:increment {
+.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:increment,
+.dark div:has(> table)::-webkit-scrollbar-button:vertical:increment {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%234e8c7c' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7H5z'/%3E%3C/svg%3E");
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:decrement:hover {
+.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:decrement:hover,
+.dark div:has(> table)::-webkit-scrollbar-button:vertical:decrement:hover {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2334D399' viewBox='0 0 24 24'%3E%3Cpath d='M5 15l7-7 7 7H5z'/%3E%3C/svg%3E");
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:increment:hover {
+.dark .custom-scrollbar::-webkit-scrollbar-button:vertical:increment:hover,
+.dark div:has(> table)::-webkit-scrollbar-button:vertical:increment:hover {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2334D399' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7H5z'/%3E%3C/svg%3E");
 }

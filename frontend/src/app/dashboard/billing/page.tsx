@@ -223,7 +223,7 @@ export default function BillingPage() {
               </div>
             ) : (
               <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
@@ -385,7 +385,7 @@ export default function BillingPage() {
                   <h4 className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase border-b border-outline-variant/40">
                     Accounts aged: {agingData.tranches?.[selectedTranche]?.label}
                   </h4>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">

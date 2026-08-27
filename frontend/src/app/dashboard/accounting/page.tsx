@@ -567,7 +567,7 @@ export default function AccountingPage() {
                 <h4 className="px-6 py-4 font-headline text-sm font-bold text-on-surface dark:text-white border-b border-outline-variant/40 flex items-center gap-2">
                   <History className="w-4 h-4 text-primary" /> Share Capital Postings
                 </h4>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
@@ -657,7 +657,7 @@ export default function AccountingPage() {
                 <h4 className="px-6 py-4 font-headline text-sm font-bold text-on-surface dark:text-white border-b border-outline-variant/40 flex items-center gap-2">
                   <Building className="w-4 h-4 text-primary" /> Fixed Term Deposits
                 </h4>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
