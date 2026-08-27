@@ -2212,7 +2212,7 @@ export default function OverviewPage() {
                 href="/dashboard/members"
                 className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-1 flex-shrink-0"
               >
-                <span>View Full Roster</span>
+                <span>View Full Table</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
