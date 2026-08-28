@@ -840,7 +840,14 @@ function LoansPageContent() {
         )}
 
         {/* Dynamic Dashboard KPI Cards */}
-        {!metricsLoading && (
+        {metricsLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 items-stretch">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 items-stretch">
             {isAdminOrManager ? (
               <>
