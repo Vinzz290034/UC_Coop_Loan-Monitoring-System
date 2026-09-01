@@ -1,17 +1,8 @@
 import { fileURLToPath } from 'url';
-import pg from 'pg';
 import dotenv from 'dotenv';
+import pool from '../config/db.js';
 
 dotenv.config();
-
-const { Pool } = pg;
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-});
 
 export async function migrateSupportTickets() {
   console.log('[Migration] Checking support_tickets and faqs_guides tables...');
