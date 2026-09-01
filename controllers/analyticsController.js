@@ -15,9 +15,11 @@ export const getDashboardSummary = async (req, res, next) => {
         (SELECT COUNT(*) FROM users WHERE role = 'manager') as total_managers,
         (SELECT COUNT(*) FROM users WHERE role = 'admin') as total_admins,
         (SELECT COUNT(*) FROM members) as total_member_profiles,
-        (SELECT COUNT(*) FROM members WHERE status = 'active') as active_members,
+        (SELECT COUNT(*) FROM members WHERE status IN ('active', 'approved')) as active_members,
         (SELECT COUNT(*) FROM members WHERE status = 'suspended') as suspended_members,
         (SELECT COUNT(*) FROM members WHERE status = 'inactive') as inactive_members,
+        (SELECT COUNT(*) FROM members WHERE membership_type = 'Regular') as regular_members,
+        (SELECT COUNT(*) FROM members WHERE membership_type = 'Associate') as associate_members,
 
         -- Loan counts by status
         (SELECT COUNT(*) FROM loans) as total_loans,

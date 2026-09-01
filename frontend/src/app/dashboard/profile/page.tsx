@@ -401,6 +401,15 @@ const computeAgeFromDob = (dobString: string): string => {
                     ID: {user.profile.member_no}
                   </span>
                 )}
+                {user.profile?.membership_type && (
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                    user.profile.membership_type === 'Associate'
+                      ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800/50'
+                      : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/50'
+                  }`}>
+                    {user.profile.membership_type === 'Associate' ? 'Associate Member' : 'Regular Member'}
+                  </span>
+                )}
                 <span className="text-[11px] text-neutral-500 dark:text-neutral-400 font-semibold">
                   @{user.username}
                 </span>

@@ -25,6 +25,7 @@ export interface User {
     address?: string | null;
     date_of_birth?: string | null;
     status: 'active' | 'suspended' | 'inactive' | 'pending' | 'approved' | 'disapproved';
+    membership_type?: 'Regular' | 'Associate';
     profile_completed?: boolean;
     is_verified?: boolean;
   } | null;

@@ -50,6 +50,8 @@ import {
   Eye,
   Loader2,
   FileSpreadsheet,
+  FileUp,
+  LogOut,
 } from 'lucide-react';
 import ProfileCompletionModal from '@/components/onboarding/ProfileCompletionModal';
 import IncompleteProfileBanner from '@/components/onboarding/IncompleteProfileBanner';
@@ -257,7 +259,7 @@ function AnimatedSelect({
 }
 
 export default function OverviewPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const isVerified = user?.role === 'admin' || user?.role === 'staff' || user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
   const [loading, setLoading] = useState(true);
@@ -374,6 +376,7 @@ export default function OverviewPage() {
   const [investmentAmount, setInvestmentAmount] = useState<string>('');
   const [fdDuration, setFdDuration] = useState<string>('12'); // months
   const [paymentMethod, setPaymentMethod] = useState<'gcash' | 'bank_transfer' | 'payroll' | 'otc'>('otc');
+  const [salaryDeductionMode, setSalaryDeductionMode] = useState<'SD' | 'SD30' | 'SD2'>('SD');
   const [paymentRefNo, setPaymentRefNo] = useState<string>('');
 
   // Milestone goal editing states
@@ -622,7 +625,13 @@ export default function OverviewPage() {
       setSubmitting(true);
       setModalError(null);
 
-      const methodLabel = paymentMethod === 'gcash' ? 'GCash' : paymentMethod === 'bank_transfer' ? 'Bank Transfer' : paymentMethod === 'payroll' ? 'Salary Deduction' : 'Hand-in';
+      const methodLabel = paymentMethod === 'gcash'
+        ? 'GCash'
+        : paymentMethod === 'bank_transfer'
+        ? 'Bank Transfer'
+        : paymentMethod === 'payroll'
+        ? `Salary Deduction (${salaryDeductionMode})`
+        : 'Hand-in';
       const remarksString = `Capital build-up deposit via ${methodLabel}${paymentRefNo ? ' (Ref: ' + paymentRefNo + ')' : ''}`;
 
       const res = await api.post('/accounts/share-capital', {
@@ -690,6 +699,7 @@ export default function OverviewPage() {
     setAppointmentReason('');
     setPaymentRefNo('');
     setPaymentMethod('otc');
+    setSalaryDeductionMode('SD');
     setInvestmentType('share_capital');
     setCoMakerName('');
     setCoMakerPhone('');
@@ -1674,6 +1684,85 @@ export default function OverviewPage() {
                           </div>
                         </div>
 
+                        {/* Salary Deduction Cutoff Schedule Options */}
+                        {paymentMethod === 'payroll' && (
+                          <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2.5 text-xs animate-in fade-in duration-200">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-neutral-700 dark:text-neutral-300">
+                                Select Payroll Cutoff:
+                              </span>
+                              <span className="text-[10px] font-mono uppercase bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary px-2 py-0.5 rounded-full font-extrabold">
+                                {salaryDeductionMode === 'SD' ? '15th Cutoff' : salaryDeductionMode === 'SD30' ? '30th Cutoff' : '15th & 30th Cutoffs'}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                              {/* SD Card */}
+                              <button
+                                type="button"
+                                onClick={() => setSalaryDeductionMode('SD')}
+                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                                  salaryDeductionMode === 'SD'
+                                    ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                                    : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="font-extrabold text-xs text-on-surface dark:text-white">SD</span>
+                                  <span className="text-[9px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/10 px-1.5 py-0.5 rounded">15th</span>
+                                </div>
+                                <span className="text-[9px] text-neutral-500 dark:text-neutral-400 block leading-tight mt-1">
+                                  Deducted every 15th of the month
+                                </span>
+                              </button>
+
+                              {/* SD30 Card */}
+                              <button
+                                type="button"
+                                onClick={() => setSalaryDeductionMode('SD30')}
+                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                                  salaryDeductionMode === 'SD30'
+                                    ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                                    : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="font-extrabold text-xs text-on-surface dark:text-white">SD30</span>
+                                  <span className="text-[9px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/10 px-1.5 py-0.5 rounded">30th</span>
+                                </div>
+                                <span className="text-[9px] text-neutral-500 dark:text-neutral-400 block leading-tight mt-1">
+                                  Deducted every 30th of the month
+                                </span>
+                              </button>
+
+                              {/* SD2 Card */}
+                              <button
+                                type="button"
+                                onClick={() => setSalaryDeductionMode('SD2')}
+                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                                  salaryDeductionMode === 'SD2'
+                                    ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                                    : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="font-extrabold text-xs text-on-surface dark:text-white">SD2</span>
+                                  <span className="text-[9px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/10 px-1.5 py-0.5 rounded">15 & 30</span>
+                                </div>
+                                <span className="text-[9px] text-neutral-500 dark:text-neutral-400 block leading-tight mt-1">
+                                  Deducted every 15th and 30th
+                                </span>
+                              </button>
+                            </div>
+
+                            <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
+                              {salaryDeductionMode === 'SD' && 'ℹ️ Deduction will be scheduled on the 15th-day payroll cutoff.'}
+                              {salaryDeductionMode === 'SD30' && 'ℹ️ Deduction will be scheduled on the 30th-day / end-of-month payroll cutoff.'}
+                              {salaryDeductionMode === 'SD2' && 'ℹ️ Deduction will be split and scheduled across both 15th & 30th payroll cutoffs.'}
+                            </p>
+                          </div>
+                        )}
+
                         {/* GCash Details */}
                         {paymentMethod === 'gcash' && (
                           <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
@@ -1752,7 +1841,13 @@ export default function OverviewPage() {
                           <div className="flex justify-between text-xs">
                             <span className="text-neutral-500 font-bold uppercase">Payment Channel:</span>
                             <span className="font-bold uppercase text-on-surface dark:text-white">
-                              {paymentMethod === 'gcash' ? 'GCash' : paymentMethod === 'bank_transfer' ? 'Bank Transfer' : paymentMethod === 'payroll' ? 'Salary Deduction' : 'Hand-in'}
+                              {paymentMethod === 'gcash'
+                                ? 'GCash'
+                                : paymentMethod === 'bank_transfer'
+                                ? 'Bank Transfer'
+                                : paymentMethod === 'payroll'
+                                ? `Salary Deduction (${salaryDeductionMode})`
+                                : 'Hand-in'}
                             </span>
                           </div>
                           <div className="flex justify-between text-xs">
@@ -1774,7 +1869,16 @@ export default function OverviewPage() {
                         <div className="text-xs text-neutral-600 dark:text-neutral-400 space-y-1.5 max-w-md mx-auto pt-2">
                           <p className="font-semibold text-on-surface dark:text-white">What happens next?</p>
                           {paymentMethod === 'payroll' ? (
-                            <p>Our payroll administrator will reflect this deduction on your upcoming payroll slip. Once validated, your ledger balance will be credited.</p>
+                            <p>
+                              Our payroll administrator will reflect this deduction under{' '}
+                              <strong className="text-primary dark:text-secondary font-bold">{salaryDeductionMode}</strong> (
+                              {salaryDeductionMode === 'SD'
+                                ? '15th Cutoff'
+                                : salaryDeductionMode === 'SD30'
+                                ? '30th Cutoff'
+                                : '15th & 30th Cutoffs'}
+                              ) on your upcoming payroll slip. Once validated, your ledger balance will be credited.
+                            </p>
                           ) : paymentMethod === 'otc' ? (
                             <p>Hand-in your cash payment and present the Reference Code <strong>{successData.reference_code}</strong> to the cooperative cashier to settle your payment.</p>
                           ) : (
@@ -2081,13 +2185,21 @@ export default function OverviewPage() {
             <h2 className="font-headline text-base font-bold text-on-surface dark:text-white flex items-center gap-2">
               <span className="text-lg"></span> Administrative Actions Quick-Desk
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <button
                 onClick={() => router.push('/dashboard/members')}
                 className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95 cursor-pointer"
               >
                 <UserIcon className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
                 <span className="font-body text-xs font-bold text-on-surface dark:text-white">Register Member</span>
+              </button>
+
+              <button
+                onClick={() => router.push('/dashboard/import')}
+                className="flex flex-col items-center gap-2 p-4 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 rounded-2xl text-center hover:bg-neutral/5 transition-all group active:scale-95 cursor-pointer"
+              >
+                <FileUp className="w-6 h-6 text-primary dark:text-secondary group-hover:scale-115 transition-transform" />
+                <span className="font-body text-xs font-bold text-on-surface dark:text-white">Import Excel Data</span>
               </button>
 
               <button
@@ -2163,12 +2275,11 @@ export default function OverviewPage() {
                   </div>
                   <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                 </div>
-                <div className="my-auto py-1">
-                  <div className="font-headline text-xl sm:text-2xl font-extrabold tabular-nums text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
-                </div>
-                <div className="flex items-center gap-2 mt-auto pt-1.5 text-[10px]">
-                  <span className="flex items-center gap-0.5 text-green-600 dark:text-green-400 font-semibold"><UserCheck className="w-3 h-3" />{ds.active_members || 0} active</span>
-                  <span className="flex items-center gap-0.5 text-neutral-500 font-semibold"><UserX className="w-3 h-3" />{ds.inactive_members || 0} inactive</span>
+                <div className="font-headline text-xl font-extrabold text-on-surface dark:text-white">{ds.total_member_profiles || 0}</div>
+                <div className="flex items-center gap-2 mt-1.5 text-[10px]">
+                  <span className="flex items-center gap-0.5 text-blue-600 dark:text-blue-400 font-semibold">{ds.regular_members || 0} Regular</span>
+                  <span className="text-neutral-300 dark:text-neutral-700">•</span>
+                  <span className="flex items-center gap-0.5 text-purple-600 dark:text-purple-400 font-semibold">{ds.associate_members || 0} Associate</span>
                 </div>
               </button>
 

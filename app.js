@@ -22,6 +22,7 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import calendarRoutes from './routes/calendarRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
+import importRoutes from './routes/importRoutes.js';
 
 dotenv.config();
 
@@ -33,8 +34,29 @@ const app = express();
 // Serve uploads directory statically (already handles http://localhost:PORT/uploads/...)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// CORS Middleware first to handle preflight OPTIONS requests correctly
-app.use(cors());
+// CORS Middleware — environment-aware, locked to frontend origin in production
+const allowedOrigins =
+  process.env.NODE_ENV === 'production'
+    ? [process.env.FRONTEND_URL].filter(Boolean)   // only your Railway frontend URL
+    : ['http://localhost:3000', 'http://127.0.0.1:3000']; // dev origins
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (Railway health checks, mobile apps, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS policy: origin '${origin}' is not allowed.`));
+    }
+  },
+  credentials: true, // Allow cookies / Authorization headers
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle preflight for all routes
 
 // Security Middlewares
 app.use(helmet());
@@ -98,6 +120,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/import', importRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

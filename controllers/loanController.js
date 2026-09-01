@@ -471,7 +471,14 @@ export const getLoans = async (req, res, next) => {
 
     // Admin/Manager view
     let queryText = `
-      SELECT l.*, lp.name as product_name, m.first_name, m.last_name, m.member_no
+      SELECT 
+        l.*, 
+        lp.name as product_name, 
+        m.first_name, 
+        m.last_name,
+        m.member_no,
+        COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
+        COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_balance
       FROM loans l
       LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
       LEFT JOIN members m ON l.member_id = m.id
@@ -496,7 +503,11 @@ export const getLoans = async (req, res, next) => {
       }
     }
 
-    queryText += ' ORDER BY l.created_at DESC';
+    if (member_id) {
+      queryText += ' ORDER BY l.disbursed_at ASC NULLS LAST, l.created_at ASC';
+    } else {
+      queryText += ' ORDER BY l.created_at DESC';
+    }
 
     const result = await query(queryText, params);
 

@@ -18,8 +18,8 @@ router.route('/me')
 
 // 2. Main appointments routing
 router.route('/')
-  .post(restrictTo('member', 'admin'), createAppointment)
-  .get(restrictTo('admin'), getAllAppointments);
+  .post(restrictTo('member', 'admin', 'staff'), createAppointment)
+  .get(restrictTo('admin', 'staff'), getAllAppointments);
 
 // 3. Status modifications
 router.route('/:id/status')

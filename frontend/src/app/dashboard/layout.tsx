@@ -30,6 +30,7 @@ import {
   X,
   LifeBuoy,
   Megaphone,
+  FileUp,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
@@ -128,6 +129,12 @@ function DashboardLayoutContent({
       name: 'Billings',
       path: '/dashboard/billing',
       icon: CalendarCheck,
+      allowed: isAdminOrStaff,
+    },
+    {
+      name: 'Data Import',
+      path: '/dashboard/import',
+      icon: FileUp,
       allowed: isAdminOrStaff,
     },
     {

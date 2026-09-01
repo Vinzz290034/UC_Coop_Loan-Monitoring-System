@@ -91,16 +91,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* 2. Floating Money Bill - Mid-Left */}
-            <div
-              className="absolute top-[32%] left-[12%] select-none z-0"
-              style={{ animation: 'bill-float-1 12s ease-in-out infinite 0.5s' }}
-            >
-              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-primary/20 dark:border-secondary/20 bg-white/45 dark:bg-neutral-900/45 backdrop-blur-xs shadow-md shadow-primary/5">
-                <Banknote className="w-6 h-6 text-primary dark:text-secondary" />
-                <span className="text-[11px] font-bold font-mono text-primary/70 dark:text-secondary/70">₱1,000</span>
-              </div>
-            </div>
+
 
             {/* 3. Floating Coins Badge - Bottom Left */}
             <div

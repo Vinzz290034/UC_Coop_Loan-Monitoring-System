@@ -18,11 +18,14 @@ import {
   CheckCircle,
   Eye,
   FileSpreadsheet,
+  FileUp,
   ArrowLeft,
   Pencil,
   Check,
   Loader2,
 } from 'lucide-react';
+
+import { useAuth } from '@/context/AuthContext';
 
 interface Member {
   id: number | string;
@@ -39,11 +42,14 @@ interface Member {
   date_of_birth?: string;
   profile_picture_url?: string | null;
   status: 'active' | 'suspended' | 'inactive' | 'pending' | 'approved' | 'disapproved';
+  membership_type?: 'Regular' | 'Associate';
   profile_completed?: boolean;
   created_at: string;
 }
 
 export default function MembersPage() {
+  const { user } = useAuth();
+  const isAdminOrManager = user ? (user.role === 'admin' || user.role === 'staff') : true;
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +57,7 @@ export default function MembersPage() {
   // Search, filter, and sort state
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [membershipFilter, setMembershipFilter] = useState('');
   const [sortBy, setSortBy] = useState('name_asc');
 
   // Pagination state
@@ -72,6 +79,7 @@ export default function MembersPage() {
   const [address, setAddress] = useState('');
   const [dob, setDob] = useState('');
   const [memberStatus, setMemberStatus] = useState<string>('active');
+  const [membershipTypeInput, setMembershipTypeInput] = useState<'Regular' | 'Associate'>('Regular');
   const [userId, setUserId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -170,8 +178,12 @@ export default function MembersPage() {
           payload.gender = inlineData.gender || undefined;
         } else if (field === 'civil_status') {
           payload.civil_status = inlineData.civil_status || undefined;
+        } else if (field === 'membership_type') {
+          payload.membership_type = inlineData.membership_type || 'Regular';
         } else if (field === 'phone') {
           payload.phone = inlineData.phone ? inlineData.phone.trim() : undefined;
+        } else if (field === 'member_no') {
+          payload.member_no = inlineData.member_no ? inlineData.member_no.trim() : undefined;
         } else if (field === 'email') {
           if (inlineData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inlineData.email)) {
             setInlineError('Please enter a valid email address.');
@@ -216,6 +228,7 @@ export default function MembersPage() {
       const params: any = {};
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
+      if (membershipFilter) params.membership_type = membershipFilter;
       if (sortBy) params.sortBy = sortBy;
 
       const response = await api.get('/members', { params });
@@ -227,7 +240,7 @@ export default function MembersPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, sortBy]);
+  }, [search, statusFilter, membershipFilter, sortBy]);
 
   useEffect(() => {
     fetchMembers();
@@ -246,6 +259,7 @@ export default function MembersPage() {
         'Last Name': m.last_name || '',
         'First Name': m.first_name || '',
         'Middle Name': m.middle_name || '',
+        'Membership Type': m.membership_type || 'Regular',
         'Email': m.email || 'N/A',
         'Phone': m.phone || 'N/A',
         'Gender': m.gender || 'N/A',
@@ -278,7 +292,7 @@ export default function MembersPage() {
     setSubmitting(true);
 
     try {
-      await api.post('/members', {
+      const res = await api.post('/members', {
         title: titleInput?.trim() || undefined,
         tin: tinInput?.trim() || undefined,
         first_name: firstName,
@@ -292,6 +306,7 @@ export default function MembersPage() {
         address: address || undefined,
         date_of_birth: dob || undefined,
         status: memberStatus,
+        membership_type: membershipTypeInput,
         user_id: userId ? parseInt(userId, 10) : undefined
       });
 
@@ -309,8 +324,17 @@ export default function MembersPage() {
       setAddress('');
       setDob('');
       setMemberStatus('active');
+      setMembershipTypeInput('Regular');
       setUserId('');
       setIsModalOpen(false);
+
+      if (res.data?.provisioned_account) {
+        setToastMessage(`Member registered! Login Username: "${res.data.provisioned_account.username}" (Password: UCCoop@2026)`);
+        setTimeout(() => setToastMessage(null), 6000);
+      } else {
+        setToastMessage('Member registered successfully!');
+        setTimeout(() => setToastMessage(null), 3500);
+      }
 
       // Refresh list
       fetchMembers();
@@ -384,6 +408,13 @@ export default function MembersPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/dashboard/import"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-full text-neutral-700 dark:text-neutral-300 hover:bg-neutral/5 transition-all shadow-sm"
+            >
+              <FileUp className="w-4 h-4 text-primary dark:text-secondary" />
+              Import Excel Data
+            </Link>
             <button
               onClick={handleExportExcel}
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-full text-neutral-600 dark:text-neutral-400 hover:bg-neutral/5 transition-all shadow-sm"
@@ -425,6 +456,19 @@ export default function MembersPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Membership:</label>
+              <select
+                value={membershipFilter}
+                onChange={(e) => setMembershipFilter(e.target.value)}
+                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+              >
+                <option value="">All Memberships</option>
+                <option value="Regular">Regular Member</option>
+                <option value="Associate">Associate Member</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
               <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Status:</label>
               <select
                 value={statusFilter}
@@ -458,7 +502,7 @@ export default function MembersPage() {
 
         {/* Main Table */}
         {loading ? (
-          <SkeletonTable rows={itemsPerPage} cols={6} />
+          <SkeletonTable rows={itemsPerPage} cols={7} />
         ) : error ? (
           <div className="p-6 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-3xl flex items-center gap-3">
             <AlertTriangle className="w-6 h-6" />
@@ -479,6 +523,7 @@ export default function MembersPage() {
                     <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                       <th className="px-5 py-3.5">Member ID</th>
                       <th className="px-5 py-3.5">Member Profile</th>
+                      <th className="px-4 py-3.5">Membership</th>
                       <th className="px-4 py-3.5 text-center">Age</th>
                       <th className="px-4 py-3.5 hidden xl:table-cell">Sex / Gender</th>
                       <th className="px-4 py-3.5 hidden xl:table-cell">Civil Status</th>
@@ -492,6 +537,7 @@ export default function MembersPage() {
                   <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
                     {currentItems.map((member) => {
                       const isEditingName = editingCell?.memberId === member.id && editingCell?.field === 'name';
+                      const isEditingMembershipType = editingCell?.memberId === member.id && editingCell?.field === 'membership_type';
                       const isEditingAge = editingCell?.memberId === member.id && editingCell?.field === 'age';
                       const isEditingPhone = editingCell?.memberId === member.id && editingCell?.field === 'phone';
                       const isEditingEmail = editingCell?.memberId === member.id && editingCell?.field === 'email';
@@ -500,10 +546,50 @@ export default function MembersPage() {
                       return (
                         <tr key={member.id} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
                           {/* Member ID Cell */}
-                          <td className="px-5 py-3.5 whitespace-nowrap">
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-primary/10 text-primary dark:bg-secondary/10 dark:text-secondary border border-primary/20 dark:border-secondary/20">
-                              {member.member_no || 'N/A'}
-                            </span>
+                          <td className="px-5 py-3.5 whitespace-nowrap relative group">
+                            {editingCell?.memberId === member.id && editingCell?.field === 'member_no' ? (
+                              <div className="flex items-center gap-1.5 z-10 animate-pop">
+                                <input
+                                  type="text"
+                                  placeholder="e.g. 2026-41"
+                                  value={inlineData.member_no || ''}
+                                  onChange={(e) => setInlineData({ ...inlineData, member_no: e.target.value })}
+                                  className="px-2.5 py-1 text-xs font-mono font-bold border border-primary/40 rounded-xl bg-white dark:bg-neutral-800 text-on-surface dark:text-white outline-none focus:ring-1 focus:ring-primary"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveInline(member.id, 'member_no')}
+                                  disabled={inlineSaving}
+                                  className="p-1 rounded-lg bg-primary text-white dark:bg-secondary dark:text-neutral-950 font-bold hover:scale-105 transition-all shadow-xs"
+                                >
+                                  {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCell(null)}
+                                  className="p-1 rounded-lg border border-outline-variant text-neutral-500 hover:text-on-surface"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-1.5">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-primary/10 text-primary dark:bg-secondary/10 dark:text-secondary border border-primary/20 dark:border-secondary/20">
+                                  {member.member_no || 'N/A'}
+                                </span>
+                                {isAdminOrManager && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleEditClick(e, member.id, 'member_no', { member_no: member.member_no || '' })}
+                                    className="opacity-0 group-hover:opacity-100 p-1 text-neutral-400 hover:text-primary dark:hover:text-secondary transition-all"
+                                    title="Edit Member ID"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </td>
 
                           {/* Member Profile Cell (Name) */}
@@ -601,6 +687,66 @@ export default function MembersPage() {
                                     <Pencil className="w-3 h-3 text-neutral-500 hover:text-primary dark:hover:text-secondary" />
                                   </button>
                                 </div>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Membership Type Cell */}
+                          <td className="px-4 py-3.5 relative font-medium">
+                            {isEditingMembershipType ? (
+                              <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
+                                <p className="text-[10px] uppercase font-bold text-primary dark:text-secondary">Edit Type</p>
+                                <select
+                                  value={inlineData.membership_type || member.membership_type || 'Regular'}
+                                  onChange={(e) => setInlineData({ ...inlineData, membership_type: e.target.value })}
+                                  className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white font-semibold"
+                                >
+                                  <option value="Regular">Regular</option>
+                                  <option value="Associate">Associate</option>
+                                </select>
+                                {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
+                                <div className="flex items-center justify-end gap-1 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingCell(null)}
+                                    className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={inlineSaving}
+                                    onClick={() => handleSaveInline(member.id, 'membership_type')}
+                                    className="p-1 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50"
+                                  >
+                                    {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                onClick={() => handleCellSingleClick(member.id)}
+                                onTouchStart={handleTouchStart}
+                                onTouchEnd={() => handleTouchEnd(member.id, 'membership_type', { membership_type: member.membership_type || 'Regular' })}
+                                className="cursor-pointer group/cell flex items-center gap-1.5"
+                                title="Click member to view profile, or click pencil to edit"
+                              >
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  member.membership_type === 'Associate'
+                                    ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800/50'
+                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/50'
+                                }`}>
+                                  {member.membership_type === 'Associate' ? 'Associate' : 'Regular'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleEditClick(e, member.id, 'membership_type', { membership_type: member.membership_type || 'Regular' })}
+                                  className="p-1 rounded-md hover:bg-primary/10 dark:hover:bg-secondary/10 opacity-0 group-hover/cell:opacity-100 transition-all focus:opacity-100"
+                                  title="Edit Membership Type"
+                                  aria-label="Edit Membership Type"
+                                >
+                                  <Pencil className="w-3 h-3 text-neutral-500 hover:text-primary dark:hover:text-secondary" />
+                                </button>
                               </div>
                             )}
                           </td>
@@ -1244,6 +1390,17 @@ export default function MembersPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Membership Type *</label>
+                  <select
+                    value={membershipTypeInput}
+                    onChange={(e: any) => setMembershipTypeInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white font-semibold"
+                  >
+                    <option value="Regular">Regular Member (Full Rights & Loans)</option>
+                    <option value="Associate">Associate Member (Non-Voting / Restricted)</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Initial Status</label>
                   <select
                     value={memberStatus}
@@ -1258,16 +1415,17 @@ export default function MembersPage() {
                     <option value="inactive">Inactive</option>
                   </select>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Linked Login User ID (Optional)</label>
-                  <input
-                    type="number"
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
-                    placeholder="System User ID"
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  />
-                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Linked Login User ID (Optional)</label>
+                <input
+                  type="number"
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                  placeholder="System User ID"
+                  className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                />
               </div>
 
               <div className="pt-4 flex items-center justify-end gap-3">

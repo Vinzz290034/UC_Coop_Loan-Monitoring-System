@@ -16,6 +16,8 @@ import {
   Banknote,
   PiggyBank,
   Coins,
+  CreditCard,
+  FileText,
   AlertTriangle,
   CheckCircle2,
   XCircle,
@@ -590,9 +592,9 @@ export default function UserDetailPage() {
           <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-4">Financial Summary</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
             <KpiCard label="Share Capital" value={formatCurrency(balances.share_capital)} icon={Building} description="Equity contributions" />
-            <KpiCard label="Fixed Deposits" value={formatCurrency(balances.fixed_deposits)} icon={PiggyBank} description="Timed placements" />
-            <KpiCard label="Investments" value={formatCurrency(balances.investments)} icon={Coins} description="Investment portfolios" />
-            <KpiCard label="Outstanding Loan" value={formatCurrency(loans.outstanding_balance)} icon={Banknote} variant="danger" description={`${loans.active_count} active loan(s)`} />
+            <KpiCard label="Active Loans" value={loans.active_count ?? 0} icon={FileText} description="Active accounts" />
+            <KpiCard label="Disbursed Principal" value={formatCurrency(loans.original_principal)} icon={CreditCard} description="Total original loans" />
+            <KpiCard label="Outstanding Loan" value={formatCurrency(loans.outstanding_balance)} icon={Banknote} variant="danger" description={`${loans.active_count || 0} active loan(s)`} />
           </div>
         </div>
       )}

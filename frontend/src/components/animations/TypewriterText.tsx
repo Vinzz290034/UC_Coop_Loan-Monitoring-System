@@ -133,7 +133,7 @@ export function TypewriterText({
                   <span
                     key={cIndex}
                     className={`inline transition-opacity duration-75 ${
-                      isRevealed ? 'opacity-100' : 'opacity-0 select-none pointer-events-none'
+                      isRevealed ? 'opacity-100 visible' : 'opacity-0 invisible select-none pointer-events-none'
                     }`}
                   >
                     {char}

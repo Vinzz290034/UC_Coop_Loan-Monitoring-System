@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Banknote, Coins } from 'lucide-react';
+import { Coins } from 'lucide-react';
 
 interface EdgeItem {
   id: string;
@@ -51,17 +51,6 @@ export default function AuthBackground() {
       ),
     },
     {
-      id: 'top-mid-right-bill',
-      className: 'hidden sm:flex top-[3%] right-[26%] lg:right-[28%]',
-      floatAnimation: 'bill-float-1 12s ease-in-out infinite 1.8s',
-      content: (
-        <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-secondary/20 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs shadow-xs select-none">
-          <Banknote className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-secondary" />
-          <span className="text-[9px] font-bold font-mono text-secondary">₱500</span>
-        </div>
-      ),
-    },
-    {
       id: 'top-right-coin',
       className: 'top-[3%] sm:top-[4%] right-[4%] sm:right-[6%]',
       floatAnimation: 'coin-float-1 9s ease-in-out infinite 0.4s',
@@ -80,17 +69,6 @@ export default function AuthBackground() {
       content: (
         <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-secondary/30 bg-secondary/10 flex items-center justify-center text-secondary font-headline font-bold text-xs sm:text-sm select-none">
           ₱
-        </div>
-      ),
-    },
-    {
-      id: 'left-mid-bill',
-      className: 'hidden lg:flex top-[48%] left-[2%] sm:left-[3%]',
-      floatAnimation: 'bill-float-1 12s ease-in-out infinite 0.8s',
-      content: (
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-primary/20 dark:border-secondary/20 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs shadow-sm select-none">
-          <Banknote className="w-4 h-4 text-primary dark:text-secondary" />
-          <span className="text-[9px] sm:text-[10px] font-bold font-mono text-primary/70 dark:text-secondary/70">₱1,000</span>
         </div>
       ),
     },
@@ -126,17 +104,6 @@ export default function AuthBackground() {
         </div>
       ),
     },
-    {
-      id: 'right-lower-bill',
-      className: 'hidden md:flex top-[72%] right-[2%] sm:right-[3%] lg:right-[4%]',
-      floatAnimation: 'bill-float-2 11s ease-in-out infinite 1.6s',
-      content: (
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-secondary/25 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs shadow-sm select-none">
-          <Banknote className="w-4 h-4 text-secondary" />
-          <span className="text-[9px] sm:text-[10px] font-bold font-mono text-secondary">₱500</span>
-        </div>
-      ),
-    },
 
     // ── BOTTOM PERIMETER ─────────────────────────────────────────────────────
     {
@@ -146,17 +113,6 @@ export default function AuthBackground() {
       content: (
         <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-tertiary/25 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs flex items-center justify-center shadow-md shadow-tertiary/10 text-tertiary select-none">
           <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-        </div>
-      ),
-    },
-    {
-      id: 'bottom-mid-left-bill',
-      className: 'hidden sm:flex bottom-[3%] left-[26%] lg:left-[28%]',
-      floatAnimation: 'bill-float-1 12s ease-in-out infinite 0.7s',
-      content: (
-        <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/20 dark:border-secondary/20 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs shadow-xs select-none">
-          <Banknote className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary dark:text-secondary" />
-          <span className="text-[9px] font-bold font-mono text-primary/70 dark:text-secondary/70">₱1,000</span>
         </div>
       ),
     },
@@ -177,17 +133,6 @@ export default function AuthBackground() {
       content: (
         <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-primary/25 dark:border-secondary/25 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs flex items-center justify-center shadow-xs text-primary dark:text-secondary select-none">
           <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-        </div>
-      ),
-    },
-    {
-      id: 'bottom-right-bill',
-      className: 'bottom-[3%] sm:bottom-[4%] right-[4%] sm:right-[6%]',
-      floatAnimation: 'bill-float-2 10s ease-in-out infinite 1s',
-      content: (
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-secondary/25 bg-white/40 dark:bg-neutral-900/40 backdrop-blur-xs shadow-md shadow-secondary/10 select-none">
-          <Banknote className="w-4 h-4 text-secondary" />
-          <span className="text-[9px] sm:text-[10px] font-bold font-mono text-secondary">₱500</span>
         </div>
       ),
     },

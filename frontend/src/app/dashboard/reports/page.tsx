@@ -141,6 +141,29 @@ export default function ReportsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Helper for clean truncated pagination
+  const getPageNumbers = (current: number, total: number) => {
+    const pages: (number | string)[] = [];
+    if (total <= 7) {
+      for (let i = 1; i <= total; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (current > 3) {
+        pages.push('...');
+      }
+      const start = Math.max(2, current - 1);
+      const end = Math.min(total - 1, current + 1);
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      if (current < total - 2) {
+        pages.push('...');
+      }
+      pages.push(total);
+    }
+    return pages;
+  };
+
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const fetchReport = useCallback(async () => {
     try {
@@ -731,30 +754,42 @@ export default function ReportsPage() {
               <span className="font-body text-xs text-neutral-600 dark:text-neutral-400">
                 Displaying {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredRecords.length)} of {filteredRecords.length} records
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(currentPage - 1)}
-                  className="px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40"
+                  className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40 cursor-pointer shadow-xs"
                 >
                   Previous
                 </button>
-                {Array.from({ length: totalPages }).map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentPage(idx + 1)}
-                    className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors ${currentPage === idx + 1
-                        ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary'
-                        : 'border-outline-variant hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400'
+
+                {getPageNumbers(currentPage, totalPages).map((p, idx) => {
+                  if (typeof p === 'string') {
+                    return (
+                      <span key={`ellipsis-${idx}`} className="px-1.5 text-xs font-bold text-neutral-400">
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p)}
+                      className={`w-8 h-8 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                        currentPage === p
+                          ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-xs scale-105'
+                          : 'border-outline-variant hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
                       }`}
-                  >
-                    {idx + 1}
-                  </button>
-                ))}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+
                 <button
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage(currentPage + 1)}
-                  className="px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40"
+                  className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40 cursor-pointer shadow-xs"
                 >
                   Next
                 </button>

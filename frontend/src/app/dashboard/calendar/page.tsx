@@ -507,7 +507,7 @@ export default function CalendarPage() {
                     <div
                       key={idx}
                       onClick={() => handleDayClick(cell.dayNum)}
-                      className={`min-h-[72px] md:min-h-[96px] p-1.5 md:p-2 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer relative group ${cell.isCurrentMonth
+                      className={`h-24 md:h-28 p-1.5 md:p-2 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer relative group overflow-hidden ${cell.isCurrentMonth
                         ? 'bg-surface dark:bg-surface-container-high/40 hover:bg-primary/5 dark:hover:bg-secondary/5 border-outline-variant/30 dark:border-outline-variant/10'
                         : 'bg-neutral-50 dark:bg-neutral-950/20 text-neutral-400 border-outline-variant/15 dark:border-outline-variant/5 hover:opacity-75'
                         } ${cell.isToday ? 'ring-2 ring-primary dark:ring-secondary ring-offset-2 dark:ring-offset-neutral-900' : ''}`}
@@ -532,30 +532,63 @@ export default function CalendarPage() {
                       </div>
 
                       {/* Event badges on desktop view */}
-                      <div className="hidden md:flex flex-col gap-1 mt-1 overflow-y-auto max-h-[50px] scrollbar-thin">
-                        {dayEvents.slice(0, 3).map((evt) => (
-                          <div
-                            key={evt.id}
-                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md truncate border ${getBadgeStyles(evt.type, evt.status)}`}
-                          >
-                            {evt.title}
+                      {(() => {
+                        const nonDeadlineEvents = dayEvents.filter(e => e.type !== 'payment_deadline');
+                        const deadlineEvents = dayEvents.filter(e => e.type === 'payment_deadline');
+
+                        return (
+                          <div className="hidden md:flex flex-col gap-1 mt-1 overflow-hidden">
+                            {/* Render non-deadline events (max 2) */}
+                            {nonDeadlineEvents.slice(0, 2).map((evt) => (
+                              <div
+                                key={evt.id}
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md truncate border ${getBadgeStyles(evt.type, evt.status)}`}
+                                title={evt.title}
+                              >
+                                {evt.title}
+                              </div>
+                            ))}
+
+                            {/* Render payment deadlines summary or single badge */}
+                            {deadlineEvents.length === 1 && (
+                              <div
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md truncate border ${getBadgeStyles('payment_deadline')}`}
+                                title={deadlineEvents[0].title}
+                              >
+                                {deadlineEvents[0].title}
+                              </div>
+                            )}
+
+                            {deadlineEvents.length > 1 && (
+                              <div
+                                className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md truncate border bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/25 flex items-center justify-between gap-1"
+                                title={`${deadlineEvents.length} payment deadlines on this day. Click to view all details.`}
+                              >
+                                <span className="truncate">💳 {deadlineEvents.length} Payments Due</span>
+                              </div>
+                            )}
+
+                            {/* Overflow count for extra non-deadline events */}
+                            {nonDeadlineEvents.length > 2 && (
+                              <div className="text-[8px] font-black text-neutral-500 dark:text-neutral-400 pl-1">
+                                +{nonDeadlineEvents.length - 2} notices
+                              </div>
+                            )}
                           </div>
-                        ))}
-                        {dayEvents.length > 3 && (
-                          <div className="text-[8px] font-black text-neutral-400 pl-1">
-                            +{dayEvents.length - 3} more
-                          </div>
-                        )}
-                      </div>
+                        );
+                      })()}
 
                       {/* Event dots on mobile view */}
-                      <div className="flex md:hidden flex-row gap-1 flex-wrap mt-2">
-                        {dayEvents.map(evt => (
+                      <div className="flex md:hidden flex-row gap-1 flex-wrap mt-1 items-center">
+                        {dayEvents.slice(0, 4).map(evt => (
                           <span
                             key={evt.id}
                             className={`w-1.5 h-1.5 rounded-full ${getDotColorClass(evt.type, evt.status)}`}
                           />
                         ))}
+                        {dayEvents.length > 4 && (
+                          <span className="text-[7px] font-bold text-neutral-400">+{dayEvents.length - 4}</span>
+                        )}
                       </div>
                     </div>
                   );

@@ -14,6 +14,8 @@ import { migrateLoansComaker } from './migrate_loans_comaker.js';
 import { migrateSeedDefaults } from './migrate_seed_defaults.js';
 import { migrateSystemSettings } from './migrate_system_settings.js';
 import { migrateMemberIdFormalization } from './migrate_member_id_formalization.js';
+import { migrateLoansImportFields } from './migrate_loans_import_fields.js';
+import { migrateMembershipType } from './migrate_membership_type.js';
 
 export async function runMigrations() {
   console.log('[System Startup] Running automated database migrations...');
@@ -21,7 +23,9 @@ export async function runMigrations() {
     await migrateRoleStaff();
     await migrateMembersSchema();
     await migrateMembersOnboarding();
+    await migrateMembershipType();
     await migrateLoansComaker();
+    await migrateLoansImportFields();
     await migrateAnalyticsAudit();
     await migrateUserAccessLogs();
     await migrateCalendarEvents();

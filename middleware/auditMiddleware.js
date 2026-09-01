@@ -70,6 +70,10 @@ function sanitizeBody(body) {
     }
   }
   
+  if (Array.isArray(sanitized.membersData)) {
+    sanitized.membersData = `[${sanitized.membersData.length} member records]`;
+  }
+
   return sanitized;
 }
 

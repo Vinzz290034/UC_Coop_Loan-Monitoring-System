@@ -1,4 +1,5 @@
 import pool, { query } from '../config/db.js';
+import bcrypt from 'bcryptjs';
 import { exportToExcel } from '../services/reportExporter.js';
 import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
 
@@ -8,12 +9,19 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
 export const createMember = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id, is_verified } = req.body;
+    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id, is_verified, membership_type } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
         success: false,
         error: { message: 'First name and last name are required.' }
+      });
+    }
+
+    if (membership_type && !['Regular', 'Associate'].includes(membership_type)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid membership type. Must be Regular or Associate.' }
       });
     }
 
@@ -48,13 +56,44 @@ export const createMember = async (req, res, next) => {
     // Start Transaction
     await client.query('BEGIN');
 
+    let assignedUserId = user_id || null;
+    let provisionedUsername = null;
+
+    // Auto-provision user login account if no existing user_id is linked
+    if (!assignedUserId) {
+      const cleanFirst = first_name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanLast = last_name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      let baseUsername = `${cleanFirst}.${cleanLast}` || `user${Date.now()}`;
+      let candidateUsername = baseUsername;
+      let counter = 1;
+
+      while (true) {
+        const checkUserRes = await client.query(`SELECT id FROM users WHERE username = $1`, [candidateUsername]);
+        if (checkUserRes.rows.length === 0) {
+          break;
+        }
+        candidateUsername = `${baseUsername}${counter}`;
+        counter++;
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash('UCCoop@2026', salt);
+
+      const createUserRes = await client.query(
+        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, 'member') RETURNING id`,
+        [candidateUsername, passwordHash]
+      );
+      assignedUserId = createUserRes.rows[0].id;
+      provisionedUsername = candidateUsername;
+    }
+
     // Generate atomic sequential Member ID (YYYY-N)
     const memberNo = await generateNextMemberNo(client, new Date().getFullYear());
 
     // 1. Insert Member
     const insertMemberQuery = `
-      INSERT INTO members (member_no, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      INSERT INTO members (member_no, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id, membership_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `;
     const memberResult = await client.query(insertMemberQuery, [
@@ -72,7 +111,8 @@ export const createMember = async (req, res, next) => {
       tin?.trim() || null,
       title?.trim() || null,
       status || 'active',
-      user_id || null
+      assignedUserId,
+      membership_type || 'Regular'
     ]);
 
     const newMember = memberResult.rows[0];
@@ -94,7 +134,11 @@ export const createMember = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      data: newMember
+      data: newMember,
+      provisioned_account: provisionedUsername ? {
+        username: provisionedUsername,
+        default_password: 'UCCoop@2026'
+      } : null
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -116,7 +160,7 @@ export const createMember = async (req, res, next) => {
 // @access  Protected (Admin, Manager)
 export const getAllMembers = async (req, res, next) => {
   try {
-    const { search, status, sortBy } = req.query;
+    const { search, status, sortBy, membership_type } = req.query;
 
     let queryText = `
       SELECT 
@@ -164,6 +208,12 @@ export const getAllMembers = async (req, res, next) => {
       paramIndex++;
     }
 
+    if (membership_type) {
+      queryText += ` AND m.membership_type = $${paramIndex}`;
+      queryParams.push(membership_type);
+      paramIndex++;
+    }
+
     if (search) {
       queryText += ` AND (
         COALESCE(m.member_no, '') ILIKE $${paramIndex} OR
@@ -173,7 +223,8 @@ export const getAllMembers = async (req, res, next) => {
         COALESCE(m.email, '') ILIKE $${paramIndex} OR
         COALESCE(m.phone, '') ILIKE $${paramIndex} OR
         COALESCE(m.gender, '') ILIKE $${paramIndex} OR
-        COALESCE(m.civil_status, '') ILIKE $${paramIndex}
+        COALESCE(m.civil_status, '') ILIKE $${paramIndex} OR
+        COALESCE(m.membership_type, '') ILIKE $${paramIndex}
       )`;
       queryParams.push(`%${search}%`);
       paramIndex++;
@@ -288,12 +339,19 @@ export const getMemberById = async (req, res, next) => {
 export const updateMember = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, is_verified } = req.body;
+    const { member_no, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, is_verified, membership_type } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
         success: false,
         error: { message: 'First name and last name are required.' }
+      });
+    }
+
+    if (membership_type && !['Regular', 'Associate'].includes(membership_type)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid membership type. Must be Regular or Associate.' }
       });
     }
 
@@ -326,6 +384,7 @@ export const updateMember = async (req, res, next) => {
     }
 
     const isVerifiedVal = is_verified !== undefined ? !!is_verified : undefined;
+    const memberNoVal = member_no !== undefined ? (member_no?.trim() || null) : undefined;
 
     let updateQuery;
     let queryParams;
@@ -333,10 +392,12 @@ export const updateMember = async (req, res, next) => {
       updateQuery = `
         UPDATE members
         SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, tin = $11, title = $12, is_verified = $13,
+            membership_type = COALESCE($14, membership_type),
+            member_no = COALESCE($15, member_no),
             status = (CASE WHEN $13 = true AND status = 'pending' THEN 'approved' ELSE status END),
             profile_completed = (CASE WHEN $13 = true THEN true ELSE profile_completed END),
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $14
+        WHERE id = $16
         RETURNING *
       `;
       queryParams = [
@@ -353,13 +414,18 @@ export const updateMember = async (req, res, next) => {
         tin?.trim() || null,
         title?.trim() || null,
         isVerifiedVal,
+        membership_type || null,
+        memberNoVal,
         id
       ];
     } else {
       updateQuery = `
         UPDATE members
-        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, tin = $11, title = $12, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $13
+        SET first_name = $1, last_name = $2, middle_name = $3, age = $4, email = $5, phone = $6, address = $7, date_of_birth = $8, gender = $9, civil_status = $10, tin = $11, title = $12,
+            membership_type = COALESCE($13, membership_type),
+            member_no = COALESCE($14, member_no),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $15
         RETURNING *
       `;
       queryParams = [
@@ -375,6 +441,8 @@ export const updateMember = async (req, res, next) => {
         civil_status || null,
         tin?.trim() || null,
         title?.trim() || null,
+        membership_type || null,
+        memberNoVal,
         id
       ];
     }
@@ -396,7 +464,7 @@ export const updateMember = async (req, res, next) => {
     if (error.code === '23505') {
       return res.status(400).json({
         success: false,
-        error: { message: 'Email address is already in use by another member.' }
+        error: { message: 'Email address or Member ID is already in use by another member.' }
       });
     }
     next(error);
@@ -471,14 +539,14 @@ export const updateMemberStatus = async (req, res, next) => {
 };
 
 
-// @desc    Delete a member profile (Hard delete for clean profiles only)
+// @desc    Permanently delete a member profile and all associated financial & ledger records
 // @route   DELETE /api/members/:id
 // @access  Protected (Admin)
 export const deleteMember = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const memberCheck = await query('SELECT first_name, last_name FROM members WHERE id = $1', [id]);
+    const memberCheck = await query('SELECT id, user_id, first_name, last_name FROM members WHERE id = $1', [id]);
     if (memberCheck.rowCount === 0) {
       return res.status(404).json({
         success: false,
@@ -486,31 +554,66 @@ export const deleteMember = async (req, res, next) => {
       });
     }
 
-    const ledgerCheck = await query(`
-      SELECT 
-        (SELECT COUNT(*) FROM loans WHERE member_id = $1) as loan_count,
-        (SELECT COUNT(*) FROM share_capital_transactions WHERE member_id = $1) as transaction_count
+    const member = memberCheck.rows[0];
+
+    // Begin cascade deletion transaction
+    await query('BEGIN');
+
+    // 1. Delete loan payment allocations for all loans belonging to this member
+    await query(`
+      DELETE FROM loan_payment_allocations 
+      WHERE loan_payment_id IN (
+        SELECT id FROM loan_payments WHERE loan_id IN (SELECT id FROM loans WHERE member_id = $1)
+      )
+      OR repayment_schedule_id IN (
+        SELECT id FROM repayment_schedules WHERE loan_id IN (SELECT id FROM loans WHERE member_id = $1)
+      )
     `, [id]);
 
-    const { loan_count, transaction_count } = ledgerCheck.rows[0];
+    // 2. Delete loan payments
+    await query(`
+      DELETE FROM loan_payments 
+      WHERE loan_id IN (SELECT id FROM loans WHERE member_id = $1)
+    `, [id]);
 
-    if (parseInt(loan_count, 10) > 0 || parseInt(transaction_count, 10) > 0) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: 'Cannot delete member. This profile has historical financial ledger records or loans attached to it. Please update their status to "inactive" instead.'
-        }
-      });
+    // 3. Delete repayment schedules
+    await query(`
+      DELETE FROM repayment_schedules 
+      WHERE loan_id IN (SELECT id FROM loans WHERE member_id = $1)
+    `, [id]);
+
+    // 4. Delete loans
+    await query('DELETE FROM loans WHERE member_id = $1', [id]);
+
+    // 5. Delete fixed deposits & investments
+    await query('DELETE FROM fixed_deposits WHERE member_id = $1', [id]);
+    await query('DELETE FROM investments WHERE member_id = $1', [id]);
+
+    // 6. Delete share capital transactions
+    await query('DELETE FROM share_capital_transactions WHERE member_id = $1', [id]);
+
+    // 7. Delete appointments
+    await query('DELETE FROM appointments WHERE member_id = $1', [id]);
+
+    // 8. Delete member status logs
+    await query('DELETE FROM member_status_logs WHERE member_id = $1', [id]);
+
+    // 9. Delete the member record
+    await query('DELETE FROM members WHERE id = $1', [id]);
+
+    // 10. Delete associated auth user record if they have a dedicated member account
+    if (member.user_id) {
+      await query('DELETE FROM users WHERE id = $1 AND role = \'member\'', [member.user_id]);
     }
 
-    await query('DELETE FROM member_status_logs WHERE member_id = $1', [id]);
-    await query('DELETE FROM members WHERE id = $1', [id]);
+    await query('COMMIT');
 
     res.status(200).json({
       success: true,
-      message: `Member profile for ${memberCheck.rows[0].first_name} ${memberCheck.rows[0].last_name} was permanently removed from the system.`
+      message: `Member profile for ${member.first_name} ${member.last_name} and all associated financial records were permanently deleted.`
     });
   } catch (error) {
+    await query('ROLLBACK');
     next(error);
   }
 };
@@ -649,9 +752,9 @@ export const getMemberDashboardSummary = async (req, res, next) => {
 // @access  Protected (Admin, Manager)
 export const exportMembersReport = async (req, res, next) => {
   try {
-    const { search, status } = req.query;
+    const { search, status, membership_type } = req.query;
 
-    let queryText = 'SELECT id, member_no, first_name, middle_name, last_name, age, gender, civil_status, email, phone, status, created_at FROM members WHERE 1=1';
+    let queryText = 'SELECT id, member_no, first_name, middle_name, last_name, age, gender, civil_status, email, phone, status, membership_type, created_at FROM members WHERE 1=1';
     const queryParams = [];
     let paramIndex = 1;
 
@@ -661,8 +764,14 @@ export const exportMembersReport = async (req, res, next) => {
       paramIndex++;
     }
 
+    if (membership_type) {
+      queryText += ` AND membership_type = $${paramIndex}`;
+      queryParams.push(membership_type);
+      paramIndex++;
+    }
+
     if (search) {
-      queryText += ` AND (COALESCE(member_no, '') ILIKE $${paramIndex} OR first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR COALESCE(middle_name, '') ILIKE $${paramIndex} OR COALESCE(email, '') ILIKE $${paramIndex} OR COALESCE(phone, '') ILIKE $${paramIndex} OR COALESCE(gender, '') ILIKE $${paramIndex} OR COALESCE(civil_status, '') ILIKE $${paramIndex})`;
+      queryText += ` AND (COALESCE(member_no, '') ILIKE $${paramIndex} OR first_name ILIKE $${paramIndex} OR last_name ILIKE $${paramIndex} OR COALESCE(middle_name, '') ILIKE $${paramIndex} OR COALESCE(email, '') ILIKE $${paramIndex} OR COALESCE(phone, '') ILIKE $${paramIndex} OR COALESCE(gender, '') ILIKE $${paramIndex} OR COALESCE(civil_status, '') ILIKE $${paramIndex} OR COALESCE(membership_type, '') ILIKE $${paramIndex})`;
       queryParams.push(`%${search}%`);
       paramIndex++;
     }
@@ -674,6 +783,7 @@ export const exportMembersReport = async (req, res, next) => {
       ...row,
       member_id_display: row.member_no || row.id,
       full_name: `${row.last_name}, ${row.first_name}${row.middle_name ? ' ' + row.middle_name : ''}`,
+      membership_type: row.membership_type || 'Regular',
       age: row.age != null ? row.age : 'N/A',
       gender: row.gender || 'N/A',
       civil_status: row.civil_status || 'N/A',
@@ -685,6 +795,7 @@ export const exportMembersReport = async (req, res, next) => {
     const columns = [
       { header: 'Member ID', key: 'member_id_display', width: 15 },
       { header: 'Full Name', key: 'full_name', width: 28 },
+      { header: 'Membership Type', key: 'membership_type', width: 18 },
       { header: 'Age', key: 'age', width: 10 },
       { header: 'Sex / Gender', key: 'gender', width: 15 },
       { header: 'Civil Status', key: 'civil_status', width: 15 },

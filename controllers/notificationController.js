@@ -145,16 +145,28 @@ export const getUnreadCount = async (req, res, next) => {
 export const markAsRead = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
+    // Only allow marking a notification as read if it belongs to the user,
+    // is role-targeted to their role, or is a broadcast notification.
+    // This prevents IDOR (any user marking another user's notification).
     const result = await query(
-      `UPDATE notifications SET is_read = true WHERE id = $1 RETURNING id, is_read`,
-      [id]
+      `UPDATE notifications SET is_read = true
+       WHERE id = $1
+         AND (
+           user_id = $2
+           OR (user_id IS NULL AND role_target = $3)
+           OR (user_id IS NULL AND role_target IS NULL)
+         )
+       RETURNING id, is_read`,
+      [id, userId, userRole]
     );
 
     if (result.rowCount === 0) {
       return res.status(404).json({
         success: false,
-        error: { message: 'Notification not found.' }
+        error: { message: 'Notification not found or you do not have permission to update it.' }
       });
     }
 

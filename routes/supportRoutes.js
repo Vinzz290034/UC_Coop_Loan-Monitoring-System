@@ -17,7 +17,7 @@ router.use(protect);
 // Support Ticket Endpoints
 router.post('/contact', contactSupportDesk);
 router.get('/tickets', getSupportTickets);
-router.patch('/tickets/:id/status', updateTicketStatus);
+router.patch('/tickets/:id/status', restrictTo('admin', 'staff'), updateTicketStatus);
 
 // FAQ & Guide Endpoints
 router.get('/faqs-guides', getFaqsAndGuides);

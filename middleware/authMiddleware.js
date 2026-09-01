@@ -21,7 +21,7 @@ export const protect = async (req, res, next) => {
     }
 
     // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'coop_loan_monitoring_secret_key_2026_dev');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Fetch user from DB to ensure they still exist and check latest data
     const userResult = await query(

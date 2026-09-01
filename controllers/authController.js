@@ -117,7 +117,7 @@ export const login = async (req, res, next) => {
     let memberProfile = null;
     if (user.role === 'member') {
       const memberResult = await query(
-        'SELECT id, member_no, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified FROM members WHERE user_id = $1',
+        'SELECT id, member_no, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified, membership_type FROM members WHERE user_id = $1',
         [user.id]
       );
       if (memberResult.rowCount > 0) {
@@ -202,7 +202,7 @@ export const getMe = async (req, res, next) => {
     // Fetch linked member/profile for ALL roles (admin/manager may also have one)
     let memberProfile = null;
     const memberResult = await query(
-      'SELECT id, member_no, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified FROM members WHERE user_id = $1',
+      'SELECT id, member_no, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified, membership_type FROM members WHERE user_id = $1',
       [user.id]
     );
     if (memberResult.rowCount > 0) {
@@ -1545,7 +1545,7 @@ export const updateProfile = async (req, res, next) => {
            is_verified = (CASE WHEN status IN ('approved', 'active') THEN true ELSE false END),
            updated_at = CURRENT_TIMESTAMP
          WHERE user_id = $13
-         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, title, tin, email, phone, address, date_of_birth, status, profile_completed, is_verified`,
+         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, title, tin, email, phone, address, date_of_birth, status, profile_completed, is_verified, membership_type`,
         [
           first_name.trim(),
           last_name.trim(),
@@ -1565,9 +1565,9 @@ export const updateProfile = async (req, res, next) => {
     } else {
       // Create a new member profile for this user (admin/manager without one)
       result = await query(
-        `INSERT INTO members (user_id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, title, tin, profile_completed, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, 'active')
-         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, title, tin, email, phone, address, date_of_birth, status, profile_completed, is_verified`,
+        `INSERT INTO members (user_id, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, title, tin, profile_completed, status, membership_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, 'active', 'Regular')
+         RETURNING id, first_name, last_name, middle_name, age, gender, civil_status, title, tin, email, phone, address, date_of_birth, status, profile_completed, is_verified, membership_type`,
         [
           userId,
           first_name.trim(),

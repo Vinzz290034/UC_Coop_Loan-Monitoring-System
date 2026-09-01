@@ -129,6 +129,7 @@ function LoansPageContent() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [products, setProducts] = useState<LoanProduct[]>([]);
   const [members, setMembers] = useState<any[]>([]); // for apply dropdown
+  const [loansPage, setLoansPage] = useState(1);
 
   // Loading & error state
   const [loansLoading, setLoansLoading] = useState(true);
@@ -1069,262 +1070,246 @@ function LoansPageContent() {
                 <p className="text-xs text-neutral-600 dark:text-neutral-400">No loans found matching the status filter.</p>
               </div>
             ) : (
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
-                <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">ID</th>
-                        {isAdminOrManager && (
-                          <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
-                        )}
-                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
-                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Principal Amount</th>
-                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest (Term)</th>
-                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
-                        <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Details</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
-                      {loans.map((loan) => {
-                        const isExpanded = expandedLoanId === loan.id;
-                        return (
-                          <React.Fragment key={loan.id}>
-                            <tr className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
-                              <td className="px-6 py-4 font-mono font-bold">#{loan.id}</td>
-                              {isAdminOrManager && (
-                                <td className="px-6 py-4 font-semibold">
-                                  {loan.last_name}, {loan.first_name}
-                                </td>
-                              )}
-                              <td className="px-6 py-4 font-semibold text-primary dark:text-secondary">{loan.product_name || 'Legacy Product'}</td>
-                              <td className="px-6 py-4 font-bold">{formatCurrency(parseFloat(loan.principal_amount))}</td>
-                              <td className="px-6 py-4 font-mono">
-                                {parseFloat(loan.interest_rate)}% ({loan.term_months}mo)
-                              </td>
-                              <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
-                              <td className="px-6 py-4 text-right">
-                                <button
-                                  onClick={() => toggleLoanExpand(loan.id)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral/5 transition-all text-[11px] font-bold"
-                                >
-                                  {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                  Amortization
-                                </button>
-                              </td>
-                            </tr>
+              (() => {
+                const totalLoansCount = loans.length;
+                const LOANS_PER_PAGE = 25;
+                const totalLoansPages = Math.ceil(totalLoansCount / LOANS_PER_PAGE) || 1;
+                const loansStartIdx = (loansPage - 1) * LOANS_PER_PAGE;
+                const visibleLoans = loans.slice(loansStartIdx, loansStartIdx + LOANS_PER_PAGE);
 
-                            {/* Expanded Details Row */}
-                            {isExpanded && (
-                              <tr>
-                                <td colSpan={isAdminOrManager ? 7 : 6} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
-                                  {loadingDetails ? (
-                                    <div className="flex items-center gap-2 py-4 justify-center">
-                                      <div className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
-                                      <span className="text-neutral-600 dark:text-neutral-400 font-semibold text-xs">Loading schedules and ledger data...</span>
-                                    </div>
-                                  ) : !loanDetails ? (
-                                    <p className="text-center text-xs text-neutral-600 dark:text-neutral-400">Failed to parse loan details.</p>
-                                  ) : (
-                                    <div className="space-y-6">
-                                      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/40 pb-4">
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs">
-                                          <div>
-                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Amortization Type</span>
-                                            <p className="font-semibold text-on-surface dark:text-white capitalize mt-0.5">
-                                              {loanDetails.amortization_type?.replace('_', ' ')}
-                                            </p>
-                                          </div>
-                                          <div>
-                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Registered Date</span>
-                                            <p className="font-semibold text-on-surface dark:text-white mt-0.5">
-                                              {new Date(loanDetails.created_at).toLocaleDateString()}
-                                            </p>
-                                          </div>
-                                          <div>
-                                            <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Disbursement Date</span>
-                                            <p className="font-semibold text-on-surface dark:text-white mt-0.5">
-                                              {loanDetails.disbursement_date
-                                                ? new Date(loanDetails.disbursement_date).toLocaleDateString()
-                                                : <span className="italic text-neutral-600 dark:text-neutral-400/50">Un-disbursed</span>}
-                                            </p>
-                                          </div>
+                return (
+                  <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
+                    <div className="overflow-x-auto custom-scrollbar">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
+                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">ID</th>
+                            {isAdminOrManager && (
+                              <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
+                            )}
+                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
+                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Principal Amount</th>
+                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest (Term)</th>
+                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
+                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Details</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
+                          {visibleLoans.map((loan) => {
+                            const isExpanded = expandedLoanId === loan.id;
+                            return (
+                              <React.Fragment key={loan.id}>
+                                <tr className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
+                                  <td className="px-6 py-4 font-mono font-bold">#{loan.id}</td>
+                                  {isAdminOrManager && (
+                                    <td className="px-6 py-4 font-semibold">
+                                      {loan.last_name}, {loan.first_name}
+                                    </td>
+                                  )}
+                                  <td className="px-6 py-4 font-semibold text-primary dark:text-secondary">{loan.product_name || 'Legacy Product'}</td>
+                                  <td className="px-6 py-4 font-bold">{formatCurrency(parseFloat(loan.principal_amount))}</td>
+                                  <td className="px-6 py-4 font-mono">
+                                    {parseFloat(loan.interest_rate)}% ({loan.term_months}mo)
+                                  </td>
+                                  <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
+                                  <td className="px-6 py-4 text-right">
+                                    <button
+                                      onClick={() => toggleLoanExpand(loan.id)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral/5 transition-all text-[11px] font-bold"
+                                    >
+                                      {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                      Amortization
+                                    </button>
+                                  </td>
+                                </tr>
+
+                                {/* Expanded Details Row */}
+                                {isExpanded && (
+                                  <tr>
+                                    <td colSpan={isAdminOrManager ? 7 : 6} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
+                                      {loadingDetails ? (
+                                        <div className="flex items-center gap-2 py-4 justify-center">
+                                          <div className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
+                                          <span className="text-neutral-600 dark:text-neutral-400 font-semibold text-xs">Loading schedules and ledger data...</span>
                                         </div>
+                                      ) : !loanDetails ? (
+                                        <p className="text-center text-xs text-neutral-600 dark:text-neutral-400">Failed to parse loan details.</p>
+                                      ) : (
+                                        <div className="space-y-6">
+                                          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/40 pb-4">
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs">
+                                              <div>
+                                                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Amortization Type</span>
+                                                <p className="font-semibold text-on-surface dark:text-white capitalize mt-0.5">
+                                                  {loanDetails.amortization_type?.replace('_', ' ')}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Registered Date</span>
+                                                <p className="font-semibold text-on-surface dark:text-white mt-0.5">
+                                                  {new Date(loanDetails.created_at).toLocaleDateString()}
+                                                </p>
+                                              </div>
+                                              <div>
+                                                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Disbursement Date</span>
+                                                <p className="font-semibold text-on-surface dark:text-white mt-0.5">
+                                                  {loanDetails.disbursement_date
+                                                    ? new Date(loanDetails.disbursement_date).toLocaleDateString()
+                                                    : <span className="italic text-neutral-600 dark:text-neutral-400/50">Un-disbursed</span>}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </div>
 
-                                        {/* Disbursement / Rejection / Printing / Export actions */}
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <button
-                                            onClick={() => exportSingleLoanScheduleToExcel(loanDetails)}
-                                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600/10 border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 font-bold rounded-full text-[11px] hover:bg-emerald-600 hover:text-white transition-all"
-                                          >
-                                            <Download className="w-3.5 h-3.5" />
-                                            Export Schedule (.xlsx)
-                                          </button>
-                                          {isAdminOrManager && (
-                                            <>
-                                              <button
-                                                onClick={() => openVoucherModal(loanDetails)}
-                                                className="inline-flex items-center gap-1.5 px-4 py-2 border border-outline-variant hover:bg-neutral/5 text-neutral-700 dark:text-neutral-300 font-bold rounded-full text-[11px] transition-colors"
-                                              >
-                                                <Printer className="w-3.5 h-3.5" />
-                                                Check Voucher
-                                              </button>
-                                              <button
-                                                onClick={() => openPrintAmortizationModal(loanDetails)}
-                                                className="inline-flex items-center gap-1.5 px-4 py-2 border border-outline-variant hover:bg-neutral/5 text-neutral-700 dark:text-neutral-300 font-bold rounded-full text-[11px] transition-colors"
-                                              >
-                                                <Printer className="w-3.5 h-3.5" />
-                                                Print Schedule
-                                              </button>
-                                            </>
+                                          {/* Amortization Schedule Table */}
+                                          {loanDetails.schedule && loanDetails.schedule.length > 0 && (
+                                            <div className="space-y-3">
+                                              <h5 className="font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amortization Repayment Ledger Schedule</h5>
+                                              <div className="overflow-x-auto border border-outline-variant/40 rounded-2xl">
+                                                <table className="w-full text-left text-xs border-collapse">
+                                                  <thead className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
+                                                    <tr>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 font-mono">#</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Principal Due</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Interest Due</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Total Due</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Loan Balance</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Principal</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Interest</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Due Date</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Status</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody className="divide-y divide-outline-variant/35 font-mono">
+                                                    {(() => {
+                                                      let runningBalance = parseFloat(loanDetails.principal_amount);
+                                                      return loanDetails.schedule?.map((sch: any) => {
+                                                        const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
+                                                        if (loanDetails.amortization_type === 'diminishing_balance') {
+                                                          runningBalance = Math.round((runningBalance - schTotalDue) * 100) / 100;
+                                                        } else {
+                                                          runningBalance = Math.round((runningBalance - parseFloat(sch.principal_due)) * 100) / 100;
+                                                        }
+                                                        const displayBalance = Math.max(0, runningBalance);
+
+                                                        return (
+                                                          <tr key={sch.id} className="hover:bg-neutral/5">
+                                                            <td className="px-4 py-2 font-bold">{sch.installment_number}</td>
+                                                            <td className="px-4 py-2">{formatCurrency(parseFloat(sch.principal_due))}</td>
+                                                            <td className="px-4 py-2">{formatCurrency(parseFloat(sch.interest_due))}</td>
+                                                            <td className="px-4 py-2 font-bold">{formatCurrency(parseFloat(sch.principal_due) + parseFloat(sch.interest_due))}</td>
+                                                            <td className="px-4 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
+                                                            <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
+                                                            <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
+                                                            <td className="px-4 py-2 font-sans">{new Date(sch.due_date).toLocaleDateString()}</td>
+                                                            <td className="px-4 py-2 font-sans">
+                                                              {sch.status === 'paid' ? (
+                                                                <span className="text-primary font-bold">Paid</span>
+                                                              ) : sch.status === 'partially_paid' ? (
+                                                                <span className="text-amber-500 font-bold">Partial</span>
+                                                              ) : (
+                                                                <span className="text-tertiary font-bold">Unpaid</span>
+                                                              )}
+                                                            </td>
+                                                          </tr>
+                                                        );
+                                                      });
+                                                    })()}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
                                           )}
 
-                                          {isAdminOrManager && loan.status === 'pending_approval' && (
-                                            <>
-                                              <button
-                                                onClick={() => handleRejectLoan(loan.id)}
-                                                className="px-4 py-2 border border-tertiary/40 hover:bg-tertiary/10 text-tertiary font-bold rounded-full text-[11px] transition-colors"
-                                              >
-                                                Reject Credit Request
-                                              </button>
-                                              <button
-                                                onClick={() => handleDisburseLoan(loan.id)}
-                                                className="px-4 py-2 bg-primary text-white font-bold rounded-full text-[11px] shadow hover:translate-y-[-1px] transition-all"
-                                              >
-                                                Verify & Disburse Funds
-                                              </button>
-                                            </>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Amortization Schedule */}
-                                      <div className="space-y-3">
-                                        <h4 className="font-headline font-bold text-xs text-on-surface dark:text-white flex items-center gap-1.5">
-                                          <Calendar className="w-4 h-4 text-primary dark:text-secondary" />
-                                          Amortization Schedule Matrices
-                                        </h4>
-                                        {loanDetails.schedule && loanDetails.schedule.length === 0 ? (
-                                          <p className="text-[11px] text-neutral-600 dark:text-neutral-400 italic">No schedules generated yet (needs disbursement).</p>
-                                        ) : (
-                                          <div className="border border-outline-variant/60 rounded-2xl overflow-x-auto custom-scrollbar bg-white dark:bg-surface p-1.5">
-                                            <table className="w-full text-left border-collapse text-[11px]">
-                                              <thead>
-                                                <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Month</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Principal Due</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Interest Due</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Total Due</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Balance</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Principal</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Interest</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Due Date</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Status</th>
-                                                </tr>
-                                              </thead>
-                                              <tbody className="divide-y divide-outline-variant/35 font-mono">
-                                                {(() => {
-                                                  let runningBalance = parseFloat(loanDetails.principal_amount);
-                                                  return loanDetails.schedule?.map((sch: any) => {
-                                                    const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
-                                                    if (loanDetails.amortization_type === 'diminishing_balance') {
-                                                      runningBalance = Math.round((runningBalance - schTotalDue) * 100) / 100;
-                                                    } else {
-                                                      runningBalance = Math.round((runningBalance - parseFloat(sch.principal_due)) * 100) / 100;
-                                                    }
-                                                    const displayBalance = Math.max(0, runningBalance);
-
-                                                    return (
-                                                      <tr key={sch.id} className="hover:bg-neutral/5">
-                                                        <td className="px-4 py-2 font-bold">{sch.installment_number}</td>
-                                                        <td className="px-4 py-2">{formatCurrency(parseFloat(sch.principal_due))}</td>
-                                                        <td className="px-4 py-2">{formatCurrency(parseFloat(sch.interest_due))}</td>
-                                                        <td className="px-4 py-2 font-bold">{formatCurrency(parseFloat(sch.principal_due) + parseFloat(sch.interest_due))}</td>
-                                                        <td className="px-4 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
-                                                        <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
-                                                        <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
-                                                        <td className="px-4 py-2 font-sans">{new Date(sch.due_date).toLocaleDateString()}</td>
-                                                        <td className="px-4 py-2 font-sans">
-                                                          {sch.status === 'paid' ? (
-                                                            <span className="text-primary font-bold">Paid</span>
-                                                          ) : sch.status === 'partially_paid' ? (
-                                                            <span className="text-amber-500 font-bold">Partial</span>
-                                                          ) : (
-                                                            <span className="text-tertiary font-bold">Unpaid</span>
-                                                          )}
+                                          {/* Payment Ledger Log */}
+                                          {loanDetails.payments && loanDetails.payments.length > 0 && (
+                                            <div className="space-y-3">
+                                              <h5 className="font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Repayment Receipts Ledger</h5>
+                                              <div className="overflow-x-auto border border-outline-variant/40 rounded-2xl">
+                                                <table className="w-full text-left text-xs border-collapse">
+                                                  <thead className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
+                                                    <tr>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 font-mono">Reference No</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Amount Paid</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Payment Method</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Booking Date</th>
+                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 text-right">Receipt</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody className="divide-y divide-outline-variant/35 font-mono">
+                                                    {loanDetails.payments?.map((pay: any) => (
+                                                      <tr key={pay.id} className="hover:bg-neutral/5">
+                                                        <td className="px-4 py-2 font-bold">{pay.reference_no || 'N/A'}</td>
+                                                        <td className="px-4 py-2 text-primary font-bold">{formatCurrency(parseFloat(pay.amount))}</td>
+                                                        <td className="px-4 py-2 font-sans">{pay.payment_method}</td>
+                                                        <td className="px-4 py-2 font-sans">{new Date(pay.payment_date).toLocaleString()}</td>
+                                                        <td className="px-4 py-2 text-right">
+                                                          <div className="flex items-center justify-end gap-1.5">
+                                                            <button
+                                                              onClick={() => downloadReceipt(loanDetails, pay)}
+                                                              className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
+                                                            >
+                                                              <Download className="w-2.5 h-2.5" /> Download
+                                                            </button>
+                                                            <button
+                                                              onClick={() => openReceiptModal(loanDetails, pay)}
+                                                              className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
+                                                            >
+                                                              <Printer className="w-2.5 h-2.5" /> Print
+                                                            </button>
+                                                          </div>
                                                         </td>
                                                       </tr>
-                                                    );
-                                                  });
-                                                })()}
-                                              </tbody>
-                                            </table>
-                                          </div>
-                                        )}
-                                      </div>
+                                                    ))}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                                      {/* Payments History */}
-                                      <div className="space-y-3">
-                                        <h4 className="font-headline font-bold text-xs text-on-surface dark:text-white flex items-center gap-1.5">
-                                          <CreditCard className="w-4 h-4 text-primary dark:text-secondary" />
-                                          Posted Ledger Payments History
-                                        </h4>
-                                        {loanDetails.payments && loanDetails.payments.length === 0 ? (
-                                          <p className="text-[11px] text-neutral-600 dark:text-neutral-400 italic">No payments logged yet.</p>
-                                        ) : (
-                                          <div className="border border-outline-variant/60 rounded-2xl overflow-x-auto custom-scrollbar bg-white dark:bg-surface p-1.5">
-                                            <table className="w-full text-left border-collapse text-[11px]">
-                                              <thead>
-                                                <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Ref No</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Amount Paid</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Payment Method</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Booking Date</th>
-                                                  <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 text-right">Receipt</th>
-                                                </tr>
-                                              </thead>
-                                              <tbody className="divide-y divide-outline-variant/35 font-mono">
-                                                {loanDetails.payments?.map((pay: any) => (
-                                                  <tr key={pay.id} className="hover:bg-neutral/5">
-                                                    <td className="px-4 py-2 font-bold">{pay.reference_no || 'N/A'}</td>
-                                                    <td className="px-4 py-2 text-primary font-bold">{formatCurrency(parseFloat(pay.amount))}</td>
-                                                    <td className="px-4 py-2 font-sans">{pay.payment_method}</td>
-                                                    <td className="px-4 py-2 font-sans">{new Date(pay.payment_date).toLocaleString()}</td>
-                                                    <td className="px-4 py-2 text-right">
-                                                      <div className="flex items-center justify-end gap-1.5">
-                                                        <button
-                                                          onClick={() => downloadReceipt(loanDetails, pay)}
-                                                          className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
-                                                        >
-                                                          <Download className="w-2.5 h-2.5" /> Download
-                                                        </button>
-                                                        <button
-                                                          onClick={() => openReceiptModal(loanDetails, pay)}
-                                                          className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
-                                                        >
-                                                          <Printer className="w-2.5 h-2.5" /> Print
-                                                        </button>
-                                                      </div>
-                                                    </td>
-                                                  </tr>
-                                                ))}
-                                              </tbody>
-                                            </table>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    {/* Pagination Control */}
+                    {totalLoansCount > 0 && (
+                      <div className="px-6 py-3.5 border-t border-outline-variant/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-surface-container-low/30">
+                        <div className="text-neutral-500 font-medium">
+                          Showing <span className="font-bold text-on-surface dark:text-white">{loansStartIdx + 1}</span> to <span className="font-bold text-on-surface dark:text-white">{Math.min(loansStartIdx + LOANS_PER_PAGE, totalLoansCount)}</span> of <span className="font-bold text-on-surface dark:text-white">{totalLoansCount}</span> loans
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={loansPage === 1}
+                            onClick={() => setLoansPage(p => Math.max(1, p - 1))}
+                            className="px-3 py-1.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-surface-container-low text-on-surface dark:text-white font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs"
+                          >
+                            Previous
+                          </button>
+                          <span className="px-2 font-bold font-mono text-neutral-600 dark:text-neutral-300">
+                            Page {loansPage} of {totalLoansPages}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={loansPage >= totalLoansPages}
+                            onClick={() => setLoansPage(p => Math.min(totalLoansPages, p + 1))}
+                            className="px-3 py-1.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-surface-container-low text-on-surface dark:text-white font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
             )}
           </div>
         ) : activeTab === 'calculator' ? (
@@ -2137,12 +2122,12 @@ function LoansPageContent() {
                   onChange={(e) => setRepayLoanId(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white font-semibold"
                 >
-                  <option value="">-- Choose Contract ID --</option>
+                  <option value="">-- Choose Loan (LAF No) --</option>
                   {loans
                     .filter((l) => l.status === 'disbursed' || l.status === 'defaulted')
                     .map((l: any) => (
                       <option key={l.id} value={l.id}>
-                        Contract #{l.id} - {l.last_name}, {l.first_name} ({l.product_name} - Principal: ₱{parseFloat(l.principal_amount).toLocaleString()})
+                        {l.laf_no ? `LAF #${l.laf_no}` : `Contract #${l.id.slice(0, 8)}`} - {l.last_name}, {l.first_name} ({l.product_name} - Principal: ₱{parseFloat(l.principal_amount).toLocaleString()})
                       </option>
                     ))}
                 </select>
@@ -2298,27 +2283,39 @@ function LoansPageContent() {
               <div className="bg-neutral-50 dark:bg-neutral-900/40 p-4 rounded-2xl border border-outline-variant/60 space-y-4 mt-2">
                 <div className="text-center pb-2 border-b border-outline-variant">
                   <h4 className="font-bold text-neutral-800 dark:text-neutral-100 text-xs">University of Cebu Cooperative</h4>
-                  <p className="text-[10px] text-neutral-500">CHECK DISBURSEMENT VOUCHER PREVIEW</p>
+                  <p className="text-[10px] text-neutral-500 font-semibold">CHECK DISBURSEMENT VOUCHER PREVIEW</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
                   <p><strong>Payee:</strong> {printLoan.last_name}, {printLoan.first_name}</p>
                   <p className="text-right"><strong>Amount:</strong> <span className="font-bold text-primary dark:text-secondary">{formatCurrency(parseFloat(printLoan.principal_amount))}</span></p>
                 </div>
-                <div className="border border-outline-variant bg-white dark:bg-surface rounded-xl p-2 text-[9px] font-mono leading-normal">
-                  <div className="flex justify-between font-bold border-b pb-1 mb-1 text-neutral-600">
-                    <span>Account Description</span>
-                    <span>Debit</span>
-                    <span>Credit</span>
+                <div className="border border-outline-variant bg-white dark:bg-surface rounded-xl p-3 text-[10px] leading-normal space-y-2">
+                  <div className="flex justify-between font-bold border-b pb-1 text-neutral-700 dark:text-neutral-300">
+                    <span>Account Title & Description</span>
+                    <div className="flex gap-6">
+                      <span>Debit</span>
+                      <span>Credit</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Receivable - Loans ({printLoan.product_name})</span>
-                    <span>{parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                    <span>-</span>
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <span className="font-bold text-on-surface dark:text-white block">Loans Receivable — {printLoan.product_name || 'Regular Loan'}</span>
+                      <span className="text-[9px] text-neutral-500">Ref: {printLoan.laf_no ? `LAF #${printLoan.laf_no}` : `Contract #${String(printLoan.id).slice(0, 8).toUpperCase()}`}</span>
+                    </div>
+                    <div className="flex gap-6 font-mono font-bold">
+                      <span className="text-on-surface dark:text-white">{parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-neutral-400">—</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Cash in Bank - {bankName} (Chk: {checkNo || 'PENDING'})</span>
-                    <span>-</span>
-                    <span>{parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <span className="font-bold text-on-surface dark:text-white block">Cash in Bank — {bankName}</span>
+                      <span className="text-[9px] text-neutral-500">Check #: {checkNo || 'PENDING'}</span>
+                    </div>
+                    <div className="flex gap-6 font-mono font-bold">
+                      <span className="text-neutral-400">—</span>
+                      <span className="text-primary dark:text-secondary">{parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2523,7 +2520,7 @@ function LoansPageContent() {
       {printLoan && printMode && (
         <div id="print-section" className="hidden print:block text-black bg-white p-6 font-sans" style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff' }}>
           {printMode === 'voucher' ? (
-            /* Print-only Check Voucher Sheet */
+            /* Print-only Check Voucher Sheet (Identical Format to Loan Amortization) */
             <div className="max-w-4xl mx-auto p-4" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               {/* Brand Header */}
               <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px' }}>
@@ -2541,7 +2538,7 @@ function LoansPageContent() {
               </div>
 
               {/* Modern Info Grid */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', backgroundColor: '#ecfdf5', padding: '16px', borderRadius: '16px', border: '1px solid #d1fae5', fontSize: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', backgroundColor: '#ecfdf5', padding: '16px', borderRadius: '16px', border: '1px solid #d1fae5', fontSize: '10px' }}>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Payee Member</span>
                   <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{printLoan.last_name}, {printLoan.first_name}</p>
@@ -2549,13 +2546,18 @@ function LoansPageContent() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Check Reference</span>
-                  <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{checkNo || 'PENDING RELEASE'}</p>
+                  <p style={{ fontWeight: 'bold', color: '#064e3b', margin: '2px 0 0 0' }}>{checkNo || 'PENDING RELEASE'}</p>
                   <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{bankName}</p>
                 </div>
-                <div style={{ textAlign: 'right', flex: 1 }}>
+                <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Disbursement Amount</span>
                   <p style={{ fontSize: '12px', fontWeight: '800', color: '#064e3b', margin: '2px 0 0 0' }}>{formatCurrency(parseFloat(printLoan.principal_amount))}</p>
                   <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{new Date(printLoan.disbursement_date || printLoan.created_at).toLocaleDateString()}</p>
+                </div>
+                <div style={{ textAlign: 'right', flex: 1 }}>
+                  <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Loan Product</span>
+                  <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{printLoan.product_name || 'Standard'}</p>
+                  <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{printLoan.term_months} Mos ({printLoan.payment_mode || 'Standard'})</p>
                 </div>
               </div>
 
@@ -2564,38 +2566,38 @@ function LoansPageContent() {
                 <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      <th style={{ padding: '10px 16px' }}>Account Title & Description</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'right', width: '128px', borderLeft: '1px solid rgba(4, 120, 87, 0.2)' }}>Debit (₱)</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'right', width: '128px', borderLeft: '1px solid rgba(4, 120, 87, 0.2)' }}>Credit (₱)</th>
+                      <th style={{ padding: '8px 12px', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Account Title & Description</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '140px', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Debit (₱)</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '140px' }}>Credit (₱)</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                      <td style={{ padding: '12px 16px' }}>
+                      <td style={{ padding: '10px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
                         <span style={{ fontWeight: 'bold', color: '#1f2937', display: 'block' }}>Receivables - Loans ({printLoan.product_name || 'Standard'})</span>
                         <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Disbursement of principal amount for Contract #{printLoan.id}</p>
                       </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#1f2937', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#1f2937', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
                         {parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>-</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af' }}>-</td>
                     </tr>
                     <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                      <td style={{ padding: '12px 16px' }}>
+                      <td style={{ padding: '10px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
                         <span style={{ fontWeight: 'bold', color: '#1f2937', display: 'block' }}>Cash in Bank</span>
                         <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Check drawn on {bankName} (Ref No: {checkNo || 'N/A'})</p>
                       </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>-</td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#064e3b', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>-</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#064e3b' }}>
                         {parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                     <tr style={{ backgroundColor: '#ecfdf5', fontWeight: 'bold', fontSize: '10px' }}>
-                      <td style={{ padding: '10px 16px', textAlign: 'right', color: '#064e3b' }}>TOTAL</td>
-                      <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: '#064e3b', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>TOTAL</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
                         {parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
                         {parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
@@ -2608,27 +2610,17 @@ function LoansPageContent() {
                 <p style={{ margin: 0 }}><strong>PARTICULARS / REMARKS:</strong> Being check payment for the loan proceeds of {printLoan.product_name} approved on {new Date(printLoan.created_at).toLocaleDateString()} under member name {printLoan.last_name}, {printLoan.first_name}.</p>
               </div>
 
-              {/* Modern Signee Grid */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', paddingTop: '32px', fontSize: '9px', textAlign: 'center' }}>
+              {/* Modern Signee Grid (Matching Amortization Table) */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '32px', paddingTop: '32px', fontSize: '9px', textAlign: 'center' }}>
                 <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{preparedBy}</p>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{releasedBy || preparedBy || 'AUTHORIZED SIGNATORY'}</p>
                   <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
-                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Prepared By</p>
-                </div>
-                <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{approvedBy}</p>
-                  <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
-                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Approved By</p>
-                </div>
-                <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{releasedBy}</p>
-                  <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
-                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Released By</p>
+                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Authorized Disbursing Officer</p>
                 </div>
                 <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #d1fae5' }}>
                   <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#064e3b', margin: 0 }}>{printLoan.last_name}, {printLoan.first_name}</p>
                   <div style={{ height: '1px', backgroundColor: '#a7f3d0', margin: '8px 0' }}></div>
-                  <p style={{ color: '#059669', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Received By (Borrower)</p>
+                  <p style={{ color: '#059669', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Signature of Borrower (Received By)</p>
                 </div>
               </div>
             </div>
@@ -2852,6 +2844,22 @@ function LoansPageContent() {
       <style dangerouslySetInnerHTML={{
         __html: `
         @media print {
+          @page {
+            size: letter portrait;
+            margin: 10mm 12mm;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          html, body {
+            background: #ffffff !important;
+            color: #000000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+          }
           body * {
             visibility: hidden !important;
           }
@@ -2863,23 +2871,13 @@ function LoansPageContent() {
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            background: white !important;
-            color: black !important;
+            background: #ffffff !important;
+            color: #000000 !important;
             padding: 0px !important;
-          }
-          /* Override background colors and text colors for print output */
-          .print-bg-green {
-            background-color: #064e3b !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .print-text-white {
-            color: white !important;
-          }
-          .print-bg-light {
-            background-color: #ecfdf5 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
+            margin: 0px !important;
+            box-sizing: border-box !important;
+            -webkit-font-smoothing: antialiased !important;
+            text-rendering: optimizeLegibility !important;
           }
         }
       `}} />

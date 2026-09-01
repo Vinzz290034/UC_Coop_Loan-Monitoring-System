@@ -55,11 +55,21 @@ export default function KpiCard({
     ? 'hover:scale-[1.02] hover:shadow-md transition-all cursor-pointer group active:scale-[0.98]'
     : '';
 
+  const valStr = String(value ?? '');
+
+  // Dynamically scale font size based on value string length to prevent card overflow
+  const getValueFontSize = (str: string) => {
+    if (str.length >= 16) return 'text-sm sm:text-base lg:text-lg tracking-tight';
+    if (str.length >= 13) return 'text-base sm:text-lg lg:text-xl tracking-tight';
+    if (str.length >= 10) return 'text-lg sm:text-xl lg:text-2xl tracking-tight';
+    return 'text-2xl';
+  };
+
   const content = (
-    <div className={`h-full flex flex-col justify-between p-5 sm:p-6 rounded-3xl shadow-xs ${v.card} ${interactiveClasses}`}>
+    <div className={`h-full flex flex-col justify-between p-4 sm:p-5 rounded-3xl shadow-xs min-w-0 overflow-hidden ${v.card} ${interactiveClasses}`}>
       {/* Header Row with Label & Badge aligned */}
       <div className="flex items-start justify-between gap-3 mb-2 min-h-[2.5rem]">
-        <span className={`text-[11px] sm:text-xs font-bold uppercase font-label tracking-wider leading-snug line-clamp-2 ${variant === 'primary' ? 'opacity-90' : 'text-neutral-600 dark:text-neutral-400'}`}>
+        <span className={`text-[11px] sm:text-xs font-bold uppercase font-label tracking-wider leading-snug line-clamp-2 ${variant === 'primary' ? 'opacity-90' : 'text-neutral-600 dark:text-neutral-400'}`} title={label}>
           {label}
         </span>
         <div className={`p-2 rounded-xl flex-shrink-0 ${v.icon} ${isInteractive ? 'group-hover:scale-110 transition-transform' : ''}`}>
@@ -69,7 +79,7 @@ export default function KpiCard({
 
       {/* Main KPI Value Digit */}
       <div className="my-auto py-1">
-        <div className={`font-headline text-xl sm:text-2xl 2xl:text-[1.65rem] font-extrabold tabular-nums tracking-tight leading-tight break-words ${v.value}`}>
+        <div className={`font-headline font-extrabold tabular-nums tracking-tight leading-tight truncate ${getValueFontSize(valStr)} ${v.value}`} title={valStr}>
           {value}
         </div>
       </div>
@@ -78,7 +88,7 @@ export default function KpiCard({
       {(description || trend) && (
         <div className="mt-auto pt-2 space-y-1">
           {description && (
-            <p className={`text-[11px] leading-relaxed line-clamp-2 ${variant === 'primary' ? 'opacity-85 font-medium' : 'text-neutral-600 dark:text-neutral-400'}`}>
+            <p className={`text-[11px] leading-relaxed line-clamp-2 ${variant === 'primary' ? 'opacity-85 font-medium' : 'text-neutral-600 dark:text-neutral-400'}`} title={description}>
               {description}
             </p>
           )}
