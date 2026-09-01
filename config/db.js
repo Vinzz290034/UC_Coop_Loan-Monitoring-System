@@ -5,17 +5,27 @@ dotenv.config();
 
 const { Pool } = pg;
 
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: parseInt(process.env.DB_PORT || '5432', 10),
+// Railway provides a single DATABASE_URL; local dev uses individual DB_* vars.
+const isProduction = process.env.NODE_ENV === 'production';
 
-  // ⚡ ADD THESE TWO TIMEOUT PROPERTIES:
-  connectionTimeoutMillis: 5000, // Terminate connection attempt after 5 seconds
-  idleTimeoutMillis: 30000,      // Close idle connections after 30 seconds
-});
+const pool = new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: isProduction ? { rejectUnauthorized: false } : false, // Required by Railway's managed PostgreSQL
+        connectionTimeoutMillis: 5000,
+        idleTimeoutMillis: 30000,
+      }
+    : {
+        user: process.env.DB_USER,
+        host: process.env.DB_HOST,
+        database: process.env.DB_NAME,
+        password: process.env.DB_PASSWORD,
+        port: parseInt(process.env.DB_PORT || '5432', 10),
+        connectionTimeoutMillis: 5000,
+        idleTimeoutMillis: 30000,
+      }
+);
 
 // Test database connection
 pool.on('connect', () => {
