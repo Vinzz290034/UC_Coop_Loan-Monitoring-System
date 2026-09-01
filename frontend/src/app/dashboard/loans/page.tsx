@@ -1159,6 +1159,62 @@ function LoansPageContent() {
                                                 </p>
                                               </div>
                                             </div>
+
+                                            {/* Action Buttons: Check Voucher, Print Schedule, Excel Export, Disburse / Reject */}
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              {isAdminOrManager && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => openVoucherModal(loanDetails)}
+                                                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                                                  title="Generate and print check disbursement voucher"
+                                                >
+                                                  <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                                  Check Voucher
+                                                </button>
+                                              )}
+
+                                              <button
+                                                type="button"
+                                                onClick={() => openPrintAmortizationModal(loanDetails)}
+                                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                                                title="Print official loan amortization schedule"
+                                              >
+                                                <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                                Print Schedule
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() => exportSingleLoanScheduleToExcel(loanDetails)}
+                                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                                                title="Export amortization ledger to Excel"
+                                              >
+                                                <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                Export (Excel)
+                                              </button>
+
+                                              {isAdminOrManager && loan.status === 'pending_approval' && (
+                                                <>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleRejectLoan(loan.id)}
+                                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-tertiary/40 bg-tertiary/10 hover:bg-tertiary/20 text-tertiary font-bold rounded-full text-xs transition-all active:scale-95 cursor-pointer"
+                                                  >
+                                                    <XCircle className="w-3.5 h-3.5" />
+                                                    Reject
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleDisburseLoan(loan.id)}
+                                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-full text-xs shadow hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                                                  >
+                                                    <FileCheck className="w-3.5 h-3.5" />
+                                                    Verify & Disburse
+                                                  </button>
+                                                </>
+                                              )}
+                                            </div>
                                           </div>
 
                                           {/* Amortization Schedule Table */}
