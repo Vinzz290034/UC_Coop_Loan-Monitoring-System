@@ -2630,7 +2630,7 @@ export default function OverviewPage() {
                               {/* View Profile Action Link */}
                               <Link
                                 href={`/dashboard/members/${m.id}`}
-                                className="inline-flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs text-center"
+                                className="inline-flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 mt-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs text-center"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                                 <span>View Profile</span>
