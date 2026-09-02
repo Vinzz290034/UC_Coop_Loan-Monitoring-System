@@ -421,7 +421,7 @@ export default function MembersPage() {
           <div>
             <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Members Directory</h1>
             <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-              Cooperative registry roster containing {members.length} members.
+              Cooperative registry list containing {members.length} members.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -539,7 +539,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between px-1 flex-wrap gap-2.5">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-on-surface dark:text-white">
-                  Members Roster
+                  Members Table
                 </span>
                 <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold border border-outline-variant/30">
                   {isExpandedAll ? `Showing all ${members.length} members (Full Roster)` : `Showing ${displayedMembers.length} of ${members.length} members`}
@@ -550,8 +550,8 @@ export default function MembersPage() {
                 type="button"
                 onClick={() => setIsExpandedAll((prev) => !prev)}
                 className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer shadow-2xs active:scale-95 ${isExpandedAll
-                    ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary border-primary/30 hover:bg-primary/20'
-                    : 'bg-white dark:bg-surface-container-low text-neutral-700 dark:text-neutral-300 border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                  ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary border-primary/30 hover:bg-primary/20'
+                  : 'bg-white dark:bg-surface-container-low text-neutral-700 dark:text-neutral-300 border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800'
                   }`}
                 title={isExpandedAll ? 'Restore pagination (8 per page)' : 'Expand table to display all members on page'}
               >
@@ -785,8 +785,8 @@ export default function MembersPage() {
                                 title="Click member to view profile, or click pencil to edit"
                               >
                                 <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${member.membership_type === 'Associate'
-                                    ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800/50'
-                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/50'
+                                  ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800/50'
+                                  : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/50'
                                   }`}>
                                   {member.membership_type === 'Associate' ? 'Associate' : 'Regular'}
                                 </span>
