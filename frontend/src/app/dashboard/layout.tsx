@@ -187,6 +187,20 @@ function DashboardLayoutContent({
     },
   ];
 
+  // Role-based dashboard destination helper
+  const getRoleDashboardRoute = (role?: string): string => {
+    switch (role) {
+      case 'admin':
+        return '/dashboard';
+      case 'staff':
+        return '/dashboard';
+      case 'member':
+        return '/dashboard';
+      default:
+        return '/dashboard';
+    }
+  };
+
   /* Shared sidebar content — rendered identically in both desktop sidebar and mobile drawer */
   const isCollapsed = sidebarCollapsed && !mobileSidebarOpen;
 
@@ -195,14 +209,27 @@ function DashboardLayoutContent({
       {/* Brand Banner */}
       <div className={`h-20 border-b border-outline-variant/50 flex items-center justify-between flex-shrink-0 ${isCollapsed ? 'px-3' : 'px-6'
         }`}>
-        {/* Brand Logo & Name */}
+        {/* Brand Logo & Name (Role-Based Dashboard Navigation Link) */}
         {(!sidebarCollapsed || mobileSidebarOpen) ? (
-          <div className="font-brandname font-bold text-lg text-primary dark:text-secondary flex items-center gap-1.5">
+          <Link
+            href={getRoleDashboardRoute(user?.role)}
+            onClick={() => setMobileSidebarOpen(false)}
+            className="font-brandname font-bold text-lg text-primary dark:text-secondary flex items-center gap-1.5 hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:focus-visible:ring-secondary rounded-xl transition-all cursor-pointer select-none"
+            aria-label="Coop Sync Dashboard"
+            title="Go to Dashboard"
+          >
             <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-9 h-6 object-contain" />
             <span>Coop Sync</span>
-          </div>
+          </Link>
         ) : (
-          <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-7 h-7 object-contain mx-auto" />
+          <Link
+            href={getRoleDashboardRoute(user?.role)}
+            className="flex items-center justify-center p-1 rounded-xl hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:focus-visible:ring-secondary transition-all mx-auto cursor-pointer"
+            aria-label="Coop Sync Dashboard"
+            title="Go to Dashboard"
+          >
+            <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-7 h-7 object-contain" />
+          </Link>
         )}
 
         {/* Desktop collapse toggle — hidden on mobile */}
