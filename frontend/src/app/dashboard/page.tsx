@@ -52,6 +52,9 @@ import {
   FileSpreadsheet,
   FileUp,
   LogOut,
+  Maximize2,
+  Download,
+  ArrowUpDown,
 } from 'lucide-react';
 import ProfileCompletionModal from '@/components/onboarding/ProfileCompletionModal';
 import IncompleteProfileBanner from '@/components/onboarding/IncompleteProfileBanner';
@@ -347,6 +350,443 @@ export default function OverviewPage() {
     } finally {
       setInlineSaving(false);
     }
+  };
+
+  // Member Financial Overview sorting & expanded modal state
+  const [memberSortBy, setMemberSortBy] = useState<string>('member_id_asc');
+  const [isExpandedMembersModalOpen, setIsExpandedMembersModalOpen] = useState<boolean>(false);
+  const [isExportingPDF, setIsExportingPDF] = useState<boolean>(false);
+
+  // Sorting helper for Member Financial Overview
+  const sortMembersList = (members: any[], sortKey: string) => {
+    return [...members].sort((a, b) => {
+      switch (sortKey) {
+        case 'member_id_asc': {
+          const idA = String(a.member_no || a.id || '');
+          const idB = String(b.member_no || b.id || '');
+          return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+        }
+        case 'member_id_desc': {
+          const idA = String(a.member_no || a.id || '');
+          const idB = String(b.member_no || b.id || '');
+          return idB.localeCompare(idA, undefined, { numeric: true, sensitivity: 'base' });
+        }
+        case 'name_asc': {
+          const lastA = (a.last_name || '').trim();
+          const lastB = (b.last_name || '').trim();
+          const res = lastA.localeCompare(lastB, undefined, { sensitivity: 'base' });
+          if (res !== 0) return res;
+          return (a.first_name || '').localeCompare(b.first_name || '', undefined, { sensitivity: 'base' });
+        }
+        case 'name_desc': {
+          const lastA = (a.last_name || '').trim();
+          const lastB = (b.last_name || '').trim();
+          const res = lastB.localeCompare(lastA, undefined, { sensitivity: 'base' });
+          if (res !== 0) return res;
+          return (b.first_name || '').localeCompare(a.first_name || '', undefined, { sensitivity: 'base' });
+        }
+        case 'loan_amount_desc': {
+          const amountA = parseFloat(a.total_loans_taken || 0);
+          const amountB = parseFloat(b.total_loans_taken || 0);
+          return amountB - amountA;
+        }
+        case 'loan_amount_asc': {
+          const amountA = parseFloat(a.total_loans_taken || 0);
+          const amountB = parseFloat(b.total_loans_taken || 0);
+          return amountA - amountB;
+        }
+        case 'balance_desc': {
+          const balA = parseFloat(a.share_capital_balance || 0);
+          const balB = parseFloat(b.share_capital_balance || 0);
+          return balB - balA;
+        }
+        case 'balance_asc': {
+          const balA = parseFloat(a.share_capital_balance || 0);
+          const balB = parseFloat(b.share_capital_balance || 0);
+          return balA - balB;
+        }
+        case 'status_pending': {
+          if (a.status === 'pending' && b.status !== 'pending') return -1;
+          if (a.status !== 'pending' && b.status === 'pending') return 1;
+          return (a.last_name || '').localeCompare(b.last_name || '');
+        }
+        case 'status_active': {
+          if (a.status === 'active' && b.status !== 'active') return -1;
+          if (a.status !== 'active' && b.status === 'active') return 1;
+          return (a.last_name || '').localeCompare(b.last_name || '');
+        }
+        default:
+          return 0;
+      }
+    });
+  };
+
+  const getSortLabel = (key: string) => {
+    switch (key) {
+      case 'member_id_asc': return 'Member ID (Ascending ↑)';
+      case 'member_id_desc': return 'Member ID (Descending ↓)';
+      case 'name_asc': return 'Last Name (A → Z)';
+      case 'name_desc': return 'Last Name (Z → A)';
+      case 'loan_amount_desc': return 'Loan Amount (Highest → Lowest)';
+      case 'loan_amount_asc': return 'Loan Amount (Lowest → Highest)';
+      case 'balance_desc': return 'Account Balance (Highest → Lowest)';
+      case 'balance_asc': return 'Account Balance (Lowest → Highest)';
+      case 'status_pending': return 'Member Status (Pending Review First)';
+      case 'status_active': return 'Member Status (Active First)';
+      default: return 'Default';
+    }
+  };
+
+  const sortedAdminMembers = sortMembersList(adminMembersList, memberSortBy);
+
+  // Landscape PDF Export for Member Financial Overview
+  const handleDownloadMemberFinancialPDF = async () => {
+    try {
+      setIsExportingPDF(true);
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: 'a4',
+      });
+
+      // Top brand accent line
+      doc.setFillColor(4, 120, 87);
+      doc.rect(0, 0, doc.internal.pageSize.width, 6, 'F');
+
+      // Header Title
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(4, 120, 87);
+      doc.text('Member Financial Overview Report', 40, 36);
+
+      // Subtitle & Metadata
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      const now = new Date();
+      const dateFormatted = now.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      doc.text(`Generated: ${dateFormatted} | Total Records: ${sortedAdminMembers.length} | Order: ${getSortLabel(memberSortBy)}`, 40, 50);
+
+      const tableRows = sortedAdminMembers.map((m: any) => {
+        const memberId = m.member_no || `MEM-${m.id}`;
+        const fullName = `${m.last_name || ''}, ${m.first_name || ''} ${m.middle_name ? m.middle_name[0] + '.' : ''}`.trim();
+        const balance = formatCurrency(parseFloat(m.share_capital_balance || 0));
+        const status = (m.status || 'Active').toUpperCase();
+        const loanAmount = formatCurrency(parseFloat(m.total_loans_taken || 0));
+
+        const loanProducts = m.member_loans && m.member_loans.length > 0
+          ? m.member_loans.map((l: any) => l.product_name || 'N/A').join('\n')
+          : 'N/A';
+
+        const loanStatuses = m.member_loans && m.member_loans.length > 0
+          ? m.member_loans.map((l: any) => (l.status || 'Active').toUpperCase()).join('\n')
+          : 'NO ACTIVE LOAN';
+
+        return [memberId, fullName, balance, status, loanAmount, loanProducts, loanStatuses];
+      });
+
+      autoTable(doc, {
+        startY: 62,
+        head: [['Member ID', 'Member Profile', 'Account Balance', 'Status', 'Loan Amount', 'Loan Product', 'Loan Status']],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [4, 120, 87],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 9,
+          halign: 'center',
+          cellPadding: 6,
+        },
+        styles: {
+          fontSize: 8,
+          cellPadding: 5,
+          valign: 'middle',
+          overflow: 'linebreak',
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 248],
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 75, fontStyle: 'bold' },
+          1: { halign: 'left', fontStyle: 'bold', cellWidth: 140 },
+          2: { halign: 'right', fontStyle: 'bold', cellWidth: 95 },
+          3: { halign: 'center', cellWidth: 75 },
+          4: { halign: 'right', fontStyle: 'bold', cellWidth: 95 },
+          5: { halign: 'left', cellWidth: 160 },
+          6: { halign: 'center', cellWidth: 100 },
+        },
+        didDrawPage: (data) => {
+          const pageCount = (doc as any).internal.getNumberOfPages();
+          doc.setFontSize(8);
+          doc.setTextColor(140);
+          doc.text(
+            `Page ${data.pageNumber} of ${pageCount}  •  Cooperative Loan Management System`,
+            data.settings.margin.left,
+            doc.internal.pageSize.height - 18
+          );
+        },
+      });
+
+      doc.save(`Member_Financial_Overview_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err) {
+      console.error('PDF export error:', err);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  // Shared row renderer for both regular and expanded Member Financial Overview tables
+  const renderMemberFinancialTableRows = (membersList: any[]) => {
+    if (membersList.length === 0) {
+      return (
+        <tr>
+          <td colSpan={7} className="px-6 py-8 text-center text-neutral-500 italic">
+            No members recorded in directory.
+          </td>
+        </tr>
+      );
+    }
+
+    return membersList.map((m: any) => (
+      <tr key={m.id} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
+        {/* Member Profile */}
+        <td className="px-5 py-3.5">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-bold flex items-center justify-center text-xs flex-shrink-0">
+              {m.first_name?.[0] || 'M'}{m.last_name?.[0] || ''}
+            </div>
+            <div>
+              <Link
+                href={`/dashboard/members/${m.id}`}
+                className="font-bold text-on-surface dark:text-white hover:text-primary dark:hover:text-secondary block"
+              >
+                {m.last_name}, {m.first_name} {m.middle_name ? `${m.middle_name[0]}.` : ''}
+              </Link>
+              <span className="text-[10px] text-primary dark:text-secondary font-mono font-bold block truncate max-w-[140px]" title={`Member ID: ${m.member_no || 'N/A'}`}>
+                Member ID: {m.member_no || 'N/A'}
+              </span>
+            </div>
+          </div>
+        </td>
+
+        {/* Account Balance (Share Capital - Editable) */}
+        <td className="px-4 py-3.5 text-right font-extrabold text-primary dark:text-secondary font-mono group/edit">
+          {editingCell?.memberId === m.id && editingCell?.field === 'share_capital_balance' ? (
+            <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-end gap-1.5">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={inlineData.share_capital_balance ?? m.share_capital_balance ?? 0}
+                  onChange={(e) => setInlineData({ ...inlineData, share_capital_balance: e.target.value })}
+                  className="w-28 px-2 py-1 text-xs font-mono font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-right focus:outline-none focus:ring-1 focus:ring-primary text-on-surface dark:text-white"
+                  placeholder="0.00"
+                  disabled={inlineSaving}
+                  autoFocus
+                />
+                <button
+                  onClick={() => handleSaveInlineFinancial(m.id, 'share_capital_balance')}
+                  disabled={inlineSaving}
+                  className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+                  title="Save Balance"
+                >
+                  {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={() => { setEditingCell(null); setInlineError(null); }}
+                  disabled={inlineSaving}
+                  className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
+                  title="Cancel"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {inlineError && (
+                <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-end gap-1.5">
+              <span>{formatCurrency(parseFloat(m.share_capital_balance || 0))}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setInlineError(null);
+                  setEditingCell({ memberId: m.id, field: 'share_capital_balance' });
+                  setInlineData({ share_capital_balance: m.share_capital_balance || 0 });
+                }}
+                className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
+                title="Edit Account Balance"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+        </td>
+
+        {/* Member Status (Editable) */}
+        <td className="px-4 py-3.5 text-center whitespace-nowrap group/edit">
+          {editingCell?.memberId === m.id && editingCell?.field === 'status' ? (
+            <div className="flex flex-col items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-center gap-1.5">
+                <select
+                  value={inlineData.status || m.status}
+                  onChange={(e) => setInlineData({ ...inlineData, status: e.target.value })}
+                  className="px-2 py-1 text-xs font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-on-surface dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                  disabled={inlineSaving}
+                  autoFocus
+                >
+                  <option value="active">Active</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="disapproved">Disapproved</option>
+                </select>
+                <button
+                  onClick={() => handleSaveInlineFinancial(m.id, 'status')}
+                  disabled={inlineSaving}
+                  className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
+                  title="Save Status"
+                >
+                  {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={() => { setEditingCell(null); setInlineError(null); }}
+                  disabled={inlineSaving}
+                  className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
+                  title="Cancel"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {inlineError && (
+                <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-1.5">
+              {getStatusBadge(m.status)}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setInlineError(null);
+                  setEditingCell({ memberId: m.id, field: 'status' });
+                  setInlineData({ status: m.status });
+                }}
+                className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
+                title="Edit Member Status"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+        </td>
+
+        {/* Loan Amount */}
+        <td className="px-4 py-3.5 text-right font-extrabold text-on-surface dark:text-white font-mono">
+          {formatCurrency(parseFloat(m.total_loans_taken || 0))}
+        </td>
+
+        {/* Loan Product (Supports Multiple Loans) */}
+        <td className="px-4 py-3.5 text-center whitespace-nowrap">
+          {m.member_loans && m.member_loans.length > 0 ? (
+            <div className="flex flex-col gap-1 items-start">
+              {m.member_loans.map((loan: any, idx: number) => (
+                <span
+                  key={loan.loan_id || idx}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-on-surface dark:text-white border border-outline-variant/40 max-w-[170px] truncate"
+                  title={loan.product_name}
+                >
+                  <FileSpreadsheet className="w-3 h-3 text-primary dark:text-secondary flex-shrink-0" />
+                  <span className="truncate">{loan.product_name}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-neutral-400 text-xs italic">N/A</span>
+          )}
+        </td>
+
+        {/* Loan Status (Supports Multiple Loan Statuses) */}
+        <td className="px-4 py-3.5 text-center whitespace-nowrap">
+          {m.member_loans && m.member_loans.length > 0 ? (
+            <div className="flex flex-col gap-1 items-center justify-center">
+              {m.member_loans.map((loan: any, idx: number) => (
+                <React.Fragment key={loan.loan_id || idx}>
+                  {getLoanStatusBadge(loan.status)}
+                </React.Fragment>
+              ))}
+            </div>
+          ) : (
+            getLoanStatusBadge('none')
+          )}
+        </td>
+
+        {/* Actions - Vertically Stacked Controls */}
+        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+          <div className="flex flex-col gap-1.5 items-end justify-center min-w-[100px] max-w-[110px] ml-auto">
+            {m.status === 'pending' && (
+              <>
+                {/* Accept/Approve Action Button */}
+                <button
+                  onClick={async () => {
+                    try {
+                      await api.patch(`/members/${m.id}/approval`, { status: 'approved' });
+                      fetchDashboardData(true);
+                    } catch (err: any) {
+                      alert(err.response?.data?.error?.message || 'Failed to approve profile.');
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/20 cursor-pointer shadow-2xs"
+                  title="Approve Member Profile"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Approve</span>
+                </button>
+
+                {/* Reject Action Button */}
+                <button
+                  onClick={async () => {
+                    try {
+                      await api.patch(`/members/${m.id}/approval`, { status: 'disapproved' });
+                      fetchDashboardData(true);
+                    } catch (err: any) {
+                      alert(err.response?.data?.error?.message || 'Failed to disapprove profile.');
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20 cursor-pointer shadow-2xs"
+                  title="Disapprove Member Profile"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Reject</span>
+                </button>
+              </>
+            )}
+
+            {/* View Profile Action Link */}
+            <Link
+              href={`/dashboard/members/${m.id}`}
+              className="inline-flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 mt-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs text-center"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>View Profile</span>
+            </Link>
+          </div>
+        </td>
+      </tr>
+    ));
   };
 
   // --- MEMBER WIZARD FORM STATES ---
@@ -2354,7 +2794,7 @@ export default function OverviewPage() {
 
           {/* Member Financial Overview Table */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="space-y-3">
               <div>
                 <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary dark:text-secondary" />
@@ -2365,13 +2805,40 @@ export default function OverviewPage() {
                 </p>
               </div>
 
-              <Link
-                href="/dashboard/members"
-                className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-1 flex-shrink-0"
-              >
-                <span>View Full Table</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+              {/* Table Toolbar: Sort on Far Left, View Full Table on Far Right */}
+              <div className="flex items-center justify-between flex-wrap gap-2.5 w-full">
+                {/* Sorting Controls (Far Left) */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 text-xs font-semibold text-neutral-700 dark:text-neutral-300 shadow-2xs">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-primary dark:text-secondary flex-shrink-0" />
+                  <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400">Sort:</span>
+                  <select
+                    value={memberSortBy}
+                    onChange={(e) => setMemberSortBy(e.target.value)}
+                    className="bg-transparent border-none outline-none text-xs font-bold text-on-surface dark:text-white cursor-pointer pr-1"
+                    title="Sort Member Financial Overview"
+                  >
+                    <option value="member_id_asc">Member ID (Ascending ↑)</option>
+                    <option value="member_id_desc">Member ID (Descending ↓)</option>
+                    <option value="name_asc">Last Name (A → Z)</option>
+                    <option value="name_desc">Last Name (Z → A)</option>
+                    <option value="loan_amount_desc">Loan Amount (Highest → Lowest)</option>
+                    <option value="loan_amount_asc">Loan Amount (Lowest → Highest)</option>
+                    <option value="balance_desc">Account Balance (Highest → Lowest)</option>
+                    <option value="balance_asc">Account Balance (Lowest → Highest)</option>
+                    <option value="status_pending">Status (Pending First)</option>
+                    <option value="status_active">Status (Active First)</option>
+                  </select>
+                </div>
+
+                {/* View Full Table Link (Far Right) */}
+                <Link
+                  href="/dashboard/members"
+                  className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-1 flex-shrink-0 px-2 py-1 ml-auto"
+                >
+                  <span>View Full Table</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             </div>
 
             {/* Member Financial Overview Table Card */}
@@ -2389,7 +2856,7 @@ export default function OverviewPage() {
 
             <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm flex flex-col p-1.5">
               {/* Scrollable Container with Integrated End-Arrow Stepper Scrollbars (vertical scroll triggers when entries exceed 8) */}
-              <div className={`overflow-x-auto custom-scrollbar ${adminMembersList.length > 8 ? 'max-h-[640px] overflow-y-auto' : 'overflow-y-visible'}`}>
+              <div className={`overflow-x-auto custom-scrollbar ${sortedAdminMembers.length > 8 ? 'max-h-[640px] overflow-y-auto' : 'overflow-y-visible'}`}>
                 <table className="w-full text-left border-collapse min-w-[920px]">
                   <thead className="sticky top-0 z-10 bg-neutral-50/95 dark:bg-neutral-800/95 backdrop-blur-xs border-b border-outline-variant/50">
                     <tr className="text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
@@ -2403,255 +2870,23 @@ export default function OverviewPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
-                    {adminMembersList.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-neutral-500 italic">
-                          No members recorded in directory.
-                        </td>
-                      </tr>
-                    ) : (
-                      adminMembersList.map((m: any) => (
-                        <tr key={m.id} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
-                          {/* Member Profile */}
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-bold flex items-center justify-center text-xs flex-shrink-0">
-                                {m.first_name?.[0] || 'M'}{m.last_name?.[0] || ''}
-                              </div>
-                              <div>
-                                <Link
-                                  href={`/dashboard/members/${m.id}`}
-                                  className="font-bold text-on-surface dark:text-white hover:text-primary dark:hover:text-secondary block"
-                                >
-                                  {m.last_name}, {m.first_name} {m.middle_name ? `${m.middle_name[0]}.` : ''}
-                                </Link>
-                                <span className="text-[10px] text-primary dark:text-secondary font-mono font-bold block truncate max-w-[140px]" title={`Member ID: ${m.member_no || 'N/A'}`}>
-                                  Member ID: {m.member_no || 'N/A'}
-                                </span>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Account Balance (Share Capital - Editable) */}
-                          <td className="px-4 py-3.5 text-right font-extrabold text-primary dark:text-secondary font-mono group/edit">
-                            {editingCell?.memberId === m.id && editingCell?.field === 'share_capital_balance' ? (
-                              <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    value={inlineData.share_capital_balance ?? m.share_capital_balance ?? 0}
-                                    onChange={(e) => setInlineData({ ...inlineData, share_capital_balance: e.target.value })}
-                                    className="w-28 px-2 py-1 text-xs font-mono font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-right focus:outline-none focus:ring-1 focus:ring-primary text-on-surface dark:text-white"
-                                    placeholder="0.00"
-                                    disabled={inlineSaving}
-                                    autoFocus
-                                  />
-                                  <button
-                                    onClick={() => handleSaveInlineFinancial(m.id, 'share_capital_balance')}
-                                    disabled={inlineSaving}
-                                    className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
-                                    title="Save Balance"
-                                  >
-                                    {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                                  </button>
-                                  <button
-                                    onClick={() => { setEditingCell(null); setInlineError(null); }}
-                                    disabled={inlineSaving}
-                                    className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
-                                    title="Cancel"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                                {inlineError && (
-                                  <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-end gap-1.5">
-                                <span>{formatCurrency(parseFloat(m.share_capital_balance || 0))}</span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setInlineError(null);
-                                    setEditingCell({ memberId: m.id, field: 'share_capital_balance' });
-                                    setInlineData({ share_capital_balance: m.share_capital_balance || 0 });
-                                  }}
-                                  className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
-                                  title="Edit Account Balance"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Member Status (Editable) */}
-                          <td className="px-4 py-3.5 text-center whitespace-nowrap group/edit">
-                            {editingCell?.memberId === m.id && editingCell?.field === 'status' ? (
-                              <div className="flex flex-col items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <select
-                                    value={inlineData.status || m.status}
-                                    onChange={(e) => setInlineData({ ...inlineData, status: e.target.value })}
-                                    className="px-2 py-1 text-xs font-bold bg-white dark:bg-neutral-900 border border-primary/40 rounded-lg text-on-surface dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
-                                    disabled={inlineSaving}
-                                    autoFocus
-                                  >
-                                    <option value="active">Active</option>
-                                    <option value="pending">Pending</option>
-                                    <option value="approved">Approved</option>
-                                    <option value="suspended">Suspended</option>
-                                    <option value="inactive">Inactive</option>
-                                    <option value="disapproved">Disapproved</option>
-                                  </select>
-                                  <button
-                                    onClick={() => handleSaveInlineFinancial(m.id, 'status')}
-                                    disabled={inlineSaving}
-                                    className="p-1 rounded bg-emerald-500 text-white hover:bg-emerald-600 transition-colors cursor-pointer"
-                                    title="Save Status"
-                                  >
-                                    {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                                  </button>
-                                  <button
-                                    onClick={() => { setEditingCell(null); setInlineError(null); }}
-                                    disabled={inlineSaving}
-                                    className="p-1 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 transition-colors cursor-pointer"
-                                    title="Cancel"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                                {inlineError && (
-                                  <span className="text-[10px] text-red-500 font-sans">{inlineError}</span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center gap-1.5">
-                                {getStatusBadge(m.status)}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setInlineError(null);
-                                    setEditingCell({ memberId: m.id, field: 'status' });
-                                    setInlineData({ status: m.status });
-                                  }}
-                                  className="opacity-0 group-hover/edit:opacity-100 transition-opacity text-neutral-400 hover:text-primary dark:hover:text-secondary p-0.5 rounded cursor-pointer"
-                                  title="Edit Member Status"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Loan Amount */}
-                          <td className="px-4 py-3.5 text-right font-extrabold text-on-surface dark:text-white font-mono">
-                            {formatCurrency(parseFloat(m.total_loans_taken || 0))}
-                          </td>
-
-                          {/* Loan Product (Supports Multiple Loans) */}
-                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                            {m.member_loans && m.member_loans.length > 0 ? (
-                              <div className="flex flex-col gap-1 items-start">
-                                {m.member_loans.map((loan: any, idx: number) => (
-                                  <span
-                                    key={loan.loan_id || idx}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-on-surface dark:text-white border border-outline-variant/40 max-w-[170px] truncate"
-                                    title={loan.product_name}
-                                  >
-                                    <FileSpreadsheet className="w-3 h-3 text-primary dark:text-secondary flex-shrink-0" />
-                                    <span className="truncate">{loan.product_name}</span>
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-neutral-400 text-xs italic">N/A</span>
-                            )}
-                          </td>
-
-                          {/* Loan Status (Supports Multiple Loan Statuses) */}
-                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                            {m.member_loans && m.member_loans.length > 0 ? (
-                              <div className="flex flex-col gap-1 items-center justify-center">
-                                {m.member_loans.map((loan: any, idx: number) => (
-                                  <React.Fragment key={loan.loan_id || idx}>
-                                    {getLoanStatusBadge(loan.status)}
-                                  </React.Fragment>
-                                ))}
-                              </div>
-                            ) : (
-                              getLoanStatusBadge('none')
-                            )}
-                          </td>
-
-                          {/* Actions - Vertically Stacked Controls */}
-                          <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                            <div className="flex flex-col gap-1.5 items-end justify-center min-w-[100px] max-w-[110px] ml-auto">
-                              {m.status === 'pending' && (
-                                <>
-                                  {/* Accept/Approve Action Button */}
-                                  <button
-                                    onClick={async () => {
-                                      try {
-                                        await api.patch(`/members/${m.id}/approval`, { status: 'approved' });
-                                        fetchDashboardData(true);
-                                      } catch (err: any) {
-                                        alert(err.response?.data?.error?.message || 'Failed to approve profile.');
-                                      }
-                                    }}
-                                    className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/20 cursor-pointer shadow-2xs"
-                                    title="Approve Member Profile"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                    <span>Approve</span>
-                                  </button>
-
-                                  {/* Reject Action Button */}
-                                  <button
-                                    onClick={async () => {
-                                      try {
-                                        await api.patch(`/members/${m.id}/approval`, { status: 'disapproved' });
-                                        fetchDashboardData(true);
-                                      } catch (err: any) {
-                                        alert(err.response?.data?.error?.message || 'Failed to disapprove profile.');
-                                      }
-                                    }}
-                                    className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20 cursor-pointer shadow-2xs"
-                                    title="Disapprove Member Profile"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                    <span>Reject</span>
-                                  </button>
-                                </>
-                              )}
-
-                              {/* View Profile Action Link */}
-                              <Link
-                                href={`/dashboard/members/${m.id}`}
-                                className="inline-flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 mt-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs text-center"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>View Profile</span>
-                              </Link>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
+                    {renderMemberFinancialTableRows(sortedAdminMembers)}
                   </tbody>
                 </table>
               </div>
 
-              {/* Table Footer with Summary */}
+              {/* Table Footer with Summary & Expand All List Action */}
               {adminMembersList.length > 5 && (
                 <div className="px-5 py-2.5 bg-neutral-50/90 dark:bg-neutral-800/90 border-t border-outline-variant/40 text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
-                  <span>Showing 5 visible of {adminMembersList.length} total members</span>
-                  <span className="text-primary dark:text-secondary flex items-center gap-1 text-[10px] uppercase tracking-wider font-extrabold">
-                    <span>Scroll table for full roster</span>
-                    <ChevronDown className="w-3.5 h-3.5 animate-bounce" />
-                  </span>
+                  <span>Showing {Math.min(sortedAdminMembers.length, 5)} visible of {adminMembersList.length} total members</span>
+                  <button
+                    onClick={() => setIsExpandedMembersModalOpen(true)}
+                    className="text-primary dark:text-secondary flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-extrabold hover:underline cursor-pointer transition-colors"
+                    title="Open Expanded Roster Modal"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Expand All List</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -2759,6 +2994,123 @@ export default function OverviewPage() {
           </div>
         </div>,
         document.body
+      )}
+      {/* EXPANDED MEMBER FINANCIAL OVERVIEW MODAL */}
+      {isExpandedMembersModalOpen && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setIsExpandedMembersModalOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between bg-neutral-50/80 dark:bg-neutral-800/60">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-2xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary flex items-center justify-center flex-shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-headline text-base font-bold text-on-surface dark:text-white flex items-center gap-2">
+                    Member Financial Overview
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary dark:text-secondary font-mono font-bold">
+                      {sortedAdminMembers.length} Members
+                    </span>
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Expanded roster overview of member share capital equity balances and active loan amounts
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsExpandedMembersModalOpen(false)}
+                className="p-2 rounded-xl text-neutral-400 hover:text-neutral-700 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                title="Close Modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Control Bar (Sort + Download PDF) */}
+            <div className="px-6 py-3 border-b border-outline-variant/30 flex items-center justify-between flex-wrap gap-3 bg-white dark:bg-surface-container-low">
+              {/* Sorting selector inside modal */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 text-xs font-semibold text-neutral-700 dark:text-neutral-300 shadow-2xs">
+                <ArrowUpDown className="w-3.5 h-3.5 text-primary dark:text-secondary flex-shrink-0" />
+                <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400">Sort:</span>
+                <select
+                  value={memberSortBy}
+                  onChange={(e) => setMemberSortBy(e.target.value)}
+                  className="bg-transparent border-none outline-none text-xs font-bold text-on-surface dark:text-white cursor-pointer pr-1"
+                  title="Sort Member Financial Overview"
+                >
+                  <option value="member_id_asc">Member ID (Ascending ↑)</option>
+                  <option value="member_id_desc">Member ID (Descending ↓)</option>
+                  <option value="name_asc">Last Name (A → Z)</option>
+                  <option value="name_desc">Last Name (Z → A)</option>
+                  <option value="loan_amount_desc">Loan Amount (Highest → Lowest)</option>
+                  <option value="loan_amount_asc">Loan Amount (Lowest → Highest)</option>
+                  <option value="balance_desc">Account Balance (Highest → Lowest)</option>
+                  <option value="balance_asc">Account Balance (Lowest → Highest)</option>
+                  <option value="status_pending">Status (Pending First)</option>
+                  <option value="status_active">Status (Active First)</option>
+                </select>
+              </div>
+
+              {/* Download PDF Button */}
+              <button
+                onClick={handleDownloadMemberFinancialPDF}
+                disabled={isExportingPDF || sortedAdminMembers.length === 0}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-primary text-white hover:bg-primary/90 text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                title="Download Table as Landscape PDF"
+              >
+                {isExportingPDF ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generating Landscape PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>Download PDF</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Modal Table Container with Full Scrollability */}
+            <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[60vh] custom-scrollbar p-1.5">
+              <table className="w-full text-left border-collapse min-w-[920px]">
+                <thead className="sticky top-0 z-10 bg-neutral-50/95 dark:bg-neutral-800/95 backdrop-blur-xs border-b border-outline-variant/50">
+                  <tr className="text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                    <th className="px-5 py-3.5">Member Profile</th>
+                    <th className="px-4 py-3.5 text-center">Account Balance</th>
+                    <th className="px-4 py-3.5 text-center">Member Status</th>
+                    <th className="px-4 py-3.5 text-center">Loan Amount</th>
+                    <th className="px-4 py-3.5 text-center">Loan Product</th>
+                    <th className="px-4 py-3.5 text-center">Loan Status</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                  {renderMemberFinancialTableRows(sortedAdminMembers)}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-outline-variant/40 bg-neutral-50/80 dark:bg-neutral-800/60 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
+              <span>Showing all {sortedAdminMembers.length} member records</span>
+              <button
+                onClick={() => setIsExpandedMembersModalOpen(false)}
+                className="px-4 py-1.5 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-bold text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
