@@ -263,21 +263,21 @@ export default function ReportsPage() {
 
       const worksheet = XLSX.utils.json_to_sheet(excelData);
       const workbook = XLSX.utils.book_new();
-      const sheetName = activeTab === 'disbursement' 
-        ? 'Disbursements' 
-        : activeTab === 'monitoring' 
-          ? 'Portfolio Monitoring' 
-          : activeTab === 'revenue' 
-            ? 'Revenue Collections' 
+      const sheetName = activeTab === 'disbursement'
+        ? 'Disbursements'
+        : activeTab === 'monitoring'
+          ? 'Portfolio Monitoring'
+          : activeTab === 'revenue'
+            ? 'Revenue Collections'
             : 'Master Transactions';
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 
-      const filename = activeTab === 'disbursement' 
-        ? 'Cash_Disbursements_Report' 
-        : activeTab === 'monitoring' 
-          ? 'Loan_Monitoring_Report' 
-          : activeTab === 'revenue' 
-            ? 'Revenue_Collection_Report' 
+      const filename = activeTab === 'disbursement'
+        ? 'Cash_Disbursements_Report'
+        : activeTab === 'monitoring'
+          ? 'Loan_Monitoring_Report'
+          : activeTab === 'revenue'
+            ? 'Revenue_Collection_Report'
             : 'Master_Transactions_Report';
       XLSX.writeFile(workbook, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err) {
@@ -344,6 +344,7 @@ export default function ReportsPage() {
           if (rowDate > end) return false;
         }
       }
+
 
       return true;
     })
@@ -467,8 +468,8 @@ export default function ReportsPage() {
               setCurrentPage(1);
             }}
             className={`px-5 py-3 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all cursor-pointer ${activeTab === tab.id
-                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
               }`}
           >
             {tab.label}
@@ -609,11 +610,10 @@ export default function ReportsPage() {
               <button
                 type="button"
                 onClick={() => setIsExpandedAll((prev) => !prev)}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer shadow-2xs active:scale-95 ${
-                  isExpandedAll
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer shadow-2xs active:scale-95 ${isExpandedAll
                     ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary border-primary/30'
                     : 'bg-white dark:bg-surface-container-low text-neutral-700 dark:text-neutral-300 border-outline-variant'
-                }`}
+                  }`}
               >
                 {isExpandedAll ? (
                   <>
@@ -728,13 +728,12 @@ export default function ReportsPage() {
                           <td className="px-5 py-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.collected_revenue_interest)}</td>
                           <td className="px-5 py-3.5 font-mono font-bold text-amber-600 dark:text-amber-400">{formatCurrency(row.uncollected_interest_variance)}</td>
                           <td className="px-5 py-3.5 text-right">
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
-                              rateNum >= 90
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] ${rateNum >= 90
                                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                                 : rateNum >= 50
-                                ? 'bg-primary/10 text-primary dark:text-secondary border border-primary/20'
-                                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                            }`}>
+                                  ? 'bg-primary/10 text-primary dark:text-secondary border border-primary/20'
+                                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                              }`}>
                               {row.revenue_realization_rate || '0%'}
                             </span>
                           </td>
@@ -763,8 +762,8 @@ export default function ReportsPage() {
                       <tr key={index} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
                         <td className="px-5 py-3.5">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${row.ledger_type === 'Share Capital' ? 'bg-primary/10 text-primary' :
-                              row.ledger_type === 'Fixed Deposit' ? 'bg-indigo-600/10 text-indigo-600' :
-                                row.ledger_type === 'Investment' ? 'bg-amber-500/10 text-amber-600' : 'bg-neutral/15 text-neutral-600 dark:text-neutral-400'
+                            row.ledger_type === 'Fixed Deposit' ? 'bg-indigo-600/10 text-indigo-600' :
+                              row.ledger_type === 'Investment' ? 'bg-amber-500/10 text-amber-600' : 'bg-neutral/15 text-neutral-600 dark:text-neutral-400'
                             }`}>
                             {row.ledger_type}
                           </span>
