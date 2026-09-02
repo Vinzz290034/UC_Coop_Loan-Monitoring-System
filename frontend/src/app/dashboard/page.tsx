@@ -429,14 +429,14 @@ export default function OverviewPage() {
   const getSortLabel = (key: string) => {
     switch (key) {
       case 'default': return 'Default View';
-      case 'member_id_asc': return 'Member ID (Ascending ↑)';
-      case 'member_id_desc': return 'Member ID (Descending ↓)';
-      case 'name_asc': return 'Last Name (A → Z)';
-      case 'name_desc': return 'Last Name (Z → A)';
-      case 'loan_amount_desc': return 'Loan Amount (Highest → Lowest)';
-      case 'loan_amount_asc': return 'Loan Amount (Lowest → Highest)';
-      case 'balance_desc': return 'Account Balance (Highest → Lowest)';
-      case 'balance_asc': return 'Account Balance (Lowest → Highest)';
+      case 'member_id_asc': return 'Member ID (Ascending)';
+      case 'member_id_desc': return 'Member ID (Descending)';
+      case 'name_asc': return 'Last Name (A to Z)';
+      case 'name_desc': return 'Last Name (Z to A)';
+      case 'loan_amount_desc': return 'Loan Amount (Highest to Lowest)';
+      case 'loan_amount_asc': return 'Loan Amount (Lowest to Highest)';
+      case 'balance_desc': return 'Account Balance (Highest to Lowest)';
+      case 'balance_asc': return 'Account Balance (Lowest to Highest)';
       case 'status_pending': return 'Member Status (Pending Review First)';
       case 'status_active': return 'Member Status (Active First)';
       default: return 'Default View';
@@ -510,12 +510,22 @@ export default function OverviewPage() {
       const exportList = isExpandedMembersModalOpen ? modalDisplayMembers : sortedAdminMembers;
       doc.text(`Generated: ${dateFormatted} | Total Records: ${exportList.length} | Order: ${getSortLabel(memberSortBy)}`, 40, 50);
 
+      // ASCII-safe currency formatter for PDF export
+      const formatPDFCurrency = (val: number | string) => {
+        const num = typeof val === 'string' ? parseFloat(val) : val;
+        if (isNaN(num)) return 'PHP 0.00';
+        return `PHP ${(num || 0).toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
+      };
+
       const tableRows = exportList.map((m: any) => {
         const memberId = m.member_no || `MEM-${m.id}`;
         const fullName = `${m.last_name || ''}, ${m.first_name || ''} ${m.middle_name ? m.middle_name[0] + '.' : ''}`.trim();
-        const balance = formatCurrency(parseFloat(m.share_capital_balance || 0));
+        const balance = formatPDFCurrency(m.share_capital_balance || 0);
         const status = (m.status || 'Active').toUpperCase();
-        const loanAmount = formatCurrency(parseFloat(m.total_loans_taken || 0));
+        const loanAmount = formatPDFCurrency(m.total_loans_taken || 0);
 
         const loanProducts = m.member_loans && m.member_loans.length > 0
           ? m.member_loans.map((l: any) => l.product_name || 'N/A').join('\n')
@@ -530,7 +540,8 @@ export default function OverviewPage() {
 
       autoTable(doc, {
         startY: 62,
-        head: [['Member ID', 'Member Profile', 'Account Balance', 'Status', 'Loan Amount', 'Loan Product', 'Loan Status']],
+        margin: { left: 41, right: 41 },
+        head: [['Member ID', 'Member Profile', 'Account Balance (PHP)', 'Status', 'Loan Amount (PHP)', 'Loan Product', 'Loan Status']],
         body: tableRows,
         theme: 'grid',
         headStyles: {
@@ -543,7 +554,7 @@ export default function OverviewPage() {
         },
         styles: {
           fontSize: 8,
-          cellPadding: 5,
+          cellPadding: { top: 5, right: 6, bottom: 5, left: 6 },
           valign: 'middle',
           overflow: 'linebreak',
         },
@@ -551,13 +562,13 @@ export default function OverviewPage() {
           fillColor: [248, 250, 248],
         },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 75, fontStyle: 'bold' },
-          1: { halign: 'left', fontStyle: 'bold', cellWidth: 140 },
-          2: { halign: 'right', fontStyle: 'bold', cellWidth: 95 },
-          3: { halign: 'center', cellWidth: 75 },
-          4: { halign: 'right', fontStyle: 'bold', cellWidth: 95 },
-          5: { halign: 'left', cellWidth: 160 },
-          6: { halign: 'center', cellWidth: 100 },
+          0: { halign: 'center', cellWidth: 65, fontStyle: 'bold' },
+          1: { halign: 'left', fontStyle: 'bold', cellWidth: 135 },
+          2: { halign: 'right', fontStyle: 'bold', cellWidth: 100 },
+          3: { halign: 'center', cellWidth: 65 },
+          4: { halign: 'right', fontStyle: 'bold', cellWidth: 100 },
+          5: { halign: 'left', cellWidth: 215 },
+          6: { halign: 'center', cellWidth: 80 },
         },
         didDrawPage: (data) => {
           const pageCount = (doc as any).internal.getNumberOfPages();
