@@ -353,12 +353,15 @@ export default function OverviewPage() {
   };
 
   // Member Financial Overview sorting & expanded modal state
-  const [memberSortBy, setMemberSortBy] = useState<string>('member_id_asc');
+  const [memberSortBy, setMemberSortBy] = useState<string>('default');
   const [isExpandedMembersModalOpen, setIsExpandedMembersModalOpen] = useState<boolean>(false);
   const [isExportingPDF, setIsExportingPDF] = useState<boolean>(false);
 
   // Sorting helper for Member Financial Overview
   const sortMembersList = (members: any[], sortKey: string) => {
+    if (sortKey === 'default' || !sortKey) {
+      return members;
+    }
     return [...members].sort((a, b) => {
       switch (sortKey) {
         case 'member_id_asc': {
@@ -423,6 +426,7 @@ export default function OverviewPage() {
 
   const getSortLabel = (key: string) => {
     switch (key) {
+      case 'default': return 'Default View';
       case 'member_id_asc': return 'Member ID (Ascending ↑)';
       case 'member_id_desc': return 'Member ID (Descending ↓)';
       case 'name_asc': return 'Last Name (A → Z)';
@@ -433,7 +437,7 @@ export default function OverviewPage() {
       case 'balance_asc': return 'Account Balance (Lowest → Highest)';
       case 'status_pending': return 'Member Status (Pending Review First)';
       case 'status_active': return 'Member Status (Active First)';
-      default: return 'Default';
+      default: return 'Default View';
     }
   };
 
@@ -2817,6 +2821,7 @@ export default function OverviewPage() {
                     className="bg-transparent border-none outline-none text-xs font-bold text-on-surface dark:text-white cursor-pointer pr-1"
                     title="Sort Member Financial Overview"
                   >
+                    <option value="default">Default View</option>
                     <option value="member_id_asc">Member ID (Ascending ↑)</option>
                     <option value="member_id_desc">Member ID (Descending ↓)</option>
                     <option value="name_asc">Last Name (A → Z)</option>
@@ -3045,6 +3050,7 @@ export default function OverviewPage() {
                   className="bg-transparent border-none outline-none text-xs font-bold text-on-surface dark:text-white cursor-pointer pr-1"
                   title="Sort Member Financial Overview"
                 >
+                  <option value="default">Default View</option>
                   <option value="member_id_asc">Member ID (Ascending ↑)</option>
                   <option value="member_id_desc">Member ID (Descending ↓)</option>
                   <option value="name_asc">Last Name (A → Z)</option>
