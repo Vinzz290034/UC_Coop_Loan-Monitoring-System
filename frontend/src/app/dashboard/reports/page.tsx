@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import BackButton from '@/components/BackButton';
+import SearchInput from '@/components/SearchInput';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import * as XLSX from 'xlsx';
 import {
@@ -19,7 +20,9 @@ import {
   CheckCircle,
   Clock,
   ArrowRightLeft,
-  ArrowLeft
+  ArrowLeft,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 export default function ReportsPage() {
@@ -53,6 +56,7 @@ export default function ReportsPage() {
     setStartDate('');
     setEndDate('');
     setSortBy('date-desc');
+    setIsExpandedAll(false);
   }, [activeTab]);
 
   // Excel Importer states
@@ -137,31 +141,38 @@ export default function ReportsPage() {
   // Search filter
   const [search, setSearch] = useState('');
 
-  // Pagination
+  // Pagination & Expand state
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [isExpandedAll, setIsExpandedAll] = useState(false);
+  const itemsPerPage = 8;
 
-  // Helper for clean truncated pagination
-  const getPageNumbers = (current: number, total: number) => {
-    const pages: (number | string)[] = [];
+  // Smart windowed pagination helper matching Members Directory
+  const getPaginationNumbers = (current: number, total: number): (number | string)[] => {
     if (total <= 7) {
-      for (let i = 1; i <= total; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      if (current > 3) {
-        pages.push('...');
-      }
-      const start = Math.max(2, current - 1);
-      const end = Math.min(total - 1, current + 1);
-      for (let i = start; i <= end; i++) {
-        pages.push(i);
-      }
-      if (current < total - 2) {
-        pages.push('...');
-      }
-      pages.push(total);
+      return Array.from({ length: total }, (_, i) => i + 1);
     }
-    return pages;
+    if (current <= 4) {
+      return [1, 2, 3, 4, 5, '...', total];
+    }
+    if (current >= total - 3) {
+      return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    }
+    return [1, '...', current - 1, current, current + 1, '...', total];
+  };
+
+  const getTabTableTitle = () => {
+    switch (activeTab) {
+      case 'disbursement':
+        return 'Cash Disbursements Table';
+      case 'monitoring':
+        return 'Loan Portfolio Status Table';
+      case 'revenue':
+        return 'Revenue Collection Table';
+      case 'transactions':
+        return 'Master Transactions Log Table';
+      default:
+        return 'Reports Table';
+    }
   };
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
@@ -370,11 +381,11 @@ export default function ReportsPage() {
       return 0;
     });
 
-  // Pagination index calculations
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredRecords.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
+  const displayedRecords = isExpandedAll ? filteredRecords : currentItems;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -408,7 +419,6 @@ export default function ReportsPage() {
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
 
-      {/* Header and Download/Upload Button */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Analytical Reports</h1>
@@ -416,7 +426,23 @@ export default function ReportsPage() {
             Query read-optimized financial audits and download institutional OpenXML files.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleExportExcel}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-2xl text-xs hover:opacity-95 transition-all shadow-sm cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Export View to Excel</span>
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 px-4 py-2.5 border border-outline-variant bg-white dark:bg-surface-container-low text-on-surface dark:text-white font-bold rounded-2xl text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all shadow-2xs disabled:opacity-50 cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>{importing ? 'Processing...' : 'Import Audit File'}</span>
+          </button>
           <input
             type="file"
             ref={fileInputRef}
@@ -424,47 +450,23 @@ export default function ReportsPage() {
             accept=".xlsx, .xls"
             className="hidden"
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-white dark:bg-surface-container-low border border-outline-variant rounded-full hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 shadow-sm transition-all disabled:opacity-50 active:scale-95 cursor-pointer"
-          >
-            {importing ? (
-              <>
-                <span className="w-3.5 h-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-                Importing...
-              </>
-            ) : (
-              <>
-                <FileSpreadsheet className="w-4.5 h-4.5 text-primary" />
-                Import Excel Ledger
-              </>
-            )}
-          </button>
-          <button
-            onClick={handleExportExcel}
-            disabled={loading || records.length === 0}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all disabled:opacity-50 active:scale-95 cursor-pointer"
-          >
-            <FileSpreadsheet className="w-4.5 h-4.5" />
-            Download Excel Spreadsheet
-          </button>
         </div>
       </div>
 
-
-      {/* Tabs — horizontally scrollable on mobile */}
-      <div className="flex border-b border-outline-variant/50 overflow-x-auto">
+      <div className="flex border-b border-outline-variant/60 overflow-x-auto custom-scrollbar">
         {[
-          { key: 'disbursement', label: 'Disbursement Reports' },
-          { key: 'monitoring', label: 'Loan Portfolio Status' },
-          { key: 'revenue', label: 'Revenue Collection' },
-          { key: 'transactions', label: 'Master Transactions Log' }
+          { id: 'disbursement', label: 'Cash Disbursements' },
+          { id: 'monitoring', label: 'Loan Portfolio Status' },
+          { id: 'revenue', label: 'Revenue Collection' },
+          { id: 'transactions', label: 'Master Transactions Log' },
         ].map((tab) => (
           <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
-            className={`px-4 sm:px-5 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === tab.key
+            key={tab.id}
+            onClick={() => {
+              setActiveTab(tab.id as any);
+              setCurrentPage(1);
+            }}
+            className={`px-5 py-3 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all cursor-pointer ${activeTab === tab.id
                 ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
                 : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
               }`}
@@ -474,107 +476,110 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Filters & Sorting Desk */}
-      <div className="flex flex-col gap-4 bg-white dark:bg-surface-container-low p-5 rounded-3xl border border-outline-variant/50 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Text Search */}
-          <div className="flex-1 min-w-[200px] flex items-center gap-3 px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 rounded-2xl">
-            <Search className="w-4 h-4 text-neutral-600 dark:text-neutral-400/50" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              placeholder="Search member name, LAF/Ref, status..."
-              className="w-full bg-transparent text-xs focus:outline-none placeholder-neutral-400 text-on-surface dark:text-white font-semibold"
-            />
+      <div className="flex flex-col gap-4 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
+        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+          <div className="w-full lg:w-auto flex-1 max-w-md">
+            <div className="flex items-center gap-3 px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 rounded-2xl">
+              <Search className="w-4 h-4 text-neutral-600 dark:text-neutral-400/50" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                placeholder="Search member name, LAF/Ref, status..."
+                className="w-full bg-transparent text-xs focus:outline-none placeholder-neutral-400 text-on-surface dark:text-white font-semibold"
+              />
+            </div>
           </div>
 
-          {/* Sort By Dropdown */}
-          <div className="flex flex-col space-y-1">
-            <select
-              value={sortBy}
-              onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 rounded-2xl outline-none font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer"
-            >
-              <option value="date-desc">Newest First</option>
-              <option value="date-asc">Oldest First</option>
-              <option value="amount-desc">Highest Amount</option>
-              <option value="amount-asc">Lowest Amount</option>
-              <option value="name-asc">Name (A-Z)</option>
-              <option value="name-desc">Name (Z-A)</option>
-            </select>
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start lg:justify-end">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Sort By:</label>
+              <select
+                value={sortBy}
+                onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+                className="px-3 py-2 text-xs bg-white dark:bg-surface-container-low border border-outline-variant rounded-xl outline-none font-semibold text-on-surface dark:text-white cursor-pointer transition-all"
+              >
+                <option value="date-desc">Newest First</option>
+                <option value="date-asc">Oldest First</option>
+                <option value="amount-desc">Highest Amount</option>
+                <option value="amount-asc">Lowest Amount</option>
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+              </select>
+            </div>
+
+            {activeTab === 'disbursement' && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Status:</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                  className="px-3 py-2 text-xs bg-white dark:bg-surface-container-low border border-outline-variant rounded-xl outline-none font-semibold text-on-surface dark:text-white cursor-pointer transition-all"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="disbursed">Disbursed</option>
+                  <option value="fully_paid">Fully Paid</option>
+                  <option value="defaulted">Defaulted</option>
+                </select>
+              </div>
+            )}
+
+            {activeTab === 'transactions' && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Category:</label>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+                  className="px-3 py-2 text-xs bg-white dark:bg-surface-container-low border border-outline-variant rounded-xl outline-none font-semibold text-on-surface dark:text-white cursor-pointer transition-all"
+                >
+                  <option value="">All Categories</option>
+                  <option value="Share Capital">Share Capital</option>
+                  <option value="Loan Disbursement">Disbursements</option>
+                  <option value="Loan Repayment">Repayments</option>
+                  <option value="Fixed Deposit">Fixed Deposits</option>
+                </select>
+              </div>
+            )}
+
+            {(search || statusFilter || categoryFilter || startDate || endDate || sortBy !== 'date-desc') && (
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setStatusFilter('');
+                  setCategoryFilter('');
+                  setSortBy('date-desc');
+                  setStartDate('');
+                  setEndDate('');
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-2 text-xs text-primary dark:text-secondary font-bold hover:underline cursor-pointer"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
-
-          {/* Conditional Status Filter */}
-          {activeTab === 'disbursement' && (
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 rounded-2xl outline-none font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer"
-            >
-              <option value="">All Statuses</option>
-              <option value="disbursed">Disbursed</option>
-              <option value="fully_paid">Fully Paid</option>
-              <option value="defaulted">Defaulted</option>
-            </select>
-          )}
-
-          {/* Conditional Category Filter for Transactions */}
-          {activeTab === 'transactions' && (
-            <select
-              value={categoryFilter}
-              onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 text-xs bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 rounded-2xl outline-none font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer"
-            >
-              <option value="">All Categories</option>
-              <option value="Share Capital">Share Capital</option>
-              <option value="Loan Disbursement">Disbursements</option>
-              <option value="Loan Repayment">Repayments</option>
-              <option value="Fixed Deposit">Fixed Deposits</option>
-            </select>
-          )}
-
-          {/* Clear Filters Button */}
-          {(search || statusFilter || categoryFilter || startDate || endDate || sortBy !== 'date-desc') && (
-            <button
-              onClick={() => {
-                setSearch('');
-                setStatusFilter('');
-                setCategoryFilter('');
-                setSortBy('date-desc');
-                setStartDate('');
-                setEndDate('');
-                setCurrentPage(1);
-              }}
-              className="px-3 py-2 text-xs text-primary dark:text-secondary font-bold hover:underline cursor-pointer"
-            >
-              Clear Filters
-            </button>
-          )}
         </div>
 
-        {/* Date Range Selectors */}
-        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-outline-variant/20">
+        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-outline-variant/30">
           <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">Date Range:</span>
           <div className="flex items-center gap-2">
             <input
               type="date"
               value={startDate}
               onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-1.5 text-xs bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 rounded-2xl outline-none font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer"
+              className="px-3 py-1.5 text-xs bg-white dark:bg-surface-container-low border border-outline-variant rounded-xl outline-none font-semibold text-on-surface dark:text-white cursor-pointer"
             />
             <span className="text-xs text-neutral-400">to</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-1.5 text-xs bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 rounded-2xl outline-none font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer"
+              className="px-3 py-1.5 text-xs bg-white dark:bg-surface-container-low border border-outline-variant rounded-xl outline-none font-semibold text-on-surface dark:text-white cursor-pointer"
             />
           </div>
         </div>
       </div>
 
-      {/* TABLES VIEW */}
       {loading ? (
         <SkeletonTable rows={itemsPerPage} cols={5} />
       ) : error ? (
@@ -590,107 +595,139 @@ export default function ReportsPage() {
         </div>
       ) : (
         <div className="space-y-4">
+          <div className="flex items-center justify-between px-1 flex-wrap gap-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-on-surface dark:text-white">
+                {getTabTableTitle()}
+              </span>
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold border border-outline-variant/30">
+                {isExpandedAll ? `Showing all ${filteredRecords.length} records (Full Table)` : `Showing ${displayedRecords.length} of ${filteredRecords.length} records`}
+              </span>
+            </div>
+
+            {activeTab !== 'revenue' && (
+              <button
+                type="button"
+                onClick={() => setIsExpandedAll((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                  isExpandedAll
+                    ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary border-primary/30'
+                    : 'bg-white dark:bg-surface-container-low text-neutral-700 dark:text-neutral-300 border-outline-variant'
+                }`}
+              >
+                {isExpandedAll ? (
+                  <>
+                    <Minimize2 className="w-3.5 h-3.5" />
+                    <span>Minimize Table</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Expand All List</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
             <div className="overflow-x-auto custom-scrollbar">
 
-              {/* TABLE 1: CASH DISBURSEMENT REPORT */}
               {activeTab === 'disbursement' && (
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[750px]">
                   <thead>
-                    <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
-                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Loan Product</th>
-                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Principal Disbursed</th>
-                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Interest Rate</th>
-                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Term</th>
-                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Disbursed Date</th>
-                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Maturity Date</th>
-                      <th className="px-4 sm:px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
+                    <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                      <th className="px-5 py-3.5">Borrower Member</th>
+                      <th className="px-5 py-3.5 hidden sm:table-cell">Loan Product</th>
+                      <th className="px-5 py-3.5">Principal Disbursed</th>
+                      <th className="px-5 py-3.5 hidden md:table-cell">Interest Rate</th>
+                      <th className="px-5 py-3.5 hidden lg:table-cell">Term</th>
+                      <th className="px-5 py-3.5 hidden sm:table-cell">Disbursed Date</th>
+                      <th className="px-5 py-3.5 hidden md:table-cell">Maturity Date</th>
+                      <th className="px-5 py-3.5">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
-                    {currentItems.map((row: any, index: number) => (
-                      <tr key={index} className="hover:bg-neutral/5">
-                        <td className="px-4 sm:px-6 py-3.5 font-semibold">{row.member_name}</td>
-                        <td className="px-4 sm:px-6 py-3.5 text-primary dark:text-secondary font-semibold hidden sm:table-cell">{row.product_name}</td>
-                        <td className="px-4 sm:px-6 py-3.5 font-bold">{formatCurrency(row.principal_amount)}</td>
-                        <td className="px-4 sm:px-6 py-3.5 font-mono hidden md:table-cell">{row.interest_rate}</td>
-                        <td className="px-4 sm:px-6 py-3.5 hidden lg:table-cell">{row.term_months} months</td>
-                        <td className="px-4 sm:px-6 py-3.5 font-mono text-neutral-600 dark:text-neutral-400 hidden sm:table-cell">{row.disbursed_at}</td>
-                        <td className="px-4 sm:px-6 py-3.5 font-mono text-neutral-600 dark:text-neutral-400 hidden md:table-cell">{row.maturity_date}</td>
-                        <td className="px-4 sm:px-6 py-3.5">{getStatusBadge(row.status)}</td>
+                  <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                    {displayedRecords.map((row: any, index: number) => (
+                      <tr key={index} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
+                        <td className="px-5 py-3.5 font-semibold">{row.member_name}</td>
+                        <td className="px-5 py-3.5 text-primary dark:text-secondary font-semibold hidden sm:table-cell">{row.product_name}</td>
+                        <td className="px-5 py-3.5 font-bold">{formatCurrency(row.principal_amount)}</td>
+                        <td className="px-5 py-3.5 font-mono hidden md:table-cell">{row.interest_rate}</td>
+                        <td className="px-5 py-3.5 hidden lg:table-cell">{row.term_months} months</td>
+                        <td className="px-5 py-3.5 font-mono text-neutral-600 dark:text-neutral-400 hidden sm:table-cell">{row.disbursed_at}</td>
+                        <td className="px-5 py-3.5 font-mono text-neutral-600 dark:text-neutral-400 hidden md:table-cell">{row.maturity_date}</td>
+                        <td className="px-5 py-3.5">{getStatusBadge(row.status)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
 
-              {/* TABLE 2: PORTFOLIO MONITORING */}
               {activeTab === 'monitoring' && (
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[950px]">
                   <thead>
-                    <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Original Capital</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-primary">Principal Recovered</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-tertiary">Outstanding Capital</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Paid</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-tertiary">Outstanding Interest</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-tertiary">Total Exposure</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Past Due</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
+                    <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                      <th className="px-5 py-3.5">Borrower Member</th>
+                      <th className="px-5 py-3.5">Loan Product</th>
+                      <th className="px-5 py-3.5">Original Capital</th>
+                      <th className="px-5 py-3.5 text-primary">Principal Recovered</th>
+                      <th className="px-5 py-3.5 text-tertiary">Outstanding Capital</th>
+                      <th className="px-5 py-3.5">Interest Paid</th>
+                      <th className="px-5 py-3.5 text-tertiary">Outstanding Interest</th>
+                      <th className="px-5 py-3.5 text-tertiary">Total Exposure</th>
+                      <th className="px-5 py-3.5">Past Due</th>
+                      <th className="px-5 py-3.5">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
-                    {currentItems.map((row: any, index: number) => (
-                      <tr key={index} className="hover:bg-neutral/5">
-                        <td className="px-6 py-3.5 font-semibold">{row.member_name}</td>
-                        <td className="px-6 py-3.5 text-primary dark:text-secondary font-semibold">{row.product_name}</td>
-                        <td className="px-6 py-3.5 font-mono">{formatCurrency(row.principal_amount)}</td>
-                        <td className="px-6 py-3.5 font-mono text-primary">{formatCurrency(row.principal_paid)}</td>
-                        <td className="px-6 py-3.5 font-mono font-bold text-tertiary">{formatCurrency(row.outstanding_principal)}</td>
-                        <td className="px-6 py-3.5 font-mono text-primary">{formatCurrency(row.interest_paid)}</td>
-                        <td className="px-6 py-3.5 font-mono text-tertiary">{formatCurrency(row.outstanding_interest)}</td>
-                        <td className="px-6 py-3.5 font-mono font-bold text-tertiary">{formatCurrency(row.total_outstanding)}</td>
-                        <td className="px-6 py-3.5 font-bold text-tertiary">
+                  <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                    {displayedRecords.map((row: any, index: number) => (
+                      <tr key={index} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
+                        <td className="px-5 py-3.5 font-semibold">{row.member_name}</td>
+                        <td className="px-5 py-3.5 text-primary dark:text-secondary font-semibold">{row.product_name}</td>
+                        <td className="px-5 py-3.5 font-mono">{formatCurrency(row.principal_amount)}</td>
+                        <td className="px-5 py-3.5 font-mono text-primary">{formatCurrency(row.principal_paid)}</td>
+                        <td className="px-5 py-3.5 font-mono font-bold text-tertiary">{formatCurrency(row.outstanding_principal)}</td>
+                        <td className="px-5 py-3.5 font-mono text-primary">{formatCurrency(row.interest_paid)}</td>
+                        <td className="px-5 py-3.5 font-mono text-tertiary">{formatCurrency(row.outstanding_interest)}</td>
+                        <td className="px-5 py-3.5 font-mono font-bold text-tertiary">{formatCurrency(row.total_outstanding)}</td>
+                        <td className="px-5 py-3.5 font-bold text-tertiary">
                           {row.days_past_due > 0 ? `${row.days_past_due} days` : <span className="text-primary">Current</span>}
                         </td>
-                        <td className="px-6 py-3.5">{getStatusBadge(row.status)}</td>
+                        <td className="px-5 py-3.5">{getStatusBadge(row.status)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
 
-              {/* TABLE 3: REVENUE COLLECTION REPORT */}
               {activeTab === 'revenue' && (
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[850px]">
                   <thead>
-                    <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-center">Active Loans</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Expected Principal</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Expected Interest</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-primary">Collected Principal</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-emerald-600 dark:text-emerald-400">Collected Interest</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-amber-600 dark:text-amber-400">Variance</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Realization Rate</th>
+                    <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                      <th className="px-5 py-3.5">Loan Product</th>
+                      <th className="px-5 py-3.5 text-center">Active Loans</th>
+                      <th className="px-5 py-3.5">Expected Principal</th>
+                      <th className="px-5 py-3.5">Expected Interest</th>
+                      <th className="px-5 py-3.5 text-primary">Collected Principal</th>
+                      <th className="px-5 py-3.5 text-emerald-600 dark:text-emerald-400">Collected Interest</th>
+                      <th className="px-5 py-3.5 text-amber-600 dark:text-amber-400">Variance</th>
+                      <th className="px-5 py-3.5 text-right">Realization Rate</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
-                    {currentItems.map((row: any, index: number) => {
+                  <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                    {displayedRecords.map((row: any, index: number) => {
                       const rateNum = parseFloat(row.revenue_realization_rate || '0');
                       return (
-                        <tr key={index} className="hover:bg-neutral/5">
-                          <td className="px-6 py-3.5 font-bold text-primary dark:text-secondary">{row.product_name}</td>
-                          <td className="px-6 py-3.5 font-mono text-center font-bold">{row.active_loans_count}</td>
-                          <td className="px-6 py-3.5 font-mono">{formatCurrency(row.expected_principal)}</td>
-                          <td className="px-6 py-3.5 font-mono">{formatCurrency(row.expected_interest)}</td>
-                          <td className="px-6 py-3.5 font-mono text-primary">{formatCurrency(row.collected_principal)}</td>
-                          <td className="px-6 py-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.collected_revenue_interest)}</td>
-                          <td className="px-6 py-3.5 font-mono font-bold text-amber-600 dark:text-amber-400">{formatCurrency(row.uncollected_interest_variance)}</td>
-                          <td className="px-6 py-3.5 text-right">
+                        <tr key={index} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
+                          <td className="px-5 py-3.5 font-bold text-primary dark:text-secondary">{row.product_name}</td>
+                          <td className="px-5 py-3.5 font-mono text-center font-bold">{row.active_loans_count}</td>
+                          <td className="px-5 py-3.5 font-mono">{formatCurrency(row.expected_principal)}</td>
+                          <td className="px-5 py-3.5 font-mono">{formatCurrency(row.expected_interest)}</td>
+                          <td className="px-5 py-3.5 font-mono text-primary">{formatCurrency(row.collected_principal)}</td>
+                          <td className="px-5 py-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.collected_revenue_interest)}</td>
+                          <td className="px-5 py-3.5 font-mono font-bold text-amber-600 dark:text-amber-400">{formatCurrency(row.uncollected_interest_variance)}</td>
+                          <td className="px-5 py-3.5 text-right">
                             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
                               rateNum >= 90
                                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
@@ -708,24 +745,23 @@ export default function ReportsPage() {
                 </table>
               )}
 
-              {/* TABLE 4: MASTER TRANSACTIONS LOG */}
               {activeTab === 'transactions' && (
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[850px]">
                   <thead>
-                    <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Ledger category</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-mono">Transaction ID</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Member Name</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Type / Method</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amount</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Date & Time</th>
-                      <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Log Remarks</th>
+                    <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                      <th className="px-5 py-3.5">Ledger category</th>
+                      <th className="px-5 py-3.5 font-mono">Transaction ID</th>
+                      <th className="px-5 py-3.5">Member Name</th>
+                      <th className="px-5 py-3.5">Type / Method</th>
+                      <th className="px-5 py-3.5">Amount</th>
+                      <th className="px-5 py-3.5">Date & Time</th>
+                      <th className="px-5 py-3.5">Log Remarks</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
-                    {currentItems.map((row: any, index: number) => (
-                      <tr key={index} className="hover:bg-neutral/5">
-                        <td className="px-6 py-3.5">
+                  <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                    {displayedRecords.map((row: any, index: number) => (
+                      <tr key={index} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
+                        <td className="px-5 py-3.5">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${row.ledger_type === 'Share Capital' ? 'bg-primary/10 text-primary' :
                               row.ledger_type === 'Fixed Deposit' ? 'bg-indigo-600/10 text-indigo-600' :
                                 row.ledger_type === 'Investment' ? 'bg-amber-500/10 text-amber-600' : 'bg-neutral/15 text-neutral-600 dark:text-neutral-400'
@@ -733,12 +769,12 @@ export default function ReportsPage() {
                             {row.ledger_type}
                           </span>
                         </td>
-                        <td className="px-6 py-3.5 font-mono truncate max-w-xs">{row.transaction_id}</td>
-                        <td className="px-6 py-3.5 font-semibold">{row.member_name}</td>
-                        <td className="px-6 py-3.5 font-semibold uppercase">{row.type}</td>
-                        <td className="px-6 py-3.5 font-bold font-mono text-primary">{formatCurrency(row.amount)}</td>
-                        <td className="px-6 py-3.5 font-mono text-neutral-600 dark:text-neutral-400">{row.date}</td>
-                        <td className="px-6 py-3.5 text-neutral-600 dark:text-neutral-400">{row.description}</td>
+                        <td className="px-5 py-3.5 font-mono truncate max-w-xs">{row.transaction_id}</td>
+                        <td className="px-5 py-3.5 font-semibold">{row.member_name}</td>
+                        <td className="px-5 py-3.5 font-semibold uppercase">{row.type}</td>
+                        <td className="px-5 py-3.5 font-bold font-mono text-primary">{formatCurrency(row.amount)}</td>
+                        <td className="px-5 py-3.5 font-mono text-neutral-600 dark:text-neutral-400">{row.date}</td>
+                        <td className="px-5 py-3.5 text-neutral-600 dark:text-neutral-400">{row.description}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -748,54 +784,84 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* Bordered Pagination */}
-          {totalPages > 1 && (
+          {isExpandedAll ? (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
-              <span className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+              <div className="flex items-center gap-2 text-xs font-semibold text-neutral-600 dark:text-neutral-400">
+                <span className="w-2 h-2 rounded-full bg-primary dark:bg-secondary animate-pulse" />
+                <span>Expanded Full Table: Displaying all {filteredRecords.length} records</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExpandedAll(false)}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                <Minimize2 className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                <span>Minimize Table</span>
+              </button>
+            </div>
+          ) : totalPages > 1 ? (
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
+              <span className="font-body text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
                 Displaying {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredRecords.length)} of {filteredRecords.length} records
               </span>
-              <div className="flex flex-wrap items-center justify-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5 justify-center">
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(currentPage - 1)}
-                  className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40 cursor-pointer shadow-xs"
+                  className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer text-neutral-700 dark:text-neutral-300"
                 >
                   Previous
                 </button>
-
-                {getPageNumbers(currentPage, totalPages).map((p, idx) => {
-                  if (typeof p === 'string') {
+                {getPaginationNumbers(currentPage, totalPages).map((p, idx) => {
+                  if (p === '...') {
                     return (
-                      <span key={`ellipsis-${idx}`} className="px-1.5 text-xs font-bold text-neutral-400">
+                      <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs text-neutral-400 font-bold select-none">
                         ...
                       </span>
                     );
                   }
+                  const pageNum = Number(p);
                   return (
                     <button
-                      key={p}
-                      onClick={() => setCurrentPage(p)}
-                      className={`w-8 h-8 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-                        currentPage === p
-                          ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-xs scale-105'
-                          : 'border-outline-variant hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
-                      }`}
+                      key={`page-${pageNum}`}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-8 h-8 rounded-full text-xs font-bold border transition-all cursor-pointer ${currentPage === pageNum
+                        ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-xs'
+                        : 'border-outline-variant hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400'
+                        }`}
                     >
-                      {p}
+                      {pageNum}
                     </button>
                   );
                 })}
-
                 <button
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage(currentPage + 1)}
-                  className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40 cursor-pointer shadow-xs"
+                  className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer text-neutral-700 dark:text-neutral-300"
                 >
                   Next
                 </button>
+
+                {activeTab !== 'revenue' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsExpandedAll(true)}
+                    className="ml-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
+                    title="Expand table to display all records on page"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Expand All</span>
+                  </button>
+                )}
               </div>
             </div>
-          )}
+          ) : filteredRecords.length > 0 ? (
+            <div className="flex items-center justify-between border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
+              <span className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+                Displaying all {filteredRecords.length} records
+              </span>
+            </div>
+          ) : null}
         </div>
       )}
 

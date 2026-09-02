@@ -8,6 +8,7 @@ import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { SkeletonTable, SkeletonCard } from '@/components/ui/Skeleton';
 import LoanAmortizationCalculator from '@/components/loans/LoanAmortizationCalculator';
+import SearchInput from '@/components/SearchInput';
 import * as XLSX from 'xlsx';
 import {
   Banknote,
@@ -33,7 +34,9 @@ import {
   Users,
   Printer,
   Download,
-  Lock
+  Lock,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 interface LoanProduct {
@@ -130,6 +133,23 @@ function LoansPageContent() {
   const [products, setProducts] = useState<LoanProduct[]>([]);
   const [members, setMembers] = useState<any[]>([]); // for apply dropdown
   const [loansPage, setLoansPage] = useState(1);
+  const [loansSearch, setLoansSearch] = useState('');
+  const [loansSortBy, setLoansSortBy] = useState('date_desc');
+  const [isLoansExpandedAll, setIsLoansExpandedAll] = useState(false);
+
+  // Truncated pagination helper matching Members Directory
+  const getPaginationNumbers = (current: number, total: number): (number | string)[] => {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 4) {
+      return [1, 2, 3, 4, 5, '...', total];
+    }
+    if (current >= total - 3) {
+      return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    }
+    return [1, '...', current - 1, current, current + 1, '...', total];
+  };
 
   // Loading & error state
   const [loansLoading, setLoansLoading] = useState(true);
@@ -1039,21 +1059,58 @@ function LoansPageContent() {
         {/* TABS CONTAINER */}
         {activeTab === 'loans' ? (
           <div className="space-y-6">
-            {/* Filters */}
-            <div className="flex items-center gap-4 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
-              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 font-label">Contract Status:</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-              >
-                <option value="">All Loans</option>
-                <option value="pending_approval">Pending Approval</option>
-                <option value="disbursed">Active / Disbursed</option>
-                <option value="fully_paid">Fully Paid</option>
-                <option value="rejected">Rejected</option>
-                <option value="defaulted">Defaulted</option>
-              </select>
+            {/* Filter & Sort Desk */}
+            <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
+              <div className="w-full lg:w-auto flex-1 max-w-md">
+                <SearchInput
+                  placeholder="Search borrower, loan product, contract ID..."
+                  onSearch={(val) => {
+                    setLoansSearch(val);
+                    setLoansPage(1);
+                  }}
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start lg:justify-end">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Sort By:</label>
+                  <select
+                    value={loansSortBy}
+                    onChange={(e) => {
+                      setLoansSortBy(e.target.value);
+                      setLoansPage(1);
+                    }}
+                    className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer"
+                  >
+                    <option value="date_desc">Newest First</option>
+                    <option value="date_asc">Oldest First</option>
+                    <option value="amount_desc">Principal (Highest → Lowest)</option>
+                    <option value="amount_asc">Principal (Lowest → Highest)</option>
+                    <option value="name_asc">Borrower (A → Z)</option>
+                    <option value="name_desc">Borrower (Z → A)</option>
+                    <option value="status">Status</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Status:</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      setLoansPage(1);
+                    }}
+                    className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer"
+                  >
+                    <option value="">All Loans</option>
+                    <option value="pending_approval">Pending Approval</option>
+                    <option value="disbursed">Active / Disbursed</option>
+                    <option value="fully_paid">Fully Paid</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="defaulted">Defaulted</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             {/* Loans List */}
@@ -1071,298 +1128,437 @@ function LoansPageContent() {
               </div>
             ) : (
               (() => {
-                const totalLoansCount = loans.length;
-                const LOANS_PER_PAGE = 25;
+                const filteredLoans = loans
+                  .filter((loan) => {
+                    const q = loansSearch.toLowerCase().trim();
+                    if (q) {
+                      const bName = `${loan.last_name || ''} ${loan.first_name || ''}`.toLowerCase();
+                      const pName = (loan.product_name || '').toLowerCase();
+                      const idStr = String(loan.id || '').toLowerCase();
+                      const statusStr = (loan.status || '').toLowerCase();
+                      const matches = bName.includes(q) || pName.includes(q) || idStr.includes(q) || statusStr.includes(q);
+                      if (!matches) return false;
+                    }
+                    return true;
+                  })
+                  .sort((a, b) => {
+                    if (loansSortBy === 'date_desc') {
+                      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+                    }
+                    if (loansSortBy === 'date_asc') {
+                      return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+                    }
+                    if (loansSortBy === 'amount_desc') {
+                      return parseFloat(b.principal_amount || '0') - parseFloat(a.principal_amount || '0');
+                    }
+                    if (loansSortBy === 'amount_asc') {
+                      return parseFloat(a.principal_amount || '0') - parseFloat(b.principal_amount || '0');
+                    }
+                    if (loansSortBy === 'name_asc') {
+                      const nameA = `${a.last_name || ''}, ${a.first_name || ''}`.toLowerCase();
+                      const nameB = `${b.last_name || ''}, ${b.first_name || ''}`.toLowerCase();
+                      return nameA.localeCompare(nameB);
+                    }
+                    if (loansSortBy === 'name_desc') {
+                      const nameA = `${a.last_name || ''}, ${a.first_name || ''}`.toLowerCase();
+                      const nameB = `${b.last_name || ''}, ${b.first_name || ''}`.toLowerCase();
+                      return nameB.localeCompare(nameA);
+                    }
+                    if (loansSortBy === 'status') {
+                      return (a.status || '').localeCompare(b.status || '');
+                    }
+                    return 0;
+                  });
+
+                const totalLoansCount = filteredLoans.length;
+                const LOANS_PER_PAGE = 8;
                 const totalLoansPages = Math.ceil(totalLoansCount / LOANS_PER_PAGE) || 1;
                 const loansStartIdx = (loansPage - 1) * LOANS_PER_PAGE;
-                const visibleLoans = loans.slice(loansStartIdx, loansStartIdx + LOANS_PER_PAGE);
+                const visibleLoans = isLoansExpandedAll
+                  ? filteredLoans
+                  : filteredLoans.slice(loansStartIdx, loansStartIdx + LOANS_PER_PAGE);
 
                 return (
-                  <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
-                    <div className="overflow-x-auto custom-scrollbar">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-surface-container-low dark:bg-surface-container-high/55 border-b border-outline-variant/50">
-                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">ID</th>
-                            {isAdminOrManager && (
-                              <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Borrower Member</th>
-                            )}
-                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Loan Product</th>
-                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Principal Amount</th>
-                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest (Term)</th>
-                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
-                            <th className="px-6 py-4 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Details</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-outline-variant/40 font-body text-xs text-on-surface dark:text-white/95">
-                          {visibleLoans.map((loan) => {
-                            const isExpanded = expandedLoanId === loan.id;
-                            return (
-                              <React.Fragment key={loan.id}>
-                                <tr className="hover:bg-neutral/5 dark:hover:bg-neutral/10 transition-colors">
-                                  <td className="px-6 py-4 font-mono font-bold">#{loan.id}</td>
-                                  {isAdminOrManager && (
-                                    <td className="px-6 py-4 font-semibold">
-                                      {loan.last_name}, {loan.first_name}
-                                    </td>
-                                  )}
-                                  <td className="px-6 py-4 font-semibold text-primary dark:text-secondary">{loan.product_name || 'Legacy Product'}</td>
-                                  <td className="px-6 py-4 font-bold">{formatCurrency(parseFloat(loan.principal_amount))}</td>
-                                  <td className="px-6 py-4 font-mono">
-                                    {parseFloat(loan.interest_rate)}% ({loan.term_months}mo)
-                                  </td>
-                                  <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
-                                  <td className="px-6 py-4 text-right">
-                                    <button
-                                      onClick={() => toggleLoanExpand(loan.id)}
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral/5 transition-all text-[11px] font-bold"
-                                    >
-                                      {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                      Amortization
-                                    </button>
-                                  </td>
-                                </tr>
+                  <div className="space-y-3">
+                    {/* Table Header Bar with Count & Expand All Toggle */}
+                    <div className="flex items-center justify-between px-1 flex-wrap gap-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-on-surface dark:text-white">
+                          Credit Contracts Table
+                        </span>
+                        <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold border border-outline-variant/30">
+                          {isLoansExpandedAll ? `Showing all ${totalLoansCount} contracts (Full Table)` : `Showing ${visibleLoans.length} of ${totalLoansCount} contracts`}
+                        </span>
+                      </div>
 
-                                {/* Expanded Details Row */}
-                                {isExpanded && (
-                                  <tr>
-                                    <td colSpan={isAdminOrManager ? 7 : 6} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
-                                      {loadingDetails ? (
-                                        <div className="flex items-center gap-2 py-4 justify-center">
-                                          <div className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
-                                          <span className="text-neutral-600 dark:text-neutral-400 font-semibold text-xs">Loading schedules and ledger data...</span>
-                                        </div>
-                                      ) : !loanDetails ? (
-                                        <p className="text-center text-xs text-neutral-600 dark:text-neutral-400">Failed to parse loan details.</p>
-                                      ) : (
-                                        <div className="space-y-6">
-                                          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/40 pb-4">
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs">
-                                              <div>
-                                                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Amortization Type</span>
-                                                <p className="font-semibold text-on-surface dark:text-white capitalize mt-0.5">
-                                                  {loanDetails.amortization_type?.replace('_', ' ')}
-                                                </p>
-                                              </div>
-                                              <div>
-                                                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Registered Date</span>
-                                                <p className="font-semibold text-on-surface dark:text-white mt-0.5">
-                                                  {new Date(loanDetails.created_at).toLocaleDateString()}
-                                                </p>
-                                              </div>
-                                              <div>
-                                                <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Disbursement Date</span>
-                                                <p className="font-semibold text-on-surface dark:text-white mt-0.5">
-                                                  {loanDetails.disbursement_date
-                                                    ? new Date(loanDetails.disbursement_date).toLocaleDateString()
-                                                    : <span className="italic text-neutral-600 dark:text-neutral-400/50">Un-disbursed</span>}
-                                                </p>
-                                              </div>
-                                            </div>
-
-                                            {/* Action Buttons: Check Voucher, Print Schedule, Excel Export, Disburse / Reject */}
-                                            <div className="flex flex-wrap items-center gap-2">
-                                              {isAdminOrManager && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => openVoucherModal(loanDetails)}
-                                                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
-                                                  title="Generate and print check disbursement voucher"
-                                                >
-                                                  <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                                                  Check Voucher
-                                                </button>
-                                              )}
-
-                                              <button
-                                                type="button"
-                                                onClick={() => openPrintAmortizationModal(loanDetails)}
-                                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
-                                                title="Print official loan amortization schedule"
-                                              >
-                                                <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                                                Print Schedule
-                                              </button>
-
-                                              <button
-                                                type="button"
-                                                onClick={() => exportSingleLoanScheduleToExcel(loanDetails)}
-                                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
-                                                title="Export amortization ledger to Excel"
-                                              >
-                                                <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                                                Export (Excel)
-                                              </button>
-
-                                              {isAdminOrManager && loan.status === 'pending_approval' && (
-                                                <>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => handleRejectLoan(loan.id)}
-                                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-tertiary/40 bg-tertiary/10 hover:bg-tertiary/20 text-tertiary font-bold rounded-full text-xs transition-all active:scale-95 cursor-pointer"
-                                                  >
-                                                    <XCircle className="w-3.5 h-3.5" />
-                                                    Reject
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() => handleDisburseLoan(loan.id)}
-                                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-full text-xs shadow hover:shadow-lg transition-all active:scale-95 cursor-pointer"
-                                                  >
-                                                    <FileCheck className="w-3.5 h-3.5" />
-                                                    Verify & Disburse
-                                                  </button>
-                                                </>
-                                              )}
-                                            </div>
-                                          </div>
-
-                                          {/* Amortization Schedule Table */}
-                                          {loanDetails.schedule && loanDetails.schedule.length > 0 && (
-                                            <div className="space-y-3">
-                                              <h5 className="font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amortization Repayment Ledger Schedule</h5>
-                                              <div className="overflow-x-auto border border-outline-variant/40 rounded-2xl">
-                                                <table className="w-full text-left text-xs border-collapse">
-                                                  <thead className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
-                                                    <tr>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 font-mono">#</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Principal Due</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Interest Due</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Total Due</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Loan Balance</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Principal</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Interest</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Due Date</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Status</th>
-                                                    </tr>
-                                                  </thead>
-                                                  <tbody className="divide-y divide-outline-variant/35 font-mono">
-                                                    {(() => {
-                                                      let runningBalance = parseFloat(loanDetails.principal_amount);
-                                                      return loanDetails.schedule?.map((sch: any) => {
-                                                        const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
-                                                        if (loanDetails.amortization_type === 'diminishing_balance') {
-                                                          runningBalance = Math.round((runningBalance - schTotalDue) * 100) / 100;
-                                                        } else {
-                                                          runningBalance = Math.round((runningBalance - parseFloat(sch.principal_due)) * 100) / 100;
-                                                        }
-                                                        const displayBalance = Math.max(0, runningBalance);
-
-                                                        return (
-                                                          <tr key={sch.id} className="hover:bg-neutral/5">
-                                                            <td className="px-4 py-2 font-bold">{sch.installment_number}</td>
-                                                            <td className="px-4 py-2">{formatCurrency(parseFloat(sch.principal_due))}</td>
-                                                            <td className="px-4 py-2">{formatCurrency(parseFloat(sch.interest_due))}</td>
-                                                            <td className="px-4 py-2 font-bold">{formatCurrency(parseFloat(sch.principal_due) + parseFloat(sch.interest_due))}</td>
-                                                            <td className="px-4 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
-                                                            <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
-                                                            <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
-                                                            <td className="px-4 py-2 font-sans">{new Date(sch.due_date).toLocaleDateString()}</td>
-                                                            <td className="px-4 py-2 font-sans">
-                                                              {sch.status === 'paid' ? (
-                                                                <span className="text-primary font-bold">Paid</span>
-                                                              ) : sch.status === 'partially_paid' ? (
-                                                                <span className="text-amber-500 font-bold">Partial</span>
-                                                              ) : (
-                                                                <span className="text-tertiary font-bold">Unpaid</span>
-                                                              )}
-                                                            </td>
-                                                          </tr>
-                                                        );
-                                                      });
-                                                    })()}
-                                                  </tbody>
-                                                </table>
-                                              </div>
-                                            </div>
-                                          )}
-
-                                          {/* Payment Ledger Log */}
-                                          {loanDetails.payments && loanDetails.payments.length > 0 && (
-                                            <div className="space-y-3">
-                                              <h5 className="font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Repayment Receipts Ledger</h5>
-                                              <div className="overflow-x-auto border border-outline-variant/40 rounded-2xl">
-                                                <table className="w-full text-left text-xs border-collapse">
-                                                  <thead className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
-                                                    <tr>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 font-mono">Reference No</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Amount Paid</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Payment Method</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Booking Date</th>
-                                                      <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 text-right">Receipt</th>
-                                                    </tr>
-                                                  </thead>
-                                                  <tbody className="divide-y divide-outline-variant/35 font-mono">
-                                                    {loanDetails.payments?.map((pay: any) => (
-                                                      <tr key={pay.id} className="hover:bg-neutral/5">
-                                                        <td className="px-4 py-2 font-bold">{pay.reference_no || 'N/A'}</td>
-                                                        <td className="px-4 py-2 text-primary font-bold">{formatCurrency(parseFloat(pay.amount))}</td>
-                                                        <td className="px-4 py-2 font-sans">{pay.payment_method}</td>
-                                                        <td className="px-4 py-2 font-sans">{new Date(pay.payment_date).toLocaleString()}</td>
-                                                        <td className="px-4 py-2 text-right">
-                                                          <div className="flex items-center justify-end gap-1.5">
-                                                            <button
-                                                              onClick={() => downloadReceipt(loanDetails, pay)}
-                                                              className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
-                                                            >
-                                                              <Download className="w-2.5 h-2.5" /> Download
-                                                            </button>
-                                                            <button
-                                                              onClick={() => openReceiptModal(loanDetails, pay)}
-                                                              className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
-                                                            >
-                                                              <Printer className="w-2.5 h-2.5" /> Print
-                                                            </button>
-                                                          </div>
-                                                        </td>
-                                                      </tr>
-                                                    ))}
-                                                  </tbody>
-                                                </table>
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                      <button
+                        type="button"
+                        onClick={() => setIsLoansExpandedAll((prev) => !prev)}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                          isLoansExpandedAll
+                            ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary border-primary/30 hover:bg-primary/20'
+                            : 'bg-white dark:bg-surface-container-low text-neutral-700 dark:text-neutral-300 border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                        }`}
+                        title={isLoansExpandedAll ? 'Restore pagination (8 per page)' : 'Expand table to display all contracts on page'}
+                      >
+                        {isLoansExpandedAll ? (
+                          <>
+                            <Minimize2 className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                            <span>Minimize Table</span>
+                          </>
+                        ) : (
+                          <>
+                            <Maximize2 className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                            <span>Expand All List</span>
+                          </>
+                        )}
+                      </button>
                     </div>
 
-                    {/* Pagination Control */}
-                    {totalLoansCount > 0 && (
-                      <div className="px-6 py-3.5 border-t border-outline-variant/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-surface-container-low/30">
-                        <div className="text-neutral-500 font-medium">
-                          Showing <span className="font-bold text-on-surface dark:text-white">{loansStartIdx + 1}</span> to <span className="font-bold text-on-surface dark:text-white">{Math.min(loansStartIdx + LOANS_PER_PAGE, totalLoansCount)}</span> of <span className="font-bold text-on-surface dark:text-white">{totalLoansCount}</span> loans
+                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                              <th className="px-6 py-4">ID</th>
+                              {isAdminOrManager && (
+                                <th className="px-6 py-4">Borrower Member</th>
+                              )}
+                              <th className="px-6 py-4">Loan Product</th>
+                              <th className="px-6 py-4">Principal Amount</th>
+                              <th className="px-6 py-4">Interest (Term)</th>
+                              <th className="px-6 py-4">Status</th>
+                              <th className="px-6 py-4 text-right">Details</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                            {visibleLoans.length === 0 ? (
+                              <tr>
+                                <td colSpan={isAdminOrManager ? 7 : 6} className="px-6 py-8 text-center text-neutral-500 italic">
+                                  No contracts found matching search criteria.
+                                </td>
+                              </tr>
+                            ) : (
+                              visibleLoans.map((loan) => {
+                                const isExpanded = expandedLoanId === loan.id;
+                                return (
+                                  <React.Fragment key={loan.id}>
+                                    <tr className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
+                                      <td className="px-6 py-4 font-mono font-bold">#{loan.id}</td>
+                                      {isAdminOrManager && (
+                                        <td className="px-6 py-4 font-semibold">
+                                          {loan.last_name}, {loan.first_name}
+                                        </td>
+                                      )}
+                                      <td className="px-6 py-4 font-semibold text-primary dark:text-secondary">{loan.product_name || 'Legacy Product'}</td>
+                                      <td className="px-6 py-4 font-bold">{formatCurrency(parseFloat(loan.principal_amount))}</td>
+                                      <td className="px-6 py-4 font-mono">
+                                        {parseFloat(loan.interest_rate)}% ({loan.term_months}mo)
+                                      </td>
+                                      <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
+                                      <td className="px-6 py-4 text-right">
+                                        <button
+                                          onClick={() => toggleLoanExpand(loan.id)}
+                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all text-[11px] font-bold cursor-pointer"
+                                        >
+                                          {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                          Amortization
+                                        </button>
+                                      </td>
+                                    </tr>
+
+                                    {/* Expanded Details Row */}
+                                    {isExpanded && (
+                                      <tr>
+                                        <td colSpan={isAdminOrManager ? 7 : 6} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
+                                          {loadingDetails ? (
+                                            <div className="flex items-center gap-2 py-4 justify-center">
+                                              <div className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
+                                              <span className="text-neutral-600 dark:text-neutral-400 font-semibold text-xs">Loading schedules and ledger data...</span>
+                                            </div>
+                                          ) : !loanDetails ? (
+                                            <p className="text-center text-xs text-neutral-600 dark:text-neutral-400">Failed to parse loan details.</p>
+                                          ) : (
+                                            <div className="space-y-6">
+                                              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant/40 pb-4">
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-xs">
+                                                  <div>
+                                                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Interest Amortization Type</span>
+                                                    <p className="font-semibold text-on-surface dark:text-white capitalize mt-0.5">
+                                                      {loanDetails.amortization_type?.replace('_', ' ')}
+                                                    </p>
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Registered Date</span>
+                                                    <p className="font-semibold text-on-surface dark:text-white mt-0.5">
+                                                      {new Date(loanDetails.created_at).toLocaleDateString()}
+                                                    </p>
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">Disbursement Date</span>
+                                                    <p className="font-semibold text-on-surface dark:text-white mt-0.5">
+                                                      {loanDetails.disbursement_date
+                                                        ? new Date(loanDetails.disbursement_date).toLocaleDateString()
+                                                        : <span className="italic text-neutral-600 dark:text-neutral-400/50">Un-disbursed</span>}
+                                                    </p>
+                                                  </div>
+                                                </div>
+
+                                                {/* Action Buttons: Check Voucher, Print Schedule, Excel Export, Disburse / Reject */}
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                  {isAdminOrManager && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => openVoucherModal(loanDetails)}
+                                                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                                                      title="Generate and print check disbursement voucher"
+                                                    >
+                                                      <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                                      Check Voucher
+                                                    </button>
+                                                  )}
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => openPrintAmortizationModal(loanDetails)}
+                                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                                                    title="Print official loan amortization schedule"
+                                                  >
+                                                    <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                                    Print Schedule
+                                                  </button>
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => exportSingleLoanScheduleToExcel(loanDetails)}
+                                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                                                    title="Export amortization ledger to Excel"
+                                                  >
+                                                    <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                    Export (Excel)
+                                                  </button>
+
+                                                  {isAdminOrManager && loan.status === 'pending_approval' && (
+                                                    <>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleRejectLoan(loan.id)}
+                                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-tertiary/40 bg-tertiary/10 hover:bg-tertiary/20 text-tertiary font-bold rounded-full text-xs transition-all active:scale-95 cursor-pointer"
+                                                      >
+                                                        <XCircle className="w-3.5 h-3.5" />
+                                                        Reject
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleDisburseLoan(loan.id)}
+                                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-full text-xs shadow hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                                                      >
+                                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                                        Approve & Disburse
+                                                      </button>
+                                                    </>
+                                                  )}
+                                                </div>
+                                              </div>
+
+                                              {/* Repayment Schedules Sub-Table */}
+                                              {loanDetails.schedule && loanDetails.schedule.length > 0 && (
+                                                <div className="space-y-3">
+                                                  <h5 className="font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amortization Repayment Ledger Schedule</h5>
+                                                  <div className="overflow-x-auto border border-outline-variant/40 rounded-2xl">
+                                                    <table className="w-full text-left text-xs border-collapse">
+                                                      <thead className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
+                                                        <tr>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 font-mono">#</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Principal Due</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Interest Due</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Total Due</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Loan Balance</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Principal</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Interest</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Due Date</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Status</th>
+                                                        </tr>
+                                                      </thead>
+                                                      <tbody className="divide-y divide-outline-variant/35 font-mono">
+                                                        {(() => {
+                                                          let runningBalance = parseFloat(loanDetails.principal_amount);
+                                                          return loanDetails.schedule?.map((sch: any) => {
+                                                            const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
+                                                            if (loanDetails.amortization_type === 'diminishing_balance') {
+                                                              runningBalance = Math.round((runningBalance - schTotalDue) * 100) / 100;
+                                                            } else {
+                                                              runningBalance = Math.round((runningBalance - parseFloat(sch.principal_due)) * 100) / 100;
+                                                            }
+                                                            const displayBalance = Math.max(0, runningBalance);
+
+                                                            return (
+                                                              <tr key={sch.id} className="hover:bg-neutral/5">
+                                                                <td className="px-4 py-2 font-bold">{sch.installment_number}</td>
+                                                                <td className="px-4 py-2">{formatCurrency(parseFloat(sch.principal_due))}</td>
+                                                                <td className="px-4 py-2">{formatCurrency(parseFloat(sch.interest_due))}</td>
+                                                                <td className="px-4 py-2 font-bold">{formatCurrency(parseFloat(sch.principal_due) + parseFloat(sch.interest_due))}</td>
+                                                                <td className="px-4 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
+                                                                <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
+                                                                <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
+                                                                <td className="px-4 py-2 font-sans">{new Date(sch.due_date).toLocaleDateString()}</td>
+                                                                <td className="px-4 py-2 font-sans">
+                                                                  {sch.status === 'paid' ? (
+                                                                    <span className="text-primary font-bold">Paid</span>
+                                                                  ) : sch.status === 'partially_paid' ? (
+                                                                    <span className="text-amber-500 font-bold">Partial</span>
+                                                                  ) : (
+                                                                    <span className="text-tertiary font-bold">Unpaid</span>
+                                                                  )}
+                                                                </td>
+                                                              </tr>
+                                                            );
+                                                          });
+                                                        })()}
+                                                      </tbody>
+                                                    </table>
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {/* Payment Ledger Log */}
+                                              {loanDetails.payments && loanDetails.payments.length > 0 && (
+                                                <div className="space-y-3">
+                                                  <h5 className="font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Repayment Receipts Ledger</h5>
+                                                  <div className="overflow-x-auto border border-outline-variant/40 rounded-2xl">
+                                                    <table className="w-full text-left text-xs border-collapse">
+                                                      <thead className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
+                                                        <tr>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 font-mono">Reference No</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Amount Paid</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Payment Method</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Booking Date</th>
+                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 text-right">Receipt</th>
+                                                        </tr>
+                                                      </thead>
+                                                      <tbody className="divide-y divide-outline-variant/35 font-mono">
+                                                        {loanDetails.payments?.map((pay: any) => (
+                                                          <tr key={pay.id} className="hover:bg-neutral/5">
+                                                            <td className="px-4 py-2 font-bold">{pay.reference_no || 'N/A'}</td>
+                                                            <td className="px-4 py-2 text-primary font-bold">{formatCurrency(parseFloat(pay.amount))}</td>
+                                                            <td className="px-4 py-2 font-sans">{pay.payment_method}</td>
+                                                            <td className="px-4 py-2 font-sans">{new Date(pay.payment_date).toLocaleString()}</td>
+                                                            <td className="px-4 py-2 text-right">
+                                                              <div className="flex items-center justify-end gap-1.5">
+                                                                <button
+                                                                  onClick={() => downloadReceipt(loanDetails, pay)}
+                                                                  className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
+                                                                >
+                                                                  <Download className="w-2.5 h-2.5" /> Download
+                                                                </button>
+                                                                <button
+                                                                  onClick={() => openReceiptModal(loanDetails, pay)}
+                                                                  className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
+                                                                >
+                                                                  <Printer className="w-2.5 h-2.5" /> Print
+                                                                </button>
+                                                              </div>
+                                                            </td>
+                                                          </tr>
+                                                        ))}
+                                                      </tbody>
+                                                    </table>
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Table Footer: Pagination or Expanded Banner */}
+                    {isLoansExpandedAll ? (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm animate-in fade-in duration-200">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-neutral-600 dark:text-neutral-400">
+                          <span className="w-2 h-2 rounded-full bg-primary dark:bg-secondary animate-pulse" />
+                          <span>Expanded Full Table: Displaying all {totalLoansCount} contracts</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsLoansExpandedAll(false)}
+                          className="inline-flex items-center gap-1.5 px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                          title="Restore pagination (8 contracts per page)"
+                        >
+                          <Minimize2 className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                          <span>Minimize Table</span>
+                        </button>
+                      </div>
+                    ) : totalLoansPages > 1 ? (
+                      <div className="flex flex-col md:flex-row items-center justify-between gap-4 border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
+                        <span className="font-body text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
+                          Displaying {loansStartIdx + 1} - {Math.min(loansStartIdx + LOANS_PER_PAGE, totalLoansCount)} of {totalLoansCount} contracts
+                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5 justify-center">
                           <button
-                            type="button"
                             disabled={loansPage === 1}
                             onClick={() => setLoansPage(p => Math.max(1, p - 1))}
-                            className="px-3 py-1.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-surface-container-low text-on-surface dark:text-white font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs"
+                            className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer text-neutral-700 dark:text-neutral-300"
                           >
                             Previous
                           </button>
-                          <span className="px-2 font-bold font-mono text-neutral-600 dark:text-neutral-300">
-                            Page {loansPage} of {totalLoansPages}
-                          </span>
+                          {getPaginationNumbers(loansPage, totalLoansPages).map((p, idx) => {
+                            if (p === '...') {
+                              return (
+                                <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs text-neutral-400 font-bold select-none">
+                                  ...
+                                </span>
+                              );
+                            }
+                            const pageNum = Number(p);
+                            return (
+                              <button
+                                key={`page-${pageNum}`}
+                                onClick={() => setLoansPage(pageNum)}
+                                className={`w-8 h-8 rounded-full text-xs font-bold border transition-all cursor-pointer ${loansPage === pageNum
+                                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-xs'
+                                  : 'border-outline-variant hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400'
+                                  }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          })}
                           <button
-                            type="button"
                             disabled={loansPage >= totalLoansPages}
                             onClick={() => setLoansPage(p => Math.min(totalLoansPages, p + 1))}
-                            className="px-3 py-1.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-surface-container-low text-on-surface dark:text-white font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-xs"
+                            className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer text-neutral-700 dark:text-neutral-300"
                           >
                             Next
                           </button>
+
+                          {/* Expand All Button */}
+                          <button
+                            type="button"
+                            onClick={() => setIsLoansExpandedAll(true)}
+                            className="ml-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
+                            title="Expand table to display all contracts on page"
+                          >
+                            <Maximize2 className="w-3.5 h-3.5" />
+                            <span>Expand All</span>
+                          </button>
                         </div>
                       </div>
-                    )}
+                    ) : totalLoansCount > 0 ? (
+                      <div className="flex items-center justify-between border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
+                        <span className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+                          Displaying all {totalLoansCount} contracts
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })()
