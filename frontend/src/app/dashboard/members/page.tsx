@@ -355,6 +355,19 @@ export default function MembersPage() {
   const totalPages = Math.ceil(members.length / itemsPerPage);
   const displayedMembers = isExpandedAll ? members : currentItems;
 
+  const getPaginationNumbers = (current: number, total: number): (number | string)[] => {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 4) {
+      return [1, 2, 3, 4, 5, '...', total];
+    }
+    if (current >= total - 3) {
+      return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    }
+    return [1, '...', current - 1, current, current + 1, '...', total];
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -1237,34 +1250,44 @@ export default function MembersPage() {
                 </button>
               </div>
             ) : totalPages > 1 ? (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
-                <span className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4 border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
+                <span className="font-body text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
                   Displaying {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, members.length)} of {members.length} members
                 </span>
-                <div className="flex flex-wrap items-center gap-2 justify-center">
+                <div className="flex flex-wrap items-center gap-1.5 justify-center">
                   <button
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(currentPage - 1)}
-                    className="px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer"
+                    className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer text-neutral-700 dark:text-neutral-300"
                   >
                     Previous
                   </button>
-                  {Array.from({ length: totalPages }).map((_, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setCurrentPage(idx + 1)}
-                      className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors cursor-pointer ${currentPage === idx + 1
-                        ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary'
-                        : 'border-outline-variant hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400'
-                        }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  ))}
+                  {getPaginationNumbers(currentPage, totalPages).map((page, idx) => {
+                    if (page === '...') {
+                      return (
+                        <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs text-neutral-400 font-bold select-none">
+                          ...
+                        </span>
+                      );
+                    }
+                    const pageNum = Number(page);
+                    return (
+                      <button
+                        key={`page-${pageNum}`}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-8 h-8 rounded-full text-xs font-bold border transition-all cursor-pointer ${currentPage === pageNum
+                          ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-xs'
+                          : 'border-outline-variant hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400'
+                          }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
                   <button
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(currentPage + 1)}
-                    className="px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer"
+                    className="px-3.5 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer text-neutral-700 dark:text-neutral-300"
                   >
                     Next
                   </button>
@@ -1273,7 +1296,7 @@ export default function MembersPage() {
                   <button
                     type="button"
                     onClick={() => setIsExpandedAll(true)}
-                    className="ml-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                    className="ml-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
                     title="Expand table to display all members on page"
                   >
                     <Maximize2 className="w-3.5 h-3.5" />
