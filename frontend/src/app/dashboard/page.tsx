@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -13,6 +13,7 @@ import MonthlyTrendsChart from '@/components/charts/MonthlyTrendsChart';
 import MemberGrowthChart from '@/components/charts/MemberGrowthChart';
 import RepaymentChart from '@/components/charts/RepaymentChart';
 import FinancialSummaryChart from '@/components/charts/FinancialSummaryChart';
+import SearchInput from '@/components/SearchInput';
 import {
   TrendingUp,
   TrendingDown,
@@ -352,8 +353,9 @@ export default function OverviewPage() {
     }
   };
 
-  // Member Financial Overview sorting & expanded modal state
+  // Member Financial Overview sorting, search & expanded modal state
   const [memberSortBy, setMemberSortBy] = useState<string>('default');
+  const [modalMembersSearch, setModalMembersSearch] = useState<string>('');
   const [isExpandedMembersModalOpen, setIsExpandedMembersModalOpen] = useState<boolean>(false);
   const [isExportingPDF, setIsExportingPDF] = useState<boolean>(false);
 
@@ -441,7 +443,34 @@ export default function OverviewPage() {
     }
   };
 
+  // Base sorted list for the main dashboard table
   const sortedAdminMembers = sortMembersList(adminMembersList, memberSortBy);
+
+  // Filtered & sorted members list exclusively for the expanded modal
+  const modalDisplayMembers = useMemo(() => {
+    const q = modalMembersSearch.toLowerCase().trim();
+    let list = adminMembersList;
+    if (q) {
+      list = list.filter((m: any) => {
+        const fullName = `${m.first_name || ''} ${m.middle_name || ''} ${m.last_name || ''}`.toLowerCase();
+        const reversedName = `${m.last_name || ''}, ${m.first_name || ''}`.toLowerCase();
+        const memberNo = String(m.member_no || m.id || '').toLowerCase();
+        const status = String(m.status || '').toLowerCase();
+        const loanProducts = (m.member_loans || []).map((l: any) => String(l.product_name || '').toLowerCase()).join(' ');
+        const loanStatuses = (m.member_loans || []).map((l: any) => String(l.status || '').toLowerCase()).join(' ');
+
+        return (
+          fullName.includes(q) ||
+          reversedName.includes(q) ||
+          memberNo.includes(q) ||
+          status.includes(q) ||
+          loanProducts.includes(q) ||
+          loanStatuses.includes(q)
+        );
+      });
+    }
+    return sortMembersList(list, memberSortBy);
+  }, [adminMembersList, modalMembersSearch, memberSortBy]);
 
   // Landscape PDF Export for Member Financial Overview
   const handleDownloadMemberFinancialPDF = async () => {
@@ -478,9 +507,10 @@ export default function OverviewPage() {
         hour: '2-digit',
         minute: '2-digit',
       });
-      doc.text(`Generated: ${dateFormatted} | Total Records: ${sortedAdminMembers.length} | Order: ${getSortLabel(memberSortBy)}`, 40, 50);
+      const exportList = isExpandedMembersModalOpen ? modalDisplayMembers : sortedAdminMembers;
+      doc.text(`Generated: ${dateFormatted} | Total Records: ${exportList.length} | Order: ${getSortLabel(memberSortBy)}`, 40, 50);
 
-      const tableRows = sortedAdminMembers.map((m: any) => {
+      const tableRows = exportList.map((m: any) => {
         const memberId = m.member_no || `MEM-${m.id}`;
         const fullName = `${m.last_name || ''}, ${m.first_name || ''} ${m.middle_name ? m.middle_name[0] + '.' : ''}`.trim();
         const balance = formatCurrency(parseFloat(m.share_capital_balance || 0));
@@ -551,12 +581,12 @@ export default function OverviewPage() {
   };
 
   // Shared row renderer for both regular and expanded Member Financial Overview tables
-  const renderMemberFinancialTableRows = (membersList: any[]) => {
+  const renderMemberFinancialTableRows = (membersList: any[], emptySearchQuery?: string) => {
     if (membersList.length === 0) {
       return (
         <tr>
           <td colSpan={7} className="px-6 py-8 text-center text-neutral-500 italic">
-            No members recorded in directory.
+            {emptySearchQuery ? `No members found matching "${emptySearchQuery}".` : 'No members recorded in directory.'}
           </td>
         </tr>
       );
@@ -3004,7 +3034,10 @@ export default function OverviewPage() {
       {isExpandedMembersModalOpen && (
         <div
           className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
-          onClick={() => setIsExpandedMembersModalOpen(false)}
+          onClick={() => {
+            setIsExpandedMembersModalOpen(false);
+            setModalMembersSearch('');
+          }}
         >
           <div
             className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
@@ -3020,7 +3053,7 @@ export default function OverviewPage() {
                   <h3 className="font-headline text-base font-bold text-on-surface dark:text-white flex items-center gap-2">
                     Member Financial Overview
                     <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary dark:text-secondary font-mono font-bold">
-                      {sortedAdminMembers.length} Members
+                      {modalMembersSearch ? `${modalDisplayMembers.length} of ${adminMembersList.length} Members` : `${modalDisplayMembers.length} Members`}
                     </span>
                   </h3>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -3030,7 +3063,10 @@ export default function OverviewPage() {
               </div>
 
               <button
-                onClick={() => setIsExpandedMembersModalOpen(false)}
+                onClick={() => {
+                  setIsExpandedMembersModalOpen(false);
+                  setModalMembersSearch('');
+                }}
                 className="p-2 rounded-xl text-neutral-400 hover:text-neutral-700 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                 title="Close Modal"
               >
@@ -3038,37 +3074,48 @@ export default function OverviewPage() {
               </button>
             </div>
 
-            {/* Modal Control Bar (Sort + Download PDF) */}
-            <div className="px-6 py-3 border-b border-outline-variant/30 flex items-center justify-between flex-wrap gap-3 bg-white dark:bg-surface-container-low">
-              {/* Sorting selector inside modal */}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 text-xs font-semibold text-neutral-700 dark:text-neutral-300 shadow-2xs">
-                <ArrowUpDown className="w-3.5 h-3.5 text-primary dark:text-secondary flex-shrink-0" />
-                <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400">Sort:</span>
-                <select
-                  value={memberSortBy}
-                  onChange={(e) => setMemberSortBy(e.target.value)}
-                  className="bg-transparent border-none outline-none text-xs font-bold text-on-surface dark:text-white cursor-pointer pr-1"
-                  title="Sort Member Financial Overview"
-                >
-                  <option value="default">Default View</option>
-                  <option value="member_id_asc">Member ID (Ascending ↑)</option>
-                  <option value="member_id_desc">Member ID (Descending ↓)</option>
-                  <option value="name_asc">Last Name (A → Z)</option>
-                  <option value="name_desc">Last Name (Z → A)</option>
-                  <option value="loan_amount_desc">Loan Amount (Highest → Lowest)</option>
-                  <option value="loan_amount_asc">Loan Amount (Lowest → Highest)</option>
-                  <option value="balance_desc">Account Balance (Highest → Lowest)</option>
-                  <option value="balance_asc">Account Balance (Lowest → Highest)</option>
-                  <option value="status_pending">Status (Pending First)</option>
-                  <option value="status_active">Status (Active First)</option>
-                </select>
+            {/* Modal Control Bar (Search + Sort + Download PDF) */}
+            <div className="px-6 py-3 border-b border-outline-variant/30 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-surface-container-low">
+              {/* Left Group: Search Bar & Sorting */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 min-w-0">
+                {/* Search Bar (Scoped exclusively within modal) */}
+                <div className="w-full sm:w-auto flex-1 max-w-sm">
+                  <SearchInput
+                    placeholder="Search name, ID, loan product..."
+                    onSearch={(val) => setModalMembersSearch(val)}
+                  />
+                </div>
+
+                {/* Sorting selector inside modal */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 text-xs font-semibold text-neutral-700 dark:text-neutral-300 shadow-2xs flex-shrink-0">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-primary dark:text-secondary flex-shrink-0" />
+                  <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400">Sort:</span>
+                  <select
+                    value={memberSortBy}
+                    onChange={(e) => setMemberSortBy(e.target.value)}
+                    className="bg-transparent border-none outline-none text-xs font-bold text-on-surface dark:text-white cursor-pointer pr-1"
+                    title="Sort Member Financial Overview"
+                  >
+                    <option value="default">Default View</option>
+                    <option value="member_id_asc">Member ID (Ascending ↑)</option>
+                    <option value="member_id_desc">Member ID (Descending ↓)</option>
+                    <option value="name_asc">Last Name (A → Z)</option>
+                    <option value="name_desc">Last Name (Z → A)</option>
+                    <option value="loan_amount_desc">Loan Amount (Highest → Lowest)</option>
+                    <option value="loan_amount_asc">Loan Amount (Lowest → Highest)</option>
+                    <option value="balance_desc">Account Balance (Highest → Lowest)</option>
+                    <option value="balance_asc">Account Balance (Lowest → Highest)</option>
+                    <option value="status_pending">Status (Pending First)</option>
+                    <option value="status_active">Status (Active First)</option>
+                  </select>
+                </div>
               </div>
 
               {/* Download PDF Button */}
               <button
                 onClick={handleDownloadMemberFinancialPDF}
-                disabled={isExportingPDF || sortedAdminMembers.length === 0}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-primary text-white hover:bg-primary/90 text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                disabled={isExportingPDF || modalDisplayMembers.length === 0}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-2xl bg-primary text-white hover:bg-primary/90 text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer flex-shrink-0"
                 title="Download Table as Landscape PDF"
               >
                 {isExportingPDF ? (
@@ -3100,16 +3147,23 @@ export default function OverviewPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
-                  {renderMemberFinancialTableRows(sortedAdminMembers)}
+                  {renderMemberFinancialTableRows(modalDisplayMembers, modalMembersSearch)}
                 </tbody>
               </table>
             </div>
 
             {/* Modal Footer */}
             <div className="px-6 py-3 border-t border-outline-variant/40 bg-neutral-50/80 dark:bg-neutral-800/60 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
-              <span>Showing all {sortedAdminMembers.length} member records</span>
+              <span>
+                {modalMembersSearch
+                  ? `Showing ${modalDisplayMembers.length} matching of ${adminMembersList.length} total members`
+                  : `Showing all ${modalDisplayMembers.length} member records`}
+              </span>
               <button
-                onClick={() => setIsExpandedMembersModalOpen(false)}
+                onClick={() => {
+                  setIsExpandedMembersModalOpen(false);
+                  setModalMembersSearch('');
+                }}
                 className="px-4 py-1.5 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-bold text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
               >
                 Close
