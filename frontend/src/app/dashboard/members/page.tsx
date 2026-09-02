@@ -23,6 +23,8 @@ import {
   Pencil,
   Check,
   Loader2,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
@@ -60,8 +62,9 @@ export default function MembersPage() {
   const [membershipFilter, setMembershipFilter] = useState('');
   const [sortBy, setSortBy] = useState('name_asc');
 
-  // Pagination state
+  // Pagination & Expand state
   const [currentPage, setCurrentPage] = useState(1);
+  const [isExpandedAll, setIsExpandedAll] = useState(false);
   const itemsPerPage = 8;
 
   // Add Member Modal State
@@ -350,6 +353,7 @@ export default function MembersPage() {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = members.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(members.length / itemsPerPage);
+  const displayedMembers = isExpandedAll ? members : currentItems;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -433,16 +437,18 @@ export default function MembersPage() {
         </div>
 
         {/* Filter & Sort Desk */}
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
-          <SearchInput placeholder="Search by name, middle name, email, phone..." onSearch={handleSearch} />
+        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
+          <div className="w-full lg:w-auto flex-1 max-w-md">
+            <SearchInput placeholder="Search by name, middle name, email, phone..." onSearch={handleSearch} />
+          </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start lg:justify-end">
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Sort By:</label>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer"
               >
                 <option value="name_asc">Name (A → Z)</option>
                 <option value="name_desc">Name (Z → A)</option>
@@ -460,7 +466,7 @@ export default function MembersPage() {
               <select
                 value={membershipFilter}
                 onChange={(e) => setMembershipFilter(e.target.value)}
-                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer"
               >
                 <option value="">All Memberships</option>
                 <option value="Regular">Regular Member</option>
@@ -473,7 +479,7 @@ export default function MembersPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer"
               >
                 <option value="">All Statuses</option>
                 <option value="pending">Pending Review</option>
@@ -494,7 +500,7 @@ export default function MembersPage() {
               <CheckCircle className="w-4 h-4" />
               <span>{toastMessage}</span>
             </div>
-            <button onClick={() => setToastMessage(null)} className="p-1 hover:bg-primary/10 rounded-full">
+            <button onClick={() => setToastMessage(null)} className="p-1 hover:bg-primary/10 rounded-full cursor-pointer">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -515,7 +521,41 @@ export default function MembersPage() {
             <p className="font-body text-xs text-neutral-600 dark:text-neutral-400/80 mt-1">Try relaxing search parameters or register a member.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
+            {/* Table Header Bar with Roster Count and Expand All Toggle */}
+            <div className="flex items-center justify-between px-1 flex-wrap gap-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-on-surface dark:text-white">
+                  Members Roster
+                </span>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold border border-outline-variant/30">
+                  {isExpandedAll ? `Showing all ${members.length} members (Full Roster)` : `Showing ${displayedMembers.length} of ${members.length} members`}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsExpandedAll((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer shadow-2xs active:scale-95 ${isExpandedAll
+                    ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary border-primary/30 hover:bg-primary/20'
+                    : 'bg-white dark:bg-surface-container-low text-neutral-700 dark:text-neutral-300 border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                  }`}
+                title={isExpandedAll ? 'Restore pagination (8 per page)' : 'Expand table to display all members on page'}
+              >
+                {isExpandedAll ? (
+                  <>
+                    <Minimize2 className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                    <span>Minimize Table</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                    <span>Expand All List</span>
+                  </>
+                )}
+              </button>
+            </div>
+
             <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
               <div className="overflow-x-auto custom-scrollbar">
                 <table className="w-full text-left border-collapse">
@@ -535,7 +575,7 @@ export default function MembersPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
-                    {currentItems.map((member) => {
+                    {displayedMembers.map((member) => {
                       const isEditingName = editingCell?.memberId === member.id && editingCell?.field === 'name';
                       const isEditingMembershipType = editingCell?.memberId === member.id && editingCell?.field === 'membership_type';
                       const isEditingAge = editingCell?.memberId === member.id && editingCell?.field === 'age';
@@ -731,11 +771,10 @@ export default function MembersPage() {
                                 className="cursor-pointer group/cell flex items-center gap-1.5"
                                 title="Click member to view profile, or click pencil to edit"
                               >
-                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                                  member.membership_type === 'Associate'
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${member.membership_type === 'Associate'
                                     ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border-purple-200 dark:border-purple-800/50'
                                     : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border-blue-200 dark:border-blue-800/50'
-                                }`}>
+                                  }`}>
                                   {member.membership_type === 'Associate' ? 'Associate' : 'Regular'}
                                 </span>
                                 <button
@@ -1180,17 +1219,33 @@ export default function MembersPage() {
               </div>
             </div>
 
-            {/* Bordered Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
+            {/* Table Footer: Pagination or Expanded Roster Bar */}
+            {isExpandedAll ? (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-xs font-semibold text-neutral-600 dark:text-neutral-400">
+                  <span className="w-2 h-2 rounded-full bg-primary dark:bg-secondary animate-pulse" />
+                  <span>Expanded Full Table: Displaying all {members.length} members</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsExpandedAll(false)}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                  title="Restore pagination (8 members per page)"
+                >
+                  <Minimize2 className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                  <span>Minimize Table</span>
+                </button>
+              </div>
+            ) : totalPages > 1 ? (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
                 <span className="font-body text-xs text-neutral-600 dark:text-neutral-400">
                   Displaying {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, members.length)} of {members.length} members
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 justify-center">
                   <button
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(currentPage - 1)}
-                    className="px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40"
+                    className="px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer"
                   >
                     Previous
                   </button>
@@ -1198,7 +1253,7 @@ export default function MembersPage() {
                     <button
                       key={idx}
                       onClick={() => setCurrentPage(idx + 1)}
-                      className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors ${currentPage === idx + 1
+                      className={`w-8 h-8 rounded-full text-xs font-bold border transition-colors cursor-pointer ${currentPage === idx + 1
                         ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary'
                         : 'border-outline-variant hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400'
                         }`}
@@ -1209,13 +1264,30 @@ export default function MembersPage() {
                   <button
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(currentPage + 1)}
-                    className="px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40"
+                    className="px-4 py-1.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 transition-colors disabled:opacity-40 cursor-pointer"
                   >
                     Next
                   </button>
+
+                  {/* Expand All Button in Pagination Bar */}
+                  <button
+                    type="button"
+                    onClick={() => setIsExpandedAll(true)}
+                    className="ml-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                    title="Expand table to display all members on page"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Expand All</span>
+                  </button>
                 </div>
               </div>
-            )}
+            ) : members.length > 0 ? (
+              <div className="flex items-center justify-between border border-outline-variant/65 rounded-3xl p-4 bg-white dark:bg-surface-container-low shadow-sm">
+                <span className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+                  Displaying all {members.length} members
+                </span>
+              </div>
+            ) : null}
           </div>
         )}
 

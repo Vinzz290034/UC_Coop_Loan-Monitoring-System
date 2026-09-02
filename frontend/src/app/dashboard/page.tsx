@@ -2840,7 +2840,7 @@ export default function OverviewPage() {
                   href="/dashboard/members"
                   className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-1 flex-shrink-0 px-2 py-1 ml-auto"
                 >
-                  <span>View Full Table</span>
+                  <span>View Members Table</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
