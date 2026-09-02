@@ -104,28 +104,28 @@ const getLoanStatusBadge = (status: string) => {
     case 'disbursed':
     case 'active':
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
           <CheckCircle2 className="w-3 h-3" />
           Active / Disbursed
         </span>
       );
     case 'pending_approval':
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
           <Clock className="w-3 h-3" />
           Pending Approval
         </span>
       );
     case 'fully_paid':
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary dark:text-secondary border border-primary/20">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary/10 text-primary dark:text-secondary border border-primary/20">
           <CheckCircle2 className="w-3 h-3" />
           Fully Paid
         </span>
       );
     case 'defaulted':
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
           <AlertTriangle className="w-3 h-3" />
           Defaulted
         </span>
@@ -628,10 +628,10 @@ export default function OverviewPage() {
       const methodLabel = paymentMethod === 'gcash'
         ? 'GCash'
         : paymentMethod === 'bank_transfer'
-        ? 'Bank Transfer'
-        : paymentMethod === 'payroll'
-        ? `Salary Deduction (${salaryDeductionMode})`
-        : 'Hand-in';
+          ? 'Bank Transfer'
+          : paymentMethod === 'payroll'
+            ? `Salary Deduction (${salaryDeductionMode})`
+            : 'Hand-in';
       const remarksString = `Capital build-up deposit via ${methodLabel}${paymentRefNo ? ' (Ref: ' + paymentRefNo + ')' : ''}`;
 
       const res = await api.post('/accounts/share-capital', {
@@ -1701,11 +1701,10 @@ export default function OverviewPage() {
                               <button
                                 type="button"
                                 onClick={() => setSalaryDeductionMode('SD')}
-                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                                  salaryDeductionMode === 'SD'
-                                    ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
-                                    : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
-                                }`}
+                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${salaryDeductionMode === 'SD'
+                                  ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                                  : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                                  }`}
                               >
                                 <div className="flex items-center justify-between w-full">
                                   <span className="font-extrabold text-xs text-on-surface dark:text-white">SD</span>
@@ -1720,11 +1719,10 @@ export default function OverviewPage() {
                               <button
                                 type="button"
                                 onClick={() => setSalaryDeductionMode('SD30')}
-                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                                  salaryDeductionMode === 'SD30'
-                                    ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
-                                    : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
-                                }`}
+                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${salaryDeductionMode === 'SD30'
+                                  ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                                  : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                                  }`}
                               >
                                 <div className="flex items-center justify-between w-full">
                                   <span className="font-extrabold text-xs text-on-surface dark:text-white">SD30</span>
@@ -1739,11 +1737,10 @@ export default function OverviewPage() {
                               <button
                                 type="button"
                                 onClick={() => setSalaryDeductionMode('SD2')}
-                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                                  salaryDeductionMode === 'SD2'
-                                    ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
-                                    : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
-                                }`}
+                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${salaryDeductionMode === 'SD2'
+                                  ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                                  : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                                  }`}
                               >
                                 <div className="flex items-center justify-between w-full">
                                   <span className="font-extrabold text-xs text-on-surface dark:text-white">SD2</span>
@@ -1844,10 +1841,10 @@ export default function OverviewPage() {
                               {paymentMethod === 'gcash'
                                 ? 'GCash'
                                 : paymentMethod === 'bank_transfer'
-                                ? 'Bank Transfer'
-                                : paymentMethod === 'payroll'
-                                ? `Salary Deduction (${salaryDeductionMode})`
-                                : 'Hand-in'}
+                                  ? 'Bank Transfer'
+                                  : paymentMethod === 'payroll'
+                                    ? `Salary Deduction (${salaryDeductionMode})`
+                                    : 'Hand-in'}
                             </span>
                           </div>
                           <div className="flex justify-between text-xs">
@@ -1875,8 +1872,8 @@ export default function OverviewPage() {
                               {salaryDeductionMode === 'SD'
                                 ? '15th Cutoff'
                                 : salaryDeductionMode === 'SD30'
-                                ? '30th Cutoff'
-                                : '15th & 30th Cutoffs'}
+                                  ? '30th Cutoff'
+                                  : '15th & 30th Cutoffs'}
                               ) on your upcoming payroll slip. Once validated, your ledger balance will be credited.
                             </p>
                           ) : paymentMethod === 'otc' ? (
@@ -2589,49 +2586,56 @@ export default function OverviewPage() {
                             )}
                           </td>
 
-                          {/* Actions */}
-                          <td className="px-5 py-3.5 text-right whitespace-nowrap space-x-2">
-                            {m.status === 'pending' && (
-                              <>
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      await api.patch(`/members/${m.id}/approval`, { status: 'approved' });
-                                      fetchDashboardData(true);
-                                    } catch (err: any) {
-                                      alert(err.response?.data?.error?.message || 'Failed to approve profile.');
-                                    }
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/20 cursor-pointer"
-                                  title="Approve Member Profile"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      await api.patch(`/members/${m.id}/approval`, { status: 'disapproved' });
-                                      fetchDashboardData(true);
-                                    } catch (err: any) {
-                                      alert(err.response?.data?.error?.message || 'Failed to disapprove profile.');
-                                    }
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20 cursor-pointer"
-                                  title="Disapprove Member Profile"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                  Reject
-                                </button>
-                              </>
-                            )}
-                            <Link
-                              href={`/dashboard/members/${m.id}`}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              View Profile
-                            </Link>
+                          {/* Actions - Vertically Stacked Controls */}
+                          <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                            <div className="flex flex-col gap-1.5 items-end justify-center min-w-[100px] max-w-[110px] ml-auto">
+                              {m.status === 'pending' && (
+                                <>
+                                  {/* Accept/Approve Action Button */}
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await api.patch(`/members/${m.id}/approval`, { status: 'approved' });
+                                        fetchDashboardData(true);
+                                      } catch (err: any) {
+                                        alert(err.response?.data?.error?.message || 'Failed to approve profile.');
+                                      }
+                                    }}
+                                    className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/20 cursor-pointer shadow-2xs"
+                                    title="Approve Member Profile"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Approve</span>
+                                  </button>
+
+                                  {/* Reject Action Button */}
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        await api.patch(`/members/${m.id}/approval`, { status: 'disapproved' });
+                                        fetchDashboardData(true);
+                                      } catch (err: any) {
+                                        alert(err.response?.data?.error?.message || 'Failed to disapprove profile.');
+                                      }
+                                    }}
+                                    className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20 cursor-pointer shadow-2xs"
+                                    title="Disapprove Member Profile"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                    <span>Reject</span>
+                                  </button>
+                                </>
+                              )}
+
+                              {/* View Profile Action Link */}
+                              <Link
+                                href={`/dashboard/members/${m.id}`}
+                                className="inline-flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs text-center"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>View Profile</span>
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))
