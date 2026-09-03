@@ -275,6 +275,15 @@ function DashboardLayoutContent({
                 src={getAvatarUrl(user.profile_picture_url) || ''}
                 alt={user.username}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  if (e.currentTarget.parentElement && !e.currentTarget.parentElement.querySelector('span')) {
+                    const span = document.createElement('span');
+                    span.className = 'font-bold text-xs text-primary dark:text-secondary';
+                    span.innerText = `${user.profile?.first_name?.[0] || user.username?.[0] || 'U'}`;
+                    e.currentTarget.parentElement.appendChild(span);
+                  }
+                }}
               />
             ) : (
               <User className="w-5 h-5" />

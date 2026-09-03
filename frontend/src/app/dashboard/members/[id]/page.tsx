@@ -318,6 +318,14 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                   src={getAvatarUrl(member.profile_picture_url) || ''}
                   alt={`${member.first_name} ${member.last_name}`}
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    if (e.currentTarget.parentElement && !e.currentTarget.parentElement.querySelector('span')) {
+                      const span = document.createElement('span');
+                      span.innerText = `${member.first_name?.charAt(0) || ''}${member.last_name?.charAt(0) || ''}`;
+                      e.currentTarget.parentElement.appendChild(span);
+                    }
+                  }}
                 />
               ) : (
                 <span>{member.first_name.charAt(0)}{member.last_name.charAt(0)}</span>

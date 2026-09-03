@@ -16,16 +16,17 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
 
-  // Rewrite /api/auth/contact to your Express backend port (e.g., 5000)
+  // Rewrite /api and /uploads to Express backend port or remote URL
   async rewrites() {
+    const backendUrl = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:5000/api/:path*', // Change 5000 to your backend's actual port if different
+        destination: `${backendUrl}/api/:path*`,
       },
       {
         source: '/uploads/:path*',
-        destination: 'http://localhost:5000/uploads/:path*',
+        destination: `${backendUrl}/uploads/:path*`,
       },
     ];
   },

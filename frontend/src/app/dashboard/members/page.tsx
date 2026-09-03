@@ -713,6 +713,15 @@ export default function MembersPage() {
                                       src={getAvatarUrl(member.profile_picture_url) || ''}
                                       alt={`${member.first_name} ${member.last_name}`}
                                       className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        if (e.currentTarget.parentElement && !e.currentTarget.parentElement.querySelector('span')) {
+                                          const span = document.createElement('span');
+                                          span.className = 'font-bold text-xs text-primary dark:text-secondary';
+                                          span.innerText = `${member.first_name?.[0] || ''}${member.last_name?.[0] || ''}`;
+                                          e.currentTarget.parentElement.appendChild(span);
+                                        }
+                                      }}
                                     />
                                   ) : (
                                     <span className="font-bold text-xs text-primary dark:text-secondary">

@@ -109,6 +109,7 @@ export default function ProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarLoadError, setAvatarLoadError] = useState(false);
 
   const getAvatarUrl = (path?: string | null) => {
     if (!path) return null;
@@ -401,15 +402,20 @@ const computeAgeFromDob = (dobString: string): string => {
                 alt="Avatar preview"
                 className="w-full h-full object-cover"
               />
-            ) : user.profile_picture_url ? (
+            ) : user.profile_picture_url && !avatarLoadError ? (
               <img
                 src={getAvatarUrl(user.profile_picture_url) || ''}
                 alt={displayName}
                 className="w-full h-full object-cover"
+                onError={() => setAvatarLoadError(true)}
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-primary to-primary/70 dark:from-secondary dark:to-secondary/70 flex items-center justify-center text-white dark:text-neutral-950">
-                <User className="w-10 h-10" />
+              <div className="w-full h-full bg-gradient-to-br from-primary to-primary/70 dark:from-secondary dark:to-secondary/70 flex items-center justify-center text-white dark:text-neutral-950 font-bold text-xl">
+                {user.profile?.first_name ? (
+                  <span>{user.profile.first_name.charAt(0)}{user.profile.last_name?.charAt(0) || ''}</span>
+                ) : (
+                  <User className="w-10 h-10" />
+                )}
               </div>
             )}
 
