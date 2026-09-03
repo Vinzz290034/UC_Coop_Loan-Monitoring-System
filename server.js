@@ -18,3 +18,20 @@ process.on('unhandledRejection', (err) => {
   // Close server & exit process
   server.close(() => process.exit(1));
 });
+
+// Graceful shutdown on SIGTERM / SIGINT (e.g. Railway container restarts & redeployments)
+process.on('SIGTERM', () => {
+  console.log('Received SIGTERM. Closing server gracefully...');
+  server.close(() => {
+    console.log('Server closed successfully.');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('Received SIGINT. Closing server gracefully...');
+  server.close(() => {
+    console.log('Server closed successfully.');
+    process.exit(0);
+  });
+});
