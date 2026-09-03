@@ -336,7 +336,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <div className="text-[9px] text-neutral-500 dark:text-neutral-400 font-semibold">Share Capital Yield</div>
-                    <div className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">5.0% Target Dividend</div>
+                    <div className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400">10.0% Target Dividend</div>
                   </div>
                 </div>
               </div>
@@ -567,7 +567,7 @@ export default function LandingPage() {
                         <div className="font-bold text-white">₱25,000.00</div>
                       </div>
                       <div className="text-emerald-400 text-[10px] font-bold bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
-                        +5.0% Yield
+                        +10.0% Yield
                       </div>
                     </div>
 
@@ -655,7 +655,7 @@ export default function LandingPage() {
                     <div className="mt-8 relative z-10">
                       <div className="h-28 w-full bg-gradient-to-br from-primary/10 to-secondary/10 dark:from-primary/15 dark:to-secondary/10 rounded-2xl flex items-center justify-center border border-primary/15">
                         <div className="text-center">
-                          <div className="text-primary dark:text-secondary font-headline text-3xl font-extrabold">+5.0%</div>
+                          <div className="text-primary dark:text-secondary font-headline text-3xl font-extrabold">+10.0%</div>
                           <div className="text-primary/75 dark:text-secondary/75 text-xs font-bold mt-0.5">Target Annual Yield</div>
                         </div>
                       </div>

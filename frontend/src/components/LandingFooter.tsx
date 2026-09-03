@@ -87,7 +87,7 @@ const MODAL_DATA: Record<string, ModalContent> = {
     description:
       'The foundational equity investment of every member in the UC METC Multipurpose Cooperative, which determines voting power, loan limits, and annual dividend yields.',
     details: [
-      { label: 'Target Annual Yield', value: '+5.0% Target annual dividend distribution' },
+      { label: 'Target Annual Yield', value: '+10.0% Target annual dividend distribution' },
       { label: 'Equity Ownership', value: 'Non-withdrawable during active membership; builds long-term net worth' },
       { label: 'Ledger Auditability', value: 'Recorded in official immutable admin-verified ledgers' },
       { label: 'Credit Multiplier', value: 'Serves as primary collateral and basis for loan borrowing limits' },
