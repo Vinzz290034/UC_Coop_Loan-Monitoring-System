@@ -26,36 +26,71 @@ import {
 } from 'lucide-react';
 import UserAccessHistoryTable from '@/components/UserAccessHistoryTable';
 
-function PasswordStrength({ password }: { password: string }) {
+function PasswordStrength({ password, currentPassword }: { password: string; currentPassword?: string }) {
   if (!password) return null;
+  const isSameAsCurrent = Boolean(currentPassword && password === currentPassword);
   const checks = [
     { label: 'At least 8 characters', pass: password.length >= 8 },
     { label: 'Contains a number', pass: /\d/.test(password) },
     { label: 'Contains a letter', pass: /[a-zA-Z]/.test(password) },
+    ...(currentPassword ? [{ label: 'Different from current password', pass: !isSameAsCurrent }] : []),
   ];
-  const score = checks.filter((c) => c.pass).length;
+  const passedCount = checks.filter((c) => c.pass).length;
+  const totalChecks = checks.length;
   const colors = ['bg-tertiary', 'bg-orange-400', 'bg-yellow-400', 'bg-secondary'];
   const labels = ['Weak', 'Weak', 'Fair', 'Strong'];
+  const labelIndex = Math.min(Math.floor((passedCount / totalChecks) * 3), 3);
 
   return (
     <div className="mt-2 space-y-1.5">
       <div className="flex gap-1">
-        {[0, 1, 2].map((i) => (
+        {checks.map((_, i) => (
           <div
             key={i}
-            className={`h-1 flex-1 rounded-full transition-all duration-300 ${i < score ? colors[score] : 'bg-neutral-200 dark:bg-neutral-700'}`}
+            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+              i < passedCount
+                ? isSameAsCurrent
+                  ? 'bg-tertiary'
+                  : colors[labelIndex]
+                : 'bg-neutral-200 dark:bg-neutral-700'
+            }`}
           />
         ))}
       </div>
       <div className="flex items-center justify-between">
-        <p className={`text-[10px] font-bold ${score === 3 ? 'text-secondary' : score === 2 ? 'text-yellow-500' : 'text-tertiary'}`}>
-          {labels[score]}
+        <p
+          className={`text-[10px] font-bold ${
+            isSameAsCurrent
+              ? 'text-tertiary'
+              : passedCount === totalChecks
+              ? 'text-secondary'
+              : passedCount >= 2
+              ? 'text-yellow-500'
+              : 'text-tertiary'
+          }`}
+        >
+          {isSameAsCurrent ? 'Cannot match current password' : labels[labelIndex]}
         </p>
       </div>
       <div className="space-y-0.5">
         {checks.map((c, i) => (
-          <p key={i} className={`text-[10px] font-semibold flex items-center gap-1 ${c.pass ? 'text-primary dark:text-secondary' : 'text-neutral-400'}`}>
-            {c.pass ? <CheckCircle2 className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-neutral-300 dark:border-neutral-600 inline-block" />}
+          <p
+            key={i}
+            className={`text-[10px] font-semibold flex items-center gap-1 ${
+              c.pass
+                ? 'text-primary dark:text-secondary'
+                : !c.pass && c.label === 'Different from current password'
+                ? 'text-tertiary font-bold'
+                : 'text-neutral-400'
+            }`}
+          >
+            {c.pass ? (
+              <CheckCircle2 className="w-3 h-3 text-primary dark:text-secondary" />
+            ) : !c.pass && c.label === 'Different from current password' ? (
+              <AlertCircle className="w-3 h-3 text-tertiary" />
+            ) : (
+              <span className="w-3 h-3 rounded-full border border-neutral-300 dark:border-neutral-600 inline-block" />
+            )}
             {c.label}
           </p>
         ))}
@@ -314,6 +349,10 @@ const computeAgeFromDob = (dobString: string): string => {
     }
     if (newPassword !== confirmPassword) {
       setPasswordError('New passwords do not match.');
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPasswordError('New password cannot be the same as your current password.');
       return;
     }
 
@@ -847,7 +886,13 @@ const computeAgeFromDob = (dobString: string): string => {
                   {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <PasswordStrength password={newPassword} />
+              {currentPassword && newPassword && currentPassword === newPassword && (
+                <p className="text-[10px] font-bold text-tertiary mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                  New password cannot be the same as your current password.
+                </p>
+              )}
+              <PasswordStrength password={newPassword} currentPassword={currentPassword} />
             </div>
             <div className="space-y-1.5">
               <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
@@ -879,7 +924,7 @@ const computeAgeFromDob = (dobString: string): string => {
           <div className="pt-2">
             <button
               type="submit"
-              disabled={changingPassword}
+              disabled={changingPassword || Boolean(currentPassword && newPassword && currentPassword === newPassword)}
               className="px-6 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-xs font-bold rounded-xl shadow hover:-translate-y-px active:scale-95 disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               {changingPassword ? (
