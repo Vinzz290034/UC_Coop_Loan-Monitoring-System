@@ -454,13 +454,25 @@ export const getLoans = async (req, res, next) => {
       }
       
       const ownMemberId = memberCheck.rows[0].id;
-      let queryText = 'SELECT l.*, lp.name as product_name FROM loans l JOIN loan_products lp ON l.loan_product_id = lp.id WHERE l.member_id = $1';
+      let queryText = `
+        SELECT 
+          l.*, 
+          lp.name as product_name,
+          COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
+          COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
+          COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due
+        FROM loans l 
+        JOIN loan_products lp ON l.loan_product_id = lp.id 
+        WHERE l.member_id = $1
+      `;
       const params = [ownMemberId];
 
       if (status) {
         queryText += ' AND l.status = $2';
         params.push(status);
       }
+
+      queryText += ' ORDER BY l.disbursed_at ASC NULLS LAST, l.created_at DESC';
 
       const result = await query(queryText, params);
       return res.status(200).json({
@@ -478,7 +490,8 @@ export const getLoans = async (req, res, next) => {
         m.last_name,
         m.member_no,
         COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
-        COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_balance
+        COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
+        COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due
       FROM loans l
       LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
       LEFT JOIN members m ON l.member_id = m.id

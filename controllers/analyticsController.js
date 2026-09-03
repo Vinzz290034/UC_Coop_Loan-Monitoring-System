@@ -52,10 +52,14 @@ export const getDashboardSummary = async (req, res, next) => {
         (SELECT COALESCE(SUM(amount), 0) FROM loan_payments) as total_repayments_collected,
         (SELECT COALESCE(SUM(interest_paid), 0) FROM repayment_schedules) as total_interest_earned,
 
-        -- Outstanding balance
-        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status IN ('disbursed', 'approved', 'active')) -
-        (SELECT COALESCE(SUM(principal_paid), 0) FROM repayment_schedules rs 
-         JOIN loans l ON rs.loan_id = l.id WHERE l.status IN ('disbursed', 'approved', 'active')) as total_outstanding_balance
+        -- Outstanding balance (total remaining unpaid balance)
+        COALESCE(
+          (SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) 
+           FROM repayment_schedules rs 
+           JOIN loans l ON rs.loan_id = l.id 
+           WHERE l.status IN ('disbursed', 'approved', 'active', 'defaulted')),
+          0
+        ) as total_outstanding_balance
     `;
 
     const result = await query(summaryQuery);

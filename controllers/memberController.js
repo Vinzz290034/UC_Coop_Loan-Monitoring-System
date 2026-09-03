@@ -658,8 +658,13 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         COALESCE((SELECT SUM(current_balance) FROM investments WHERE member_id = $1 AND status = 'active'), 0) as active_investments_total,
         
         -- Outstanding Active Loans Summary
-        COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status IN ('disbursed', 'approved', 'active')), 0) as active_loans_count,
-        COALESCE((SELECT SUM(principal_amount) FROM loans WHERE member_id = $1 AND status IN ('disbursed', 'approved', 'active')), 0) as original_loan_principal,
+        COALESCE((
+          SELECT COUNT(*) FROM loans l 
+          WHERE l.member_id = $1 
+            AND l.status IN ('disbursed', 'approved', 'active', 'defaulted')
+            AND COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 1) > 0
+        ), 0) as active_loans_count,
+        COALESCE((SELECT SUM(principal_amount) FROM loans WHERE member_id = $1 AND status IN ('disbursed', 'approved', 'active', 'defaulted')), 0) as original_loan_principal,
         COALESCE((SELECT COUNT(*) FROM loans WHERE member_id = $1 AND status IN ('approved', 'disbursed', 'active', 'fully_paid', 'defaulted')), 0) as historical_loans_count,
         
         -- Counts of active loans by category
@@ -703,12 +708,23 @@ export const getMemberDashboardSummary = async (req, res, next) => {
             AND status IN ('pending_approval', 'approved', 'disbursed', 'active', 'defaulted')
         ), 0) as active_loans_principal_total,
         
-        -- Remaining Outstanding Principal
+        -- Remaining Outstanding Balance (total due minus paid)
         COALESCE(
-          (SELECT COALESCE(SUM(l.principal_amount), 0) FROM loans l WHERE l.member_id = $1 AND l.status IN ('disbursed', 'approved', 'active')) - 
-          (SELECT COALESCE(SUM(rs.principal_paid), 0) FROM repayment_schedules rs JOIN loans l ON rs.loan_id = l.id WHERE l.member_id = $1 AND l.status IN ('disbursed', 'approved', 'active')),
+          (SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) 
+           FROM repayment_schedules rs 
+           JOIN loans l ON rs.loan_id = l.id 
+           WHERE l.member_id = $1 AND l.status IN ('disbursed', 'approved', 'active', 'defaulted')),
           0
-        ) as outstanding_loan_balance
+        ) as outstanding_loan_balance,
+
+        -- Total Repaid to Date
+        COALESCE(
+          (SELECT SUM(rs.principal_paid + rs.interest_paid) 
+           FROM repayment_schedules rs 
+           JOIN loans l ON rs.loan_id = l.id 
+           WHERE l.member_id = $1),
+          0
+        ) as total_repaid
     `;
 
     const summaryResult = await query(summaryQuery, [id]);
@@ -745,7 +761,8 @@ export const getMemberDashboardSummary = async (req, res, next) => {
           active_principal: parseFloat(metrics.active_loans_principal_total),
           historical_count: parseInt(metrics.historical_loans_count, 10),
           original_principal: parseFloat(metrics.original_loan_principal),
-          outstanding_balance: parseFloat(metrics.outstanding_loan_balance)
+          outstanding_balance: parseFloat(metrics.outstanding_loan_balance),
+          total_repaid: parseFloat(metrics.total_repaid || 0)
         }
       }
     });
