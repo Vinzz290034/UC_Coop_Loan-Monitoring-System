@@ -283,6 +283,36 @@ export default function OverviewPage() {
 
   // Member-specific data
   const [memberMetrics, setMemberMetrics] = useState<any>(null);
+  const [isReturning, setIsReturning] = useState<boolean>(true);
+
+  useEffect(() => {
+    const userId = user?.id || user?.profile?.id;
+    const loginCount = memberMetrics?.login_count ?? user?.login_count;
+
+    if (typeof loginCount === 'number') {
+      if (loginCount > 1) {
+        setIsReturning(true);
+        if (userId) localStorage.setItem(`coop_visited_${userId}`, 'true');
+        return;
+      } else if (loginCount === 1) {
+        if (userId && localStorage.getItem(`coop_visited_${userId}`) === 'true') {
+          setIsReturning(true);
+        } else {
+          setIsReturning(false);
+          if (userId) {
+            setTimeout(() => {
+              localStorage.setItem(`coop_visited_${userId}`, 'true');
+            }, 2000);
+          }
+        }
+        return;
+      }
+    }
+
+    if (userId && localStorage.getItem(`coop_visited_${userId}`) === 'true') {
+      setIsReturning(true);
+    }
+  }, [user?.id, user?.profile?.id, user?.login_count, memberMetrics?.login_count]);
 
   // Admin/Manager analytics data
   const [dashboardSummary, setDashboardSummary] = useState<any>(null);
@@ -1226,7 +1256,7 @@ export default function OverviewPage() {
             <span>Verified Member Session</span>
           </div>
           <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
-            {(memberMetrics?.login_count ?? user?.login_count ?? 1) > 1 ? 'Welcome back' : 'Welcome'}, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
+            {isReturning ? 'Welcome back' : 'Welcome'}, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
           </h1>
           <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
             Cooperative Member Ledger Account Summary
