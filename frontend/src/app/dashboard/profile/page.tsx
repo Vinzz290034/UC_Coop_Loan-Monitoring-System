@@ -184,6 +184,7 @@ export default function ProfilePage() {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [showPasswordSuccessModal, setShowPasswordSuccessModal] = useState(false);
   const [mounted, setMounted] = useState(false);
 
 const computeAgeFromDob = (dobString: string): string => {
@@ -326,6 +327,7 @@ const computeAgeFromDob = (dobString: string): string => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setShowPasswordSuccessModal(true);
       setTimeout(() => setPasswordSuccess(null), 4000);
     } catch (err: any) {
       const msg =
@@ -922,6 +924,39 @@ const computeAgeFromDob = (dobString: string): string => {
                 className="w-full py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-sm font-bold hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
               >
                 Got It
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Password Changed Successfully Modal */}
+      {showPasswordSuccessModal && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-modal-pop text-center relative overflow-hidden">
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">
+                Password Changed!
+              </h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                Your account password has been successfully updated.
+              </p>
+            </div>
+            <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-outline-variant/30 text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed text-left flex items-start gap-2.5">
+              <Shield className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+              <span>Your security credentials have been refreshed. Remember to use this new password for your future logins.</span>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPasswordSuccessModal(false)}
+                className="w-full py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-xs font-bold hover:scale-[1.01] active:scale-95 transition-all shadow-md cursor-pointer"
+              >
+                Done
               </button>
             </div>
           </div>
