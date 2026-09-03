@@ -714,6 +714,12 @@ export const getMemberDashboardSummary = async (req, res, next) => {
     const summaryResult = await query(summaryQuery, [id]);
     const metrics = summaryResult.rows[0];
 
+    const accessCountResult = await query(
+      "SELECT COUNT(*) as count FROM user_access_logs WHERE user_id = (SELECT user_id FROM members WHERE id = $1) AND (LOWER(status) = 'success' OR status = 'Active')",
+      [id]
+    );
+    const loginCount = parseInt(accessCountResult.rows[0]?.count || '1', 10);
+
     res.status(200).json({
       success: true,
       data: {
@@ -724,6 +730,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         full_name: `${memberCheck.rows[0].first_name} ${memberCheck.rows[0].last_name}`,
         profile_status: memberCheck.rows[0].status,
         investment_goal: parseFloat(memberCheck.rows[0].investment_goal ?? 0.00),
+        login_count: loginCount,
         balances: {
           share_capital: parseFloat(metrics.share_capital_balance),
           fixed_deposits: parseFloat(metrics.fixed_deposit_balance),

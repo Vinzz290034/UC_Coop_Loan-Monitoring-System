@@ -125,8 +125,16 @@ export const login = async (req, res, next) => {
       }
     }
 
+    // Count successful logins for user
+    const accessCountResult = await query(
+      "SELECT COUNT(*) as count FROM user_access_logs WHERE user_id = $1 AND (LOWER(status) = 'success' OR status = 'Active')",
+      [user.id]
+    );
+    const loginCount = parseInt(accessCountResult.rows[0]?.count || '1', 10);
+
     res.status(200).json({
       success: true,
+      message: 'Login successful.',
       token,
       access_log_id: accessLogId,
       user: {
@@ -134,6 +142,7 @@ export const login = async (req, res, next) => {
         username: user.username,
         role: user.role,
         profile_picture_url: user.profile_picture_url,
+        login_count: loginCount,
         profile: memberProfile
       }
     });
@@ -178,14 +187,15 @@ export const register = async (req, res, next) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     // Insert user
-    const newUserResult = await query(
+    const insertResult = await query(
       'INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id, username, role, created_at',
       [username, passwordHash, role]
     );
 
     res.status(201).json({
       success: true,
-      data: newUserResult.rows[0]
+      message: 'User registered successfully.',
+      data: insertResult.rows[0]
     });
   } catch (error) {
     next(error);
@@ -209,6 +219,12 @@ export const getMe = async (req, res, next) => {
       memberProfile = memberResult.rows[0];
     }
 
+    const accessCountResult = await query(
+      "SELECT COUNT(*) as count FROM user_access_logs WHERE user_id = $1 AND (LOWER(status) = 'success' OR status = 'Active')",
+      [user.id]
+    );
+    const loginCount = parseInt(accessCountResult.rows[0]?.count || '1', 10);
+
     res.status(200).json({
       success: true,
       data: {
@@ -216,6 +232,7 @@ export const getMe = async (req, res, next) => {
         username: user.username,
         role: user.role,
         profile_picture_url: user.profile_picture_url,
+        login_count: loginCount,
         created_at: user.created_at,
         profile: memberProfile
       }

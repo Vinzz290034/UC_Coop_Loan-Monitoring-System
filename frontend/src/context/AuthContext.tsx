@@ -9,6 +9,7 @@ export interface User {
   username: string;
   role: 'admin' | 'staff' | 'member';
   profile_picture_url?: string | null;
+  login_count?: number;
   profile?: {
     id: number | string;
     member_no?: string | null;

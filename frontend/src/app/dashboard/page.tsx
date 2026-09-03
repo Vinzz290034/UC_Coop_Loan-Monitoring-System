@@ -1226,7 +1226,7 @@ export default function OverviewPage() {
             <span>Verified Member Session</span>
           </div>
           <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
-            Welcome back, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
+            {(memberMetrics?.login_count ?? user?.login_count ?? 1) > 1 ? 'Welcome back' : 'Welcome'}, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
           </h1>
           <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
             Cooperative Member Ledger Account Summary
