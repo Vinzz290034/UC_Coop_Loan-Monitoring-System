@@ -823,16 +823,17 @@ export const exportMembersReport = async (req, res, next) => {
 export const updateMemberGoal = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { investment_goal } = req.body;
+    const { investment_goal, target_amount } = req.body;
+    const rawGoal = investment_goal !== undefined ? investment_goal : target_amount;
 
-    if (investment_goal === undefined || isNaN(parseFloat(investment_goal))) {
+    if (rawGoal === undefined || isNaN(parseFloat(rawGoal))) {
       return res.status(400).json({
         success: false,
         error: { message: 'Please provide a valid investment goal amount.' }
       });
     }
 
-    const goalAmount = parseFloat(investment_goal);
+    const goalAmount = parseFloat(rawGoal);
     if (goalAmount < 5000 || goalAmount > 150000) {
       return res.status(400).json({
         success: false,

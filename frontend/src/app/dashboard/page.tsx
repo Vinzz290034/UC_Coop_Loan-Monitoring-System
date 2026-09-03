@@ -926,8 +926,14 @@ export default function OverviewPage() {
           const metricsData = response.data.data;
           setMemberMetrics(metricsData);
           if (metricsData && Number(metricsData.investment_goal) === 0) {
-            setActiveModal('welcome');
-            setWizardStep(1);
+            const isSkipped = typeof window !== 'undefined' && (
+              sessionStorage.getItem(`skip_goal_${memberId}`) === 'true' ||
+              localStorage.getItem(`skip_goal_${memberId}`) === 'true'
+            );
+            if (!isSkipped) {
+              setActiveModal('welcome');
+              setWizardStep(1);
+            }
           }
         } else {
           setError('Could not associate authenticated session with member profile.');
@@ -1501,15 +1507,19 @@ export default function OverviewPage() {
                   {activeModal === 'appointment' && 'Book Office Appointment'}
                   {activeModal === 'welcome' && (wizardStep === 1 ? 'Welcome to Coop Sync!' : wizardStep === 2 ? 'Set Your Investment Goal' : 'Account Verification Required')}
                 </h3>
-                {activeModal !== 'welcome' && (
-                  <button
-                    onClick={closeModal}
-                    className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    aria-label="Close modal"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    if (activeModal === 'welcome' && user?.profile?.id) {
+                      sessionStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                      localStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                    }
+                    closeModal();
+                  }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  aria-label="Close modal"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
               {/* Body */}
@@ -2511,10 +2521,23 @@ export default function OverviewPage() {
                           Welcome to the UC-METC Cooperative Loan Monitoring System.
                           We are excited to help you track your share capital, loan balance, and loan applications in one unified, secure platform.
                         </p>
-                        <div className="pt-4">
+                        <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (user?.profile?.id) {
+                                sessionStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                                localStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                              }
+                              closeModal();
+                            }}
+                            className="w-full sm:w-auto px-5 py-3 rounded-2xl border border-outline-variant/60 text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                          >
+                            Skip for Now
+                          </button>
                           <button
                             onClick={() => setWizardStep(2)}
-                            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer"
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer"
                           >
                             <span>Get Started</span>
                             <ArrowRight className="w-4 h-4" />
@@ -2526,7 +2549,7 @@ export default function OverviewPage() {
                     {wizardStep === 2 && (
                       <div className="space-y-5">
                         <p className="text-sm text-neutral-700 dark:text-neutral-200 leading-relaxed">
-                          Setting an investment milestone goal helps you visualize and track your accumulated share capital. Once your investment hits 100% of your milestone goal, our Coop Office will be automatically notified to coordinate or payout or rollover options.
+                          Setting an investment milestone goal helps you visualize and track your accumulated share capital. Once your investment hits 100% of your milestone goal, our Coop Office will be automatically notified to coordinate payout or rollover options.
                         </p>
 
                         <div className="space-y-2">
@@ -2550,7 +2573,21 @@ export default function OverviewPage() {
                           </p>
                         </div>
 
-                        <div className="pt-3">
+                        <div className="pt-3 flex flex-col sm:flex-row gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (user?.profile?.id) {
+                                sessionStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                                localStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                              }
+                              setModalError(null);
+                              setWizardStep(3);
+                            }}
+                            className="flex-1 py-3 px-4 rounded-2xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 font-bold text-sm transition-all active:scale-95 cursor-pointer text-center"
+                          >
+                            Skip for Now
+                          </button>
                           <button
                             onClick={async () => {
                               const goalVal = parseFloat(newGoalAmount);
@@ -2577,7 +2614,7 @@ export default function OverviewPage() {
                               }
                             }}
                             disabled={submitting}
-                            className="w-full py-3 px-4 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all active:scale-95 shadow-md disabled:opacity-50 cursor-pointer text-center"
+                            className="flex-1 py-3 px-4 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all active:scale-95 shadow-md disabled:opacity-50 cursor-pointer text-center"
                           >
                             {submitting ? 'Saving...' : 'Save & Continue'}
                           </button>
@@ -2606,15 +2643,32 @@ export default function OverviewPage() {
                           </p>
                         </div>
 
-                        <div className="pt-4">
+                        <div className="pt-4 flex flex-col sm:flex-row gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (user?.profile?.id) {
+                                sessionStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                                localStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                              }
+                              closeModal();
+                            }}
+                            className="flex-1 py-3 px-4 rounded-2xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 font-bold text-sm transition-all active:scale-95 cursor-pointer text-center"
+                          >
+                            Go to Dashboard
+                          </button>
                           <button
                             onClick={() => {
+                              if (user?.profile?.id) {
+                                sessionStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                                localStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                              }
                               closeModal();
                               router.push('/dashboard/profile');
                             }}
-                            className="w-full py-3 px-4 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all active:scale-95 shadow-md cursor-pointer text-center"
+                            className="flex-1 py-3 px-4 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all active:scale-95 shadow-md cursor-pointer text-center"
                           >
-                            I Understand & Finish
+                            Verify Profile Now
                           </button>
                         </div>
                       </div>

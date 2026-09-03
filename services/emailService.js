@@ -2,8 +2,9 @@ import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 
 // ============================================================
-// Email Service — OTP Delivery via Nodemailer / Gmail SMTP
-// Falls back to console logging when SMTP is not configured.
+// Email Service — OTP & Notification Delivery
+// Supports Brevo (API / SMTP), Gmail, and custom SMTP providers.
+// Falls back to console logging in development mode when unconfigured.
 // ============================================================
 
 /**
@@ -14,27 +15,142 @@ export function generateOtp() {
 }
 
 /**
- * Create a Nodemailer transporter.
- * Returns null if SMTP credentials are not configured (dev fallback).
+ * Resolve unified email configuration from environment variables.
+ * Supports:
+ * - EMAIL_SERVICE / SMTP_SERVICE ('brevo', 'gmail', etc.)
+ * - EMAIL_FROM / SMTP_FROM / SMTP_USER / EMAIL_USER
+ * - EMAIL_PASSWORD / EMAIL_PASS / SMTP_PASS / BREVO_API_KEY
+ * - SMTP_HOST / EMAIL_HOST
+ * - SMTP_PORT / EMAIL_PORT
  */
-function createTransporter() {
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+function getEmailConfig() {
+  const service = (process.env.EMAIL_SERVICE || process.env.SMTP_SERVICE || '').trim().toLowerCase();
+  const fromEmail = (process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || process.env.EMAIL_USER || '').trim();
+  const apiKey = (process.env.BREVO_API_KEY || process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS || process.env.SMTP_PASS || '').replace(/\s+/g, '');
+  const host = (process.env.SMTP_HOST || process.env.EMAIL_HOST || (service === 'brevo' ? 'smtp-relay.brevo.com' : 'smtp.gmail.com')).trim();
+  const port = parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587', 10);
+  const user = (process.env.EMAIL_USER || process.env.SMTP_USER || fromEmail).trim();
 
-  if (!smtpUser || !smtpPass) {
+  const isBrevo = service === 'brevo' || apiKey.startsWith('xkeysib-') || host.includes('brevo') || host.includes('sendinblue');
+  const isGmail = service === 'gmail' || (!isBrevo && (host.includes('gmail') || fromEmail.toLowerCase().endsWith('@gmail.com')));
+
+  return {
+    service,
+    fromEmail,
+    apiKey,
+    user,
+    host,
+    port,
+    isBrevo,
+    isGmail,
+  };
+}
+
+/**
+ * Send an email directly via Brevo REST API (HTTPS).
+ * Highly reliable on cloud platforms (Railway, Render, Vercel) with no SMTP port blockage.
+ */
+async function sendViaBrevoApi({ apiKey, fromEmail, toEmail, recipientName, subject, html, text }) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: {
+          name: 'Coop Sync',
+          email: fromEmail || 'noreply@ucmetc.coop',
+        },
+        to: [
+          {
+            email: toEmail,
+            name: recipientName || 'Member',
+          },
+        ],
+        subject: subject,
+        htmlContent: html,
+        textContent: text,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.message || `Brevo API returned status ${res.status}`);
+    }
+
+    const data = await res.json().catch(() => ({}));
+    console.log(`✅ [Brevo API] Email delivered successfully to ${toEmail} (messageId: ${data.messageId || 'ok'})`);
+    return { success: true, devMode: false };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Brevo API request timed out after 12 seconds');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Create a Nodemailer transporter for SMTP delivery.
+ */
+function createTransporter(config) {
+  const { user, apiKey, host, port, isBrevo, isGmail } = config;
+
+  if (!user || !apiKey) {
     return null; // No SMTP configured — will use dev fallback
   }
 
+  if (isBrevo) {
+    return nodemailer.createTransport({
+      host: host || 'smtp-relay.brevo.com',
+      port: port || 587,
+      secure: port === 465,
+      auth: {
+        user: user,
+        pass: apiKey,
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    });
+  }
+
+  if (isGmail) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: user,
+        pass: apiKey,
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    });
+  }
+
   return nodemailer.createTransport({
-    host: smtpHost,
-    port: smtpPort,
-    secure: smtpPort === 465,
+    host: host,
+    port: port,
+    secure: port === 465,
     auth: {
-      user: smtpUser,
-      pass: smtpPass,
+      user: user,
+      pass: apiKey,
     },
+    tls: {
+      rejectUnauthorized: process.env.NODE_ENV === 'production' && process.env.SMTP_ALLOW_INVALID_CERTS !== 'true',
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 }
 
@@ -106,8 +222,8 @@ function buildOtpEmailHtml(otpCode, recipientName, purpose = 'registration') {
 /**
  * Send an OTP verification email.
  *
- * In development mode (no SMTP configured), the OTP is logged to console
- * and the function returns successfully so the flow still works for testing.
+ * In development mode (no credentials configured), the OTP is logged to console
+ * and the function returns successfully so the flow works for testing.
  *
  * @param {string} toEmail - Recipient email address
  * @param {string} otpCode - 6-digit OTP code
@@ -116,7 +232,7 @@ function buildOtpEmailHtml(otpCode, recipientName, purpose = 'registration') {
  * @returns {Promise<{success: boolean, devMode: boolean}>}
  */
 export async function sendOtpEmail(toEmail, otpCode, recipientName = '', purpose = 'registration') {
-  const transporter = createTransporter();
+  const config = getEmailConfig();
   const emailSubject = purpose === 'password_reset'
     ? 'Reset Your Password — Coop Sync'
     : 'Your Verification Code — Coop Sync';
@@ -125,7 +241,9 @@ export async function sendOtpEmail(toEmail, otpCode, recipientName = '', purpose
     ? `Your Coop Sync password reset verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`
     : `Your Coop Sync verification code is: ${otpCode}\n\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore this email.`;
 
-  if (!transporter) {
+  const htmlContent = buildOtpEmailHtml(otpCode, recipientName, purpose);
+
+  if (!config.apiKey) {
     // Development fallback — log OTP to console
     console.log('═══════════════════════════════════════════');
     console.log(`  📧 DEV MODE — Email OTP for ${purpose} (not sent)`);
@@ -135,22 +253,48 @@ export async function sendOtpEmail(toEmail, otpCode, recipientName = '', purpose
     return { success: true, devMode: true };
   }
 
-  // Production: send real email
+  // 1. If Brevo is configured, try Brevo HTTPS API first (fastest, immune to cloud SMTP port blocks)
+  if (config.isBrevo) {
+    try {
+      return await sendViaBrevoApi({
+        apiKey: config.apiKey,
+        fromEmail: config.fromEmail,
+        toEmail,
+        recipientName,
+        subject: emailSubject,
+        html: htmlContent,
+        text: plainText,
+      });
+    } catch (brevoApiErr) {
+      console.warn(`⚠️ Brevo API failed (${brevoApiErr.message}), falling back to SMTP...`);
+    }
+  }
+
+  // 2. SMTP Transporter (Brevo SMTP / Gmail / Custom SMTP)
+  const transporter = createTransporter(config);
+  if (!transporter) {
+    throw new Error('Email credentials incomplete. Please check EMAIL_FROM and EMAIL_PASSWORD.');
+  }
+
   const mailOptions = {
-    from: `"Coop Sync" <${process.env.SMTP_USER}>`,
+    from: `"Coop Sync" <${config.fromEmail || config.user}>`,
     to: toEmail,
     subject: emailSubject,
-    html: buildOtpEmailHtml(otpCode, recipientName, purpose),
+    html: htmlContent,
     text: plainText,
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ OTP email sent successfully to ${toEmail}`);
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('SMTP email connection timed out after 12 seconds.')), 12000)
+    );
+    await Promise.race([sendPromise, timeoutPromise]);
+    console.log(`✅ [SMTP] OTP email sent successfully to ${toEmail}`);
     return { success: true, devMode: false };
   } catch (error) {
     console.error(`❌ Failed to send OTP email to ${toEmail}:`, error.message);
-    throw new Error('Failed to send verification email. Please try again later.');
+    throw new Error(`Failed to send verification email (${error.message || 'connection timeout'}). Please try again or contact support.`);
   }
 }
 
@@ -217,9 +361,12 @@ function buildContactReplyHtml(recipientName, replyContent) {
  * @returns {Promise<{success: boolean, devMode: boolean}>}
  */
 export async function sendContactReply(toEmail, recipientName, replyContent) {
-  const transporter = createTransporter();
+  const config = getEmailConfig();
+  const subject = 'Re: Your Inquiry — Coop Sync Cooperative';
+  const htmlContent = buildContactReplyHtml(recipientName, replyContent);
+  const textContent = `Hello ${recipientName},\n\nThank you for reaching out. Here is our response:\n\n${replyContent}\n\nIf you have further questions, feel free to reply.\n\n— Coop Sync Support`;
 
-  if (!transporter) {
+  if (!config.apiKey) {
     console.log('═══════════════════════════════════════════');
     console.log(`  📧 DEV MODE — Contact Reply (not sent)`);
     console.log(`  To:   ${toEmail}`);
@@ -229,21 +376,48 @@ export async function sendContactReply(toEmail, recipientName, replyContent) {
     return { success: true, devMode: true };
   }
 
+  // 1. Try Brevo REST API if configured
+  if (config.isBrevo) {
+    try {
+      return await sendViaBrevoApi({
+        apiKey: config.apiKey,
+        fromEmail: config.fromEmail,
+        toEmail,
+        recipientName,
+        subject,
+        html: htmlContent,
+        text: textContent,
+      });
+    } catch (brevoApiErr) {
+      console.warn(`⚠️ Brevo API failed (${brevoApiErr.message}), falling back to SMTP...`);
+    }
+  }
+
+  // 2. SMTP Transporter
+  const transporter = createTransporter(config);
+  if (!transporter) {
+    throw new Error('Email credentials incomplete. Please check EMAIL_FROM and EMAIL_PASSWORD.');
+  }
+
   const mailOptions = {
-    from: `"Coop Sync Support" <${process.env.SMTP_USER}>`,
+    from: `"Coop Sync Support" <${config.fromEmail || config.user}>`,
     to: toEmail,
-    subject: 'Re: Your Inquiry — Coop Sync Cooperative',
-    html: buildContactReplyHtml(recipientName, replyContent),
-    text: `Hello ${recipientName},\n\nThank you for reaching out. Here is our response:\n\n${replyContent}\n\nIf you have further questions, feel free to reply.\n\n— Coop Sync Support`,
+    subject,
+    html: htmlContent,
+    text: textContent,
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ Contact reply sent successfully to ${toEmail}`);
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('SMTP email connection timed out after 12 seconds.')), 12000)
+    );
+    await Promise.race([sendPromise, timeoutPromise]);
+    console.log(`✅ [SMTP] Contact reply sent successfully to ${toEmail}`);
     return { success: true, devMode: false };
   } catch (error) {
     console.error(`❌ Failed to send contact reply to ${toEmail}:`, error.message);
-    throw new Error('Failed to send reply email. Please try again later.');
+    throw new Error(`Failed to send reply email (${error.message || 'connection timeout'}). Please try again later.`);
   }
 }
 
