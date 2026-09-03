@@ -173,6 +173,7 @@ export default function ProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   // UI state
   const [profileLoading, setProfileLoading] = useState(true);
@@ -327,7 +328,12 @@ const computeAgeFromDob = (dobString: string): string => {
       setConfirmPassword('');
       setTimeout(() => setPasswordSuccess(null), 4000);
     } catch (err: any) {
-      setPasswordError(err.response?.data?.error?.message || 'Failed to change password.');
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to change password. Please check your current password.';
+      setPasswordError(msg);
     } finally {
       setChangingPassword(false);
     }
@@ -848,12 +854,19 @@ const computeAgeFromDob = (dobString: string): string => {
               <div className="relative group">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary pointer-events-none" />
                 <input
-                  type="password"
+                  type={showConfirmPw ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-9 pr-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
+                  className="w-full pl-9 pr-10 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPw(!showConfirmPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-primary dark:hover:text-secondary transition-colors"
+                >
+                  {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
               {confirmPassword && newPassword !== confirmPassword && (
                 <p className="text-[10px] font-bold text-tertiary mt-1">Passwords do not match.</p>

@@ -1631,6 +1631,13 @@ export const changePassword = async (req, res, next) => {
       });
     }
 
+    if (current_password === new_password) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'New password cannot be the same as your current password.' }
+      });
+    }
+
     // Fetch current password hash
     const userResult = await query(
       'SELECT password_hash FROM users WHERE id = $1',
@@ -1644,10 +1651,17 @@ export const changePassword = async (req, res, next) => {
       });
     }
 
+    if (userResult.rows[0].password_hash && userResult.rows[0].password_hash.startsWith('PORTAL_FROZEN_')) {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'This account is frozen. Password modification is blocked. Please contact admin.' }
+      });
+    }
+
     // Verify current password
     const isMatch = await bcrypt.compare(current_password, userResult.rows[0].password_hash);
     if (!isMatch) {
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
         error: { message: 'Current password is incorrect.' }
       });

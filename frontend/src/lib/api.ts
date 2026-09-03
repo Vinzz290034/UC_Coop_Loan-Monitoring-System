@@ -32,7 +32,11 @@ api.interceptors.response.use(
   (error) => {
     // Check if error response is 401 Unauthorized
     if (error.response && error.response.status === 401) {
-      if (typeof window !== 'undefined') {
+      const requestUrl = error.config?.url || '';
+      const isAuthAction = requestUrl.includes('/login') || 
+                           requestUrl.includes('/password') ||
+                           requestUrl.includes('/forgot-password');
+      if (!isAuthAction && typeof window !== 'undefined') {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         // Avoid infinite redirects on login page
