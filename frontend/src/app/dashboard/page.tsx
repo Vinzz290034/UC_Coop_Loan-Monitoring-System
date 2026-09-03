@@ -1507,19 +1507,21 @@ export default function OverviewPage() {
                   {activeModal === 'appointment' && 'Book Office Appointment'}
                   {activeModal === 'welcome' && (wizardStep === 1 ? 'Welcome to Coop Sync!' : wizardStep === 2 ? 'Set Your Investment Goal' : 'Account Verification Required')}
                 </h3>
-                <button
-                  onClick={() => {
-                    if (activeModal === 'welcome' && user?.profile?.id) {
-                      sessionStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
-                      localStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
-                    }
-                    closeModal();
-                  }}
-                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  aria-label="Close modal"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                {!(activeModal === 'welcome' && wizardStep === 1) && (
+                  <button
+                    onClick={() => {
+                      if (activeModal === 'welcome' && user?.profile?.id) {
+                        sessionStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                        localStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
+                      }
+                      closeModal();
+                    }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    aria-label="Close modal"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
 
               {/* Body */}
@@ -2521,23 +2523,10 @@ export default function OverviewPage() {
                           Welcome to the UC-METC Cooperative Loan Monitoring System.
                           We are excited to help you track your share capital, loan balance, and loan applications in one unified, secure platform.
                         </p>
-                        <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (user?.profile?.id) {
-                                sessionStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
-                                localStorage.setItem(`skip_goal_${user.profile.id}`, 'true');
-                              }
-                              closeModal();
-                            }}
-                            className="w-full sm:w-auto px-5 py-3 rounded-2xl border border-outline-variant/60 text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
-                          >
-                            Skip for Now
-                          </button>
+                        <div className="pt-4">
                           <button
                             onClick={() => setWizardStep(2)}
-                            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer"
+                            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-sm hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer"
                           >
                             <span>Get Started</span>
                             <ArrowRight className="w-4 h-4" />
