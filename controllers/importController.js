@@ -352,14 +352,12 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
     for (const l of memberData.loans) {
       if (l.remainingBalance === 0 || (l.totalPaid >= l.principalAmount && l.totalPaid > 0)) {
         l.status = 'fully_paid';
-        // When loan is fully paid, ensure all paid installments are marked fully paid
+        // When loan is fully paid, ensure all installments are marked fully paid
         for (const inst of l.installments) {
-          if (inst.amountPaid > 0) {
-            inst.principalDue = inst.principalPaid;
-            inst.interestDue = inst.interestPaid;
-            inst.totalDue = inst.principalPaid + inst.interestPaid;
-            inst.isPaid = true;
-          }
+          inst.principalPaid = inst.principalDue;
+          inst.interestPaid = inst.interestDue;
+          inst.totalDue = inst.principalDue + inst.interestDue;
+          inst.isPaid = true;
         }
       } else {
         l.status = 'disbursed';
@@ -545,11 +543,14 @@ export const executeImport = async (req, res, next) => {
       schedMap.set(`${s.loan_id}_${s.installment_number}`, s.id);
     }
 
-    const payRes = await client.query('SELECT id, loan_id, amount, payment_date::date as pdate, reference_no FROM loan_payments');
+    const payRes = await client.query("SELECT id, loan_id, amount, TO_CHAR(payment_date, 'YYYY-MM-DD') as pdate, reference_no FROM loan_payments");
     const payMap = new Map();
     for (const p of payRes.rows) {
-      const dStr = p.pdate ? new Date(p.pdate).toISOString().split('T')[0] : '';
-      payMap.set(`${p.loan_id}_${parseFloat(p.amount)}_${dStr}_${p.reference_no}`, p.id);
+      const dStr = p.pdate || '';
+      payMap.set(`${p.loan_id}_${parseFloat(p.amount)}_${dStr}_${p.reference_no || ''}`, p.id);
+      if (p.reference_no && p.reference_no !== 'SD' && p.reference_no !== 'HAND-IN') {
+        payMap.set(`${p.loan_id}_ref_${p.reference_no}`, p.id);
+      }
     }
 
     const allocRes = await client.query('SELECT loan_payment_id, repayment_schedule_id FROM loan_payment_allocations');
@@ -679,10 +680,19 @@ export const executeImport = async (req, res, next) => {
               if (amtPaid > 0 && pPaid === 0 && iPaid === 0) {
                 pPaid = amtPaid;
               }
-              const isPaid = inst.isPaid && amtPaid > 0;
-              const instStatus = (l.status === 'fully_paid' && isPaid) ? 'paid' : (isPaid ? (amtPaid >= tDue ? 'paid' : 'partially_paid') : 'unpaid');
-              const finalPDue = (l.status === 'fully_paid' && isPaid && pDue > pPaid) ? pPaid : pDue;
-              const finalTDue = Math.max(0.01, (l.status === 'fully_paid' && isPaid && tDue > (pPaid + iPaid)) ? (pPaid + iPaid) : (tDue > 0 ? tDue : 0.01));
+              const isLoanFullyPaid = l.status === 'fully_paid';
+              const isPaid = isLoanFullyPaid || (inst.isPaid && amtPaid > 0);
+              let pPaid = parseFloat(inst.principalPaid || 0);
+              let iPaid = parseFloat(inst.interestPaid || 0);
+              if (isLoanFullyPaid) {
+                pPaid = pDue;
+                iPaid = iDue;
+              } else if (amtPaid > 0 && pPaid === 0 && iPaid === 0) {
+                pPaid = amtPaid;
+              }
+              const instStatus = isPaid ? (isLoanFullyPaid || amtPaid >= tDue ? 'paid' : 'partially_paid') : 'unpaid';
+              const finalPDue = pDue;
+              const finalTDue = Math.max(0.01, tDue > 0 ? tDue : 0.01);
 
               // Upsert Repayment Schedule
               const schedKey = `${loanId}_${instNum}`;
@@ -692,7 +702,7 @@ export const executeImport = async (req, res, next) => {
                 if (isPaid) {
                   await client.query(
                     `UPDATE repayment_schedules
-                     SET principal_due = $1, total_due = $2, principal_paid = $3, interest_paid = $4, fines_due = $5, status = $6
+                     SET principal_due = $1, total_due = $2, principal_paid = $3, interest_paid = $4, fines_due = $5, status = $6, updated_at = CURRENT_TIMESTAMP
                      WHERE id = $7`,
                     [finalPDue, finalTDue, pPaid, iPaid, finesDue, instStatus, scheduleId]
                   );
@@ -722,11 +732,12 @@ export const executeImport = async (req, res, next) => {
               // 5. Insert Loan Payment if paid
               if (isPaid && amtPaid > 0) {
                 const payDate = safeDbDate(inst.datePaid) || dueDate;
-                const payDStr = payDate.toISOString().split('T')[0];
+                const payDStr = inst.datePaid || (payDate ? payDate.toISOString().split('T')[0] : '');
                 const payRef = inst.invoiceNo || lafNo || 'EXCEL_IMPORT';
                 const payKey = `${loanId}_${amtPaid}_${payDStr}_${payRef}`;
+                const payKeyRef = (payRef && payRef !== 'SD' && payRef !== 'HAND-IN') ? `${loanId}_ref_${payRef}` : null;
 
-                let paymentId = payMap.get(payKey);
+                let paymentId = payMap.get(payKey) || (payKeyRef ? payMap.get(payKeyRef) : null);
                 if (!paymentId) {
                   const insertPay = await client.query(
                     `INSERT INTO loan_payments (loan_id, amount, payment_date, payment_method, reference_no)
@@ -735,6 +746,7 @@ export const executeImport = async (req, res, next) => {
                   );
                   paymentId = insertPay.rows[0].id;
                   payMap.set(payKey, paymentId);
+                  if (payKeyRef) payMap.set(payKeyRef, paymentId);
                   paymentsCreated++;
                 }
 
