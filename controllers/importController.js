@@ -218,8 +218,61 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
 
     let currentLoan = null;
 
-    // Scan all rows starting from row 1 (Row 2 in Excel)
-    for (let r = 1; r <= range.e.r; r++) {
+    // Detect column layout dynamically from sheet header
+    let colMap = {
+      loanDate: 3,
+      lafNo: 4,
+      amountLoaned: 5,
+      mode: 6,
+      terms: 7,
+      endTerm: 8,
+      interestDue: 9,
+      principalDue: 10,
+      monthlyDue: 11,
+      fines: 12,
+      amountPaid: 13,
+      balance: 14,
+      principalBalance: 15,
+      invoiceNo: 16,
+      datePaid: 17
+    };
+    let startRow = 1;
+
+    for (let r = 0; r <= Math.min(6, range.e.r); r++) {
+      const row = [];
+      for (let c = 0; c <= range.e.c; c++) {
+        const v = cellVal(sheet, r, c);
+        row.push(v ? String(v).trim().toUpperCase() : '');
+      }
+      if (row.includes('LAF NO') || row.includes('AMOUNT LOANED')) {
+        startRow = r + 1;
+        const findIdx = (predicate, fallback) => {
+          const idx = row.findIndex(predicate);
+          return idx !== -1 ? idx : fallback;
+        };
+        colMap = {
+          loanDate: findIdx(c => c === 'DATE', 3),
+          lafNo: findIdx(c => c === 'LAF NO' || c === 'LAF NO.', 4),
+          amountLoaned: findIdx(c => c.includes('AMOUNT LOANED'), 5),
+          mode: findIdx(c => c === 'MODE', 6),
+          terms: findIdx(c => c === 'TERMS' || c === 'TERM', 7),
+          endTerm: findIdx(c => c.includes('END') || c.includes('MATURITY'), 8),
+          interestDue: findIdx(c => c === 'INTEREST' || c === 'INTEREST DUE', 9),
+          principalDue: findIdx(c => c === 'PRINCIPAL' || c === 'PRINCIPAL DUE', 10),
+          monthlyDue: findIdx(c => c.includes('MONTHLY DUE') || c === 'MONTHLY', 11),
+          fines: findIdx(c => c.includes('FINE'), 12),
+          amountPaid: findIdx(c => c === 'AMOUNT PAID' || c.includes('AMT PAID'), 13),
+          balance: findIdx(c => c === 'BALANCE', 14),
+          principalBalance: findIdx(c => c.includes('PRINCIPAL') && c.includes('BALANCE'), 15),
+          invoiceNo: findIdx(c => c.includes('INVOICE'), 16),
+          datePaid: findIdx(c => c.includes('DATE PAID'), 17)
+        };
+        break;
+      }
+    }
+
+    // Scan all rows starting after header row
+    for (let r = startRow; r <= range.e.r; r++) {
       // 1. Share Capital Columns (A, B, C)
       const scDateStr = cellDateIso(sheet, r, 0);       // Col A: DATE DEPOSITED
       const scInvoice = cleanStr(cellVal(sheet, r, 1)); // Col B: INVOICE / LAF NO
@@ -236,24 +289,24 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
         memberData.shareCapitalTotal += scAmount;
       }
 
-      // 2. Loan Columns (D - R)
-      const loanDateStr = cellDateIso(sheet, r, 3);       // Col D: DATE
-      const lafNo = cleanStr(cellVal(sheet, r, 4));        // Col E: LAF NO
-      const amountLoaned = cleanAmount(cellVal(sheet, r, 5)); // Col F: AMOUNT LOANED
-      const mode = cleanStr(cellVal(sheet, r, 6));        // Col G: MODE (e.g. SD, SD2)
-      const termsRaw = cellVal(sheet, r, 7);              // Col H: TERMS
-      const endTermDateStr = cellDateIso(sheet, r, 8);    // Col I: END OF TERM
+      // 2. Loan Columns (dynamically mapped)
+      const loanDateStr = cellDateIso(sheet, r, colMap.loanDate);
+      const lafNo = cleanStr(cellVal(sheet, r, colMap.lafNo));
+      const amountLoaned = cleanAmount(cellVal(sheet, r, colMap.amountLoaned));
+      const mode = cleanStr(cellVal(sheet, r, colMap.mode));
+      const termsRaw = cellVal(sheet, r, colMap.terms);
+      const endTermDateStr = cellDateIso(sheet, r, colMap.endTerm);
 
       // Repayment / Installment Columns
-      const interestDue = cleanAmount(cellVal(sheet, r, 9));   // Col J: INTEREST
-      const principalDue = cleanAmount(cellVal(sheet, r, 10)); // Col K: PRINCIPAL
-      const monthlyDue = cleanAmount(cellVal(sheet, r, 11));   // Col L: MONTHLY DUE
-      const fines = cleanAmount(cellVal(sheet, r, 12));        // Col M: FINES
-      const amountPaid = cleanAmount(cellVal(sheet, r, 13));   // Col N: AMOUNT PAID
-      const balance = cleanAmount(cellVal(sheet, r, 14));      // Col O: BALANCE
-      const principalBalance = cleanAmount(cellVal(sheet, r, 15)); // Col P: Principal loan balance
-      const invoiceNo = cleanStr(cellVal(sheet, r, 16));       // Col Q: INVOICE NO
-      const datePaidStr = cellDateIso(sheet, r, 17);           // Col R: DATE PAID
+      const interestDue = cleanAmount(cellVal(sheet, r, colMap.interestDue));
+      const principalDue = cleanAmount(cellVal(sheet, r, colMap.principalDue));
+      const monthlyDue = cleanAmount(cellVal(sheet, r, colMap.monthlyDue));
+      const fines = cleanAmount(cellVal(sheet, r, colMap.fines));
+      const amountPaid = cleanAmount(cellVal(sheet, r, colMap.amountPaid));
+      const balance = cleanAmount(cellVal(sheet, r, colMap.balance));
+      const principalBalance = colMap.principalBalance !== -1 ? cleanAmount(cellVal(sheet, r, colMap.principalBalance)) : 0;
+      const invoiceNo = cleanStr(cellVal(sheet, r, colMap.invoiceNo));
+      const datePaidStr = cellDateIso(sheet, r, colMap.datePaid);
 
       // Check if this row starts a new Loan Application
       if (amountLoaned > 0 && lafNo) {
@@ -261,7 +314,7 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
         const maturityDate = calcMaturityDate(loanDateStr, endTermDateStr, termsVal);
 
         // Check next row's Col E for product tag (e.g. EMERGENCY, CASH EXPRESS, SO)
-        const nextRowTag = r < range.e.r ? cleanStr(cellVal(sheet, r + 1, 4)) : '';
+        const nextRowTag = r < range.e.r ? cleanStr(cellVal(sheet, r + 1, colMap.lafNo)) : '';
 
         currentLoan = {
           row: r + 1,
@@ -276,6 +329,8 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
           installments: [],
           totalPaid: 0,
           remainingBalance: amountLoaned,
+          lastBalance: null,
+          lastPrincipalBalance: null,
           status: 'disbursed'
         };
         memberData.loans.push(currentLoan);
@@ -299,7 +354,12 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
           let tDue = monthlyDue > 0 ? monthlyDue : (pDue + iDue);
 
           const isPaidThru = invoiceNo && invoiceNo.toUpperCase().includes('PAID THRU');
-          const effectivePaid = amountPaid > 0 ? amountPaid : (isPaidThru && datePaidStr ? (pDue + iDue) : 0);
+          let effectivePaid = amountPaid > 0 ? amountPaid : (isPaidThru && datePaidStr ? (pDue + iDue) : 0);
+
+          // If payment was recorded under balance column while principalBalance stepped down
+          if (effectivePaid === 0 && colMap.principalBalance !== -1 && balance > 0 && (datePaidStr !== null || invoiceNo !== '')) {
+            effectivePaid = balance;
+          }
 
           const lastInst = currentLoan.installments.length > 0 ? currentLoan.installments[currentLoan.installments.length - 1] : null;
           const isAdvanceCutoff = lastInst && (lastInst.amountPaid < lastInst.totalDue) && (!principalDue && !interestDue && !monthlyDue);
@@ -333,16 +393,27 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
               principalBalanceAfter: principalBalance,
               invoiceNo: invoiceNo || mode || 'SD',
               datePaid: instDatePaid,
-              isPaid: effectivePaid >= tDue || (balance === 0 && instDatePaid !== null)
+              isPaid: effectivePaid >= tDue || ((balance === 0 || principalBalance === 0) && instDatePaid !== null)
             };
 
             currentLoan.installments.push(inst);
             currentLoan.totalPaid += effectivePaid;
           }
 
-          const balanceRaw = cellVal(sheet, r, 14);
-          if (balanceRaw !== null && balanceRaw !== undefined && String(balanceRaw).trim() !== '') {
-            currentLoan.remainingBalance = balance;
+          const balanceRaw = cellVal(sheet, r, colMap.balance);
+          const princBalanceRaw = colMap.principalBalance !== -1 ? cellVal(sheet, r, colMap.principalBalance) : null;
+          if (balanceRaw !== null && balanceRaw !== undefined && !isNaN(parseFloat(balanceRaw))) {
+            currentLoan.lastBalance = parseFloat(balanceRaw);
+          }
+          if (princBalanceRaw !== null && princBalanceRaw !== undefined && !isNaN(parseFloat(princBalanceRaw))) {
+            currentLoan.lastPrincipalBalance = parseFloat(princBalanceRaw);
+          }
+          if (currentLoan.lastBalance === 0 || currentLoan.lastPrincipalBalance === 0) {
+            currentLoan.remainingBalance = 0;
+          } else if (currentLoan.lastPrincipalBalance !== null && currentLoan.lastPrincipalBalance !== undefined) {
+            currentLoan.remainingBalance = currentLoan.lastPrincipalBalance;
+          } else if (currentLoan.lastBalance !== null && currentLoan.lastBalance !== undefined) {
+            currentLoan.remainingBalance = currentLoan.lastBalance;
           }
         }
       }
@@ -350,8 +421,14 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
 
     // Determine final status for each loan
     for (const l of memberData.loans) {
-      if (l.remainingBalance === 0 || (l.totalPaid >= l.principalAmount && l.totalPaid > 0)) {
+      if (
+        l.remainingBalance === 0 ||
+        l.lastBalance === 0 ||
+        l.lastPrincipalBalance === 0 ||
+        (l.totalPaid >= l.principalAmount && l.totalPaid > 0)
+      ) {
         l.status = 'fully_paid';
+        l.remainingBalance = 0;
         // When loan is fully paid, ensure all installments are marked fully paid
         for (const inst of l.installments) {
           inst.principalPaid = inst.principalDue;
