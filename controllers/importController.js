@@ -675,11 +675,6 @@ export const executeImport = async (req, res, next) => {
               const tDue = parseFloat(inst.totalDue || (pDue + iDue));
               const finesDue = parseFloat(inst.finesDue || 0);
               const amtPaid = parseFloat(inst.amountPaid || 0);
-              let pPaid = parseFloat(inst.principalPaid || 0);
-              let iPaid = parseFloat(inst.interestPaid || 0);
-              if (amtPaid > 0 && pPaid === 0 && iPaid === 0) {
-                pPaid = amtPaid;
-              }
               const isLoanFullyPaid = l.status === 'fully_paid';
               const isPaid = isLoanFullyPaid || (inst.isPaid && amtPaid > 0);
               let pPaid = parseFloat(inst.principalPaid || 0);
