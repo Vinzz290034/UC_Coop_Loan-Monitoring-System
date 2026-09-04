@@ -305,9 +305,16 @@ export default function AccountingPage() {
   };
 
   const handlePrint = () => {
+    // Dismiss the modal immediately so the user knows it's currently printing
+    setCompletedReceiptMode(null);
+    const cleanup = () => {
+      window.removeEventListener('afterprint', cleanup);
+      setCompletedReceiptTx(null);
+    };
+    window.addEventListener('afterprint', cleanup);
     setTimeout(() => {
       window.print();
-    }, 100);
+    }, 150);
   };
 
   const openContributionReceiptModal = (txObj: any) => {
@@ -1268,7 +1275,12 @@ export default function AccountingPage() {
               <div className="pt-2 space-y-2">
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    setSelectedReceipt(null);
+                    setTimeout(() => {
+                      window.print();
+                    }, 150);
+                  }}
                   className="w-full py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-headline font-bold text-xs shadow-md hover:opacity-90 transition-opacity cursor-pointer text-center flex items-center justify-center gap-2"
                 >
                   <Printer className="w-4 h-4" />

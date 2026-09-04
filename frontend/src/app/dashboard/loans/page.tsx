@@ -217,6 +217,7 @@ function LoansPageContent() {
   const [printLoan, setPrintLoan] = useState<any>(null);
   const [printPayment, setPrintPayment] = useState<any>(null);
   const [printMode, setPrintMode] = useState<'voucher' | 'schedule' | 'receipt' | null>(null);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // Voucher Template State Fields
   const [voucherNo, setVoucherNo] = useState('');
@@ -229,6 +230,7 @@ function LoansPageContent() {
   const openVoucherModal = (loanObj: any) => {
     setPrintLoan(loanObj);
     setPrintMode('voucher');
+    setIsPrintModalOpen(true);
     setVoucherNo(`CV-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(loanObj.id).substring(0, 4).toUpperCase()}`);
     setCheckNo('');
   };
@@ -236,6 +238,7 @@ function LoansPageContent() {
   const openPrintAmortizationModal = (loanObj: any) => {
     setPrintLoan(loanObj);
     setPrintMode('schedule');
+    setIsPrintModalOpen(true);
     setCoMakerName(loanObj.co_maker_name || '');
   };
 
@@ -243,6 +246,14 @@ function LoansPageContent() {
     setPrintLoan(loanObj);
     setPrintPayment(paymentObj);
     setPrintMode('receipt');
+    setIsPrintModalOpen(true);
+  };
+
+  const closePrintModal = () => {
+    setIsPrintModalOpen(false);
+    setPrintMode(null);
+    setPrintLoan(null);
+    setPrintPayment(null);
   };
 
   // Excel Export Functions
@@ -318,9 +329,18 @@ function LoansPageContent() {
   };
 
   const handlePrint = () => {
+    // Dismiss the modal immediately so the user knows it's currently printing
+    setIsPrintModalOpen(false);
+    const cleanup = () => {
+      window.removeEventListener('afterprint', cleanup);
+      setPrintMode(null);
+      setPrintLoan(null);
+      setPrintPayment(null);
+    };
+    window.addEventListener('afterprint', cleanup);
     setTimeout(() => {
       window.print();
-    }, 100);
+    }, 150);
   };
 
   const downloadReceipt = async (loanObj: any, paymentObj: any) => {
@@ -2445,7 +2465,7 @@ function LoansPageContent() {
         </div>
       )}
       {/* MODAL 4: PRINT CHECK VOUCHER PREVIEW */}
-      {printMode === 'voucher' && printLoan && (
+      {isPrintModalOpen && printMode === 'voucher' && printLoan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
             {/* Header */}
@@ -2454,7 +2474,7 @@ function LoansPageContent() {
                 <Printer className="w-5 h-5 text-primary" /> Generate Check Voucher
               </h3>
               <button
-                onClick={() => { setPrintMode(null); setPrintLoan(null); }}
+                onClick={closePrintModal}
                 className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
                 aria-label="Close modal"
               >
@@ -2481,52 +2501,49 @@ function LoansPageContent() {
                     type="text"
                     value={bankName}
                     onChange={(e) => setBankName(e.target.value)}
-                    placeholder="e.g. Land Bank of the Philippines"
+                    placeholder="e.g. Land Bank"
                     className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-neutral-600 dark:text-neutral-400">Check Number *</label>
-                  <input
-                    type="text"
-                    required
-                    value={checkNo}
-                    onChange={(e) => setCheckNo(e.target.value)}
-                    placeholder="e.g. 0000104822"
-                    className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="font-bold text-neutral-600 dark:text-neutral-400">Check Reference Number</label>
+                <input
+                  type="text"
+                  value={checkNo}
+                  onChange={(e) => setCheckNo(e.target.value)}
+                  placeholder="e.g. 000492819 (or leave blank if pending)"
+                  className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
                   <label className="font-bold text-neutral-600 dark:text-neutral-400">Prepared By</label>
                   <input
                     type="text"
                     value={preparedBy}
                     onChange={(e) => setPreparedBy(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-surface border border-outline-variant rounded-xl text-[11px] font-semibold text-on-surface dark:text-white"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-neutral-600 dark:text-neutral-400">Approved By</label>
                   <input
                     type="text"
                     value={approvedBy}
                     onChange={(e) => setApprovedBy(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-surface border border-outline-variant rounded-xl text-[11px] font-semibold text-on-surface dark:text-white"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="font-bold text-neutral-600 dark:text-neutral-400">Released By (Cashier)</label>
+                  <label className="font-bold text-neutral-600 dark:text-neutral-400">Released By</label>
                   <input
                     type="text"
                     value={releasedBy}
                     onChange={(e) => setReleasedBy(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-surface border border-outline-variant rounded-xl text-[11px] font-semibold text-on-surface dark:text-white"
                   />
                 </div>
               </div>
@@ -2575,7 +2592,7 @@ function LoansPageContent() {
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-outline-variant/30">
                 <button
                   type="button"
-                  onClick={() => { setPrintMode(null); setPrintLoan(null); }}
+                  onClick={closePrintModal}
                   className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95"
                 >
                   Cancel
@@ -2594,7 +2611,7 @@ function LoansPageContent() {
       )}
 
       {/* MODAL 5: PRINT AMORTIZATION SCHEDULE PREVIEW */}
-      {printMode === 'schedule' && printLoan && (
+      {isPrintModalOpen && printMode === 'schedule' && printLoan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
             {/* Header */}
@@ -2603,7 +2620,7 @@ function LoansPageContent() {
                 <Printer className="w-5 h-5 text-primary" /> Print Amortization Schedule
               </h3>
               <button
-                onClick={() => { setPrintMode(null); setPrintLoan(null); }}
+                onClick={closePrintModal}
                 className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
                 aria-label="Close modal"
               >
@@ -2637,7 +2654,7 @@ function LoansPageContent() {
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-outline-variant/30">
                 <button
                   type="button"
-                  onClick={() => { setPrintMode(null); setPrintLoan(null); }}
+                  onClick={closePrintModal}
                   className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95"
                 >
                   Cancel
@@ -2656,7 +2673,7 @@ function LoansPageContent() {
       )}
 
       {/* MODAL 6: PRINT RECEIPT PREVIEW */}
-      {printMode === 'receipt' && printLoan && printPayment && (
+      {isPrintModalOpen && printMode === 'receipt' && printLoan && printPayment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto font-sans">
             {/* Header */}
@@ -2665,7 +2682,7 @@ function LoansPageContent() {
                 <Printer className="w-5 h-5 text-primary" /> Official Payment Receipt
               </h3>
               <button
-                onClick={() => { setPrintMode(null); setPrintLoan(null); setPrintPayment(null); }}
+                onClick={closePrintModal}
                 className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
                 aria-label="Close modal"
               >
@@ -2696,7 +2713,7 @@ function LoansPageContent() {
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-outline-variant/30">
                 <button
                   type="button"
-                  onClick={() => { setPrintMode(null); setPrintLoan(null); setPrintPayment(null); }}
+                  onClick={closePrintModal}
                   className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95"
                 >
                   Close
