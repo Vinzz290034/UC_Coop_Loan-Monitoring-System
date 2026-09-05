@@ -113,16 +113,14 @@ export const login = async (req, res, next) => {
     // Update last login timestamp
     await query('UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
-    // If member, fetch member details
+    // Fetch linked member details if available (all roles)
     let memberProfile = null;
-    if (user.role === 'member') {
-      const memberResult = await query(
-        'SELECT id, member_no, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified, membership_type FROM members WHERE user_id = $1',
-        [user.id]
-      );
-      if (memberResult.rowCount > 0) {
-        memberProfile = memberResult.rows[0];
-      }
+    const memberResult = await query(
+      'SELECT id, member_no, first_name, last_name, middle_name, title, tin, age, gender, civil_status, email, phone, address, date_of_birth, status, profile_completed, is_verified, membership_type FROM members WHERE user_id = $1',
+      [user.id]
+    );
+    if (memberResult.rowCount > 0) {
+      memberProfile = memberResult.rows[0];
     }
 
     // Count successful logins for user
