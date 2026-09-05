@@ -369,7 +369,7 @@ export default function AccountingPage() {
       });
 
       const link = document.createElement('a');
-      link.download = `Receipt_${receiptNo}.png`;
+      link.download = `Acknowledgement_Receipt_${receiptNo}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } catch (err) {
@@ -1306,7 +1306,7 @@ export default function AccountingPage() {
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto font-sans">
             <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30 mb-4">
               <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-primary" /> Official Contribution Receipt
+                <Receipt className="w-5 h-5 text-primary" /> Acknowledgement Receipt
               </h3>
               <button
                 onClick={() => { setCompletedReceiptMode(null); setCompletedReceiptTx(null); }}
@@ -1378,7 +1378,7 @@ export default function AccountingPage() {
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0 }}>Official Contribution Receipt</h1>
+                <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0 }}>Acknowledgement Receipt</h1>
                 <p style={{ fontSize: '9px', fontFamily: 'monospace', color: '#6b7280', margin: '2px 0 0 0' }}>
                   TXN-{new Date(completedReceiptTx.transaction_date).getFullYear()}-{String(completedReceiptTx.id).padStart(6, '0')}
                 </p>
@@ -1450,21 +1450,6 @@ export default function AccountingPage() {
               <p style={{ margin: 0 }}>
                 <strong>RECEIPT STATUS:</strong> This is an official system-generated transaction receipt acknowledging the ledger booking of the specified equity change. The member&apos;s share capital balance has been credited/debited and updated accordingly.
               </p>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '32px', paddingTop: '32px', fontSize: '9px', textAlign: 'center' }}>
-              <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#022c22', margin: 0 }}>Cooperative Office Staff</p>
-                <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
-                <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Authorized Officer</p>
-              </div>
-              <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #d1fae5' }}>
-                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#064e3b', margin: 0 }}>
-                  {auditedMember.last_name}, {auditedMember.first_name}
-                </p>
-                <div style={{ height: '1px', backgroundColor: '#a7f3d0', margin: '8px 0' }}></div>
-                <p style={{ color: '#059669', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Member Signature</p>
-              </div>
             </div>
           </div>
         </div>
