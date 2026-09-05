@@ -377,11 +377,14 @@ function LoansPageContent() {
 
     // Apply off-screen layout styling with standard sizing and background color
     clone.style.cssText = `
-      position: fixed;
-      top: -9999px;
-      left: -9999px;
-      width: 794px;
-      padding: 40px;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: -9999;
+      pointer-events: none;
+      width: 800px;
+      box-sizing: border-box !important;
+      padding: 32px;
       background: #ffffff;
       color: #000000;
       display: block !important;
@@ -395,7 +398,13 @@ function LoansPageContent() {
         scale: 2,
         backgroundColor: '#ffffff',
         useCORS: true,
-        logging: false
+        logging: false,
+        width: clone.offsetWidth,
+        height: clone.offsetHeight,
+        windowWidth: clone.offsetWidth,
+        windowHeight: clone.offsetHeight,
+        scrollX: 0,
+        scrollY: 0
       });
 
       const link = document.createElement('a');
@@ -2787,21 +2796,21 @@ function LoansPageContent() {
 
       {/* HIDDEN PRINT-ONLY CONTAINER */}
       {printLoan && printMode && (
-        <div id="print-section" className="hidden print:block text-black bg-white p-6 font-sans" style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff' }}>
+        <div id="print-section" className="hidden print:block text-black bg-white font-sans" style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' }}>
           {printMode === 'voucher' ? (
             /* Print-only Check Voucher Sheet (Identical Format to Loan Amortization) */
-            <div className="max-w-4xl mx-auto p-4" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '24px', boxSizing: 'border-box' }}>
               {/* Brand Header */}
-              <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px', boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
                   <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" style={{ height: '36px', width: 'auto', display: 'block', objectFit: 'contain' }} />
                   <div>
                     <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu Cooperative</h2>
                     <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Coop Sync Loan Management Portal</p>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0 }}>Check Disbursement Voucher</h1>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap' }}>Check Disbursement Voucher</h1>
                   <p style={{ fontSize: '9px', fontFamily: 'monospace', color: '#6b7280', margin: '2px 0 0 0' }}>{voucherNo}</p>
                 </div>
               </div>
@@ -2895,18 +2904,18 @@ function LoansPageContent() {
             </div>
           ) : printMode === 'schedule' ? (
             /* Print-only Amortization Table Sheet */
-            <div className="max-w-4xl mx-auto p-4" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '24px', boxSizing: 'border-box' }}>
               {/* Brand Header */}
-              <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px', boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
                   <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" style={{ height: '36px', width: 'auto', display: 'block', objectFit: 'contain' }} />
                   <div>
                     <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu Cooperative</h2>
                     <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Coop Sync Loan Management Portal</p>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0 }}>Official Loan Amortization</h1>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap' }}>Official Loan Amortization</h1>
                   <p style={{ fontSize: '9px', fontFamily: 'monospace', color: '#6b7280', margin: '2px 0 0 0' }}>Contract #{printLoan.id}</p>
                 </div>
               </div>
@@ -3013,18 +3022,18 @@ function LoansPageContent() {
             </div>
           ) : (
             /* Print-only Official Receipt Sheet */
-            <div className="max-w-4xl mx-auto p-4" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '24px', boxSizing: 'border-box' }}>
               {/* Brand Header */}
-              <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px', boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
                   <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" style={{ height: '36px', width: 'auto', display: 'block', objectFit: 'contain' }} />
                   <div>
                     <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu Cooperative</h2>
                     <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Coop Sync Loan Management Portal</p>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0 }}>Official Payment Receipt</h1>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap' }}>Official Payment Receipt</h1>
                   <p style={{ fontSize: '9px', fontFamily: 'monospace', color: '#6b7280', margin: '2px 0 0 0' }}>OR-{new Date(printPayment.payment_date).getFullYear()}-{String(printPayment.id).padStart(6, '0')}</p>
                 </div>
               </div>
