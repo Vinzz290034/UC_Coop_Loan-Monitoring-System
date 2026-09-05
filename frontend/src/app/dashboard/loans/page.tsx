@@ -34,6 +34,7 @@ import {
   Users,
   Printer,
   Download,
+  Loader2,
   Lock,
   Maximize2,
   Minimize2
@@ -218,6 +219,7 @@ function LoansPageContent() {
   const [printPayment, setPrintPayment] = useState<any>(null);
   const [printMode, setPrintMode] = useState<'voucher' | 'schedule' | 'receipt' | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [downloadingPaymentId, setDownloadingPaymentId] = useState<string | number | null>(null);
 
   // Voucher Template State Fields
   const [voucherNo, setVoucherNo] = useState('');
@@ -344,79 +346,86 @@ function LoansPageContent() {
   };
 
   const downloadReceipt = async (loanObj: any, paymentObj: any) => {
-    const html2canvas = (await import('html2canvas-pro')).default;
-    const receiptNo = `OR-${new Date(paymentObj.payment_date).getFullYear()}-${String(paymentObj.id).padStart(6, '0')}`;
-
-    // If print state is not already set to this receipt, temporarily set it to render print-section in DOM
-    const alreadyConfigured = printLoan?.id === loanObj.id && printPayment?.id === paymentObj.id && printMode === 'receipt';
-
-    if (!alreadyConfigured) {
-      setPrintLoan(loanObj);
-      setPrintPayment(paymentObj);
-      setPrintMode('receipt');
-      // Wait for React state updates to reflect in the DOM
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
-
-    const printEl = document.getElementById('print-section');
-    if (!printEl) {
-      console.error('Print element not found in DOM');
-      if (!alreadyConfigured) {
-        setPrintLoan(null);
-        setPrintPayment(null);
-        setPrintMode(null);
-      }
-      return;
-    }
-
-    // Clone the print element so we can modify it for off-screen rendering
-    const clone = printEl.cloneNode(true) as HTMLElement;
-
-    // Remove the printing classes that make it hidden on screen
-    clone.classList.remove('hidden', 'print:block');
-
-    // Apply off-screen layout styling with standard sizing and background color
-    clone.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: -9999;
-      pointer-events: none;
-      width: 800px;
-      box-sizing: border-box !important;
-      padding: 32px;
-      background: #ffffff;
-      color: #000000;
-      display: block !important;
-      visibility: visible !important;
-    `;
-
-    document.body.appendChild(clone);
-
     try {
-      const canvas = await html2canvas(clone, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        width: clone.offsetWidth,
-        height: clone.offsetHeight,
-        windowWidth: clone.offsetWidth,
-        windowHeight: clone.offsetHeight,
-        scrollX: 0,
-        scrollY: 0
-      });
+      setDownloadingPaymentId(paymentObj.id);
+      const html2canvas = (await import('html2canvas-pro')).default;
+      const receiptNo = `OR-${new Date(paymentObj.payment_date).getFullYear()}-${String(paymentObj.id).padStart(6, '0')}`;
 
-      const link = document.createElement('a');
-      link.download = `Receipt_${receiptNo}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      // If print state is not already set to this receipt, temporarily set it to render print-section in DOM
+      const alreadyConfigured = printLoan?.id === loanObj.id && printPayment?.id === paymentObj.id && printMode === 'receipt';
+
+      if (!alreadyConfigured) {
+        setPrintLoan(loanObj);
+        setPrintPayment(paymentObj);
+        setPrintMode('receipt');
+        // Wait for React state updates to reflect in the DOM
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+
+      const printEl = document.getElementById('print-section');
+      if (!printEl) {
+        console.error('Print element not found in DOM');
+        if (!alreadyConfigured) {
+          setPrintLoan(null);
+          setPrintPayment(null);
+          setPrintMode(null);
+        }
+        return;
+      }
+
+      // Clone the print element so we can modify it for off-screen rendering
+      const clone = printEl.cloneNode(true) as HTMLElement;
+
+      // Remove the printing classes that make it hidden on screen
+      clone.classList.remove('hidden', 'print:block');
+
+      // Apply off-screen layout styling with standard sizing and background color
+      clone.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: -9999;
+        pointer-events: none;
+        width: 800px;
+        box-sizing: border-box !important;
+        padding: 32px;
+        background: #ffffff;
+        color: #000000;
+        display: block !important;
+        visibility: visible !important;
+      `;
+
+      document.body.appendChild(clone);
+
+      try {
+        const canvas = await html2canvas(clone, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+          width: clone.offsetWidth,
+          height: clone.offsetHeight,
+          windowWidth: clone.offsetWidth,
+          windowHeight: clone.offsetHeight,
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        const link = document.createElement('a');
+        link.download = `Receipt_${receiptNo}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } finally {
+        if (document.body.contains(clone)) {
+          document.body.removeChild(clone);
+        }
+      }
     } catch (err) {
       console.error('Failed to generate image from print element:', err);
     } finally {
-      document.body.removeChild(clone);
+      setDownloadingPaymentId(null);
       // Revert temporary state changes if they were not already configured by user interaction
-      if (!alreadyConfigured) {
+      if (!isPrintModalOpen) {
         setPrintLoan(null);
         setPrintPayment(null);
         setPrintMode(null);
@@ -1476,9 +1485,18 @@ function LoansPageContent() {
                                                               <div className="flex items-center justify-end gap-1.5">
                                                                 <button
                                                                   onClick={() => downloadReceipt(loanDetails, pay)}
-                                                                  className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1"
+                                                                  disabled={downloadingPaymentId === pay.id}
+                                                                  className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1 disabled:opacity-50"
                                                                 >
-                                                                  <Download className="w-2.5 h-2.5" /> Download
+                                                                  {downloadingPaymentId === pay.id ? (
+                                                                    <>
+                                                                      <Loader2 className="w-2.5 h-2.5 animate-spin" /> Saving...
+                                                                    </>
+                                                                  ) : (
+                                                                    <>
+                                                                      <Download className="w-2.5 h-2.5" /> Download
+                                                                    </>
+                                                                  )}
                                                                 </button>
                                                                 <button
                                                                   onClick={() => openReceiptModal(loanDetails, pay)}

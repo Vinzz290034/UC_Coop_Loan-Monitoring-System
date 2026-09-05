@@ -21,6 +21,7 @@ import {
   Printer,
   Receipt,
   Download,
+  Loader2,
   PiggyBank,
   Building,
   PlusCircle,
@@ -69,6 +70,7 @@ export default function AccountingPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
   const [completedReceiptTx, setCompletedReceiptTx] = useState<any | null>(null);
   const [completedReceiptMode, setCompletedReceiptMode] = useState<'receipt' | null>(null);
+  const [downloadingTxId, setDownloadingTxId] = useState<string | number | null>(null);
 
   const auditedMember = user?.role === 'member' && user.profile
     ? user.profile
@@ -323,73 +325,76 @@ export default function AccountingPage() {
   };
 
   const downloadContributionReceipt = async (txObj: any) => {
-    const html2canvas = (await import('html2canvas-pro')).default;
-    const receiptNo = `TXN-${new Date(txObj.transaction_date).getFullYear()}-${String(txObj.id).padStart(6, '0')}`;
-
-    const alreadyConfigured = completedReceiptTx?.id === txObj.id && completedReceiptMode === 'receipt';
-
-    if (!alreadyConfigured) {
-      setCompletedReceiptTx(txObj);
-      setCompletedReceiptMode('receipt');
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
-
-    const printEl = document.getElementById('print-section');
-    if (!printEl) {
-      console.error('Print element not found in DOM');
-      if (!alreadyConfigured) {
-        setCompletedReceiptTx(null);
-        setCompletedReceiptMode(null);
-      }
-      return;
-    }
-
-    const clone = printEl.cloneNode(true) as HTMLElement;
-    clone.classList.remove('hidden', 'print:block');
-    clone.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: -9999;
-      pointer-events: none;
-      width: 800px;
-      box-sizing: border-box !important;
-      padding: 32px;
-      background: #ffffff;
-      color: #000000;
-      display: block !important;
-      visibility: visible !important;
-    `;
-
-    document.body.appendChild(clone);
-
     try {
-      const canvas = await html2canvas(clone, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        width: clone.offsetWidth,
-        height: clone.offsetHeight,
-        windowWidth: clone.offsetWidth,
-        windowHeight: clone.offsetHeight,
-        scrollX: 0,
-        scrollY: 0
-      });
+      setDownloadingTxId(txObj.id);
+      const html2canvas = (await import('html2canvas-pro')).default;
+      const receiptNo = `TXN-${new Date(txObj.transaction_date).getFullYear()}-${String(txObj.id).padStart(6, '0')}`;
 
-      const link = document.createElement('a');
-      link.download = `Acknowledgement_Receipt_${receiptNo}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      const isModalOpen = completedReceiptTx?.id === txObj.id && completedReceiptMode === 'receipt';
+
+      if (!completedReceiptTx || completedReceiptTx.id !== txObj.id) {
+        setCompletedReceiptTx(txObj);
+        // Do NOT set completedReceiptMode('receipt') here so modal will not pop up!
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+
+      const printEl = document.getElementById('print-section');
+      if (!printEl) {
+        console.error('Print element not found in DOM');
+        if (!isModalOpen) {
+          setCompletedReceiptTx(null);
+        }
+        return;
+      }
+
+      const clone = printEl.cloneNode(true) as HTMLElement;
+      clone.classList.remove('hidden', 'print:block');
+      clone.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: -9999;
+        pointer-events: none;
+        width: 800px;
+        box-sizing: border-box !important;
+        padding: 32px;
+        background: #ffffff;
+        color: #000000;
+        display: block !important;
+        visibility: visible !important;
+      `;
+
+      document.body.appendChild(clone);
+
+      try {
+        const canvas = await html2canvas(clone, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+          width: clone.offsetWidth,
+          height: clone.offsetHeight,
+          windowWidth: clone.offsetWidth,
+          windowHeight: clone.offsetHeight,
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        const link = document.createElement('a');
+        link.download = `Acknowledgement_Receipt_${receiptNo}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } finally {
+        if (document.body.contains(clone)) {
+          document.body.removeChild(clone);
+        }
+      }
     } catch (err) {
       console.error('Failed to generate receipt image:', err);
     } finally {
-      if (document.body.contains(clone)) {
-        document.body.removeChild(clone);
-      }
-      if (!alreadyConfigured) {
+      setDownloadingTxId(null);
+      if (completedReceiptMode !== 'receipt') {
         setCompletedReceiptTx(null);
-        setCompletedReceiptMode(null);
       }
     }
   };
@@ -624,9 +629,18 @@ export default function AccountingPage() {
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   onClick={() => downloadContributionReceipt(tx)}
-                                  className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
+                                  disabled={downloadingTxId === tx.id}
+                                  className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1 cursor-pointer disabled:opacity-50"
                                 >
-                                  <Download className="w-2.5 h-2.5" /> Download
+                                  {downloadingTxId === tx.id ? (
+                                    <>
+                                      <Loader2 className="w-2.5 h-2.5 animate-spin" /> Saving...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Download className="w-2.5 h-2.5" /> Download
+                                    </>
+                                  )}
                                 </button>
                                 <button
                                   onClick={() => openContributionReceiptModal(tx)}
@@ -1358,9 +1372,18 @@ export default function AccountingPage() {
                 <button
                   type="button"
                   onClick={() => downloadContributionReceipt(completedReceiptTx)}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
+                  disabled={downloadingTxId === completedReceiptTx.id}
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  <Download className="w-4 h-4" /> Download
+                  {downloadingTxId === completedReceiptTx.id ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" /> Download
+                    </>
+                  )}
                 </button>
                 <button
                   type="button"
