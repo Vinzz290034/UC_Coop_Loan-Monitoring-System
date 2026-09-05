@@ -2816,84 +2816,133 @@ function LoansPageContent() {
       {printLoan && printMode && (
         <div id="print-section" className="hidden print:block text-black bg-white font-sans" style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' }}>
           {printMode === 'voucher' ? (
-            /* Print-only Check Voucher Sheet (Identical Format to Loan Amortization) */
-            <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '24px', boxSizing: 'border-box' }}>
+            /* Print-only Check Voucher Sheet — Formal Boxed Cooperative Voucher */
+            <div
+              className="mx-auto"
+              style={{
+                maxWidth: '740px',
+                margin: '0 auto',
+                border: '1.5px solid #064e3b',
+                borderRadius: '16px',
+                padding: '28px 32px',
+                backgroundColor: '#ffffff',
+                boxSizing: 'border-box',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px'
+              }}
+            >
               {/* Brand Header */}
-              <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px', boxSizing: 'border-box' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: '2px solid #064e3b',
+                  paddingBottom: '16px',
+                  boxSizing: 'border-box'
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                  <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" style={{ height: '36px', width: 'auto', display: 'block', objectFit: 'contain' }} />
+                  <img
+                    src="/Coop Sync_logo.png"
+                    alt="Coop Sync Logo"
+                    style={{ height: '40px', width: 'auto', display: 'block', objectFit: 'contain' }}
+                  />
                   <div>
-                    <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu Cooperative</h2>
-                    <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Coop Sync Loan Management Portal</p>
+                    <h2 style={{ fontSize: '15px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>
+                      University of Cebu Cooperative
+                    </h2>
+                    <p style={{ fontSize: '10px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>
+                      Coop Sync Loan Management Portal
+                    </p>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap' }}>Check Disbursement Voucher</h1>
-                  <p style={{ fontSize: '9px', fontFamily: 'monospace', color: '#6b7280', margin: '2px 0 0 0' }}>{voucherNo}</p>
+                  <h1 style={{ fontSize: '13px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap' }}>
+                    Check Disbursement Voucher
+                  </h1>
+                  <p style={{ fontSize: '10px', fontFamily: 'monospace', color: '#064e3b', fontWeight: 'bold', margin: '2px 0 0 0' }}>
+                    {voucherNo}
+                  </p>
                 </div>
               </div>
 
               {/* Modern Info Grid */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', backgroundColor: '#ecfdf5', padding: '16px', borderRadius: '16px', border: '1px solid #d1fae5', fontSize: '10px' }}>
-                <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '12px',
+                  backgroundColor: '#f0fdf4',
+                  padding: '14px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid #bbf7d0',
+                  fontSize: '10px',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <div>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Payee Member</span>
                   <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{printLoan.last_name}, {printLoan.first_name}</p>
-                  <p style={{ fontSize: '9px', color: '#6b7280', fontFamily: 'monospace', margin: '2px 0 0 0' }}>ID: #{printLoan.member_id || printLoan.borrower_id}</p>
+                  <p style={{ fontSize: '9px', color: '#6b7280', fontFamily: 'monospace', margin: '2px 0 0 0' }}>
+                    Member ID: {printLoan.member_no || String(printLoan.member_id || printLoan.borrower_id).slice(0, 8).toUpperCase()}
+                  </p>
                 </div>
-                <div style={{ flex: 1 }}>
+                <div>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Check Reference</span>
                   <p style={{ fontWeight: 'bold', color: '#064e3b', margin: '2px 0 0 0' }}>{checkNo || 'PENDING RELEASE'}</p>
                   <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{bankName}</p>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Disbursement Amount</span>
-                  <p style={{ fontSize: '12px', fontWeight: '800', color: '#064e3b', margin: '2px 0 0 0' }}>{formatCurrency(parseFloat(printLoan.principal_amount))}</p>
-                  <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{new Date(printLoan.disbursement_date || printLoan.created_at).toLocaleDateString()}</p>
-                </div>
-                <div style={{ textAlign: 'right', flex: 1 }}>
+                <div>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Loan Product</span>
-                  <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{printLoan.product_name || 'Standard'}</p>
+                  <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{printLoan.product_name || 'Regular Loan'}</p>
                   <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{printLoan.term_months} Mos ({printLoan.payment_mode || 'Standard'})</p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Disbursement Amount</span>
+                  <p style={{ fontSize: '13px', fontWeight: '800', color: '#064e3b', margin: '2px 0 0 0' }}>{formatCurrency(parseFloat(printLoan.principal_amount))}</p>
+                  <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{new Date(printLoan.disbursement_date || printLoan.created_at).toLocaleDateString()}</p>
                 </div>
               </div>
 
               {/* Simplified Debit/Credit Table */}
-              <div style={{ border: '1px solid rgba(6, 78, 59, 0.1)', borderRadius: '16px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+              <div style={{ border: '1px solid rgba(6, 78, 59, 0.15)', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
                 <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      <th style={{ padding: '8px 12px', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Account Title & Description</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '140px', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Debit (₱)</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right', width: '140px' }}>Credit (₱)</th>
+                      <th style={{ padding: '9px 14px', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Account Title & Description</th>
+                      <th style={{ padding: '9px 14px', textAlign: 'right', width: '130px', borderRight: '1px solid rgba(4, 120, 87, 0.2)' }}>Debit (₱)</th>
+                      <th style={{ padding: '9px 14px', textAlign: 'right', width: '130px' }}>Credit (₱)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                      <td style={{ padding: '10px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                    <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.06)' }}>
+                      <td style={{ padding: '10px 14px', borderRight: '1px solid rgba(6, 78, 59, 0.06)' }}>
                         <span style={{ fontWeight: 'bold', color: '#1f2937', display: 'block' }}>Receivables - Loans ({printLoan.product_name || 'Standard'})</span>
-                        <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Disbursement of principal amount for Contract #{printLoan.id}</p>
+                        <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Disbursement of approved loan proceeds — Contract #{String(printLoan.id).slice(0, 8).toUpperCase()}</p>
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#1f2937', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#1f2937', borderRight: '1px solid rgba(6, 78, 59, 0.06)' }}>
                         {parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af' }}>-</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af' }}>—</td>
                     </tr>
-                    <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                      <td style={{ padding: '10px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                    <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.06)' }}>
+                      <td style={{ padding: '10px 14px', borderRight: '1px solid rgba(6, 78, 59, 0.06)' }}>
                         <span style={{ fontWeight: 'bold', color: '#1f2937', display: 'block' }}>Cash in Bank</span>
                         <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Check drawn on {bankName} (Ref No: {checkNo || 'N/A'})</p>
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>-</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#064e3b' }}>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af', borderRight: '1px solid rgba(6, 78, 59, 0.06)' }}>—</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#064e3b' }}>
                         {parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
-                    <tr style={{ backgroundColor: '#ecfdf5', fontWeight: 'bold', fontSize: '10px' }}>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: '#064e3b', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>TOTAL</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                    <tr style={{ backgroundColor: '#ecfdf5', fontWeight: 'bold', fontSize: '10px', borderBottom: '3px double #064e3b' }}>
+                      <td style={{ padding: '9px 14px', textAlign: 'right', color: '#064e3b', borderRight: '1px solid rgba(6, 78, 59, 0.06)' }}>TOTAL</td>
+                      <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', borderRight: '1px solid rgba(6, 78, 59, 0.06)' }}>
                         {parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
+                      <td style={{ padding: '9px 14px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
                         {parseFloat(printLoan.principal_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
@@ -2902,21 +2951,33 @@ function LoansPageContent() {
               </div>
 
               {/* Particulars Card */}
-              <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '16px', border: '1px solid #f3f4f6', fontSize: '10px', lineHeight: '1.625', color: '#4b5563' }}>
-                <p style={{ margin: 0 }}><strong>PARTICULARS / REMARKS:</strong> Being check payment for the loan proceeds of {printLoan.product_name} approved on {new Date(printLoan.created_at).toLocaleDateString()} under member name {printLoan.last_name}, {printLoan.first_name}.</p>
+              <div style={{ backgroundColor: '#f9fafb', padding: '14px 16px', borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: '10px', lineHeight: '1.6', color: '#4b5563' }}>
+                <p style={{ margin: 0 }}>
+                  <strong style={{ color: '#111827' }}>PARTICULARS / REMARKS:</strong> Being check disbursement payment for the loan proceeds of {printLoan.product_name || 'Regular Loan'} approved on {new Date(printLoan.created_at).toLocaleDateString()} under member name {printLoan.last_name}, {printLoan.first_name}.
+                </p>
               </div>
 
-              {/* Modern Signee Grid (Matching Amortization Table) */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '32px', paddingTop: '32px', fontSize: '9px', textAlign: 'center' }}>
-                <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{releasedBy || preparedBy || 'AUTHORIZED SIGNATORY'}</p>
-                  <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
-                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Authorized Disbursing Officer</p>
+              {/* Four-Column Official Cooperative Signatories Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', paddingTop: '16px', fontSize: '9px', textAlign: 'center' }}>
+                <div style={{ backgroundColor: 'rgba(249, 250, 251, 0.6)', padding: '12px 8px', borderRadius: '10px', border: '1px solid #e5e7eb' }}>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0, minHeight: '14px' }}>{preparedBy || 'Cooperative Staff'}</p>
+                  <div style={{ height: '1px', backgroundColor: '#d1d5db', margin: '8px 0' }}></div>
+                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0, fontSize: '8px' }}>Prepared By</p>
                 </div>
-                <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #d1fae5' }}>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#064e3b', margin: 0 }}>{printLoan.last_name}, {printLoan.first_name}</p>
-                  <div style={{ height: '1px', backgroundColor: '#a7f3d0', margin: '8px 0' }}></div>
-                  <p style={{ color: '#059669', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Signature of Borrower (Received By)</p>
+                <div style={{ backgroundColor: 'rgba(249, 250, 251, 0.6)', padding: '12px 8px', borderRadius: '10px', border: '1px solid #e5e7eb' }}>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0, minHeight: '14px' }}>{approvedBy || 'Credit Committee'}</p>
+                  <div style={{ height: '1px', backgroundColor: '#d1d5db', margin: '8px 0' }}></div>
+                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0, fontSize: '8px' }}>Approved By</p>
+                </div>
+                <div style={{ backgroundColor: 'rgba(249, 250, 251, 0.6)', padding: '12px 8px', borderRadius: '10px', border: '1px solid #e5e7eb' }}>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0, minHeight: '14px' }}>{releasedBy || 'Michelle Pable'}</p>
+                  <div style={{ height: '1px', backgroundColor: '#d1d5db', margin: '8px 0' }}></div>
+                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0, fontSize: '8px' }}>Disbursed / Released By</p>
+                </div>
+                <div style={{ backgroundColor: '#f0fdf4', padding: '12px 8px', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#064e3b', margin: 0, minHeight: '14px' }}>{printLoan.last_name}, {printLoan.first_name}</p>
+                  <div style={{ height: '1px', backgroundColor: '#86efac', margin: '8px 0' }}></div>
+                  <p style={{ color: '#059669', fontWeight: '600', textTransform: 'uppercase', margin: 0, fontSize: '8px' }}>Received By (Borrower)</p>
                 </div>
               </div>
             </div>
@@ -3142,7 +3203,7 @@ function LoansPageContent() {
         @media print {
           @page {
             size: letter portrait;
-            margin: 10mm 12mm;
+            margin: 18mm 20mm;
           }
           * {
             -webkit-print-color-adjust: exact !important;
