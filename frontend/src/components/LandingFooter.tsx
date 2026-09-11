@@ -173,8 +173,13 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
             {/* Brand column */}
             <div className="md:col-span-2 space-y-5">
               <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity w-fit">
-                <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-8 h-8 object-contain" />
-                <span className="font-brandname text-lg font-extrabold text-primary dark:text-secondary">Coop Sync</span>
+                <span className="p-0.5 rounded-full ring-2 ring-primary inline-flex">
+                  <img src="/Coop.jpeg" alt="UC-METC Cooperative Logo" className="w-10 h-10 object-cover rounded-full" />
+                </span>
+                <div className="flex flex-col leading-tight">
+                  <span className="font-brandname text-lg font-extrabold text-primary dark:text-secondary">Coop Sync</span>
+                  <span className="font-body text-[11px] font-semibold text-neutral-500 dark:text-neutral-400 tracking-wide">UC-METC MPC</span>
+                </div>
               </Link>
               <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 max-w-xs leading-relaxed">
                 Transparent loan monitoring, automated amortization computation, and member ledger management for the <span className="font-semibold text-on-surface dark:text-neutral-200">University of Cebu - METC Multipurpose Cooperative</span>.
@@ -236,7 +241,7 @@ export default function LandingFooter({ activeLegal = null }: LandingFooterProps
           {/* ── Bottom bar ──────────────────────────────────────────── */}
           <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-neutral-500 dark:text-neutral-400">
             <div className="flex flex-col gap-1.5 text-left w-full sm:w-auto">
-              <div>© 2026 UC Coop Loans / Coop Sync. All rights reserved.</div>
+              <div>© 2026 Coop Sync. All rights reserved.</div>
               <div className="text-[10px] text-neutral-500 flex items-center gap-1.5">
                 <Cpu className="w-3.5 h-3.5 text-primary dark:text-secondary" />
                 Engineered &amp; Maintained by{' '}

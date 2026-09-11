@@ -375,7 +375,9 @@ export default function RegisterPage() {
       <main className="w-full max-w-md z-10 space-y-6 pt-16 py-10">
         {/* Brand Header */}
         <div className="text-center space-y-2 flex flex-col items-center">
-          <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-20 h-10 object-contain mb-1" />
+          <span className="p-0.5 rounded-full ring-2 ring-primary inline-flex mb-1">
+            <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-full" />
+          </span>
           <h1 className="font-brandname text-4xl font-bold text-primary dark:text-secondary tracking-tight">
             Coop Sync
           </h1>
@@ -786,7 +788,7 @@ export default function RegisterPage() {
 
         <div className="text-center font-body text-xs text-on-surface/50 dark:text-neutral-400 leading-relaxed font-semibold">
           <p>Protected by UC Coop Loans Secure Encryption protocol.</p>
-          <p className="mt-1">For support, contact support@coopsync.ph or visit the UC METC Coop Office</p>
+          <p className="mt-1">For support, contact ucmetc.ecc@gmail.com or visit the UC METC Coop Office</p>
         </div>
       </main>
     </div>

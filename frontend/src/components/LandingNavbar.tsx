@@ -29,8 +29,10 @@ export default function LandingNavbar() {
       <div className="flex justify-between items-center w-full px-4 sm:px-6 md:px-12 max-w-7xl mx-auto h-20">
 
         {/* ── Logo ──────────────────────────────────────────────────── */}
-        <Link href="/" className="font-brandname text-sm sm:text-2xl font-bold text-primary dark:text-secondary flex items-center gap-1 hover:opacity-90 transition-opacity">
-          <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-10 h-10 sm:w-14 sm:h-14 object-contain" />
+        <Link href="/" className="font-brandname text-sm sm:text-2xl font-bold text-primary dark:text-secondary flex items-center gap-2 hover:opacity-90 transition-opacity">
+          <span className="p-0.5 rounded-full ring-2 ring-primary inline-flex">
+            <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded-full" />
+          </span>
           Coop Sync
         </Link>
 

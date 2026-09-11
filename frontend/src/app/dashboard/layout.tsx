@@ -218,7 +218,9 @@ function DashboardLayoutContent({
             aria-label="Coop Sync Dashboard"
             title="Go to Dashboard"
           >
-            <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-9 h-6 object-contain" />
+            <span className="p-0.5 rounded-full ring-2 ring-primary inline-flex flex-shrink-0">
+              <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" className="w-7 h-7 object-cover rounded-full" />
+            </span>
             <span>Coop Sync</span>
           </Link>
         ) : (
@@ -228,7 +230,9 @@ function DashboardLayoutContent({
             aria-label="Coop Sync Dashboard"
             title="Go to Dashboard"
           >
-            <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" className="w-7 h-7 object-contain" />
+            <span className="p-0.5 rounded-full ring-2 ring-primary inline-flex">
+              <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" className="w-7 h-7 object-cover rounded-full" />
+            </span>
           </Link>
         )}
 

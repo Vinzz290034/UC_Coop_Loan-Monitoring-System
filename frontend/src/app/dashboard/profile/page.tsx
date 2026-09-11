@@ -21,6 +21,9 @@ import {
   Loader2,
   Edit3,
   Camera,
+  ImagePlus,
+  FolderOpen,
+  RotateCcw,
   X,
   Clock,
 } from 'lucide-react';
@@ -102,6 +105,144 @@ function PasswordStrength({ password, currentPassword }: { password: string; cur
 export default function ProfilePage() {
   const { user, updateUser, refreshUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Photo source picker menu
+  const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+  const photoMenuRef = useRef<HTMLDivElement>(null);
+
+  // Live Camera Capture Modal states
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [capturedSnapshot, setCapturedSnapshot] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Close photo menu on outside click
+  useEffect(() => {
+    if (!showPhotoMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (photoMenuRef.current && !photoMenuRef.current.contains(e.target as Node)) {
+        setShowPhotoMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPhotoMenu]);
+
+  // Handle camera modal cleanup
+  const stopCameraStream = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+  };
+
+  const handleStartCamera = async () => {
+    setShowPhotoMenu(false);
+
+    // On mobile devices, directly launch the native device camera app
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+
+    if (isMobileDevice) {
+      cameraInputRef.current?.click();
+      return;
+    }
+
+    setCameraError(null);
+    setCapturedSnapshot(null);
+    setIsCameraModalOpen(true);
+    setCameraLoading(true);
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        // Fallback to native capture input if WebRTC is not supported
+        cameraInputRef.current?.click();
+        setIsCameraModalOpen(false);
+        setCameraLoading(false);
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 640 },
+        },
+        audio: false,
+      });
+
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (err: any) {
+      console.warn('Webcam access error or permission denied:', err);
+      // If user denied or device lacks direct stream support, offer native file capture
+      setCameraError(
+        err?.message?.includes('Permission') || err?.name === 'NotAllowedError'
+          ? 'Camera permission denied. Please allow camera access in browser settings, or use "Choose File".'
+          : 'Unable to start camera stream. You can still use the native device camera option.'
+      );
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  const handleCapturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    // Set square crop based on the smaller dimension
+    const size = Math.min(video.videoWidth || 640, video.videoHeight || 640);
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Calculate center crop offsets
+    const startX = (video.videoWidth - size) / 2;
+    const startY = (video.videoHeight - size) / 2;
+
+    ctx.drawImage(video, startX, startY, size, size, 0, 0, size, size);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    setCapturedSnapshot(dataUrl);
+  };
+
+  const handleRetakePhoto = () => {
+    setCapturedSnapshot(null);
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.play();
+    }
+  };
+
+  const handleConfirmCapturedPhoto = () => {
+    if (!capturedSnapshot || !canvasRef.current) return;
+    canvasRef.current.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], `avatar_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      setSelectedFile(file);
+      setAvatarPreview(capturedSnapshot);
+      setAvatarError(null);
+      setAvatarSuccess(null);
+      stopCameraStream();
+      setIsCameraModalOpen(false);
+    }, 'image/jpeg', 0.92);
+  };
+
+  const handleCloseCameraModal = () => {
+    stopCameraStream();
+    setIsCameraModalOpen(false);
+    setCapturedSnapshot(null);
+    setCameraError(null);
+  };
 
   // Avatar upload states
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -182,9 +323,8 @@ export default function ProfilePage() {
     setSelectedFile(null);
     setAvatarPreview(null);
     setAvatarError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
   // Profile form state
@@ -394,49 +534,117 @@ const computeAgeFromDob = (dobString: string): string => {
       {/* Profile Header */}
       <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl p-6">
         <div className="flex flex-col sm:flex-row items-center gap-6">
-          {/* Avatar upload container */}
-          <div className="relative group w-20 h-20 rounded-2xl overflow-hidden shadow-lg border border-outline-variant/30 flex-shrink-0 bg-neutral-100 dark:bg-neutral-800">
-            {avatarPreview ? (
-              <img
-                src={avatarPreview}
-                alt="Avatar preview"
-                className="w-full h-full object-cover"
-              />
-            ) : user.profile_picture_url && !avatarLoadError ? (
-              <img
-                src={getAvatarUrl(user.profile_picture_url) || ''}
-                alt={displayName}
-                className="w-full h-full object-cover"
-                onError={() => setAvatarLoadError(true)}
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-primary to-primary/70 dark:from-secondary dark:to-secondary/70 flex items-center justify-center text-white dark:text-neutral-950 font-bold text-xl">
-                {user.profile?.first_name ? (
-                  <span>{user.profile.first_name.charAt(0)}{user.profile.last_name?.charAt(0) || ''}</span>
-                ) : (
-                  <User className="w-10 h-10" />
-                )}
-              </div>
-            )}
+          {/* Avatar + photo picker wrapper */}
+          <div ref={photoMenuRef} className="relative flex-shrink-0">
+            {/* Avatar upload container */}
+            <div className="relative group w-20 h-20 rounded-2xl overflow-hidden shadow-lg border border-outline-variant/30 bg-neutral-100 dark:bg-neutral-800">
+              {avatarPreview ? (
+                <img
+                  src={avatarPreview}
+                  alt="Avatar preview"
+                  className="w-full h-full object-cover"
+                />
+              ) : user.profile_picture_url && !avatarLoadError ? (
+                <img
+                  src={getAvatarUrl(user.profile_picture_url) || ''}
+                  alt={displayName}
+                  className="w-full h-full object-cover"
+                  onError={() => setAvatarLoadError(true)}
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-primary to-primary/70 dark:from-secondary dark:to-secondary/70 flex items-center justify-center text-white dark:text-neutral-950 font-bold text-xl">
+                  {user.profile?.first_name ? (
+                    <span>{user.profile.first_name.charAt(0)}{user.profile.last_name?.charAt(0) || ''}</span>
+                  ) : (
+                    <User className="w-10 h-10" />
+                  )}
+                </div>
+              )}
 
-            {/* Hover overlay */}
+              {/* Hover overlay — opens photo source picker */}
+              <button
+                type="button"
+                disabled={avatarUploading}
+                onClick={() => setShowPhotoMenu(v => !v)}
+                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 cursor-pointer"
+                aria-label="Change profile photo"
+              >
+                <Camera className="w-5 h-5" />
+                <span>Change</span>
+              </button>
+
+              {/* Hidden file input — choose from library */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+              />
+
+              {/* Hidden camera input — take photo */}
+              <input
+                type="file"
+                ref={cameraInputRef}
+                onChange={handleFileChange}
+                accept="image/jpeg,image/png,image/webp"
+                capture="user"
+                className="hidden"
+              />
+            </div>
+
+            {/* Mobile-friendly camera badge icon on bottom right */}
             <button
+              type="button"
               disabled={avatarUploading}
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1 cursor-pointer"
+              onClick={() => setShowPhotoMenu(v => !v)}
+              className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md border-2 border-white dark:border-neutral-900 flex items-center justify-center sm:hidden hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+              title="Change photo"
+              aria-label="Change photo"
             >
-              <Camera className="w-5 h-5" />
-              <span>Change</span>
+              <Camera className="w-3.5 h-3.5" />
             </button>
 
-            {/* Hidden File Input */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-            />
+            {/* Photo source picker dropdown */}
+            {showPhotoMenu && (
+              <div
+                className="absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 top-[calc(100%+8px)] z-50 w-44 bg-white dark:bg-neutral-800 border border-outline-variant/50 dark:border-neutral-700 rounded-xl shadow-xl overflow-hidden animate-micro-elevate"
+              >
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    handleStartCamera();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStartCamera();
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-on-surface dark:text-white hover:bg-primary/8 dark:hover:bg-primary/15 transition-colors cursor-pointer"
+                >
+                  <Camera className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                  Take Photo
+                </button>
+                <div className="h-px bg-outline-variant/30 dark:bg-neutral-700 mx-3" />
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setShowPhotoMenu(false);
+                    setTimeout(() => fileInputRef.current?.click(), 10);
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPhotoMenu(false);
+                    fileInputRef.current?.click();
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-on-surface dark:text-white hover:bg-primary/8 dark:hover:bg-primary/15 transition-colors cursor-pointer"
+                >
+                  <FolderOpen className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                  Choose File
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex-1 text-center sm:text-left space-y-2">
@@ -1010,6 +1218,135 @@ const computeAgeFromDob = (dobString: string): string => {
                 Done
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Live Camera Viewfinder Modal for Desktop & Mobile */}
+      {isCameraModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-neutral-950/75 backdrop-blur-md p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4 animate-modal-pop relative overflow-hidden">
+            <div className="flex items-center justify-between pb-2 border-b border-outline-variant/30">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/10 dark:bg-secondary/15 flex items-center justify-center text-primary dark:text-secondary">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <h3 className="font-headline text-base font-bold text-on-surface dark:text-white">
+                  {capturedSnapshot ? 'Photo Preview' : 'Take Profile Photo'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseCameraModal}
+                className="p-1.5 rounded-full text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                aria-label="Close camera"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {cameraError ? (
+              <div className="space-y-4 py-4 text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed px-2">
+                  {cameraError}
+                </p>
+                <div className="pt-2 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCloseCameraModal();
+                      cameraInputRef.current?.click();
+                    }}
+                    className="w-full py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-sm font-bold shadow hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+                  >
+                    Open Device Camera
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCloseCameraModal}
+                    className="w-full py-2 text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Viewfinder container */}
+                <div className="relative aspect-square w-full max-w-[320px] mx-auto rounded-2xl overflow-hidden bg-neutral-950 flex items-center justify-center border-2 border-primary/30 dark:border-secondary/30 shadow-inner">
+                  {cameraLoading && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-neutral-950 text-white z-10">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary dark:text-secondary" />
+                      <span className="text-xs font-semibold">Starting camera...</span>
+                    </div>
+                  )}
+
+                  {/* Live Video stream */}
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    autoPlay
+                    className={`w-full h-full object-cover -scale-x-100 ${capturedSnapshot ? 'hidden' : 'block'}`}
+                  />
+
+                  {/* Captured snapshot preview */}
+                  {capturedSnapshot && (
+                    <img
+                      src={capturedSnapshot}
+                      alt="Captured snapshot"
+                      className="w-full h-full object-cover -scale-x-100"
+                    />
+                  )}
+
+                  {/* Subtle circular portrait guide overlay */}
+                  <div className="absolute inset-0 pointer-events-none border-[3px] border-dashed border-white/40 rounded-full m-6" />
+                </div>
+
+                {/* Hidden canvas for capturing the frame */}
+                <canvas ref={canvasRef} className="hidden" />
+
+                {/* Control buttons */}
+                <div className="pt-2">
+                  {!capturedSnapshot ? (
+                    <div className="flex items-center justify-center gap-4">
+                      <button
+                        type="button"
+                        onClick={handleCapturePhoto}
+                        disabled={cameraLoading}
+                        className="flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold shadow-lg shadow-primary/25 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        <Camera className="w-4 h-4" />
+                        Capture Photo
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={handleRetakePhoto}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-outline-variant/60 dark:border-neutral-700 text-on-surface dark:text-white font-label text-sm font-bold hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Retake
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmCapturedPhoto}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold shadow hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Use Photo
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>,
         document.body

@@ -14,12 +14,12 @@ export const getDashboardSummary = async (req, res, next) => {
         (SELECT COUNT(*) FROM users WHERE role = 'member') as total_members_users,
         (SELECT COUNT(*) FROM users WHERE role = 'manager') as total_managers,
         (SELECT COUNT(*) FROM users WHERE role = 'admin') as total_admins,
-        (SELECT COUNT(*) FROM members) as total_member_profiles,
-        (SELECT COUNT(*) FROM members WHERE status IN ('active', 'approved')) as active_members,
-        (SELECT COUNT(*) FROM members WHERE status = 'suspended') as suspended_members,
-        (SELECT COUNT(*) FROM members WHERE status = 'inactive') as inactive_members,
-        (SELECT COUNT(*) FROM members WHERE membership_type = 'Regular') as regular_members,
-        (SELECT COUNT(*) FROM members WHERE membership_type = 'Associate') as associate_members,
+        (SELECT COUNT(*) FROM members m LEFT JOIN users u ON m.user_id = u.id WHERE (u.role IS NULL OR u.role = 'member') AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%'))) as total_member_profiles,
+        (SELECT COUNT(*) FROM members m LEFT JOIN users u ON m.user_id = u.id WHERE (u.role IS NULL OR u.role = 'member') AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%')) AND m.status IN ('active', 'approved')) as active_members,
+        (SELECT COUNT(*) FROM members m LEFT JOIN users u ON m.user_id = u.id WHERE (u.role IS NULL OR u.role = 'member') AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%')) AND m.status = 'suspended') as suspended_members,
+        (SELECT COUNT(*) FROM members m LEFT JOIN users u ON m.user_id = u.id WHERE (u.role IS NULL OR u.role = 'member') AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%')) AND m.status = 'inactive') as inactive_members,
+        (SELECT COUNT(*) FROM members m LEFT JOIN users u ON m.user_id = u.id WHERE (u.role IS NULL OR u.role = 'member') AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%')) AND m.membership_type = 'Regular') as regular_members,
+        (SELECT COUNT(*) FROM members m LEFT JOIN users u ON m.user_id = u.id WHERE (u.role IS NULL OR u.role = 'member') AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%')) AND m.membership_type = 'Associate') as associate_members,
 
         -- Loan counts by status
         (SELECT COUNT(*) FROM loans) as total_loans,

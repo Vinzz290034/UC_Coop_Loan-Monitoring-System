@@ -45,6 +45,7 @@ interface Member {
   profile_picture_url?: string | null;
   status: 'active' | 'suspended' | 'inactive' | 'pending' | 'approved' | 'disapproved';
   membership_type?: 'Regular' | 'Associate';
+  user_role?: string;
   profile_completed?: boolean;
   created_at: string;
 }
@@ -235,7 +236,13 @@ export default function MembersPage() {
       if (sortBy) params.sortBy = sortBy;
 
       const response = await api.get('/members', { params });
-      setMembers(response.data.data || []);
+      const rawMembers: any[] = response.data.data || [];
+      const filteredMembers = rawMembers.filter((m: any) => {
+        const isStaffOrAdminRole = m.user_role === 'admin' || m.user_role === 'staff' || m.user_role === 'manager';
+        const isStaffOrAdminNo = typeof m.member_no === 'string' && (m.member_no.startsWith('ADM-') || m.member_no.startsWith('STF-'));
+        return !isStaffOrAdminRole && !isStaffOrAdminNo;
+      });
+      setMembers(filteredMembers);
       setCurrentPage(1);
     } catch (err: any) {
       console.error('Error fetching members:', err);

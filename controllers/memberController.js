@@ -166,6 +166,7 @@ export const getAllMembers = async (req, res, next) => {
       SELECT 
         m.*, 
         u.profile_picture_url,
+        u.role AS user_role,
         COALESCE((
           SELECT sct.balance_after 
           FROM share_capital_transactions sct 
@@ -198,6 +199,8 @@ export const getAllMembers = async (req, res, next) => {
       FROM members m
       LEFT JOIN users u ON m.user_id = u.id
       WHERE 1=1
+        AND (u.role IS NULL OR u.role = 'member')
+        AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%'))
     `;
     const queryParams = [];
     let paramIndex = 1;
@@ -778,7 +781,14 @@ export const exportMembersReport = async (req, res, next) => {
   try {
     const { search, status, membership_type } = req.query;
 
-    let queryText = 'SELECT id, member_no, first_name, middle_name, last_name, age, gender, civil_status, email, phone, status, membership_type, created_at FROM members WHERE 1=1';
+    let queryText = `
+      SELECT m.id, m.member_no, m.first_name, m.middle_name, m.last_name, m.age, m.gender, m.civil_status, m.email, m.phone, m.status, m.membership_type, m.created_at 
+      FROM members m
+      LEFT JOIN users u ON m.user_id = u.id
+      WHERE 1=1
+        AND (u.role IS NULL OR u.role = 'member')
+        AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%'))
+    `;
     const queryParams = [];
     let paramIndex = 1;
 
