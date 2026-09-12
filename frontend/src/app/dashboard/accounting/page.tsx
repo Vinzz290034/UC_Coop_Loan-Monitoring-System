@@ -1648,10 +1648,10 @@ export default function AccountingPage() {
           <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '24px', boxSizing: 'border-box' }}>
             <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                <img src="/Coop Sync_logo.png" alt="Coop Sync Logo" style={{ height: '36px', width: 'auto', display: 'block', objectFit: 'contain' }} />
+                <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '42px', width: '42px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
                 <div>
-                  <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu Cooperative</h2>
-                  <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Coop Sync Loan Management Portal</p>
+                  <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC MPC</h2>
+                  <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Loan Portal</p>
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -1678,7 +1678,7 @@ export default function AccountingPage() {
                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Status: Completed</p>
               </div>
               <div style={{ textAlign: 'right', flex: 1 }}>
-                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Date & Time Booked</span>
+                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Date and Time</span>
                 <p style={{ fontWeight: 'bold', color: '#064e3b', margin: '2px 0 0 0' }}>{new Date(completedReceiptTx.transaction_date).toLocaleDateString()}</p>
                 <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{new Date(completedReceiptTx.transaction_date).toLocaleTimeString()}</p>
               </div>
@@ -1688,7 +1688,7 @@ export default function AccountingPage() {
               <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    <th style={{ padding: '10px 16px' }}>Ledger Allocation Details</th>
+                    <th style={{ padding: '10px 16px' }}>Ledger Details</th>
                     <th style={{ padding: '10px 16px', textAlign: 'right', width: '192px', borderLeft: '1px solid rgba(4, 120, 87, 0.2)' }}>Valuation Change (₱)</th>
                   </tr>
                 </thead>
@@ -1696,7 +1696,7 @@ export default function AccountingPage() {
                   <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
                     <td style={{ padding: '12px 16px' }}>
                       <span style={{ fontWeight: 'bold', color: '#1f2937', display: 'block' }}>
-                        {completedReceiptTx.transaction_type === 'credit' ? 'Equity Share Capital Contribution' : 'Equity Share Capital Withdrawal'}
+                        {completedReceiptTx.transaction_type === 'credit' ? 'Share Capital Contribution' : 'Share Capital Withdrawal'}
                       </span>
                       <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{completedReceiptTx.remarks || 'Standard capital account deposit adjustment.'}</p>
                     </td>
@@ -1706,15 +1706,14 @@ export default function AccountingPage() {
                   </tr>
                   <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)', backgroundColor: '#f9fafb' }}>
                     <td style={{ padding: '12px 16px' }}>
-                      <span style={{ fontWeight: 'bold', color: '#4b5563', display: 'block' }}>Total Account Balance After</span>
-                      <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Cumulative valuation of locked member equity value contributions</p>
+                      <span style={{ fontWeight: 'bold', color: '#4b5563', display: 'block' }}>Total Account Balance</span>
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: '600', color: '#4b5563', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
                       {parseFloat(completedReceiptTx.balance_after).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                   <tr style={{ backgroundColor: '#ecfdf5', fontWeight: 'bold', fontSize: '10px' }}>
-                    <td style={{ padding: '10px 16px', textAlign: 'right', color: '#064e3b' }}>NET TRANSACTION VALUE</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'right', color: '#064e3b' }}>NET VALUE</td>
                     <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
                       {parseFloat(completedReceiptTx.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
