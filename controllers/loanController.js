@@ -101,16 +101,44 @@ export const updateLoanProductStatus = async (req, res, next) => {
   }
 };
 
-// ==========================================
-// 2. LOAN LIFECYCLE & DISBURSEMENT
-// ==========================================
+// @desc    Generate next sequential LAF number (e.g. 26-01, 26-388)
+export const generateNextLafNo = async () => {
+  const yearPrefix = String(new Date().getFullYear()).slice(-2) + '-';
+  const queryText = `
+    SELECT laf_no, 
+           CAST(SUBSTRING(laf_no FROM '[0-9]+$') AS INTEGER) as num 
+    FROM loans 
+    WHERE laf_no ~ ('^' || $1 || '[0-9]+$') 
+    ORDER BY num DESC 
+    LIMIT 1
+  `;
+  const res = await query(queryText, [yearPrefix]);
+  const maxNum = res.rowCount > 0 ? (res.rows[0].num || 0) : 0;
+  const nextNum = maxNum + 1;
+  return `${yearPrefix}${nextNum < 10 ? '0' + nextNum : nextNum}`;
+};
+
+// @desc    Get next sequential LAF number
+// @route   GET /api/loans/next-laf-no
+// @access  Protected
+export const getNextLafNumber = async (req, res, next) => {
+  try {
+    const nextLafNo = await generateNextLafNo();
+    res.status(200).json({
+      success: true,
+      data: { next_laf_no: nextLafNo }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // @desc    Apply for a new loan (status: pending_approval)
 // @route   POST /api/loans
 // @access  Protected (Admin, Manager)
 export const applyForLoan = async (req, res, next) => {
   try {
-    let { member_id, loan_product_id, principal_amount, term_months } = req.body;
+    let { member_id, loan_product_id, principal_amount, term_months, laf_no, payment_mode } = req.body;
 
     // Enforce own profile ID if caller is a member
     if (req.user.role === 'member') {
@@ -310,9 +338,27 @@ export const applyForLoan = async (req, res, next) => {
     // Dynamic interest rate: 15% if 36 months, otherwise 2% (0.02)
     const finalInterestRate = finalTermMonths === 36 ? 0.1500 : 0.0200;
 
+    // Validate or auto-generate LAF No.
+    let finalLafNo = laf_no ? String(laf_no).trim() : null;
+    if (finalLafNo) {
+      const existingLaf = await query('SELECT id FROM loans WHERE LOWER(laf_no) = LOWER($1)', [finalLafNo]);
+      if (existingLaf.rowCount > 0) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `LAF No. "${finalLafNo}" is already assigned to an existing loan. Please specify a unique LAF No.` }
+        });
+      }
+    } else {
+      finalLafNo = await generateNextLafNo();
+    }
+
     const insertLoan = `
-      INSERT INTO loans (member_id, loan_product_id, principal_amount, interest_rate, term_months, amortization_type, status, co_maker_name, co_maker_phone)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8)
+      INSERT INTO loans (
+        member_id, loan_product_id, principal_amount, interest_rate, 
+        term_months, amortization_type, status, co_maker_name, co_maker_phone,
+        laf_no, payment_mode
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8, $9, $10)
       RETURNING *
     `;
     const result = await query(insertLoan, [
@@ -323,7 +369,9 @@ export const applyForLoan = async (req, res, next) => {
       finalTermMonths,
       p.amortization_type,
       co_maker_name || null,
-      co_maker_phone || null
+      co_maker_phone || null,
+      finalLafNo,
+      payment_mode || 'SD'
     ]);
 
     res.status(201).json({
@@ -441,7 +489,7 @@ export const disburseLoan = async (req, res, next) => {
 // @access  Protected
 export const getLoans = async (req, res, next) => {
   try {
-    const { member_id, status } = req.query;
+    const { member_id, status, search, sort_by } = req.query;
 
     // RBAC: Member can only view their own loans
     if (req.user.role === 'member') {
@@ -466,13 +514,27 @@ export const getLoans = async (req, res, next) => {
         WHERE l.member_id = $1
       `;
       const params = [ownMemberId];
+      let paramIndex = 2;
 
       if (status) {
-        queryText += ' AND l.status = $2';
+        queryText += ` AND l.status = $${paramIndex}`;
         params.push(status);
+        paramIndex++;
       }
 
-      queryText += ' ORDER BY l.disbursed_at ASC NULLS LAST, l.created_at DESC';
+      if (sort_by === 'laf_asc') {
+        queryText += ` ORDER BY 
+          CASE WHEN l.laf_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(l.laf_no, '-', 1) AS INTEGER) ELSE 999999 END ASC,
+          CASE WHEN l.laf_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(l.laf_no, '-', 2) AS INTEGER) ELSE 999999 END ASC,
+          l.laf_no ASC NULLS LAST`;
+      } else if (sort_by === 'laf_desc') {
+        queryText += ` ORDER BY 
+          CASE WHEN l.laf_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(l.laf_no, '-', 1) AS INTEGER) ELSE -1 END DESC,
+          CASE WHEN l.laf_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(l.laf_no, '-', 2) AS INTEGER) ELSE -1 END DESC,
+          l.laf_no DESC NULLS LAST`;
+      } else {
+        queryText += ' ORDER BY l.disbursed_at ASC NULLS LAST, l.created_at DESC';
+      }
 
       const result = await query(queryText, params);
       return res.status(200).json({
@@ -516,7 +578,30 @@ export const getLoans = async (req, res, next) => {
       }
     }
 
-    if (member_id) {
+    if (search) {
+      queryText += ` AND (
+        m.first_name ILIKE $${paramIndex} OR 
+        m.last_name ILIKE $${paramIndex} OR 
+        COALESCE(m.member_no, '') ILIKE $${paramIndex} OR 
+        COALESCE(l.laf_no, '') ILIKE $${paramIndex} OR 
+        lp.name ILIKE $${paramIndex} OR
+        CAST(l.id AS TEXT) ILIKE $${paramIndex}
+      )`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (sort_by === 'laf_asc') {
+      queryText += ` ORDER BY 
+        CASE WHEN l.laf_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(l.laf_no, '-', 1) AS INTEGER) ELSE 999999 END ASC,
+        CASE WHEN l.laf_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(l.laf_no, '-', 2) AS INTEGER) ELSE 999999 END ASC,
+        l.laf_no ASC NULLS LAST`;
+    } else if (sort_by === 'laf_desc') {
+      queryText += ` ORDER BY 
+        CASE WHEN l.laf_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(l.laf_no, '-', 1) AS INTEGER) ELSE -1 END DESC,
+        CASE WHEN l.laf_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(l.laf_no, '-', 2) AS INTEGER) ELSE -1 END DESC,
+        l.laf_no DESC NULLS LAST`;
+    } else if (member_id) {
       queryText += ' ORDER BY l.disbursed_at ASC NULLS LAST, l.created_at ASC';
     } else {
       queryText += ' ORDER BY l.created_at DESC';

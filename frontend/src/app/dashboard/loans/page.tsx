@@ -38,7 +38,11 @@ import {
   Loader2,
   Lock,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  FileText
 } from 'lucide-react';
 
 interface LoanProduct {
@@ -64,6 +68,8 @@ interface Loan {
   amortization_type: string;
   status: 'pending_approval' | 'disbursed' | 'fully_paid' | 'rejected' | 'defaulted';
   created_at: string;
+  laf_no?: string;
+  payment_mode?: string;
 }
 
 const LOAN_CATEGORIES = {
@@ -198,6 +204,8 @@ function LoansPageContent() {
   const [coMakerName, setCoMakerName] = useState('');
   const [coMakerPhone, setCoMakerPhone] = useState('');
   const [applyTermMonths, setApplyTermMonths] = useState<number>(1);
+  const [applyLafNo, setApplyLafNo] = useState('');
+  const [loadingLafNo, setLoadingLafNo] = useState(false);
 
   // State of Calamity toggle
   const [isCalamityDeclared, setIsCalamityDeclared] = useState(false);
@@ -744,6 +752,20 @@ function LoansPageContent() {
     }
   };
 
+  const fetchNextLafNo = async () => {
+    try {
+      setLoadingLafNo(true);
+      const res = await api.get('/loans/next-laf-no');
+      if (res.data?.data?.next_laf_no) {
+        setApplyLafNo(res.data.data.next_laf_no);
+      }
+    } catch (err) {
+      console.error('Failed to fetch next LAF number:', err);
+    } finally {
+      setLoadingLafNo(false);
+    }
+  };
+
   const openApplyModal = () => {
     if (!isAdminOrManager && !isVerified) {
       setIsUnverifiedModalOpen(true);
@@ -756,9 +778,11 @@ function LoansPageContent() {
     setApplyAmount(0);
     setCoMakerName('');
     setCoMakerPhone('');
+    setApplyLafNo('');
     setSuccessData(null);
     setApplyError(null);
     setIsApplyModalOpen(true);
+    fetchNextLafNo();
   };
 
   const handleApplyLoanSubmit = async (e?: React.FormEvent) => {
@@ -786,7 +810,8 @@ function LoansPageContent() {
         principal_amount: applyAmount,
         term_months: applyTermMonths,
         co_maker_name: coMakerRequired ? coMakerName : null,
-        co_maker_phone: coMakerRequired ? coMakerPhone : null
+        co_maker_phone: coMakerRequired ? coMakerPhone : null,
+        laf_no: applyLafNo.trim() || undefined
       });
 
       setSuccessData(response.data.data);
@@ -796,6 +821,7 @@ function LoansPageContent() {
       setApplyAmount(0);
       setCoMakerName('');
       setCoMakerPhone('');
+      setApplyLafNo('');
       fetchLoans();
       fetchMetrics();
     } catch (err: any) {
@@ -1141,7 +1167,7 @@ function LoansPageContent() {
             <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
               <div className="w-full lg:w-auto flex-1 max-w-md">
                 <SearchInput
-                  placeholder="Search borrower, loan product, contract ID..."
+                  placeholder="Search by LAF No., borrower, product, contract ID..."
                   onSearch={(val) => {
                     setLoansSearch(val);
                     setLoansPage(1);
@@ -1158,10 +1184,12 @@ function LoansPageContent() {
                       setLoansSortBy(e.target.value);
                       setLoansPage(1);
                     }}
-                    className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer"
+                    className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer font-semibold"
                   >
-                    <option value="date_desc">Newest First</option>
-                    <option value="date_asc">Oldest First</option>
+                    <option value="laf_desc">LAF No: Highest First (Newest)</option>
+                    <option value="laf_asc">LAF No: Lowest First (26-01, 26-02...)</option>
+                    <option value="date_desc">Date: Newest First</option>
+                    <option value="date_asc">Date: Oldest First</option>
                     <option value="amount_desc">Principal (Highest → Lowest)</option>
                     <option value="amount_asc">Principal (Lowest → Highest)</option>
                     <option value="name_asc">Borrower (A → Z)</option>
@@ -1213,13 +1241,42 @@ function LoansPageContent() {
                       const bName = `${loan.last_name || ''} ${loan.first_name || ''}`.toLowerCase();
                       const pName = (loan.product_name || '').toLowerCase();
                       const idStr = String(loan.id || '').toLowerCase();
+                      const lafStr = (loan.laf_no || '').toLowerCase();
                       const statusStr = (loan.status || '').toLowerCase();
-                      const matches = bName.includes(q) || pName.includes(q) || idStr.includes(q) || statusStr.includes(q);
+                      const matches = bName.includes(q) || pName.includes(q) || idStr.includes(q) || lafStr.includes(q) || statusStr.includes(q);
                       if (!matches) return false;
                     }
                     return true;
                   })
                   .sort((a, b) => {
+                    if (loansSortBy === 'laf_asc') {
+                      const parseLaf = (laf: string | null | undefined) => {
+                        if (!laf) return { year: 999999, num: 999999, raw: '' };
+                        const m = String(laf).match(/^(\d+)-(\d+)$/);
+                        if (m) return { year: parseInt(m[1], 10), num: parseInt(m[2], 10), raw: laf };
+                        const n = parseInt(String(laf).replace(/\D/g, ''), 10);
+                        return { year: 9999, num: isNaN(n) ? 999999 : n, raw: laf };
+                      };
+                      const lafA = parseLaf(a.laf_no);
+                      const lafB = parseLaf(b.laf_no);
+                      if (lafA.year !== lafB.year) return lafA.year - lafB.year;
+                      if (lafA.num !== lafB.num) return lafA.num - lafB.num;
+                      return lafA.raw.localeCompare(lafB.raw);
+                    }
+                    if (loansSortBy === 'laf_desc') {
+                      const parseLaf = (laf: string | null | undefined) => {
+                        if (!laf) return { year: -1, num: -1, raw: '' };
+                        const m = String(laf).match(/^(\d+)-(\d+)$/);
+                        if (m) return { year: parseInt(m[1], 10), num: parseInt(m[2], 10), raw: laf };
+                        const n = parseInt(String(laf).replace(/\D/g, ''), 10);
+                        return { year: 0, num: isNaN(n) ? -1 : n, raw: laf };
+                      };
+                      const lafA = parseLaf(a.laf_no);
+                      const lafB = parseLaf(b.laf_no);
+                      if (lafA.year !== lafB.year) return lafB.year - lafA.year;
+                      if (lafA.num !== lafB.num) return lafB.num - lafA.num;
+                      return lafB.raw.localeCompare(lafA.raw);
+                    }
                     if (loansSortBy === 'date_desc') {
                       return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
                     }
@@ -1298,12 +1355,66 @@ function LoansPageContent() {
                         <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                              <th className="px-6 py-4">ID</th>
+                              <th 
+                                className="px-6 py-4 cursor-pointer select-none group hover:text-primary dark:hover:text-secondary transition-colors"
+                                onClick={() => {
+                                  setLoansSortBy(prev => prev === 'laf_asc' ? 'laf_desc' : 'laf_asc');
+                                  setLoansPage(1);
+                                }}
+                                title="Click to sort by LAF No."
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span>LAF NO.</span>
+                                  {loansSortBy === 'laf_asc' ? (
+                                    <ArrowUp className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                  ) : loansSortBy === 'laf_desc' ? (
+                                    <ArrowDown className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                  ) : (
+                                    <ArrowUpDown className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
+                                  )}
+                                </div>
+                              </th>
                               {isAdminOrManager && (
-                                <th className="px-6 py-4">Borrower Member</th>
+                                <th 
+                                  className="px-6 py-4 cursor-pointer select-none group hover:text-primary dark:hover:text-secondary transition-colors"
+                                  onClick={() => {
+                                    setLoansSortBy(prev => prev === 'name_asc' ? 'name_desc' : 'name_asc');
+                                    setLoansPage(1);
+                                  }}
+                                  title="Click to sort by Borrower name"
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <span>Borrower Member</span>
+                                    {loansSortBy === 'name_asc' ? (
+                                      <ArrowUp className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                    ) : loansSortBy === 'name_desc' ? (
+                                      <ArrowDown className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                    ) : (
+                                      <ArrowUpDown className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
+                                    )}
+                                  </div>
+                                </th>
                               )}
                               <th className="px-6 py-4">Loan Product</th>
-                              <th className="px-6 py-4">Principal Amount</th>
+                              <th 
+                                className="px-6 py-4 cursor-pointer select-none group hover:text-primary dark:hover:text-secondary transition-colors"
+                                onClick={() => {
+                                  setLoansSortBy(prev => prev === 'amount_desc' ? 'amount_asc' : 'amount_desc');
+                                  setLoansPage(1);
+                                }}
+                                title="Click to sort by Principal Amount"
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span>Principal Amount</span>
+                                  {loansSortBy === 'amount_desc' ? (
+                                    <ArrowDown className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                  ) : loansSortBy === 'amount_asc' ? (
+                                    <ArrowUp className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                  ) : (
+                                    <ArrowUpDown className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
+                                  )}
+                                </div>
+                              </th>
                               <th className="px-6 py-4">Interest (Term)</th>
                               <th className="px-6 py-4">Status</th>
                               <th className="px-6 py-4 text-right">Details</th>
@@ -1322,7 +1433,18 @@ function LoansPageContent() {
                                 return (
                                   <React.Fragment key={loan.id}>
                                     <tr className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
-                                      <td className="px-6 py-4 font-mono font-bold">#{loan.id}</td>
+                                      <td className="px-6 py-4 font-mono">
+                                        {loan.laf_no ? (
+                                          <div className="flex flex-col items-start gap-0.5">
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg font-mono font-bold text-xs bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/25 shadow-2xs">
+                                              LAF #{loan.laf_no}
+                                            </span>
+                                            <span className="text-[10px] text-neutral-400 font-mono">#{String(loan.id).slice(0, 8)}</span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-neutral-500 font-mono text-xs font-semibold">#{String(loan.id).slice(0, 8)}</span>
+                                        )}
+                                      </td>
                                       {isAdminOrManager && (
                                         <td className="px-6 py-4 font-semibold">
                                           {loan.last_name}, {loan.first_name}
@@ -2250,6 +2372,40 @@ function LoansPageContent() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* Left: Slider & Repayment summary */}
                       <div className="space-y-5">
+                        {/* LAF NO. Field */}
+                        <div className="p-4 rounded-2xl border border-outline-variant/65 bg-surface-container-low space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-on-surface dark:text-white flex items-center gap-1.5">
+                              <FileText className="w-4 h-4 text-primary dark:text-secondary" />
+                              <span>Loan Application Form (LAF) No. *</span>
+                            </label>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20">
+                              Auto-Suggested
+                            </span>
+                          </div>
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              value={applyLafNo}
+                              onChange={(e) => setApplyLafNo(e.target.value)}
+                              placeholder="e.g. 26-388"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-sm font-mono font-bold text-primary dark:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                            <button
+                              type="button"
+                              onClick={fetchNextLafNo}
+                              disabled={loadingLafNo}
+                              className="absolute right-2 px-2.5 py-1 text-[11px] font-bold text-neutral-500 hover:text-primary dark:hover:text-secondary bg-neutral-100 dark:bg-neutral-800 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                              title="Refresh to next sequential LAF No."
+                            >
+                              {loadingLafNo ? '...' : 'Refresh'}
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                            Sequential application form number for sorting & tracking physical documents (e.g. 26-01, 26-388).
+                          </p>
+                        </div>
+
                         <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
                           <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Loan Principal Amount</span>
                           <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
@@ -2414,13 +2570,21 @@ function LoansPageContent() {
                     ✓
                   </div>
                   <h4 className="font-headline font-bold text-xl text-on-surface dark:text-white">Credit Contract Booked!</h4>
+                  {successData?.laf_no && (
+                    <div className="py-1">
+                      <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-mono text-base font-bold border border-primary/25 shadow-xs">
+                        <FileText className="w-4 h-4" />
+                        LAF #{successData.laf_no}
+                      </span>
+                    </div>
+                  )}
                   <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                    A new loan application has been registered under ID <strong className="text-on-surface dark:text-white font-bold font-mono">#{successData?.id || 'N/A'}</strong> with status <strong className="text-amber-500 font-bold">Pending Approval</strong>.
+                    A new loan application has been registered under ID <strong className="text-on-surface dark:text-white font-bold font-mono">#{String(successData?.id || 'N/A').slice(0, 8)}</strong> with status <strong className="text-amber-500 font-bold">Pending Approval</strong>.
                   </p>
                   <div className="pt-4">
                     <button
                       onClick={() => setIsApplyModalOpen(false)}
-                      className="w-full py-3.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer text-sm"
+                      className="w-full py-3.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer text-sm shadow"
                     >
                       Close Window & Refresh
                     </button>

@@ -1,5 +1,6 @@
 import XLSX from 'xlsx';
 import fs from 'fs';
+import bcrypt from 'bcryptjs';
 import pool, { query } from '../config/db.js';
 
 // Helper: Safely extract cell value
@@ -145,25 +146,133 @@ const cleanStr = (val) => {
   return String(val).trim();
 };
 
-// Helper: Parse member name from Sheet tab
-const parseMemberName = (sheetName) => {
+// Helper: Clean tokens for fuzzy/loose matching (handles accents like ñ/n, punctuation, and casing)
+const cleanToken = (s) => (s ? String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ñ/g, 'n').replace(/[^a-z0-9]/g, '') : '');
+
+// Helper: Smartly resolve member name against database records (handles single names, swapped names, accents, and initials)
+export const resolveMemberName = (sheetName, existingMembers = []) => {
+  if (!sheetName) return { matched: false, memberId: null, firstName: 'Member', lastName: 'Member', fullName: 'Member', memberNo: null };
+
   const cleanTab = sheetName.trim();
+  const cleanRaw = cleanToken(cleanTab);
+  if (!cleanRaw) return { matched: false, memberId: null, firstName: 'Member', lastName: 'Member', fullName: 'Member', memberNo: null };
+
+  let targetFirst = '';
+  let targetLast = '';
+
+  // 1. Tab has comma: "LASTNAME, FIRSTNAME"
   if (cleanTab.includes(',')) {
     const parts = cleanTab.split(',');
-    const lastName = parts[0].trim();
-    const firstName = parts.slice(1).join(' ').trim() || 'Member';
-    return { firstName, lastName, fullName: `${firstName} ${lastName}` };
+    targetLast = parts[0].trim();
+    targetFirst = parts.slice(1).join(' ').trim() || 'Member';
+  } else {
+    // Multi-word or single word
+    const parts = cleanTab.split(/\s+/);
+    if (parts.length > 1) {
+      targetFirst = parts.slice(0, -1).join(' ');
+      targetLast = parts[parts.length - 1];
+    } else {
+      targetFirst = cleanTab;
+      targetLast = '';
+    }
   }
 
-  // If no comma, check if multiple words
-  const parts = cleanTab.split(/\s+/);
-  if (parts.length > 1) {
-    const lastName = parts[parts.length - 1];
-    const firstName = parts.slice(0, -1).join(' ');
-    return { firstName, lastName, fullName: cleanTab };
+  const firstToken = cleanToken(targetFirst);
+  const lastToken = cleanToken(targetLast);
+
+  // A. Exact full concatenated token match (any order e.g. "KIRKALBANO" or "ALBANOKIRK")
+  for (const m of existingMembers) {
+    const mFn = cleanToken(m.first_name || m.fn);
+    const mLn = cleanToken(m.last_name || m.ln);
+    const comb1 = `${mFn}${mLn}`;
+    const comb2 = `${mLn}${mFn}`;
+    const targetComb1 = `${firstToken}${lastToken}`;
+    const targetComb2 = `${lastToken}${firstToken}`;
+
+    if (
+      comb1 === cleanRaw || comb2 === cleanRaw ||
+      comb1 === targetComb1 || comb1 === targetComb2 ||
+      comb2 === targetComb1 || comb2 === targetComb2
+    ) {
+      return {
+        matched: true,
+        memberId: m.id,
+        firstName: m.first_name || m.fn,
+        lastName: m.last_name || m.ln,
+        fullName: `${m.first_name || m.fn} ${m.last_name || m.ln}`,
+        memberNo: m.member_no || null
+      };
+    }
   }
 
-  return { firstName: cleanTab, lastName: 'Member', fullName: `${cleanTab} Member` };
+  // B. Both first and last tokens match or start with each other (ignoring middle names/initials/accents)
+  if (firstToken && lastToken) {
+    for (const m of existingMembers) {
+      const mFn = cleanToken(m.first_name || m.fn);
+      const mLn = cleanToken(m.last_name || m.ln);
+
+      const normalMatch = (mLn === lastToken || mLn.startsWith(lastToken) || lastToken.startsWith(mLn)) &&
+                          (mFn === firstToken || mFn.startsWith(firstToken) || firstToken.startsWith(mFn));
+      const swappedMatch = (mFn === lastToken || mFn.startsWith(lastToken) || lastToken.startsWith(mFn)) &&
+                           (mLn === firstToken || mLn.startsWith(firstToken) || firstToken.startsWith(mLn));
+
+      if (normalMatch || swappedMatch) {
+        return {
+          matched: true,
+          memberId: m.id,
+          firstName: m.first_name || m.fn,
+          lastName: m.last_name || m.ln,
+          fullName: `${m.first_name || m.fn} ${m.last_name || m.ln}`,
+          memberNo: m.member_no || null
+        };
+      }
+    }
+  }
+
+  // C. Single word tab: e.g. "KIRK" or "AMOROTO"
+  if (!lastToken || !firstToken) {
+    const single = firstToken || lastToken;
+    const fnMatches = existingMembers.filter(m => {
+      const mFn = cleanToken(m.first_name || m.fn);
+      return mFn === single || mFn.startsWith(single);
+    });
+    if (fnMatches.length === 1) {
+      const m = fnMatches[0];
+      return {
+        matched: true,
+        memberId: m.id,
+        firstName: m.first_name || m.fn,
+        lastName: m.last_name || m.ln,
+        fullName: `${m.first_name || m.fn} ${m.last_name || m.ln}`,
+        memberNo: m.member_no || null
+      };
+    }
+
+    const lnMatches = existingMembers.filter(m => {
+      const mLn = cleanToken(m.last_name || m.ln);
+      return mLn === single || mLn.startsWith(single);
+    });
+    if (lnMatches.length === 1) {
+      const m = lnMatches[0];
+      return {
+        matched: true,
+        memberId: m.id,
+        firstName: m.first_name || m.fn,
+        lastName: m.last_name || m.ln,
+        fullName: `${m.first_name || m.fn} ${m.last_name || m.ln}`,
+        memberNo: m.member_no || null
+      };
+    }
+  }
+
+  return {
+    matched: false,
+    memberId: null,
+    firstName: targetFirst || cleanTab,
+    lastName: targetLast || 'Member',
+    fullName: targetLast ? `${targetFirst} ${targetLast}` : `${cleanTab} Member`,
+    memberNo: null
+  };
 };
 
 // Core parser function that extracts structured data from workbook buffer or file
@@ -176,11 +285,20 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
   const systemLoanProducts = await query('SELECT id, name, interest_rate, amortization_type FROM loan_products WHERE is_active = true');
   const defaultProduct = systemLoanProducts.rows[0] || null;
 
+  // Pre-fetch all existing members to resolve member names (including single-name tabs like KIRK or AMOROTO)
+  const existingMembersRes = await query('SELECT id, first_name, last_name, member_no, email FROM members');
+  const existingMembers = existingMembersRes.rows;
+
   for (const sheetName of workbook.SheetNames) {
     // Skip obvious system, summary, totals, or template sheets
     const lowerTab = sheetName.toLowerCase().trim();
     if (
-      ['instructions', 'instruction', 'template', 'summary', 'settings', 'master', 'sheet1_example', 'sum-sc', 'sum_sc', 'sum sc', 'total', 'totals', 'grand total', 'all'].includes(lowerTab) ||
+      [
+        'instructions', 'instruction', 'template', 'summary', 'settings', 'master',
+        'sheet1_example', 'sum-sc', 'sum_sc', 'sum sc', 'total', 'totals', 'grand total',
+        'all', 'regular', 'associate', 'investment', 'investments', 'investment accounts',
+        'investment only', 'investment only accounts'
+      ].includes(lowerTab) ||
       lowerTab.startsWith('sum-') ||
       lowerTab.startsWith('sum_') ||
       lowerTab.startsWith('sum ') ||
@@ -196,7 +314,8 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
     const range = XLSX.utils.decode_range(sheet['!ref']);
     if (range.e.r < 1) continue; // Not enough rows
 
-    const { firstName, lastName, fullName } = parseMemberName(sheetName);
+    const resolved = resolveMemberName(sheetName, existingMembers);
+    const { firstName, lastName, fullName } = resolved;
 
     // Look for member demographics if available in top rows
     const birthDateStr = cellDateIso(sheet, 1, 9);
@@ -209,6 +328,8 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
       firstName,
       lastName,
       fullName,
+      existingMember: resolved.matched,
+      memberId: resolved.memberId,
       phone: phone || null,
       birthDate: birthDateStr,
       shareCapitalDeposits: [],
@@ -278,15 +399,26 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
       const scInvoice = cleanStr(cellVal(sheet, r, 1)); // Col B: INVOICE / LAF NO
       const scAmount = cleanAmount(cellVal(sheet, r, 2)); // Col C: SHARED CAPITAL
 
-      // Check if this row is a genuine deposit (must have amount > 0 and a deposit date or invoice)
-      if (scAmount > 0 && (scDateStr || scInvoice)) {
+      // Safeguard: Check if this row is a total/summary row (e.g. "TOTAL", "SUM", "BALANCE", "SUBTOTAL")
+      const rawColA = cleanStr(cellVal(sheet, r, 0)).toLowerCase();
+      const rawColB = scInvoice.toLowerCase();
+      const isTotalKeyword = (s) => ['total', 'totals', 'sum', 'subtotal', 'grand total', 'balance'].some(k => s.includes(k));
+      if (isTotalKeyword(rawColA) || isTotalKeyword(rawColB)) {
+        continue;
+      }
+
+      // Filter placeholder invoice strings if there is no date
+      const isPlaceholder = ['n/a', 'na', '-', '--', 'none', 'null'].includes(rawColB);
+
+      // Check if this row is a genuine deposit (must have amount > 0 and either a valid deposit date or real invoice)
+      if (scAmount > 0 && (scDateStr || (scInvoice && !isPlaceholder))) {
         memberData.shareCapitalDeposits.push({
           row: r + 1,
           date: scDateStr,
           invoiceNo: scInvoice || 'SD',
           amount: scAmount
         });
-        memberData.shareCapitalTotal += scAmount;
+        memberData.shareCapitalTotal = Math.round((memberData.shareCapitalTotal + scAmount) * 100) / 100;
       }
 
       // 2. Loan Columns (dynamically mapped)
@@ -447,14 +579,6 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
     }
   }
 
-  // Cross-reference existing database members
-  const existingMembersRes = await query('SELECT id, first_name, last_name, email FROM members');
-  const existingMembersMap = new Map();
-  for (const m of existingMembersRes.rows) {
-    const key = `${m.first_name.toLowerCase().trim()}_${m.last_name.toLowerCase().trim()}`;
-    existingMembersMap.set(key, m);
-  }
-
   let totalShareCapitalCount = 0;
   let totalShareCapitalSum = 0;
   let totalLoansCount = 0;
@@ -465,14 +589,9 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
   let newMembersCount = 0;
 
   for (const sheet of parsedSheets) {
-    const key = `${sheet.firstName.toLowerCase()}_${sheet.lastName.toLowerCase()}`;
-    if (existingMembersMap.has(key)) {
-      sheet.existingMember = true;
-      sheet.memberId = existingMembersMap.get(key).id;
+    if (sheet.existingMember) {
       existingMembersCount++;
     } else {
-      sheet.existingMember = false;
-      sheet.memberId = null;
       newMembersCount++;
     }
 
@@ -584,17 +703,20 @@ export const executeImport = async (req, res, next) => {
     };
 
     // 2. Pre-cache existing database entities to eliminate 30,000+ sequential round-trips
-    const memRes = await client.query('SELECT id, LOWER(first_name) as fn, LOWER(last_name) as ln FROM members');
+    const memRes = await client.query('SELECT id, first_name, last_name, LOWER(first_name) as fn, LOWER(last_name) as ln FROM members');
     const memberMap = new Map();
     for (const m of memRes.rows) {
       memberMap.set(`${m.fn}_${m.ln}`, m.id);
     }
 
-    const scRes = await client.query('SELECT member_id, amount, invoice_no, transaction_date::date as tdate FROM share_capital_transactions');
+    const scRes = await client.query("SELECT member_id, amount, invoice_no, TO_CHAR(transaction_date, 'YYYY-MM-DD') as tdate FROM share_capital_transactions");
     const scSet = new Set();
     for (const sc of scRes.rows) {
-      const dStr = sc.tdate ? new Date(sc.tdate).toISOString().split('T')[0] : '';
+      const dStr = sc.tdate || '';
       scSet.add(`${sc.member_id}_${parseFloat(sc.amount)}_${sc.invoice_no || 'SD'}_${dStr}`);
+      if (sc.invoice_no && sc.invoice_no !== 'SD' && sc.invoice_no !== 'HAND-IN') {
+        scSet.add(`${sc.member_id}_ref_${sc.invoice_no.toLowerCase().trim()}`);
+      }
     }
 
     const balRes = await client.query(
@@ -650,11 +772,19 @@ export const executeImport = async (req, res, next) => {
       const memKey = `${firstName.toLowerCase().trim()}_${lastName.toLowerCase().trim()}`;
       let memberId = mem.memberId || memberMap.get(memKey);
 
-      // 1. Check or Create Member
+      // If still not found, try smart resolve against existing members
+      if (!memberId) {
+        const resolved = resolveMemberName(mem.sheetName || `${firstName} ${lastName}`, memRes.rows);
+        if (resolved.matched && resolved.memberId) {
+          memberId = resolved.memberId;
+        }
+      }
+
+      // 1. Check or Create Member (never duplicate existing account)
       if (!memberId) {
         const insertMem = await client.query(
           `INSERT INTO members (user_id, first_name, last_name, email, phone, date_of_birth, status, profile_completed)
-           VALUES (NULL, $1, $2, NULL, $3, $4, 'active', true) RETURNING id`,
+           VALUES (NULL, $1, $2, NULL, $3, $4, 'inactive', false) RETURNING id`,
           [firstName, lastName, phone || null, safeDbDate(birthDate)]
         );
         memberId = insertMem.rows[0].id;
@@ -664,20 +794,23 @@ export const executeImport = async (req, res, next) => {
         membersUpdated++;
       }
 
-      // 2. Insert Share Capital Deposits
+      // 2. Insert Share Capital Deposits (updates existing member's ledger)
       if (shareCapitalDeposits && shareCapitalDeposits.length > 0) {
         for (const sc of shareCapitalDeposits) {
           const scAmount = parseFloat(sc.amount);
           if (scAmount <= 0) continue;
 
           const transDate = safeDbDate(sc.date) || new Date();
-          const dStr = transDate.toISOString().split('T')[0];
+          const dStr = sc.date ? sc.date : (transDate ? transDate.toISOString().split('T')[0] : '');
           const invoice = sc.invoiceNo || 'SD';
           const scKey = `${memberId}_${scAmount}_${invoice}_${dStr}`;
+          const scKeyRef = (invoice && invoice !== 'SD' && invoice !== 'HAND-IN')
+            ? `${memberId}_ref_${invoice.toLowerCase().trim()}`
+            : null;
 
-          if (!scSet.has(scKey)) {
+          if (!scSet.has(scKey) && (!scKeyRef || !scSet.has(scKeyRef))) {
             const currentBal = scBalMap.get(memberId) || 0;
-            const balanceAfter = currentBal + scAmount;
+            const balanceAfter = Math.round((currentBal + scAmount) * 100) / 100;
             scBalMap.set(memberId, balanceAfter);
 
             await client.query(
@@ -693,6 +826,7 @@ export const executeImport = async (req, res, next) => {
               ]
             );
             scSet.add(scKey);
+            if (scKeyRef) scSet.add(scKeyRef);
             shareDepositsCreated++;
           }
         }
@@ -1195,6 +1329,156 @@ export const importMembersRegistry = async (req, res, next) => {
     if (req.file?.path) {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
     }
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
+// ==========================================
+// 4. PROVISION USER ACCOUNTS FOR IMPORTED MEMBERS
+// @route   POST /api/import/provision-accounts
+// @access  Protected (Admin only)
+// ==========================================
+export const provisionImportedAccounts = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const cleanStr = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanFirst = (s) => {
+      if (!s) return '';
+      const parts = s.trim().split(/\s+/);
+      const mainFirst = parts.filter(p => !p.match(/^[A-Za-z]\.?$/)).join('') || parts[0];
+      return (mainFirst || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    };
+
+    // 1. Fetch all members without a linked user account
+    const membersRes = await client.query(`
+      SELECT id, first_name, last_name, email, phone, status
+      FROM members
+      WHERE user_id IS NULL
+      ORDER BY last_name, first_name
+    `);
+
+    const unlinkedMembers = membersRes.rows;
+
+    if (unlinkedMembers.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'All imported members already have user accounts.',
+        data: { provisioned: 0, accounts: [] }
+      });
+    }
+
+    // 2. Fetch existing usernames to avoid collisions
+    const existingUsersRes = await client.query('SELECT username FROM users');
+    const existingUsernames = new Set(existingUsersRes.rows.map(r => r.username.toLowerCase()));
+
+    // 3. Hash default password once
+    const defaultPassword = 'UCCoop@2026';
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+    await client.query('BEGIN');
+
+    const provisioned = [];
+
+    for (const member of unlinkedMembers) {
+      const baseFirst = cleanFirst(member.first_name);
+      const baseLast = cleanStr(member.last_name);
+
+      // If member only has a single name/surname (or placeholder 'member'), use the surname directly
+      let username;
+      if ((!baseLast || baseLast === 'member') && baseFirst && baseFirst !== 'member') {
+        username = baseFirst;
+      } else if ((!baseFirst || baseFirst === 'member') && baseLast && baseLast !== 'member') {
+        username = baseLast;
+      } else {
+        const first = baseFirst || 'member';
+        const last = baseLast || 'user';
+        username = `${first}.${last}`;
+      }
+
+      // Generate unique username
+      const baseUsername = username;
+      let count = 1;
+      while (existingUsernames.has(username)) {
+        count++;
+        username = `${baseUsername}${count}`;
+      }
+      existingUsernames.add(username);
+
+      // Create user account
+      const userRes = await client.query(
+        `INSERT INTO users (username, password_hash, role)
+         VALUES ($1, $2, 'member')
+         RETURNING id, username`,
+        [username, passwordHash]
+      );
+      const newUser = userRes.rows[0];
+
+      // Link user_id to member and set status to pending for onboarding
+      await client.query(
+        `UPDATE members
+         SET user_id = $1,
+             status = 'pending',
+             profile_completed = false,
+             is_verified = false,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [newUser.id, member.id]
+      );
+
+      // Audit trail
+      await client.query(
+        `INSERT INTO member_status_logs (member_id, previous_status, new_status, remarks)
+         VALUES ($1, $2, 'pending', 'User account provisioned via Import Hub; awaiting member profile completion and verification.')`,
+        [member.id, member.status]
+      );
+
+      provisioned.push({
+        memberId: member.id,
+        fullName: `${member.last_name}, ${member.first_name}`,
+        username: newUser.username,
+        defaultPassword,
+        status: 'pending'
+      });
+    }
+
+    await client.query('COMMIT');
+
+    // Audit log for the admin action
+    try {
+      await client.query(
+        `INSERT INTO audit_logs (user_id, username, action, module, method, endpoint, status_code, status, ip_address, user_agent, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          req.user?.id || null,
+          req.user?.username || 'admin',
+          'PROVISION_MEMBER_ACCOUNTS',
+          'DATA_IMPORT',
+          req.method,
+          req.originalUrl || '/api/import/provision-accounts',
+          200,
+          'success',
+          req.ip || '127.0.0.1',
+          req.headers['user-agent'] || 'System',
+          JSON.stringify({ provisionedCount: provisioned.length, provisionedAt: new Date().toISOString() })
+        ]
+      );
+    } catch (auditErr) {
+      console.warn('Failed to insert provision audit log:', auditErr.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully provisioned ${provisioned.length} user account${provisioned.length !== 1 ? 's' : ''}.`,
+      data: {
+        provisioned: provisioned.length,
+        defaultPassword,
+        accounts: provisioned
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
     next(error);
   } finally {
     client.release();

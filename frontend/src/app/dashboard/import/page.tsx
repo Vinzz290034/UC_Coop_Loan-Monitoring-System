@@ -143,6 +143,15 @@ export default function ImportPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
 
+  // Account Provisioning
+  const [provisioning, setProvisioning] = useState(false);
+  const [provisionResult, setProvisionResult] = useState<{
+    provisioned: number;
+    defaultPassword: string;
+    accounts: { memberId: string; fullName: string; username: string; status: string }[];
+  } | null>(null);
+  const [provisionError, setProvisionError] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // File Drop & Selection Handlers
@@ -336,9 +345,28 @@ export default function ImportPage() {
     setExcludedCount(0);
     setExecutionResult(null);
     setRegistryResult(null);
+    setProvisionResult(null);
+    setProvisionError(null);
     setErrorMsg(null);
     setStep('upload');
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleProvisionAccounts = async () => {
+    setProvisioning(true);
+    setProvisionError(null);
+    try {
+      const response = await api.post('/import/provision-accounts');
+      if (response.data.success) {
+        setProvisionResult(response.data.data);
+      } else {
+        setProvisionError(response.data.error?.message || 'Failed to provision accounts.');
+      }
+    } catch (err: any) {
+      setProvisionError(err.response?.data?.error?.message || 'Failed to provision accounts.');
+    } finally {
+      setProvisioning(false);
+    }
   };
 
   // Filter members list
@@ -414,7 +442,7 @@ export default function ImportPage() {
                       : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
                   }`}
                 >
-                  Loan Ledgers & Accounts
+                  Loan & Investment Ledgers
                 </button>
                 <button
                   type="button"
@@ -694,6 +722,11 @@ export default function ImportPage() {
                                   Coop Member
                                 </span>
                               )}
+                              {member.loans.length === 0 && member.shareCapitalDeposits.length > 0 && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                                  Investment Account
+                                </span>
+                              )}
                             </div>
                             {member.phone && (
                               <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
@@ -719,7 +752,7 @@ export default function ImportPage() {
                               Loans Found
                             </span>
                             <span className="font-bold text-on-surface dark:text-white">
-                              {member.loans.length} {member.loans.length === 1 ? 'Loan' : 'Loans'}
+                              {member.loans.length === 0 ? '0 Loans (Investment Only)' : `${member.loans.length} ${member.loans.length === 1 ? 'Loan' : 'Loans'}`}
                             </span>
                           </div>
 
@@ -789,7 +822,7 @@ export default function ImportPage() {
                             </h4>
 
                             {member.loans.length === 0 ? (
-                              <p className="text-xs text-neutral-500 italic">No loan accounts found in columns D–R.</p>
+                              <p className="text-xs text-neutral-500 italic">No loan accounts found in columns D–N (Investment Only / Capital Depositor).</p>
                             ) : (
                               <div className="space-y-4">
                                 {member.loans.map((loan, lIdx) => (
@@ -1036,7 +1069,79 @@ export default function ImportPage() {
               </div>
             </div>
 
+            {/* Provision Accounts Panel */}
+            <div className="border border-outline-variant/40 rounded-2xl overflow-hidden text-left">
+              <div className="p-4 bg-neutral-50 dark:bg-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold text-on-surface dark:text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-primary dark:text-secondary" />
+                    Create Login Accounts for New Members
+                  </h4>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    Generates usernames &amp; sets default password <code className="bg-neutral-200 dark:bg-neutral-700 px-1 rounded">UCCoop@2026</code> for all members without a login account.
+                  </p>
+                </div>
+                {!provisionResult && (
+                  <button
+                    onClick={handleProvisionAccounts}
+                    disabled={provisioning}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap flex-shrink-0"
+                  >
+                    {provisioning ? (
+                      <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Provisioning...</>
+                    ) : (
+                      <><ShieldCheck className="w-3.5 h-3.5" /> Provision Accounts</>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {provisionError && (
+                <div className="p-3 bg-error/10 border-t border-error/20 text-error dark:text-red-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" /> {provisionError}
+                </div>
+              )}
+
+              {provisionResult && (
+                <div className="p-4 border-t border-outline-variant/40 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                    <CheckCircle2 className="w-4 h-4" />
+                    {provisionResult.provisioned === 0
+                      ? 'All members already have login accounts.'
+                      : `${provisionResult.provisioned} account${provisionResult.provisioned !== 1 ? 's' : ''} provisioned successfully.`}
+                  </div>
+                  {provisionResult.accounts.length > 0 && (
+                    <div className="max-h-52 overflow-y-auto rounded-xl border border-outline-variant/40 bg-white dark:bg-surface-container-low">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-semibold border-b border-outline-variant/30">
+                          <tr>
+                            <th className="p-2.5">Full Name</th>
+                            <th className="p-2.5">Username</th>
+                            <th className="p-2.5">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant/20">
+                          {provisionResult.accounts.map((a, i) => (
+                            <tr key={i} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
+                              <td className="p-2.5 font-medium text-on-surface dark:text-white">{a.fullName}</td>
+                              <td className="p-2.5 font-mono text-primary dark:text-secondary">{a.username}</td>
+                              <td className="p-2.5">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                  Pending Onboarding
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Quick Actions */}
+
             <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-outline-variant/40">
               <Link
                 href="/dashboard/members"

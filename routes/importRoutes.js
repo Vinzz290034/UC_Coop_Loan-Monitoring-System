@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { previewImport, executeImport, importMembersRegistry } from '../controllers/importController.js';
+import { previewImport, executeImport, importMembersRegistry, provisionImportedAccounts } from '../controllers/importController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -46,5 +46,6 @@ router.use(restrictTo('admin', 'staff'));
 router.post('/preview', upload.single('file'), previewImport);
 router.post('/execute', executeImport);
 router.post('/members-registry', upload.single('file'), importMembersRegistry);
+router.post('/provision-accounts', restrictTo('admin'), provisionImportedAccounts);
 
 export default router;

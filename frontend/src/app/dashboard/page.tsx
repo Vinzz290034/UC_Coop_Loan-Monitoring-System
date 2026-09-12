@@ -56,6 +56,7 @@ import {
   Maximize2,
   Download,
   ArrowUpDown,
+  FileText
 } from 'lucide-react';
 import ProfileCompletionModal from '@/components/onboarding/ProfileCompletionModal';
 import IncompleteProfileBanner from '@/components/onboarding/IncompleteProfileBanner';
@@ -884,6 +885,7 @@ export default function OverviewPage() {
   const [coMakerName, setCoMakerName] = useState<string>('');
   const [coMakerPhone, setCoMakerPhone] = useState<string>('');
   const [loanTerm, setLoanTerm] = useState<number>(1);
+  const [memberLafNo, setMemberLafNo] = useState<string>('');
 
   // Investment Form States
   const [investmentType, setInvestmentType] = useState<'share_capital' | 'fixed_deposit' | 'payday'>('share_capital');
@@ -1093,6 +1095,7 @@ export default function OverviewPage() {
       setSuccessData(null);
       setCoMakerName('');
       setCoMakerPhone('');
+      setMemberLafNo('');
       const res = await api.get('/loans/products');
       const activeProducts = res.data.data.filter((p: any) => p.is_active);
       setProducts(activeProducts);
@@ -1100,6 +1103,15 @@ export default function OverviewPage() {
         setSelectedProduct(activeProducts[0]);
         setLoanAmount(parseFloat(activeProducts[0].min_amount));
         setSelectedLoanCategory(getProductCategory(activeProducts[0].name));
+      }
+
+      try {
+        const lafRes = await api.get('/loans/next-laf-no');
+        if (lafRes.data?.data?.next_laf_no) {
+          setMemberLafNo(lafRes.data.data.next_laf_no);
+        }
+      } catch (err) {
+        console.error('Failed to fetch next LAF number:', err);
       }
     } catch (err: any) {
       setModalError('Failed to fetch available loan products. Please try again.');
@@ -1118,7 +1130,8 @@ export default function OverviewPage() {
         principal_amount: loanAmount,
         term_months: loanTerm,
         co_maker_name: coMakerName || undefined,
-        co_maker_phone: coMakerPhone || undefined
+        co_maker_phone: coMakerPhone || undefined,
+        laf_no: memberLafNo.trim() || undefined
       });
       setSuccessData(res.data.data);
       setWizardStep(3); // Go to success step
@@ -1917,6 +1930,48 @@ export default function OverviewPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Left column: Slider and Repayments */}
                             <div className="space-y-5">
+                              {/* LAF NO Tracking Field */}
+                              <div className="p-4 rounded-2xl border border-outline-variant/65 bg-surface-container-low space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-xs font-bold text-on-surface dark:text-white flex items-center gap-1.5">
+                                    <FileText className="w-4 h-4 text-primary dark:text-secondary" />
+                                    <span>Loan Application Form (LAF) No. *</span>
+                                  </label>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20">
+                                    Auto-Suggested
+                                  </span>
+                                </div>
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="text"
+                                    value={memberLafNo}
+                                    onChange={(e) => setMemberLafNo(e.target.value)}
+                                    placeholder="e.g. 26-388"
+                                    className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-sm font-mono font-bold text-primary dark:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        const lafRes = await api.get('/loans/next-laf-no');
+                                        if (lafRes.data?.data?.next_laf_no) {
+                                          setMemberLafNo(lafRes.data.data.next_laf_no);
+                                        }
+                                      } catch (err) {
+                                        console.error('Failed to refresh LAF:', err);
+                                      }
+                                    }}
+                                    className="absolute right-2 px-2.5 py-1 text-[11px] font-bold text-neutral-500 hover:text-primary dark:hover:text-secondary bg-neutral-100 dark:bg-neutral-800 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                                    title="Reset to next sequential LAF No."
+                                  >
+                                    Refresh
+                                  </button>
+                                </div>
+                                <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                                  Sequential application number for sorting & tracking physical documents (editable if matching a paper form).
+                                </p>
+                              </div>
+
                               <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
                                 <span className="text-xs text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Requested Amortization Principal</span>
                                 <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
@@ -2087,13 +2142,21 @@ export default function OverviewPage() {
                           ✓
                         </div>
                         <h4 className="font-headline font-bold text-xl text-on-surface dark:text-white">Loan Application Submitted!</h4>
+                        {successData?.laf_no && (
+                          <div className="py-1">
+                            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-mono text-base font-bold border border-primary/25 shadow-xs">
+                              <FileText className="w-4 h-4" />
+                              LAF #{successData.laf_no}
+                            </span>
+                          </div>
+                        )}
                         <p className="text-sm text-neutral-600 dark:text-neutral-400 max-w-sm mx-auto">
                           Your application has been received with status <strong className="text-primary font-bold">Pending Review</strong>. Please visit the cooperative office to complete physical requirements.
                         </p>
                         <div className="pt-4">
                           <button
                             onClick={closeModal}
-                            className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer"
+                            className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer shadow"
                           >
                             Go Back to Dashboard
                           </button>

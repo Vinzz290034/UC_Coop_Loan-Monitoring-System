@@ -13,7 +13,8 @@ import {
   previewAmortizationSchedule,
   getMyLoanHistory,
   getCalamityStatus,
-  updateCalamityStatus
+  updateCalamityStatus,
+  getNextLafNumber
 } from '../controllers/loanController.js';
 import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
@@ -65,6 +66,8 @@ router.route('/my-history')
 // ==========================================
 // 6. LOAN APPLICATIONS & LISTING
 // ==========================================
+router.get('/next-laf-no', getNextLafNumber);
+
 router.route('/')
   .post(restrictTo('admin', 'staff', 'member'), requireApprovedProfile, applyForLoan)
   .get(getLoans);

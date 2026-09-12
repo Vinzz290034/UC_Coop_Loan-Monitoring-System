@@ -27,7 +27,10 @@ import {
   PlusCircle,
   Sparkles,
   Layers,
-  Plus
+  Plus,
+  WalletCards,
+  Lock,
+  Users
 } from 'lucide-react';
 
 export default function AccountingPage() {
@@ -80,6 +83,9 @@ export default function AccountingPage() {
   const [shareTxType, setShareTxType] = useState<'credit' | 'debit'>('credit');
   const [shareAmount, setShareAmount] = useState('');
   const [shareRemarks, setShareRemarks] = useState('');
+  const [sharePaymentMethod, setSharePaymentMethod] = useState<'gcash' | 'bank_transfer' | 'payroll' | 'otc'>('otc');
+  const [sharePaymentRefNo, setSharePaymentRefNo] = useState('');
+  const [shareSalaryDeductionMode, setShareSalaryDeductionMode] = useState<'SD' | 'SD30' | 'SD2'>('SD');
   const [shareSubmitting, setShareSubmitting] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
@@ -161,7 +167,18 @@ export default function AccountingPage() {
   const handleShareSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMemberId || !shareAmount) {
-      setShareError('Amount is required.');
+      setShareError('Please enter the contribution amount.');
+      return;
+    }
+
+    const numAmount = parseFloat(shareAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setShareError('Please enter a valid amount greater than zero.');
+      return;
+    }
+
+    if ((sharePaymentMethod === 'gcash' || sharePaymentMethod === 'bank_transfer') && !sharePaymentRefNo.trim()) {
+      setShareError('Please enter the transaction reference number.');
       return;
     }
 
@@ -169,15 +186,28 @@ export default function AccountingPage() {
     setShareSubmitting(true);
 
     try {
+      const methodLabel = sharePaymentMethod === 'gcash'
+        ? 'GCash'
+        : sharePaymentMethod === 'bank_transfer'
+          ? 'Bank Transfer'
+          : sharePaymentMethod === 'payroll'
+            ? `Salary Deduction (${shareSalaryDeductionMode})`
+            : 'Hand-in';
+      const refPart = sharePaymentRefNo.trim() ? ` (Ref: ${sharePaymentRefNo.trim()})` : '';
+      const customRemarks = shareRemarks.trim() ? ` - ${shareRemarks.trim()}` : '';
+      const finalRemarks = `Capital build-up deposit via ${methodLabel}${refPart}${customRemarks}`;
+
       await api.post('/accounts/share-capital', {
         member_id: selectedMemberId,
-        transaction_type: shareTxType,
-        amount: parseFloat(shareAmount),
-        remarks: shareRemarks || undefined
+        transaction_type: 'credit',
+        amount: numAmount,
+        remarks: finalRemarks
       });
 
       setShareAmount('');
       setShareRemarks('');
+      setSharePaymentRefNo('');
+      setSharePaymentMethod('otc');
       setIsShareModalOpen(false);
       loadLedgerData();
     } catch (err: any) {
@@ -420,8 +450,8 @@ export default function AccountingPage() {
               onClick={() => setIsShareModalOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
             >
-              <ArrowRightLeft className="w-4 h-4" />
-              Book Share Tx
+              <PlusCircle className="w-4 h-4" />
+              Add Share Capital
             </button>
           )}
 
@@ -866,15 +896,24 @@ export default function AccountingPage() {
       {/* MODAL 1: BOOK SHARE CAPITAL TRANSACTION */}
       {isShareModalOpen && mounted && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop">
-            <button
-              onClick={() => setIsShareModalOpen(false)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
-              aria-label="Close modal"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white mb-4">Book Share Capital Transaction</h2>
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-outline-variant/50 mb-4">
+              <div>
+                <h3 className="font-headline font-bold text-xl text-on-surface dark:text-white">
+                  Initiate Investment
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Choose investment type, placement amount, and deposit channel
+                </p>
+              </div>
+              <button
+                onClick={() => setIsShareModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             {shareError && (
               <div className="p-3 mb-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2">
@@ -883,57 +922,261 @@ export default function AccountingPage() {
               </div>
             )}
 
-            <form onSubmit={handleShareSubmit} className="space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="font-label text-neutral-600 dark:text-neutral-400 px-1">Transaction Category *</label>
-                <select
-                  value={shareTxType}
-                  onChange={(e: any) => setShareTxType(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white"
-                >
-                  <option value="credit">Deposit (Equity Contribution Injection)</option>
-                  <option value="debit">Withdrawal (Equity Withdrawal Capital-Out)</option>
-                </select>
+            <form onSubmit={handleShareSubmit} className="space-y-5">
+              {/* Selected Type summary banner */}
+              <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl text-xs flex items-center justify-between">
+                <div>
+                  <span className="text-neutral-500 block">Investment Type</span>
+                  <span className="font-bold font-headline text-on-surface dark:text-white capitalize">
+                    Share Capital (Capital Build-Up)
+                  </span>
+                </div>
+                {auditedMember && (
+                  <div className="text-right">
+                    <span className="text-neutral-500 block">Beneficiary Member</span>
+                    <span className="font-bold font-headline text-on-surface dark:text-white">
+                      {auditedMember.full_name || auditedMember.name}
+                    </span>
+                  </div>
+                )}
               </div>
 
+              {/* Amount Input */}
               <div className="space-y-1.5">
-                <label className="font-label text-neutral-600 dark:text-neutral-400 px-1">Contribution Capital Amount (₱) *</label>
+                <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
+                  Placement Amount (₱):
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   required
+                  placeholder="e.g. 5000"
                   value={shareAmount}
                   onChange={(e) => setShareAmount(e.target.value)}
-                  placeholder="e.g. 1000"
-                  className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white"
+                  className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent font-bold text-lg focus:outline-none focus:border-primary text-on-surface dark:text-white"
                 />
               </div>
 
+              {/* Payment Channel Options */}
+              <div className="space-y-2.5">
+                <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Select Deposit Channel:</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSharePaymentMethod('gcash');
+                      setSharePaymentRefNo('');
+                    }}
+                    className={`p-3.5 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${sharePaymentMethod === 'gcash'
+                      ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                      : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                      }`}
+                  >
+                    <WalletCards className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                    <div>
+                      <span className="font-bold text-xs block text-on-surface dark:text-white">GCash</span>
+                      <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Instant online GCash mobile wallet transfer</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSharePaymentMethod('bank_transfer');
+                      setSharePaymentRefNo('');
+                    }}
+                    className={`p-3.5 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${sharePaymentMethod === 'bank_transfer'
+                      ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                      : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                      }`}
+                  >
+                    <Building className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                    <div>
+                      <span className="font-bold text-xs block text-on-surface dark:text-white">Bank Transfer</span>
+                      <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Direct deposit to BDO Account</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSharePaymentMethod('payroll');
+                      setSharePaymentRefNo('');
+                    }}
+                    className={`p-3.5 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${sharePaymentMethod === 'payroll'
+                      ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                      : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                      }`}
+                  >
+                    <Lock className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                    <div>
+                      <span className="font-bold text-xs block text-on-surface dark:text-white">Salary Deduction</span>
+                      <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Deduct from upcoming payslip</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSharePaymentMethod('otc');
+                      setSharePaymentRefNo('');
+                    }}
+                    className={`p-3.5 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${sharePaymentMethod === 'otc'
+                      ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                      : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                      }`}
+                  >
+                    <Users className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                    <div>
+                      <span className="font-bold text-xs block text-on-surface dark:text-white">Hand-in</span>
+                      <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Hand-in cash to the co-op cashier</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Salary Deduction Cutoff Schedule Options */}
+              {sharePaymentMethod === 'payroll' && (
+                <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2.5 text-xs animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-700 dark:text-neutral-300">
+                      Select Payroll Cutoff:
+                    </span>
+                    <span className="text-[10px] font-mono uppercase bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary px-2 py-0.5 rounded-full font-extrabold">
+                      {shareSalaryDeductionMode === 'SD' ? '15th Cutoff' : shareSalaryDeductionMode === 'SD30' ? '30th Cutoff' : '15th & 30th Cutoffs'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShareSalaryDeductionMode('SD')}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${shareSalaryDeductionMode === 'SD'
+                        ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                        : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-extrabold text-xs text-on-surface dark:text-white">SD</span>
+                        <span className="text-[9px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/10 px-1.5 py-0.5 rounded">15th</span>
+                      </div>
+                      <span className="text-[9px] text-neutral-500 dark:text-neutral-400 block leading-tight mt-1">
+                        Deducted every 15th of the month
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShareSalaryDeductionMode('SD30')}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${shareSalaryDeductionMode === 'SD30'
+                        ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                        : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-extrabold text-xs text-on-surface dark:text-white">SD30</span>
+                        <span className="text-[9px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/10 px-1.5 py-0.5 rounded">30th</span>
+                      </div>
+                      <span className="text-[9px] text-neutral-500 dark:text-neutral-400 block leading-tight mt-1">
+                        Deducted every 30th of the month
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShareSalaryDeductionMode('SD2')}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${shareSalaryDeductionMode === 'SD2'
+                        ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20 shadow-sm'
+                        : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-extrabold text-xs text-on-surface dark:text-white">SD2</span>
+                        <span className="text-[9px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/10 px-1.5 py-0.5 rounded">15 & 30</span>
+                      </div>
+                      <span className="text-[9px] text-neutral-500 dark:text-neutral-400 block leading-tight mt-1">
+                        Deducted every 15th and 30th
+                      </span>
+                    </button>
+                  </div>
+
+                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
+                    {shareSalaryDeductionMode === 'SD' && 'ℹ️ Deduction will be scheduled on the 15th-day payroll cutoff.'}
+                    {shareSalaryDeductionMode === 'SD30' && 'ℹ️ Deduction will be scheduled on the 30th-day / end-of-month payroll cutoff.'}
+                    {shareSalaryDeductionMode === 'SD2' && 'ℹ️ Deduction will be split and scheduled across both 15th & 30th payroll cutoffs.'}
+                  </p>
+                </div>
+              )}
+
+              {/* GCash Details */}
+              {sharePaymentMethod === 'gcash' && (
+                <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-neutral-600 dark:text-neutral-400">GCash Account Name:</span>
+                    <span className="text-on-surface dark:text-white font-extrabold">Michelle Pable</span>
+                  </div>
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-neutral-600 dark:text-neutral-400">Co-op GCash Number:</span>
+                    <span className="font-mono text-primary dark:text-secondary font-extrabold">09498664041</span>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter GCash Reference No. (e.g. 10029384)"
+                    value={sharePaymentRefNo}
+                    onChange={(e) => setSharePaymentRefNo(e.target.value)}
+                    className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary text-on-surface dark:text-white"
+                  />
+                </div>
+              )}
+
+              {/* Bank Transfer Details */}
+              {sharePaymentMethod === 'bank_transfer' && (
+                <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-neutral-600 dark:text-neutral-400">BDO Account No:</span>
+                    <span className="font-mono text-primary dark:text-secondary font-extrabold">0012-3456-7890</span>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter Bank Deposit/Ref No. (e.g. BDO-98213)"
+                    value={sharePaymentRefNo}
+                    onChange={(e) => setSharePaymentRefNo(e.target.value)}
+                    className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary text-on-surface dark:text-white"
+                  />
+                </div>
+              )}
+
+              {/* Optional Remarks */}
               <div className="space-y-1.5">
-                <label className="font-label text-neutral-600 dark:text-neutral-400 px-1">Remarks / Reference</label>
+                <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400">
+                  Remarks / Notes (Optional):
+                </label>
                 <input
                   type="text"
                   value={shareRemarks}
                   onChange={(e) => setShareRemarks(e.target.value)}
-                  placeholder="e.g. Monthly salary deduction contribution"
-                  className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-on-surface dark:text-white"
+                  placeholder="e.g. Additional capital build-up"
+                  className="w-full px-3.5 py-2.5 bg-transparent border border-outline-variant/65 rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none text-xs text-on-surface dark:text-white"
                 />
               </div>
 
-              <div className="pt-4 flex items-center justify-end gap-3">
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsShareModalOpen(false)}
-                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
+                  className="flex-1 py-3 bg-neutral/10 hover:bg-neutral/15 dark:bg-neutral/20 dark:hover:bg-neutral/25 text-on-surface dark:text-white rounded-2xl font-bold transition-colors cursor-pointer text-center text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={shareSubmitting}
-                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                  disabled={shareSubmitting || !shareAmount}
+                  className="flex-1 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-sm shadow-md"
                 >
-                  {shareSubmitting ? 'Recording...' : 'Book Transaction'}
+                  {shareSubmitting ? 'Processing...' : 'Confirm Capital Placement'}
                 </button>
               </div>
             </form>
