@@ -26,6 +26,7 @@ import {
   RotateCcw,
   X,
   Clock,
+  AtSign,
 } from 'lucide-react';
 import UserAccessHistoryTable from '@/components/UserAccessHistoryTable';
 
@@ -351,6 +352,14 @@ export default function ProfilePage() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
+  // Username form state
+  const [newUsername, setNewUsername] = useState('');
+  const [usernamePassword, setUsernamePassword] = useState('');
+  const [showUsernamePw, setShowUsernamePw] = useState(false);
+  const [changingUsername, setChangingUsername] = useState(false);
+  const [usernameSuccess, setUsernameSuccess] = useState<string | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+
   // UI state
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -521,6 +530,65 @@ const computeAgeFromDob = (dobString: string): string => {
     }
   };
 
+  const handleChangeUsername = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUsernameError(null);
+    setUsernameSuccess(null);
+
+    const trimmed = newUsername.trim().toLowerCase();
+    if (!trimmed) {
+      setUsernameError('Please enter a new username.');
+      return;
+    }
+    if (trimmed.length < 3) {
+      setUsernameError('Username must be at least 3 characters long.');
+      return;
+    }
+    if (trimmed.length > 50) {
+      setUsernameError('Username cannot exceed 50 characters.');
+      return;
+    }
+    if (!/^[a-z]/.test(trimmed)) {
+      setUsernameError('Username must begin with a letter.');
+      return;
+    }
+    if (/\s/.test(trimmed)) {
+      setUsernameError('Username must be a single word (no spaces).');
+      return;
+    }
+    if (!/^[a-z][a-z0-9_.]*$/.test(trimmed)) {
+      setUsernameError('Username can only contain letters, numbers, underscores, and dots.');
+      return;
+    }
+    if (user?.username && user.username.toLowerCase() === trimmed) {
+      setUsernameError('New username is the same as your current username.');
+      return;
+    }
+
+    setChangingUsername(true);
+    try {
+      const res = await api.put('/auth/me/username', {
+        new_username: trimmed,
+        current_password: usernamePassword || undefined
+      });
+      const updatedUser = res.data.data;
+      setUsernameSuccess('Username updated successfully!');
+      updateUser({ username: updatedUser.username });
+      setNewUsername('');
+      setUsernamePassword('');
+      setTimeout(() => setUsernameSuccess(null), 4000);
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to update username. Please try again.';
+      setUsernameError(msg);
+    } finally {
+      setChangingUsername(false);
+    }
+  };
+
   if (!user) return null;
 
   const displayName = firstName && lastName ? `${firstName} ${lastName}` : user.username;
@@ -671,9 +739,19 @@ const computeAgeFromDob = (dobString: string): string => {
                     {user.profile.membership_type === 'Associate' ? 'Associate Member' : 'Regular Member'}
                   </span>
                 )}
-                <span className="text-[11px] text-neutral-500 dark:text-neutral-400 font-semibold">
-                  @{user.username}
-                </span>
+                <div className="inline-flex items-center gap-1.5 bg-neutral-100 dark:bg-neutral-800/80 px-2.5 py-0.5 rounded-full border border-outline-variant/40">
+                  <span className="text-[11px] text-neutral-600 dark:text-neutral-300 font-semibold font-mono">
+                    @{user.username}
+                  </span>
+                  <a
+                    href="#change-username-section"
+                    className="text-[10px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer flex items-center gap-0.5"
+                    title="Jump to Change Username section"
+                  >
+                    <Edit3 className="w-2.5 h-2.5" />
+                    <span>Change</span>
+                  </a>
+                </div>
               </div>
             </div>
 
@@ -1031,6 +1109,99 @@ const computeAgeFromDob = (dobString: string): string => {
               </div>
             </>
           )}
+        </form>
+      </div>
+
+      {/* Change Username */}
+      <div id="change-username-section" className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl overflow-hidden scroll-mt-6">
+        <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <AtSign className="w-4 h-4 text-primary dark:text-secondary" />
+            <h2 className="font-headline text-sm font-bold text-on-surface dark:text-white">Change Username</h2>
+          </div>
+          <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300">
+            Current: @{user.username}
+          </span>
+        </div>
+
+        <form onSubmit={handleChangeUsername} className="p-6 space-y-4">
+          {usernameError && (
+            <div className="p-3 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-xl text-[11px] font-bold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {usernameError}
+            </div>
+          )}
+          {usernameSuccess && (
+            <div className="p-3 bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 text-primary dark:text-secondary rounded-xl text-[11px] font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              {usernameSuccess}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
+                New Username
+              </label>
+              <div className="relative group">
+                <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary pointer-events-none" />
+                <input
+                  type="text"
+                  required
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
+                  placeholder="e.g. juan.delacruz"
+                  className="w-full pl-9 pr-3 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400 font-semibold"
+                />
+              </div>
+              <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                At least 3 characters. Letters, numbers, dots, and underscores only.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-label text-[11px] uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400">
+                Current Password <span className="text-neutral-400 font-normal lowercase">(for verification)</span>
+              </label>
+              <div className="relative group">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-primary dark:group-focus-within:text-secondary pointer-events-none" />
+                <input
+                  type={showUsernamePw ? 'text' : 'password'}
+                  value={usernamePassword}
+                  onChange={(e) => setUsernamePassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full pl-9 pr-10 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/50 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary transition-all text-on-surface dark:text-white placeholder:text-neutral-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowUsernamePw(!showUsernamePw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-primary dark:hover:text-secondary transition-colors cursor-pointer"
+                >
+                  {showUsernamePw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={changingUsername || !newUsername.trim() || newUsername.trim().toLowerCase() === user.username.toLowerCase()}
+              className="px-6 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-xs font-bold rounded-xl shadow hover:-translate-y-px active:scale-95 disabled:opacity-50 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              {changingUsername ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Update Username
+                </>
+              )}
+            </button>
+          </div>
         </form>
       </div>
 

@@ -1700,6 +1700,147 @@ export const changePassword = async (req, res, next) => {
   }
 };
 
+// @desc    Change own username
+// @route   PUT /api/auth/me/username
+// @access  Protected (All roles)
+export const changeUsername = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    let { new_username, current_password } = req.body;
+
+    if (!new_username || !new_username.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide a new username.' }
+      });
+    }
+
+    new_username = new_username.trim();
+
+    if (new_username.length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username must be at least 3 characters long.' }
+      });
+    }
+
+    if (new_username.length > 50) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username cannot exceed 50 characters.' }
+      });
+    }
+
+    if (!/^[a-zA-Z]/.test(new_username)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username must begin with a letter.' }
+      });
+    }
+
+    if (/\s/.test(new_username)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username must be a single word (no spaces).' }
+      });
+    }
+
+    if (!/^[a-zA-Z][a-zA-Z0-9_.]*$/.test(new_username)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username can only contain letters, numbers, underscores, and dots.' }
+      });
+    }
+
+    if (req.user.username && req.user.username.toLowerCase() === new_username.toLowerCase()) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'New username cannot be the same as your current username.' }
+      });
+    }
+
+    const userResult = await query(
+      'SELECT id, username, password_hash FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'User account not found.' }
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    if (current_password) {
+      const isMatch = await bcrypt.compare(current_password, user.password_hash);
+      if (!isMatch) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Current password is incorrect.' }
+        });
+      }
+    }
+
+    const existing = await query(
+      'SELECT id FROM users WHERE LOWER(username) = LOWER($1) AND id != $2',
+      [new_username, userId]
+    );
+
+    if (existing.rowCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `The username "${new_username}" is already taken. Please choose another one.` }
+      });
+    }
+
+    const updateRes = await query(
+      `UPDATE users
+       SET username = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, username, role, is_active, profile_picture_url, updated_at`,
+      [new_username, userId]
+    );
+
+    try {
+      await query(
+        `INSERT INTO audit_logs (user_id, username, action, module, method, endpoint, status_code, status, ip_address, user_agent, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          userId,
+          new_username,
+          'UPDATE_USERNAME',
+          'PROFILE',
+          req.method,
+          req.originalUrl || '/api/auth/me/username',
+          200,
+          'success',
+          req.ip || '127.0.0.1',
+          req.headers['user-agent'] || 'System',
+          JSON.stringify({ old_username: user.username, new_username: new_username })
+        ]
+      );
+    } catch (auditErr) {
+      console.warn('Audit log insert failed:', auditErr.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Username updated successfully.',
+      data: updateRes.rows[0]
+    });
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Username is already taken.' }
+      });
+    }
+    next(error);
+  }
+};
+
 // @desc    Update profile picture (avatar)
 // @route   PUT /api/auth/me/avatar
 // @access  Protected

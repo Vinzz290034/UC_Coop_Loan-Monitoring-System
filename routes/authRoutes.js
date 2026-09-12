@@ -18,6 +18,7 @@ import {
   replyToContactMessage,      // Added — Reply to contact inquiries
   updateProfile,              // Added — Self-service profile update
   changePassword,             // Added — Self-service password change
+  changeUsername,             // Added — Self-service username change
   updateAvatar,               // Added — Self-service avatar update
   logout,                     // Added — User logout event tracking
   getUserAccessHistory        // Added — User access history (login/logout logs)
@@ -51,6 +52,7 @@ router.post('/contact', submitContactMessage); // Public landing page submission
 // ==========================================
 router.get('/me', protect, getMe);
 router.put('/me/profile', protect, updateProfile);
+router.put('/me/username', protect, changeUsername);
 router.put('/me/password', protect, changePassword);
 router.put('/me/avatar', protect, uploadAvatar, updateAvatar);
 router.post('/logout', protect, logout);
