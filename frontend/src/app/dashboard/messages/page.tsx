@@ -25,6 +25,8 @@ import {
   ShieldAlert,
   Eye,
   FileSpreadsheet,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 
 interface ContactMessage {
@@ -85,6 +87,7 @@ export default function MessagesPage() {
   const [error, setError] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -403,12 +406,23 @@ export default function MessagesPage() {
             <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl overflow-hidden sticky top-6 shadow-md animate-micro-elevate">
               <div className="px-5 py-4.5 border-b border-outline-variant/40 flex items-center justify-between">
                 <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">Message Details</h3>
-                <button
-                  onClick={() => setSelectedMessage(null)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setIsMaximized(true)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
+                    title="Maximize message view"
+                    aria-label="Maximize message"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => { setSelectedMessage(null); setIsMaximized(false); }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
+                    aria-label="Close details"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="p-5 space-y-5 max-h-[calc(100vh-300px)] overflow-y-auto">
@@ -462,7 +476,17 @@ export default function MessagesPage() {
                     </div>
 
                     <div className="border-t border-outline-variant/30 pt-4 space-y-3" ref={replyPanelRef}>
-                      <h4 className="text-[10px] font-bold text-on-surface dark:text-white uppercase tracking-wider font-label">Reply to Inquirer</h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-[10px] font-bold text-on-surface dark:text-white uppercase tracking-wider font-label">Reply to Inquirer</h4>
+                        <button
+                          type="button"
+                          onClick={() => setIsMaximized(true)}
+                          className="text-[10px] font-bold text-primary dark:text-secondary hover:underline flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Maximize view to see full message and reply without scrolling"
+                        >
+                          <Maximize2 className="w-3 h-3" /> Maximize
+                        </button>
+                      </div>
 
                       {error && (
                         <div className="p-3 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-xl text-[11px] font-bold flex items-center gap-2">
@@ -481,9 +505,9 @@ export default function MessagesPage() {
                       <textarea
                         value={replyContent}
                         onChange={(e) => setReplyContent(e.target.value)}
-                        rows={4}
+                        rows={5}
                         placeholder="Type your reply..."
-                        className="w-full px-3.5 py-2.5 bg-neutral-50 dark:bg-surface border border-outline-variant rounded-2xl text-xs font-body outline-none focus:ring-2 focus:ring-primary/20 resize-none text-on-surface dark:text-white"
+                        className="w-full px-3.5 py-2.5 bg-neutral-50 dark:bg-surface border border-outline-variant rounded-2xl text-xs font-body outline-none focus:ring-2 focus:ring-primary/20 resize-y min-h-[110px] text-on-surface dark:text-white"
                       />
                       <button
                         onClick={handleReply}
@@ -614,6 +638,175 @@ export default function MessagesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MAXIMIZED MESSAGE & REPLY MODAL */}
+      {isMaximized && selectedMessage && mounted && createPortal(
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/70 backdrop-blur-md p-4 sm:p-6 md:p-8 animate-modal-backdrop"
+          onClick={() => setIsMaximized(false)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden animate-modal-pop flex flex-col max-h-[92vh] font-sans"
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-outline-variant/40 flex items-center justify-between bg-surface-container-low dark:bg-surface-container-high/40 flex-shrink-0">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary flex-shrink-0">
+                  <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-headline font-bold text-base sm:text-lg text-on-surface dark:text-white">
+                      {selectedMessage.full_name}
+                    </h3>
+                    <StatusBadge status={selectedMessage.status} />
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    <span>{selectedMessage.email}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1 text-[11px]">
+                      <Clock className="w-3.5 h-3.5" />
+                      {formatDate(selectedMessage.created_at)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {!isMember && (
+                  <div className="hidden sm:flex items-center gap-2 mr-2">
+                    {selectedMessage.status !== 'read' && selectedMessage.status !== 'resolved' && (
+                      <button
+                        onClick={() => handleUpdateStatus(selectedMessage.id, 'read')}
+                        disabled={updatingStatus === selectedMessage.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl hover:bg-amber-500/25 transition-colors cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" /> Mark as Read
+                      </button>
+                    )}
+                    {selectedMessage.status !== 'resolved' && (
+                      <button
+                        onClick={() => handleUpdateStatus(selectedMessage.id, 'resolved')}
+                        disabled={updatingStatus === selectedMessage.id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 rounded-xl hover:bg-primary/20 dark:hover:bg-secondary/20 transition-colors cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Resolve
+                      </button>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => setIsMaximized(false)}
+                  className="px-3.5 py-2 rounded-xl border border-outline-variant/60 hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-600 dark:text-neutral-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Minimize back to sidebar"
+                >
+                  <Minimize2 className="w-3.5 h-3.5" /> Minimize
+                </button>
+                <button
+                  onClick={() => { setIsMaximized(false); setSelectedMessage(null); }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer"
+                  aria-label="Close modal"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 sm:p-7 space-y-6">
+              {/* Original Inquiry Content */}
+              <div className="space-y-2">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 font-bold font-label block">
+                  Inquiry Message
+                </span>
+                <div className="bg-neutral-50 dark:bg-surface rounded-2xl p-5 border border-outline-variant/40 text-sm text-neutral-800 dark:text-neutral-100 leading-relaxed whitespace-pre-wrap font-body select-text">
+                  {selectedMessage.message_content}
+                </div>
+              </div>
+
+              {/* Reply Section for Admin/Staff */}
+              {!isMember ? (
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 font-bold font-label block">
+                      Reply to Inquirer (Will be delivered to {selectedMessage.email})
+                    </span>
+                    <span className="text-[11px] text-neutral-400">
+                      {replyContent.trim().length} characters
+                    </span>
+                  </div>
+
+                  {error && (
+                    <div className="p-3.5 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs font-bold flex items-center gap-2">
+                      <AlertTriangle className="w-4.5 h-4.5 shrink-0" />
+                      {error}
+                    </div>
+                  )}
+
+                  {replySuccess && (
+                    <div className="p-3.5 bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20 text-primary dark:text-secondary rounded-2xl text-xs font-bold flex items-center gap-2">
+                      <CheckCircle2 className="w-4.5 h-4.5 shrink-0" />
+                      Reply sent successfully and inquiry resolved!
+                    </div>
+                  )}
+
+                  <textarea
+                    autoFocus
+                    value={replyContent}
+                    onChange={(e) => setReplyContent(e.target.value)}
+                    rows={10}
+                    placeholder="Type your official response here..."
+                    className="w-full p-4 bg-white dark:bg-surface border border-outline-variant rounded-2xl text-sm font-body outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary leading-relaxed resize-y min-h-[220px] text-on-surface dark:text-white shadow-inner"
+                  />
+
+                  <div className="flex items-center justify-between pt-3 border-t border-outline-variant/30">
+                    <button
+                      type="button"
+                      onClick={() => setIsMaximized(false)}
+                      className="px-5 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
+                    >
+                      Return to Sidebar
+                    </button>
+                    <button
+                      onClick={handleReply}
+                      disabled={replying || !replyContent.trim()}
+                      className="px-8 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-xs font-bold rounded-full shadow-lg hover:shadow-xl hover:-translate-y-px active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      {replying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      Send Reply
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="pt-2">
+                  {selectedMessage.status === 'resolved' ? (
+                    <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-2xl p-5 space-y-2">
+                      <div className="flex items-center gap-2 font-bold text-xs text-primary dark:text-secondary font-label uppercase">
+                        <CheckCircle2 className="w-5 h-5" /> Official Response Submitted
+                      </div>
+                      <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed font-body">
+                        An official response has been sent to your registered email: <strong>{selectedMessage.email}</strong>.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="bg-neutral-50 dark:bg-surface border border-outline-variant/40 rounded-2xl p-5 space-y-2 flex items-start gap-3">
+                      <HelpCircle className="w-6 h-6 text-neutral-400 shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="font-bold text-neutral-700 dark:text-neutral-200 text-sm">Under Review</h5>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed mt-1">
+                          Cooperative management has received your inquiry and is currently reviewing it.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>,
         document.body
