@@ -15,9 +15,17 @@ export async function migrateContactMessages() {
         message_content TEXT NOT NULL,
         status VARCHAR(50) NOT NULL DEFAULT 'unread' CHECK (status IN ('unread', 'read', 'resolved')),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        resolved_at TIMESTAMP WITH TIME ZONE
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        reply_content TEXT DEFAULT NULL,
+        replied_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+        replied_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        replied_by_name VARCHAR(150) DEFAULT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_contact_messages_created_at ON contact_messages(created_at);
+      ALTER TABLE contact_messages ADD COLUMN IF NOT EXISTS reply_content TEXT DEFAULT NULL;
+      ALTER TABLE contact_messages ADD COLUMN IF NOT EXISTS replied_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+      ALTER TABLE contact_messages ADD COLUMN IF NOT EXISTS replied_by UUID REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE contact_messages ADD COLUMN IF NOT EXISTS replied_by_name VARCHAR(150) DEFAULT NULL;
     `;
     await client.query(createTableQuery);
     console.log('[Migration] contact_messages table is ready.');

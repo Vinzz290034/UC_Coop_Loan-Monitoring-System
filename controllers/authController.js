@@ -1258,7 +1258,7 @@ export const getContactMessages = async (req, res, next) => {
     const { status, search } = req.query;
 
     let queryText = `
-      SELECT id, full_name, email, message_content, status, created_at, resolved_at
+      SELECT id, full_name, email, message_content, status, created_at, resolved_at, reply_content, replied_at, replied_by_name
       FROM contact_messages
       WHERE 1=1
     `;
@@ -1420,13 +1420,22 @@ export const replyToContactMessage = async (req, res, next) => {
     // Send reply email
     await sendContactReply(message.email, message.full_name, reply_content.trim());
 
-    // Update message status to resolved
+    const responderName = req.user?.profile
+      ? `${req.user.profile.first_name} ${req.user.profile.last_name}`
+      : req.user?.username || 'Cooperative Management';
+
+    // Update message status to resolved and record the sent reply
     const updateResult = await query(
       `UPDATE contact_messages
-       SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
-       WHERE id = $1
-       RETURNING id, full_name, email, status, created_at, resolved_at`,
-      [id]
+       SET status = 'resolved',
+           resolved_at = CURRENT_TIMESTAMP,
+           reply_content = $1,
+           replied_at = CURRENT_TIMESTAMP,
+           replied_by = $2,
+           replied_by_name = $3
+       WHERE id = $4
+       RETURNING id, full_name, email, message_content, status, created_at, resolved_at, reply_content, replied_at, replied_by_name`,
+      [reply_content.trim(), req.user?.id || null, responderName, id]
     );
 
     res.status(200).json({

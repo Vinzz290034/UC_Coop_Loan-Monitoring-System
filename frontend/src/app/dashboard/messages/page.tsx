@@ -37,6 +37,9 @@ interface ContactMessage {
   status: 'unread' | 'read' | 'resolved';
   created_at: string;
   resolved_at: string | null;
+  reply_content?: string | null;
+  replied_at?: string | null;
+  replied_by_name?: string | null;
 }
 
 const STATUS_CONFIG = {
@@ -152,15 +155,16 @@ export default function MessagesPage() {
     setReplying(true);
     setError(null);
     try {
-      await api.post(`/auth/contact-messages/${selectedMessage.id}/reply`, {
+      const res = await api.post(`/auth/contact-messages/${selectedMessage.id}/reply`, {
         reply_content: replyContent.trim(),
       });
+      const updatedData = res.data.data;
       setReplySuccess(true);
       setReplyContent('');
       setMessages((prev) =>
-        prev.map((m) => (m.id === selectedMessage.id ? { ...m, status: 'resolved' } : m))
+        prev.map((m) => (m.id === selectedMessage.id ? { ...m, ...updatedData, status: 'resolved' } : m))
       );
-      setSelectedMessage((prev) => prev ? { ...prev, status: 'resolved' } : null);
+      setSelectedMessage((prev) => prev ? { ...prev, ...updatedData, status: 'resolved' } : null);
       setTimeout(() => setReplySuccess(false), 3000);
     } catch (err: unknown) {
       const errorObj = err as { response?: { data?: { error?: { message?: string } } } };
@@ -275,20 +279,12 @@ export default function MessagesPage() {
             <Plus className="w-4 h-4" /> Compose Message
           </button>
         ) : (
-          <div className="flex items-center gap-2.5">
-            {unreadCount > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-tertiary/10 text-tertiary border border-tertiary/20 text-xs font-bold">
-                <Inbox className="w-3.5 h-3.5" />
-                {unreadCount} unread
-              </div>
-            )}
-            <button
-              onClick={exportToExcel}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4" /> Export Excel
-            </button>
-          </div>
+          unreadCount > 0 ? (
+            <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-tertiary/10 text-tertiary border border-tertiary/20 text-xs font-bold">
+              <Inbox className="w-3.5 h-3.5" />
+              {unreadCount} unread
+            </div>
+          ) : null
         )}
       </div>
 
@@ -475,9 +471,36 @@ export default function MessagesPage() {
                       )}
                     </div>
 
+                    {/* Official Sent Reply Thread */}
+                    {selectedMessage.reply_content && (
+                      <div className="bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-600 dark:text-emerald-400 font-label">
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            Official Response Sent
+                          </div>
+                          {selectedMessage.replied_at && (
+                            <span className="text-[10px] text-neutral-400 dark:text-neutral-500 font-mono">
+                              {formatDate(selectedMessage.replied_at)}
+                            </span>
+                          )}
+                        </div>
+                        {selectedMessage.replied_by_name && (
+                          <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
+                            Replied by <span className="font-semibold text-neutral-700 dark:text-neutral-200">{selectedMessage.replied_by_name}</span>
+                          </p>
+                        )}
+                        <div className="text-xs text-neutral-800 dark:text-neutral-100 whitespace-pre-wrap font-body leading-relaxed bg-white/80 dark:bg-surface/80 p-3.5 rounded-xl border border-emerald-500/20">
+                          {selectedMessage.reply_content}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="border-t border-outline-variant/30 pt-4 space-y-3" ref={replyPanelRef}>
                       <div className="flex items-center justify-between">
-                        <h4 className="text-[10px] font-bold text-on-surface dark:text-white uppercase tracking-wider font-label">Reply to Inquirer</h4>
+                        <h4 className="text-[10px] font-bold text-on-surface dark:text-white uppercase tracking-wider font-label">
+                          {selectedMessage.reply_content ? 'Send Additional Response' : 'Reply to Inquirer'}
+                        </h4>
                         <button
                           type="button"
                           onClick={() => setIsMaximized(true)}
@@ -522,13 +545,26 @@ export default function MessagesPage() {
                 ) : (
                   <div className="border-t border-outline-variant/30 pt-4 space-y-3">
                     {selectedMessage.status === 'resolved' ? (
-                      <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-2xl p-4.5 space-y-2">
-                        <div className="flex items-center gap-2 font-bold text-xs text-primary dark:text-secondary font-label uppercase">
-                          <CheckCircle2 className="w-4.5 h-4.5" /> Response Submitted
+                      <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-2xl p-4.5 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 font-bold text-xs text-primary dark:text-secondary font-label uppercase">
+                            <CheckCircle2 className="w-4.5 h-4.5" /> Response from Cooperative
+                          </div>
+                          {selectedMessage.replied_at && (
+                            <span className="text-[10px] text-neutral-400 font-mono">
+                              {formatDate(selectedMessage.replied_at)}
+                            </span>
+                          )}
                         </div>
-                        <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed font-body">
-                          An official response has been emailed to your registered email: <strong>{selectedMessage.email}</strong>.
-                        </p>
+                        {selectedMessage.reply_content ? (
+                          <div className="bg-white dark:bg-surface p-3.5 rounded-xl border border-outline-variant/30 text-xs text-neutral-700 dark:text-neutral-200 whitespace-pre-wrap font-body leading-relaxed">
+                            {selectedMessage.reply_content}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed font-body">
+                            An official response has been emailed to your registered email: <strong>{selectedMessage.email}</strong>.
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <div className="bg-neutral-50 dark:bg-surface border border-outline-variant/40 rounded-2xl p-4.5 space-y-2 flex items-start gap-2.5">
@@ -729,12 +765,37 @@ export default function MessagesPage() {
                 </div>
               </div>
 
+              {/* Official Sent Reply Thread (Maximized) */}
+              {selectedMessage.reply_content && (
+                <div className="bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-xs text-emerald-600 dark:text-emerald-400 font-label">
+                      <CheckCircle2 className="w-4.5 h-4.5 shrink-0" />
+                      Official Cooperative Response Sent
+                    </div>
+                    {selectedMessage.replied_at && (
+                      <span className="text-xs text-neutral-400 dark:text-neutral-500 font-mono">
+                        {formatDate(selectedMessage.replied_at)}
+                      </span>
+                    )}
+                  </div>
+                  {selectedMessage.replied_by_name && (
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
+                      Replied by <span className="font-semibold text-neutral-700 dark:text-neutral-200">{selectedMessage.replied_by_name}</span> (Delivered to {selectedMessage.email})
+                    </p>
+                  )}
+                  <div className="text-sm text-neutral-800 dark:text-neutral-100 whitespace-pre-wrap font-body leading-relaxed bg-white/80 dark:bg-surface/80 p-4 rounded-xl border border-emerald-500/20 select-text">
+                    {selectedMessage.reply_content}
+                  </div>
+                </div>
+              )}
+
               {/* Reply Section for Admin/Staff */}
               {!isMember ? (
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 font-bold font-label block">
-                      Reply to Inquirer (Will be delivered to {selectedMessage.email})
+                      {selectedMessage.reply_content ? `Send Additional Response (To ${selectedMessage.email})` : `Reply to Inquirer (Delivered to ${selectedMessage.email})`}
                     </span>
                     <span className="text-[11px] text-neutral-400">
                       {replyContent.trim().length} characters
@@ -759,9 +820,9 @@ export default function MessagesPage() {
                     autoFocus
                     value={replyContent}
                     onChange={(e) => setReplyContent(e.target.value)}
-                    rows={10}
+                    rows={8}
                     placeholder="Type your official response here..."
-                    className="w-full p-4 bg-white dark:bg-surface border border-outline-variant rounded-2xl text-sm font-body outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary leading-relaxed resize-y min-h-[220px] text-on-surface dark:text-white shadow-inner"
+                    className="w-full p-4 bg-white dark:bg-surface border border-outline-variant rounded-2xl text-sm font-body outline-none focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary leading-relaxed resize-y min-h-[180px] text-on-surface dark:text-white shadow-inner"
                   />
 
                   <div className="flex items-center justify-between pt-3 border-t border-outline-variant/30">
@@ -785,13 +846,26 @@ export default function MessagesPage() {
               ) : (
                 <div className="pt-2">
                   {selectedMessage.status === 'resolved' ? (
-                    <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-2xl p-5 space-y-2">
-                      <div className="flex items-center gap-2 font-bold text-xs text-primary dark:text-secondary font-label uppercase">
-                        <CheckCircle2 className="w-5 h-5" /> Official Response Submitted
+                    <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-2xl p-5 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-bold text-xs text-primary dark:text-secondary font-label uppercase">
+                          <CheckCircle2 className="w-5 h-5" /> Official Response Submitted
+                        </div>
+                        {selectedMessage.replied_at && (
+                          <span className="text-xs text-neutral-400 font-mono">
+                            {formatDate(selectedMessage.replied_at)}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed font-body">
-                        An official response has been sent to your registered email: <strong>{selectedMessage.email}</strong>.
-                      </p>
+                      {selectedMessage.reply_content ? (
+                        <div className="bg-white dark:bg-surface p-4 rounded-xl border border-outline-variant/30 text-sm text-neutral-700 dark:text-neutral-200 whitespace-pre-wrap font-body leading-relaxed select-text">
+                          {selectedMessage.reply_content}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed font-body">
+                          An official response has been sent to your registered email: <strong>{selectedMessage.email}</strong>.
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-neutral-50 dark:bg-surface border border-outline-variant/40 rounded-2xl p-5 space-y-2 flex items-start gap-3">
