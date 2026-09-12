@@ -214,7 +214,9 @@ export const getBillingByLoanId = async (req, res, next) => {
         lp.payment_date,
         lp.payment_method,
         lp.reference_no,
-        lpa.repayment_schedule_id
+        lpa.repayment_schedule_id,
+        lpa.principal_allocated,
+        lpa.interest_allocated
       FROM loan_payments lp
       JOIN loan_payment_allocations lpa ON lp.id = lpa.loan_payment_id
       WHERE lp.loan_id = $1
@@ -236,7 +238,7 @@ export const getBillingByLoanId = async (req, res, next) => {
     result.rows.forEach(s => {
       const sPayments = paymentsBySchedule[s.schedule_id] || [];
       if (sPayments.length > 1) {
-        // Multi-cutoff semi-monthly payments (e.g. 11/15 and 11/30)
+        // Multi-cutoff semi-monthly payments (e.g. 15th and 30th salary deductions)
         sPayments.forEach((p, pIdx) => {
           expandedRows.push({
             schedule_id: `${s.schedule_id}-${p.payment_id}`,
@@ -247,8 +249,9 @@ export const getBillingByLoanId = async (req, res, next) => {
             interest_due: pIdx === 0 ? s.interest_due : '0.00',
             total_due: pIdx === 0 ? s.total_due : '0.00',
             amount_paid: p.amount,
-            principal_paid: p.amount,
-            interest_paid: '0.00',
+            principal_paid: p.principal_allocated ? parseFloat(p.principal_allocated).toFixed(2) : p.amount,
+            interest_paid: p.interest_allocated ? parseFloat(p.interest_allocated).toFixed(2) : '0.00',
+            reference_no: p.reference_no || 'SD',
             installment_status: 'paid',
             outstanding_remaining: '0.00',
             date_paid: p.payment_date,
@@ -266,8 +269,9 @@ export const getBillingByLoanId = async (req, res, next) => {
           interest_due: s.interest_due,
           total_due: s.total_due,
           amount_paid: p.amount,
-          principal_paid: s.principal_paid,
-          interest_paid: s.interest_paid,
+          principal_paid: p.principal_allocated ? parseFloat(p.principal_allocated).toFixed(2) : s.principal_paid,
+          interest_paid: p.interest_allocated ? parseFloat(p.interest_allocated).toFixed(2) : s.interest_paid,
+          reference_no: p.reference_no || 'SD',
           installment_status: s.installment_status,
           outstanding_remaining: s.outstanding_remaining,
           date_paid: p.payment_date,
