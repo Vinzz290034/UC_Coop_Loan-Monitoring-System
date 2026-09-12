@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
@@ -83,6 +84,11 @@ export default function MessagesPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // FIXED: Moved useRef to the top level of the component with other hooks
   const replyPanelRef = useRef<HTMLDivElement>(null);
@@ -185,8 +191,13 @@ export default function MessagesPage() {
       setTimeout(() => setInquirySuccess(false), 4000);
       fetchMessages();
     } catch (err: unknown) {
-      const errorObj = err as { response?: { data?: { error?: { message?: string } } } };
-      setError(errorObj.response?.data?.error?.message || 'Failed to submit inquiry.');
+      const errorObj = err as { response?: { data?: { error?: { message?: string }; message?: string } } };
+      const msg =
+        errorObj.response?.data?.error?.message ||
+        errorObj.response?.data?.message ||
+        (err as Error)?.message ||
+        'Failed to submit inquiry.';
+      setError(msg);
     } finally {
       setSendingInquiry(false);
     }
@@ -499,7 +510,7 @@ export default function MessagesPage() {
                       <div className="bg-neutral-50 dark:bg-surface border border-outline-variant/40 rounded-2xl p-4.5 space-y-2 flex items-start gap-2.5">
                         <HelpCircle className="w-5 h-5 text-neutral-400 shrink-0 mt-0.5" />
                         <div>
-                          <h5 className="font-bold text-neutral-600 dark:text-neutral-300 text-xs">Ticket Under Review</h5>
+                          <h5 className="font-bold text-neutral-600 dark:text-neutral-300 text-xs">Under Review</h5>
                           <p className="text-[11px] text-neutral-500 leading-normal mt-1">
                             Cooperative management has received your inquiry and is currently reviewing it.
                           </p>
@@ -523,16 +534,22 @@ export default function MessagesPage() {
       </div>
 
       {/* MEMBER NEW INQUIRY MODAL */}
-      {isNewInquiryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative">
+      {isNewInquiryOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 sm:p-7 relative animate-modal-pop max-h-[90vh] overflow-y-auto font-sans">
             <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30 mb-4">
-              <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-primary" /> Compose Support Message
-              </h3>
+              <div>
+                <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-primary dark:text-secondary" /> Compose Support Message
+                </h3>
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Send your inquiry or assistance request to the cooperative administrators.
+                </p>
+              </div>
               <button
                 onClick={() => { setIsNewInquiryOpen(false); setInquiryContent(''); setError(null); }}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 text-neutral-500 cursor-pointer"
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
+                aria-label="Close modal"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -546,36 +563,36 @@ export default function MessagesPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="font-bold text-neutral-600 uppercase tracking-wider font-label text-[9px]">Sender Name</label>
+                  <label className="font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label text-[9px]">Sender Name</label>
                   <input
                     type="text"
                     disabled
                     value={user.profile ? `${user.profile.first_name} ${user.profile.last_name}` : user.username}
-                    className="w-full px-3.5 py-2.5 bg-neutral-100 dark:bg-surface border border-outline-variant rounded-xl font-semibold text-neutral-500 cursor-not-allowed"
+                    className="w-full px-3.5 py-2.5 bg-neutral-100 dark:bg-surface border border-outline-variant rounded-xl font-semibold text-neutral-600 dark:text-neutral-300 cursor-not-allowed"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="font-bold text-neutral-600 uppercase tracking-wider font-label text-[9px]">Registered Email</label>
+                  <label className="font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label text-[9px]">Registered Email</label>
                   <input
                     type="text"
                     disabled
                     value={user.profile?.email || 'N/A'}
-                    className="w-full px-3.5 py-2.5 bg-neutral-100 dark:bg-surface border border-outline-variant rounded-xl font-semibold text-neutral-500 cursor-not-allowed"
+                    className="w-full px-3.5 py-2.5 bg-neutral-100 dark:bg-surface border border-outline-variant rounded-xl font-semibold text-neutral-600 dark:text-neutral-300 cursor-not-allowed"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-neutral-600 uppercase tracking-wider font-label text-[9px]">Message *</label>
+                <label className="font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label text-[9px]">Message *</label>
                 <textarea
                   required
                   value={inquiryContent}
                   onChange={(e) => setInquiryContent(e.target.value)}
-                  rows={6}
-                  placeholder="Type your support message here..."
-                  className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white resize-none"
+                  rows={5}
+                  placeholder="Type your support message here (minimum 10 characters)..."
+                  className="w-full px-3.5 py-2.5 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary/20 dark:focus:ring-secondary/20 focus:border-primary dark:focus:border-secondary outline-none font-semibold text-on-surface dark:text-white resize-none text-xs"
                 />
               </div>
 
@@ -583,22 +600,23 @@ export default function MessagesPage() {
                 <button
                   type="button"
                   onClick={() => { setIsNewInquiryOpen(false); setInquiryContent(''); setError(null); }}
-                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 cursor-pointer"
+                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={sendingInquiry || !inquiryContent.trim()}
-                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                  disabled={sendingInquiry || inquiryContent.trim().length < 10}
+                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  {sendingInquiry ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {sendingInquiry ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   Send Message
                 </button>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
