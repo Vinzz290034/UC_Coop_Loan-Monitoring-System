@@ -128,14 +128,19 @@ const safeDbDate = (val) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-// Helper: Clean monetary / numeric values
+// Helper: Clean monetary / numeric values (supports accounting parentheses e.g. (300.00) -> -300)
 const cleanAmount = (val) => {
-  if (val === null || val === undefined) return 0;
+  if (val === null || val === undefined || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : Math.round(val * 100) / 100;
   if (typeof val === 'string') {
-    const cleaned = val.replace(/[^0-9.-]/g, '');
+    const trimmed = val.trim();
+    if (!trimmed) return 0;
+    const isNegative = /^\(.*\)$/.test(trimmed) || trimmed.startsWith('-');
+    const cleaned = trimmed.replace(/[^0-9.]/g, '');
     const num = parseFloat(cleaned);
-    return isNaN(num) ? 0 : Math.round(num * 100) / 100;
+    if (isNaN(num)) return 0;
+    const result = isNegative ? -num : num;
+    return Math.round(result * 100) / 100;
   }
   return 0;
 };
@@ -1484,3 +1489,628 @@ export const provisionImportedAccounts = async (req, res, next) => {
     client.release();
   }
 };
+
+// ==========================================
+// 5. CHECK VOUCHERS IMPORT ENGINE
+// ==========================================
+
+const MONTH_MAP = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
+};
+
+// Helper: Parse date strings specifically for check voucher formats (e.g. "28-May", "1-Jun", or ISO) without UTC timezone drift
+const parseVoucherDate = (val, defaultYear = 2026) => {
+  if (!val) return null;
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof val === 'number') {
+    return parseExcelDate(val);
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+
+    // Pattern: 28-May or 1-Jun or 28 May
+    const matchDayMonth = trimmed.match(/^(\d{1,2})[-/ ]([A-Za-z]{3,})/i);
+    if (matchDayMonth) {
+      const day = String(matchDayMonth[1]).padStart(2, '0');
+      const monStr = matchDayMonth[2].substring(0, 3).toLowerCase();
+      const month = MONTH_MAP[monStr] || '01';
+      return `${defaultYear}-${month}-${day}`;
+    }
+
+    // Pattern: May-28 or May 28
+    const matchMonthDay = trimmed.match(/^([A-Za-z]{3,})[-/ ](\d{1,2})/i);
+    if (matchMonthDay) {
+      const monStr = matchMonthDay[1].substring(0, 3).toLowerCase();
+      const month = MONTH_MAP[monStr] || '01';
+      const day = String(matchMonthDay[2]).padStart(2, '0');
+      return `${defaultYear}-${month}-${day}`;
+    }
+
+    return parseExcelDate(trimmed);
+  }
+  return null;
+};
+
+// Helper: Parse all check vouchers from a worksheet (supports multi-line deductions and dynamic headers)
+export const parseCheckVouchersFromSheet = (sheet, sheetName = '') => {
+  if (!sheet) return [];
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:Z500');
+
+  // Determine base year from sheetName e.g. "Check Vouchers 2026" -> 2026
+  let defaultYear = new Date().getFullYear();
+  const yearMatch = (sheetName || '').match(/(?:19|20)\d{2}/);
+  if (yearMatch) {
+    defaultYear = parseInt(yearMatch[0], 10);
+  }
+
+  // Scan rows 0 to 25 to locate header row
+  let headerRow = -1;
+  let colMap = {
+    voucherNo: -1,
+    voucherDate: -1,
+    checkNo: -1,
+    payee: -1,
+    bank: -1,
+    particulars: -1,
+    bookOfAccount: -1,
+    amount: -1,
+    approvalDate: -1,
+    dateReleased: -1,
+    folder: -1,
+    box: -1
+  };
+
+  for (let r = 0; r <= Math.min(25, range.e.r); r++) {
+    let matches = 0;
+    const tempMap = {
+      voucherNo: -1,
+      voucherDate: -1,
+      checkNo: -1,
+      payee: -1,
+      bank: -1,
+      particulars: -1,
+      bookOfAccount: -1,
+      amount: -1,
+      approvalDate: -1,
+      dateReleased: -1,
+      folder: -1,
+      box: -1
+    };
+
+    for (let c = 0; c <= range.e.c; c++) {
+      const val = String(cellVal(sheet, r, c) || '').trim().toLowerCase();
+      if (!val) continue;
+
+      if (/voucher\s*(?:no|#|\b)/i.test(val) && tempMap.voucherNo === -1) {
+        tempMap.voucherNo = c;
+        matches++;
+      } else if (/voucher\s*date/i.test(val) && tempMap.voucherDate === -1) {
+        tempMap.voucherDate = c;
+        matches++;
+      } else if (/check\s*(?:no|#|\b)/i.test(val) && tempMap.checkNo === -1) {
+        tempMap.checkNo = c;
+        matches++;
+      } else if (/payee|member|recipient/i.test(val) && tempMap.payee === -1) {
+        tempMap.payee = c;
+        matches++;
+      } else if (/^bank/i.test(val) && tempMap.bank === -1) {
+        tempMap.bank = c;
+        matches++;
+      } else if (/particulars|description|purpose/i.test(val) && tempMap.particulars === -1) {
+        tempMap.particulars = c;
+        matches++;
+      } else if (/book\s*of\s*account|account/i.test(val) && tempMap.bookOfAccount === -1) {
+        tempMap.bookOfAccount = c;
+        matches++;
+      } else if (/(?:disbursed\s*amount|net\s*amount|disbursement|^amount$)/i.test(val) && tempMap.amount === -1) {
+        tempMap.amount = c;
+        matches++;
+      } else if (/manager.*approval|approval/i.test(val) && tempMap.approvalDate === -1) {
+        tempMap.approvalDate = c;
+        matches++;
+      } else if (/date\s*released|release\s*date/i.test(val) && tempMap.dateReleased === -1) {
+        tempMap.dateReleased = c;
+        matches++;
+      } else if (/folder/i.test(val) && tempMap.folder === -1) {
+        tempMap.folder = c;
+      } else if (/box/i.test(val) && tempMap.box === -1) {
+        tempMap.box = c;
+      }
+    }
+
+    if (matches >= 2) {
+      headerRow = r;
+      colMap = tempMap;
+      break;
+    }
+  }
+
+  // Fallback defaults if header row not explicitly identified
+  if (headerRow === -1) {
+    headerRow = 1;
+    colMap = {
+      voucherNo: 0,
+      voucherDate: 1,
+      checkNo: 2,
+      payee: 3,
+      bank: 4,
+      particulars: 5,
+      bookOfAccount: 6,
+      amount: 7,
+      approvalDate: 8,
+      dateReleased: 9,
+      folder: 10,
+      box: 11
+    };
+  } else {
+    // If amount was not explicitly matched, derive from book of account or particulars position
+    if (colMap.amount === -1) {
+      if (colMap.bookOfAccount !== -1) {
+        colMap.amount = colMap.bookOfAccount + 1;
+      } else if (colMap.particulars !== -1) {
+        colMap.amount = colMap.particulars + 1;
+      } else {
+        colMap.amount = 7;
+      }
+    }
+    if (colMap.voucherNo === -1) colMap.voucherNo = 0;
+    if (colMap.voucherDate === -1) colMap.voucherDate = 1;
+    if (colMap.checkNo === -1) colMap.checkNo = 2;
+    if (colMap.payee === -1) colMap.payee = 3;
+    if (colMap.bank === -1) colMap.bank = 4;
+    if (colMap.particulars === -1) colMap.particulars = 5;
+  }
+
+  const finalizeVoucher = (v) => {
+    if (!v) return null;
+    let finalAmount = v.amount;
+    let details = [];
+
+    if (v.subRows && v.subRows.length > 1) {
+      const lastRow = v.subRows[v.subRows.length - 1];
+      const precedingSum = v.subRows.slice(0, -1).reduce((sum, item) => sum + item.amount, 0);
+      const roundedPreceding = Math.round(precedingSum * 100) / 100;
+      const roundedLast = Math.round(lastRow.amount * 100) / 100;
+
+      if (Math.abs(roundedPreceding - roundedLast) < 0.05 && roundedLast !== 0) {
+        finalAmount = roundedLast;
+      } else if (lastRow.amount > 0 && (!lastRow.bookOfAccount || /total|net/i.test(lastRow.bookOfAccount))) {
+        finalAmount = lastRow.amount;
+      } else {
+        const totalSum = v.subRows.reduce((sum, item) => sum + item.amount, 0);
+        finalAmount = Math.round(totalSum * 100) / 100;
+      }
+
+      // Filter subRows to build clean breakdown line items
+      details = v.subRows
+        .filter((item, idx) => {
+          // If the last item is just the total repeated, omit it from the line item breakdown
+          if (idx === v.subRows.length - 1 && Math.abs(item.amount - finalAmount) < 0.05 && !item.bookOfAccount) {
+            return false;
+          }
+          return Boolean((item.bookOfAccount && item.bookOfAccount.trim()) || item.amount !== 0);
+        })
+        .map(item => ({
+          book_of_account: item.bookOfAccount || 'Disbursed Item',
+          amount: item.amount
+        }));
+    } else if (v.subRows && v.subRows.length === 1 && v.subRows[0].bookOfAccount && v.subRows[0].bookOfAccount.trim()) {
+      details = [{
+        book_of_account: v.subRows[0].bookOfAccount,
+        amount: v.amount
+      }];
+    }
+
+    v.amount = finalAmount;
+    v.details = details;
+    return v;
+  };
+
+  const vouchers = [];
+  let currentVoucher = null;
+
+  for (let r = headerRow + 1; r <= range.e.r; r++) {
+    const rawVoucherNo = cleanStr(cellVal(sheet, r, colMap.voucherNo));
+    const voucherDateRaw = colMap.voucherDate !== -1 ? cellVal(sheet, r, colMap.voucherDate) : null;
+    const check_no = colMap.checkNo !== -1 ? cleanStr(cellVal(sheet, r, colMap.checkNo)) : '';
+    const payee = colMap.payee !== -1 ? cleanStr(cellVal(sheet, r, colMap.payee)) : '';
+    const bank = colMap.bank !== -1 ? cleanStr(cellVal(sheet, r, colMap.bank)) : '';
+    const particulars = colMap.particulars !== -1 ? cleanStr(cellVal(sheet, r, colMap.particulars)) : '';
+    const bookOfAccount = colMap.bookOfAccount !== -1 ? cleanStr(cellVal(sheet, r, colMap.bookOfAccount)) : '';
+    const rawAmountVal = colMap.amount !== -1 ? cellVal(sheet, r, colMap.amount) : null;
+    const amount = cleanAmount(rawAmountVal);
+    const approvalRaw = colMap.approvalDate !== -1 ? cellVal(sheet, r, colMap.approvalDate) : null;
+    const releasedRaw = colMap.dateReleased !== -1 ? cellVal(sheet, r, colMap.dateReleased) : null;
+    const folder_name = colMap.folder !== -1 ? cleanStr(cellVal(sheet, r, colMap.folder)) : '';
+    const box_name = colMap.box !== -1 ? cleanStr(cellVal(sheet, r, colMap.box)) : '';
+
+    // Skip empty filler rows
+    if (!rawVoucherNo && !payee && !check_no && amount === 0 && !bookOfAccount && !particulars) {
+      continue;
+    }
+
+    // Determine whether this row starts a new check voucher
+    const isNewVoucher = Boolean(
+      rawVoucherNo ||
+      (payee && (check_no || bank || particulars))
+    );
+
+    if (isNewVoucher) {
+      if (currentVoucher) {
+        const finalized = finalizeVoucher(currentVoucher);
+        if (finalized && (finalized.voucher_no || finalized.payee)) {
+          vouchers.push(finalized);
+        }
+      }
+
+      // Check year prefix (e.g. 26-139 -> 2026)
+      let rowYear = defaultYear;
+      const prefixMatch = rawVoucherNo.match(/^(\d{2})-/);
+      if (prefixMatch) {
+        rowYear = 2000 + parseInt(prefixMatch[1], 10);
+      }
+
+      currentVoucher = {
+        id: `cv_${vouchers.length}_${rawVoucherNo || 'novouch'}_${check_no || 'nochk'}_${r}`,
+        voucher_no: rawVoucherNo,
+        voucher_date: parseVoucherDate(voucherDateRaw, rowYear),
+        check_no: check_no || null,
+        payee: payee,
+        bank: bank || null,
+        particulars: particulars || null,
+        amount: amount,
+        managers_approval_date: parseVoucherDate(approvalRaw, rowYear),
+        date_released: parseVoucherDate(releasedRaw, rowYear),
+        folder_name: folder_name || null,
+        box_name: box_name || null,
+        subRows: [{ bookOfAccount, amount }]
+      };
+    } else if (currentVoucher) {
+      // Continuation / deduction row
+      if (approvalRaw && !currentVoucher.managers_approval_date) {
+        currentVoucher.managers_approval_date = parseVoucherDate(approvalRaw, defaultYear);
+      }
+      if (releasedRaw && !currentVoucher.date_released) {
+        currentVoucher.date_released = parseVoucherDate(releasedRaw, defaultYear);
+      }
+      if (folder_name && !currentVoucher.folder_name) {
+        currentVoucher.folder_name = folder_name;
+      }
+      if (box_name && !currentVoucher.box_name) {
+        currentVoucher.box_name = box_name;
+      }
+      currentVoucher.subRows.push({ bookOfAccount, amount });
+    }
+  }
+
+  if (currentVoucher) {
+    const finalized = finalizeVoucher(currentVoucher);
+    if (finalized && (finalized.voucher_no || finalized.payee)) {
+      vouchers.push(finalized);
+    }
+  }
+
+  return vouchers;
+};
+
+// @desc    Preview check vouchers from uploaded Excel file & selected sheet
+// @route   POST /api/import/check-vouchers/preview
+// @access  Protected (Admin, Staff)
+export const previewCheckVouchers = async (req, res, next) => {
+  const filePath = req.file?.path;
+  try {
+    if (!filePath) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No Excel file uploaded.' }
+      });
+    }
+
+    const workbook = XLSX.readFile(filePath, { cellDates: true });
+    const sheetNames = workbook.SheetNames || [];
+    if (sheetNames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Uploaded workbook has no sheets.' }
+      });
+    }
+
+    // Determine target sheet
+    const requestedSheet = req.body.sheetName || req.query.sheetName;
+    let targetSheetName = sheetNames[0];
+
+    if (requestedSheet && sheetNames.includes(requestedSheet)) {
+      targetSheetName = requestedSheet;
+    } else {
+      // Default to sheet containing "voucher" or "check"
+      const foundSheet = sheetNames.find((s) => /voucher|check/i.test(s));
+      if (foundSheet) {
+        targetSheetName = foundSheet;
+      }
+    }
+
+    const sheet = workbook.Sheets[targetSheetName];
+    if (!sheet) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Sheet "${targetSheetName}" could not be opened.` }
+      });
+    }
+
+    const parsedVouchers = parseCheckVouchersFromSheet(sheet, targetSheetName);
+
+    // Query database to identify already-imported vouchers
+    const existingRes = await query(
+      'SELECT LOWER(TRIM(voucher_no)) AS v_no, LOWER(TRIM(COALESCE(check_no, \'\'))) AS c_no FROM check_vouchers'
+    );
+    const existingSet = new Set(
+      existingRes.rows.map((r) => `${r.v_no}__${r.c_no}`)
+    );
+
+    let existingCount = 0;
+    const enrichedVouchers = parsedVouchers.map((v) => {
+      const vKey = `${(v.voucher_no || '').trim().toLowerCase()}__${(v.check_no || '').trim().toLowerCase()}`;
+      const existsInDb = existingSet.has(vKey);
+      if (existsInDb) existingCount++;
+      return {
+        ...v,
+        existsInDb
+      };
+    });
+
+    const totalFound = enrichedVouchers.length;
+    const newCount = totalFound - existingCount;
+    const totalAmount = enrichedVouchers.reduce((acc, v) => acc + (v.amount || 0), 0);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        sheetNames,
+        selectedSheet: targetSheetName,
+        totalFound,
+        newCount,
+        existingCount,
+        totalAmount,
+        vouchers: enrichedVouchers
+      }
+    });
+  } catch (error) {
+    next(error);
+  } finally {
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.warn('Failed to clean up temp file:', err.message);
+      }
+    }
+  }
+};
+
+// @desc    Execute import of user-selected check vouchers
+// @route   POST /api/import/check-vouchers/execute
+// @access  Protected (Admin, Staff)
+export const executeCheckVouchersImport = async (req, res, next) => {
+  try {
+    const { records } = req.body;
+
+    if (!records || !Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No check vouchers selected for import.' }
+      });
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    const previewRecords = [];
+
+    for (const r of records) {
+      const {
+        voucher_no,
+        voucher_date,
+        check_no,
+        payee,
+        bank,
+        particulars,
+        amount,
+        managers_approval_date,
+        date_released,
+        folder_name,
+        box_name
+      } = r;
+
+      if (!voucher_no && !payee) {
+        skipped++;
+        continue;
+      }
+
+      const insertResult = await query(
+        `INSERT INTO check_vouchers
+           (voucher_no, voucher_date, check_no, payee, bank, particulars, amount,
+            managers_approval_date, date_released, folder_name, box_name, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (voucher_no, check_no) DO UPDATE SET
+            voucher_date = COALESCE(EXCLUDED.voucher_date, check_vouchers.voucher_date),
+            payee = EXCLUDED.payee,
+            bank = COALESCE(EXCLUDED.bank, check_vouchers.bank),
+            particulars = COALESCE(EXCLUDED.particulars, check_vouchers.particulars),
+            amount = EXCLUDED.amount,
+            managers_approval_date = COALESCE(EXCLUDED.managers_approval_date, check_vouchers.managers_approval_date),
+            date_released = COALESCE(EXCLUDED.date_released, check_vouchers.date_released),
+            folder_name = COALESCE(EXCLUDED.folder_name, check_vouchers.folder_name),
+            box_name = COALESCE(EXCLUDED.box_name, check_vouchers.box_name),
+            details = CASE WHEN EXCLUDED.details IS NOT NULL AND jsonb_array_length(EXCLUDED.details) > 0 THEN EXCLUDED.details ELSE check_vouchers.details END,
+            updated_at = CURRENT_TIMESTAMP
+         RETURNING id`,
+        [
+          voucher_no,
+          voucher_date || null,
+          check_no || null,
+          payee,
+          bank || null,
+          particulars || null,
+          amount ?? 0,
+          managers_approval_date || null,
+          date_released || null,
+          folder_name || null,
+          box_name || null,
+          JSON.stringify(r.details || [])
+        ]
+      );
+
+      if (insertResult.rowCount > 0) {
+        imported++;
+        if (previewRecords.length < 15) {
+          previewRecords.push({
+            voucher_no,
+            payee,
+            bank,
+            amount,
+            folder_name
+          });
+        }
+      } else {
+        skipped++;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        imported,
+        skipped,
+        total: records.length,
+        records: previewRecords
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Import purchase check vouchers directly from uploaded Excel file (Legacy/Batch fallback)
+// @route   POST /api/import/check-vouchers
+// @access  Protected (Admin, Staff)
+export const importCheckVouchersFromExcel = async (req, res, next) => {
+  const filePath = req.file?.path;
+  try {
+    if (!filePath) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No Excel file uploaded.' }
+      });
+    }
+
+    const workbook = XLSX.readFile(filePath, { cellDates: true });
+    const sheetNames = workbook.SheetNames || [];
+    if (sheetNames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Uploaded workbook has no sheets.' }
+      });
+    }
+
+    const requestedSheet = req.body.sheetName || req.query.sheetName;
+    let targetSheetName = sheetNames[0];
+    if (requestedSheet && sheetNames.includes(requestedSheet)) {
+      targetSheetName = requestedSheet;
+    } else {
+      const foundSheet = sheetNames.find((s) => /voucher|check/i.test(s));
+      if (foundSheet) targetSheetName = foundSheet;
+    }
+
+    const sheet = workbook.Sheets[targetSheetName];
+    if (!sheet) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Failed to access sheet.' }
+      });
+    }
+
+    const vouchers = parseCheckVouchersFromSheet(sheet, targetSheetName);
+
+    let imported = 0;
+    let skipped = 0;
+    const previewRecords = [];
+
+    for (const v of vouchers) {
+      if (!v.voucher_no && !v.payee) {
+        skipped++;
+        continue;
+      }
+
+      const insertResult = await query(
+        `INSERT INTO check_vouchers
+           (voucher_no, voucher_date, check_no, payee, bank, particulars, amount,
+            managers_approval_date, date_released, folder_name, box_name, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (voucher_no, check_no) DO UPDATE SET
+            voucher_date = COALESCE(EXCLUDED.voucher_date, check_vouchers.voucher_date),
+            payee = EXCLUDED.payee,
+            bank = COALESCE(EXCLUDED.bank, check_vouchers.bank),
+            particulars = COALESCE(EXCLUDED.particulars, check_vouchers.particulars),
+            amount = EXCLUDED.amount,
+            managers_approval_date = COALESCE(EXCLUDED.managers_approval_date, check_vouchers.managers_approval_date),
+            date_released = COALESCE(EXCLUDED.date_released, check_vouchers.date_released),
+            folder_name = COALESCE(EXCLUDED.folder_name, check_vouchers.folder_name),
+            box_name = COALESCE(EXCLUDED.box_name, check_vouchers.box_name),
+            details = CASE WHEN EXCLUDED.details IS NOT NULL AND jsonb_array_length(EXCLUDED.details) > 0 THEN EXCLUDED.details ELSE check_vouchers.details END,
+            updated_at = CURRENT_TIMESTAMP
+         RETURNING id`,
+        [
+          v.voucher_no,
+          v.voucher_date || null,
+          v.check_no || null,
+          v.payee,
+          v.bank || null,
+          v.particulars || null,
+          v.amount ?? 0,
+          v.managers_approval_date || null,
+          v.date_released || null,
+          v.folder_name || null,
+          v.box_name || null,
+          JSON.stringify(v.details || [])
+        ]
+      );
+
+      if (insertResult.rowCount > 0) {
+        imported++;
+        if (previewRecords.length < 10) {
+          previewRecords.push(v);
+        }
+      } else {
+        skipped++;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        imported,
+        skipped,
+        total: vouchers.length,
+        records: previewRecords
+      }
+    });
+  } catch (error) {
+    next(error);
+  } finally {
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.warn('Failed to clean up temp file:', err.message);
+      }
+    }
+  }
+};
+

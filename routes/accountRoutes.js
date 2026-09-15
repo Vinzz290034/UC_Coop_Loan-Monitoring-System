@@ -9,7 +9,13 @@ import {
   getInvestments,
   getPendingPlacements,
   confirmPlacementPayment,
-  declinePlacementPayment
+  declinePlacementPayment,
+  importCheckVouchers,
+  getCheckVouchers,
+  createCheckVoucher,
+  updateCheckVoucher,
+  deleteCheckVoucher,
+  bulkDeleteCheckVouchers
 } from '../controllers/accountController.js';
 import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
@@ -51,5 +57,20 @@ router.route('/confirm-placement/:type/:id')
 
 router.route('/decline-placement/:type/:id')
   .put(restrictTo('admin', 'staff'), declinePlacementPayment);
+
+// 5. Purchase Check Vouchers
+router.route('/check-vouchers/import')
+  .post(restrictTo('admin', 'staff'), importCheckVouchers);
+
+router.route('/check-vouchers/bulk-delete')
+  .post(restrictTo('admin', 'staff'), bulkDeleteCheckVouchers);
+
+router.route('/check-vouchers/:id')
+  .put(restrictTo('admin', 'staff'), updateCheckVoucher)
+  .delete(restrictTo('admin', 'staff'), deleteCheckVoucher);
+
+router.route('/check-vouchers')
+  .get(restrictTo('admin', 'staff'), getCheckVouchers)
+  .post(restrictTo('admin', 'staff'), createCheckVoucher);
 
 export default router;

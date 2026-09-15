@@ -42,7 +42,16 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
-  FileText
+  FileText,
+  ShoppingCart,
+  Minus,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  Receipt,
+  Pencil,
+  Plus,
+  Save
 } from 'lucide-react';
 
 interface LoanProduct {
@@ -68,6 +77,8 @@ interface Loan {
   amortization_type: string;
   status: 'pending_approval' | 'disbursed' | 'fully_paid' | 'rejected' | 'defaulted';
   created_at: string;
+  disbursed_at?: string | null;
+  maturity_date?: string | null;
   laf_no?: string;
   payment_mode?: string;
 }
@@ -136,7 +147,557 @@ function LoansPageContent() {
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
   const isVerified = isAdminOrManager || user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
 
-  const [activeTab, setActiveTab] = useState<'loans' | 'products' | 'calculator'>('loans');
+  const [activeTab, setActiveTab] = useState<'loans' | 'products' | 'vouchers'>('loans');
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'vouchers' || tab === 'products' || tab === 'loans') {
+      setActiveTab(tab as any);
+    }
+  }, [searchParams]);
+
+  // Check Voucher Registry state
+  const [checkVouchers, setCheckVouchers] = useState<any[]>([]);
+  const [cvLoading, setCvLoading] = useState(false);
+  const [cvSearch, setCvSearch] = useState('');
+
+  const loadCheckVouchers = useCallback(async () => {
+    try {
+      setCvLoading(true);
+      const params: Record<string, string> = {};
+      if (cvSearch.trim()) params.search = cvSearch.trim();
+      const res = await api.get('/accounts/check-vouchers', { params });
+      setCheckVouchers(res.data.data || []);
+    } catch (err) {
+      console.error('Failed to load check vouchers:', err);
+    } finally {
+      setCvLoading(false);
+    }
+  }, [cvSearch]);
+
+  useEffect(() => {
+    if (activeTab === 'vouchers') loadCheckVouchers();
+  }, [activeTab, loadCheckVouchers]);
+
+  // Check Voucher Deletion & Selection State
+  const [selectedCvIds, setSelectedCvIds] = useState<string[]>([]);
+  const [cvToDelete, setCvToDelete] = useState<any | null>(null);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isClearAllCvModalOpen, setIsClearAllCvModalOpen] = useState(false);
+  const [clearAllConfirmText, setClearAllConfirmText] = useState('');
+  const [isDeletingCv, setIsDeletingCv] = useState(false);
+  // Check Voucher Expansion / Details State
+  const [expandedCvIds, setExpandedCvIds] = useState<string[]>([]);
+  const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
+  const [printingCvBreakdown, setPrintingCvBreakdown] = useState<any | null>(null);
+  const [cvActionFeedback, setCvActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handlePrintCvBreakdown = (cv: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setPrintingCvBreakdown(cv);
+    const cleanup = () => {
+      window.removeEventListener('afterprint', cleanup);
+      setPrintingCvBreakdown(null);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
+  const toggleExpandCv = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedCvIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const formatVoucherDescription = (particulars?: string, payee?: string) => {
+    const p = (particulars || '').trim();
+    const name = (payee || '').trim();
+    if (!p && !name) return 'Loan disbursement';
+    if (!p) return `Loan disbursement for ${name}`;
+    if (!name) return p;
+    const lowerP = p.toLowerCase();
+    const lowerName = name.toLowerCase();
+    if (lowerP.includes('for ') || lowerP.includes(lowerName)) {
+      return p;
+    }
+    return `${p} for ${name}`;
+  };
+
+  const formatDisbursedInWords = (amount: number): string => {
+    if (!amount || isNaN(amount) || amount <= 0) return 'ZERO';
+    const ones = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE',
+      'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
+    const tens = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+    const toWords = (n: number): string => {
+      if (n === 0) return '';
+      if (n < 20) return ones[n] + ' ';
+      if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? '-' + ones[n % 10] : '') + ' ';
+      if (n < 1000) return ones[Math.floor(n / 100)] + ' HUNDRED ' + toWords(n % 100);
+      if (n < 1000000) return toWords(Math.floor(n / 1000)).trim() + ' THOUSAND ' + toWords(n % 1000);
+      return toWords(Math.floor(n / 1000000)).trim() + ' MILLION ' + toWords(n % 1000000);
+    };
+    const pesos = Math.floor(amount);
+    const centavos = Math.round((amount - pesos) * 100);
+    const words = toWords(pesos).replace(/\s+/g, ' ').trim();
+    if (centavos > 0) {
+      return `${words} AND ${centavos.toString().padStart(2, '0')}/100`;
+    }
+    return words;
+  };
+
+  const getBalancedCvRows = (cv: any) => {
+    if (!cv) return { rows: [], debitTotal: 0, creditTotal: 0 };
+    const details = Array.isArray(cv.details)
+      ? cv.details.filter((d: any) => !/^CIB/i.test(d.book_of_account?.trim() || ''))
+      : [];
+
+    const rows: { description: string; debit: number | null; credit: number | null }[] = [];
+    let debitTotal = 0;
+    let creditTotal = 0;
+
+    for (const item of details) {
+      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      if (val > 0) {
+        rows.push({
+          description: item.book_of_account || 'Loan Principal',
+          debit: val,
+          credit: null
+        });
+        debitTotal += val;
+      } else if (val < 0) {
+        const creditVal = Math.abs(val);
+        rows.push({
+          description: item.book_of_account || 'Deduction',
+          debit: null,
+          credit: creditVal
+        });
+        creditTotal += creditVal;
+      }
+    }
+
+    return { rows, debitTotal, creditTotal };
+  };
+
+  // Check Voucher Modal Edit State
+  const [isEditingCvModal, setIsEditingCvModal] = useState(false);
+  const [isSavingCvEdit, setIsSavingCvEdit] = useState(false);
+  const [editCvFormData, setEditCvFormData] = useState<any>({
+    id: '',
+    voucher_no: '',
+    voucher_date: '',
+    check_no: '',
+    payee: '',
+    bank: '',
+    date_released: '',
+    particulars: '',
+    signatories: {
+      prepared_by: 'LAMOSTE, CHINNETTE A.',
+      checked_by: 'MANILYN VELOS',
+      approved_by: 'MICHELLE M. PABLE',
+      received_by: ''
+    },
+    rows: [] as { description: string; debit: string; credit: string }[]
+  });
+
+  const startEditingCv = (cv: any) => {
+    const { rows } = getBalancedCvRows(cv);
+    setEditCvFormData({
+      id: cv.id,
+      voucher_no: cv.voucher_no || '',
+      voucher_date: cv.voucher_date ? String(cv.voucher_date).split('T')[0] : '',
+      check_no: cv.check_no || '',
+      payee: cv.payee || cv.payee_name || '',
+      bank: cv.bank || '',
+      date_released: cv.date_released ? String(cv.date_released).split('T')[0] : '',
+      particulars: cv.particulars || '',
+      signatories: {
+        prepared_by: cv.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.',
+        checked_by: cv.signatories?.checked_by || 'MANILYN VELOS',
+        approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE',
+        received_by: cv.signatories?.received_by || ''
+      },
+      rows: rows.length > 0 ? rows.map(r => ({
+        description: r.description,
+        debit: r.debit !== null ? String(r.debit) : '',
+        credit: r.credit !== null ? String(r.credit) : ''
+      })) : [
+        { description: 'Loans Receivable- Regular', debit: String(cv.amount || 0), credit: '' }
+      ]
+    });
+    setIsEditingCvModal(true);
+  };
+
+  const handleEditCvRowChange = (index: number, field: 'description' | 'debit' | 'credit', value: string) => {
+    setEditCvFormData((prev: any) => {
+      const updatedRows = [...prev.rows];
+      updatedRows[index] = { ...updatedRows[index], [field]: value };
+      return { ...prev, rows: updatedRows };
+    });
+  };
+
+  const handleEditCvAddRow = () => {
+    setEditCvFormData((prev: any) => ({
+      ...prev,
+      rows: [...prev.rows, { description: '', debit: '', credit: '' }]
+    }));
+  };
+
+  const handleEditCvRemoveRow = (index: number) => {
+    setEditCvFormData((prev: any) => ({
+      ...prev,
+      rows: prev.rows.filter((_: any, i: number) => i !== index)
+    }));
+  };
+
+  const calculateEditCvTotals = () => {
+    let debitTotal = 0;
+    let creditTotal = 0;
+    for (const r of editCvFormData.rows || []) {
+      const d = parseFloat(r.debit) || 0;
+      const c = parseFloat(r.credit) || 0;
+      debitTotal += d;
+      creditTotal += c;
+    }
+    const disbursed = Math.max(0, debitTotal - creditTotal);
+    return { debitTotal, creditTotal, disbursed: disbursed > 0 ? disbursed : (debitTotal || 0) };
+  };
+
+  const handleSaveCvEdit = async () => {
+    if (!editCvFormData.id) return;
+    try {
+      setIsSavingCvEdit(true);
+      const { disbursed } = calculateEditCvTotals();
+
+      const detailsToSave: { book_of_account: string; amount: number }[] = [];
+      for (const r of editCvFormData.rows) {
+        const desc = (r.description || '').trim();
+        const d = parseFloat(r.debit) || 0;
+        const c = parseFloat(r.credit) || 0;
+        if (d > 0) {
+          detailsToSave.push({
+            book_of_account: desc || 'Disbursed Item',
+            amount: d
+          });
+        }
+        if (c > 0) {
+          detailsToSave.push({
+            book_of_account: desc || 'Deduction',
+            amount: -c
+          });
+        }
+        if (d === 0 && c === 0 && desc) {
+          detailsToSave.push({
+            book_of_account: desc,
+            amount: 0
+          });
+        }
+      }
+
+      const payload = {
+        voucher_no: editCvFormData.voucher_no,
+        voucher_date: editCvFormData.voucher_date || null,
+        check_no: editCvFormData.check_no,
+        payee: editCvFormData.payee,
+        bank: editCvFormData.bank,
+        particulars: editCvFormData.particulars,
+        date_released: editCvFormData.date_released || null,
+        amount: disbursed,
+        details: detailsToSave,
+        signatories: editCvFormData.signatories
+      };
+
+      const res = await api.put(`/accounts/check-vouchers/${editCvFormData.id}`, payload);
+      const updatedVoucher = res.data.data;
+
+      setCheckVouchers((prev: any[]) =>
+        prev.map(v => (v.id === updatedVoucher.id ? { ...v, ...updatedVoucher } : v))
+      );
+
+      setSelectedCvForModal((prev: any) => ({ ...prev, ...updatedVoucher }));
+      if (printingCvBreakdown && printingCvBreakdown.id === updatedVoucher.id) {
+        setPrintingCvBreakdown((prev: any) => ({ ...prev, ...updatedVoucher }));
+      }
+
+      setIsEditingCvModal(false);
+      setCvActionFeedback({
+        type: 'success',
+        message: `Check voucher ${updatedVoucher.voucher_no} updated successfully.`
+      });
+    } catch (err: any) {
+      console.error('Failed to update check voucher:', err);
+      setCvActionFeedback({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to update check voucher.'
+      });
+    } finally {
+      setIsSavingCvEdit(false);
+    }
+  };
+
+  useEffect(() => {
+    if (cvActionFeedback) {
+      const timer = setTimeout(() => setCvActionFeedback(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [cvActionFeedback]);
+
+  const toggleSelectCv = (id: string) => {
+    setSelectedCvIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllCvs = () => {
+    if (selectedCvIds.length === checkVouchers.length && checkVouchers.length > 0) {
+      setSelectedCvIds([]);
+    } else {
+      setSelectedCvIds(checkVouchers.map((cv: any) => cv.id));
+    }
+  };
+
+  const handleDeleteSingleVoucher = async () => {
+    if (!cvToDelete) return;
+    try {
+      setIsDeletingCv(true);
+      await api.delete(`/accounts/check-vouchers/${cvToDelete.id}`);
+      setCvActionFeedback({
+        type: 'success',
+        message: `Check voucher ${cvToDelete.voucher_no || ''} deleted successfully.`
+      });
+      setSelectedCvIds(prev => prev.filter(id => id !== cvToDelete.id));
+      setCvToDelete(null);
+      await loadCheckVouchers();
+    } catch (err: any) {
+      console.error('Failed to delete voucher:', err);
+      setCvActionFeedback({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to remove check voucher.'
+      });
+    } finally {
+      setIsDeletingCv(false);
+    }
+  };
+
+  const handleBulkDeleteVouchers = async () => {
+    if (selectedCvIds.length === 0) return;
+    try {
+      setIsDeletingCv(true);
+      const res = await api.post('/accounts/check-vouchers/bulk-delete', { ids: selectedCvIds });
+      setCvActionFeedback({
+        type: 'success',
+        message: res.data?.message || `${selectedCvIds.length} check vouchers deleted successfully.`
+      });
+      setSelectedCvIds([]);
+      setIsBulkDeleteModalOpen(false);
+      await loadCheckVouchers();
+    } catch (err: any) {
+      console.error('Failed to bulk delete vouchers:', err);
+      setCvActionFeedback({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to remove selected check vouchers.'
+      });
+    } finally {
+      setIsDeletingCv(false);
+    }
+  };
+
+  const handleClearAllVouchers = async () => {
+    if (clearAllConfirmText.trim().toUpperCase() !== 'DELETE') return;
+    try {
+      setIsDeletingCv(true);
+      const res = await api.post('/accounts/check-vouchers/bulk-delete', { all: true });
+      setCvActionFeedback({
+        type: 'success',
+        message: res.data?.message || 'All check vouchers removed successfully.'
+      });
+      setSelectedCvIds([]);
+      setIsClearAllCvModalOpen(false);
+      setClearAllConfirmText('');
+      await loadCheckVouchers();
+    } catch (err: any) {
+      console.error('Failed to clear all vouchers:', err);
+      setCvActionFeedback({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to clear check vouchers.'
+      });
+    } finally {
+      setIsDeletingCv(false);
+    }
+  };
+
+  // Check Voucher Creation State (standardized format matching loan check voucher)
+  const [isPurchaseCVOpen, setIsPurchaseCVOpen] = useState(false);
+  const [isSavingNewCv, setIsSavingNewCv] = useState(false);
+  const [cvVoucherNo, setCvVoucherNo] = useState('');
+  const [cvDate, setCvDate] = useState('');
+  const [cvReleasedDate, setCvReleasedDate] = useState('');
+  const [cvPayee, setCvPayee] = useState('');
+  const [cvBankName, setCvBankName] = useState('BDO');
+  const [cvCheckNo, setCvCheckNo] = useState('');
+  const [cvRemarks, setCvRemarks] = useState('');
+  const [cvPreparedBy, setCvPreparedBy] = useState('LAMOSTE, CHINNETTE A.');
+  const [cvCheckedBy, setCvCheckedBy] = useState('MANILYN VELOS');
+  const [cvApprovedBy, setCvApprovedBy] = useState('MICHELLE M. PABLE');
+  const [cvTransactionRows, setCvTransactionRows] = useState<{ description: string; debit: string; credit: string }[]>([
+    { description: 'Loans Receivable- Regular', debit: '', credit: '' },
+    { description: 'Service fee Revenue', debit: '', credit: '' }
+  ]);
+
+  const getNextVoucherNo = () => {
+    const currentYearPrefix = String(new Date().getFullYear()).slice(-2); // '26'
+    let highestNum = 266; // Specified: latest one was 26-266, so starting baseline is 266
+
+    (checkVouchers || []).forEach((v: any) => {
+      if (!v || !v.voucher_no) return;
+      const str = String(v.voucher_no).trim();
+      const match = str.match(/(?:^|[^\d])(\d{2})-(\d+)(?:$|[^\d])/);
+      if (match && match[1] === currentYearPrefix) {
+        const parsed = parseInt(match[2], 10);
+        if (!isNaN(parsed) && parsed > highestNum) {
+          highestNum = parsed;
+        }
+      }
+    });
+
+    return `${currentYearPrefix}-${highestNum + 1}`;
+  };
+
+  const openPurchaseCVModal = () => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    setCvDate(todayIso);
+    setCvReleasedDate(todayIso);
+    setCvVoucherNo(getNextVoucherNo());
+    setCvPayee('');
+    setCvBankName('BDO');
+    setCvCheckNo('');
+    setCvRemarks('');
+    setCvPreparedBy('LAMOSTE, CHINNETTE A.');
+    setCvCheckedBy('MANILYN VELOS');
+    setCvApprovedBy('MICHELLE M. PABLE');
+    setCvTransactionRows([
+      { description: 'Loans Receivable- Regular', debit: '', credit: '' },
+      { description: 'Service fee Revenue', debit: '', credit: '' }
+    ]);
+    setIsPurchaseCVOpen(true);
+  };
+
+  const handleNewCvRowChange = (idx: number, field: 'description' | 'debit' | 'credit', val: string) => {
+    setCvTransactionRows(prev => prev.map((row, i) => i === idx ? { ...row, [field]: val } : row));
+  };
+
+  const addNewCvRow = () => {
+    setCvTransactionRows(prev => [...prev, { description: '', debit: '', credit: '' }]);
+  };
+
+  const removeNewCvRow = (idx: number) => {
+    if (cvTransactionRows.length > 1) {
+      setCvTransactionRows(prev => prev.filter((_, i) => i !== idx));
+    }
+  };
+
+  const calculateNewCvTotals = () => {
+    let debitTotal = 0;
+    let creditTotal = 0;
+    for (const r of cvTransactionRows) {
+      const d = parseFloat(r.debit) || 0;
+      const c = parseFloat(r.credit) || 0;
+      debitTotal += d;
+      creditTotal += c;
+    }
+    const disbursed = Math.max(0, debitTotal - creditTotal);
+    return { debitTotal, creditTotal, disbursed: disbursed > 0 ? disbursed : (debitTotal || 0) };
+  };
+
+  const handleSaveAndSubmitNewCv = async (shouldPrint: boolean = false) => {
+    if (!cvPayee.trim() || !cvVoucherNo.trim()) {
+      setCvActionFeedback({
+        type: 'error',
+        message: 'Please provide both a Voucher Number and Payee name.'
+      });
+      return;
+    }
+
+    try {
+      setIsSavingNewCv(true);
+      const { disbursed } = calculateNewCvTotals();
+
+      const detailsToSave: { book_of_account: string; amount: number }[] = [];
+      for (const r of cvTransactionRows) {
+        const desc = (r.description || '').trim();
+        const d = parseFloat(r.debit) || 0;
+        const c = parseFloat(r.credit) || 0;
+        if (d > 0) {
+          detailsToSave.push({
+            book_of_account: desc || 'Disbursed Item',
+            amount: d
+          });
+        }
+        if (c > 0) {
+          detailsToSave.push({
+            book_of_account: desc || 'Deduction',
+            amount: -c
+          });
+        }
+        if (d === 0 && c === 0 && desc) {
+          detailsToSave.push({
+            book_of_account: desc,
+            amount: 0
+          });
+        }
+      }
+
+      const payload = {
+        voucher_no: cvVoucherNo.trim(),
+        voucher_date: cvDate || null,
+        check_no: cvCheckNo.trim(),
+        payee: cvPayee.trim(),
+        bank: cvBankName.trim(),
+        particulars: cvRemarks.trim(),
+        date_released: cvReleasedDate || null,
+        amount: disbursed,
+        details: detailsToSave,
+        signatories: {
+          prepared_by: cvPreparedBy.trim() || 'LAMOSTE, CHINNETTE A.',
+          checked_by: cvCheckedBy.trim() || 'MANILYN VELOS',
+          approved_by: cvApprovedBy.trim() || 'MICHELLE M. PABLE'
+        }
+      };
+
+      const res = await api.post('/accounts/check-vouchers', payload);
+      const createdVoucher = res.data.data;
+
+      // Prepend to checkVouchers list
+      setCheckVouchers(prev => [createdVoucher, ...prev]);
+
+      setIsPurchaseCVOpen(false);
+      setCvActionFeedback({
+        type: 'success',
+        message: `Check voucher ${createdVoucher.voucher_no} created successfully.`
+      });
+
+      if (shouldPrint) {
+        handlePrintCvBreakdown(createdVoucher);
+      }
+    } catch (err: any) {
+      console.error('Failed to create check voucher:', err);
+      setCvActionFeedback({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to create check voucher.'
+      });
+    } finally {
+      setIsSavingNewCv(false);
+    }
+  };
   const [loans, setLoans] = useState<Loan[]>([]);
   const [products, setProducts] = useState<LoanProduct[]>([]);
   const [members, setMembers] = useState<any[]>([]); // for apply dropdown
@@ -1133,12 +1694,12 @@ function LoansPageContent() {
         <div className="flex border-b border-outline-variant/50 overflow-x-auto">
           <button
             onClick={() => setActiveTab('loans')}
-            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'loans'
+            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${activeTab === 'loans'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
               }`}
           >
-            Credit Contracts List
+            Loan Monitoring
           </button>
           <button
             onClick={() => setActiveTab('products')}
@@ -1150,13 +1711,19 @@ function LoansPageContent() {
             Loan Products Registry
           </button>
           <button
-            onClick={() => setActiveTab('calculator')}
-            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'calculator'
+            onClick={() => setActiveTab('vouchers')}
+            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'vouchers'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
               }`}
           >
-            Amortization Calculator
+            <FileText className="w-4 h-4" />
+            <span>Check Voucher Registry</span>
+            {checkVouchers.length > 0 && (
+              <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-emerald-700/10 text-emerald-700 dark:text-emerald-400 font-extrabold">
+                {checkVouchers.length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -1188,8 +1755,8 @@ function LoansPageContent() {
                   >
                     <option value="laf_desc">LAF No: Highest First (Newest)</option>
                     <option value="laf_asc">LAF No: Lowest First (26-01, 26-02...)</option>
-                    <option value="date_desc">Date: Newest First</option>
-                    <option value="date_asc">Date: Oldest First</option>
+                    <option value="date_desc">Date Granted: Newest First</option>
+                    <option value="date_asc">Date Granted: Oldest First</option>
                     <option value="amount_desc">Principal (Highest → Lowest)</option>
                     <option value="amount_asc">Principal (Lowest → Highest)</option>
                     <option value="name_asc">Borrower (A → Z)</option>
@@ -1221,7 +1788,7 @@ function LoansPageContent() {
 
             {/* Loans List */}
             {loansLoading ? (
-              <SkeletonTable rows={5} cols={6} />
+              <SkeletonTable rows={5} cols={isAdminOrManager ? 8 : 7} />
             ) : error ? (
               <div className="p-6 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-3xl">
                 <p className="text-sm font-bold">{error}</p>
@@ -1278,10 +1845,14 @@ function LoansPageContent() {
                       return lafB.raw.localeCompare(lafA.raw);
                     }
                     if (loansSortBy === 'date_desc') {
-                      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+                      const tA = new Date(a.disbursed_at || a.created_at || 0).getTime();
+                      const tB = new Date(b.disbursed_at || b.created_at || 0).getTime();
+                      return tB - tA;
                     }
                     if (loansSortBy === 'date_asc') {
-                      return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+                      const tA = new Date(a.disbursed_at || a.created_at || 0).getTime();
+                      const tB = new Date(b.disbursed_at || b.created_at || 0).getTime();
+                      return tA - tB;
                     }
                     if (loansSortBy === 'amount_desc') {
                       return parseFloat(b.principal_amount || '0') - parseFloat(a.principal_amount || '0');
@@ -1319,7 +1890,7 @@ function LoansPageContent() {
                     <div className="flex items-center justify-between px-1 flex-wrap gap-2.5">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-on-surface dark:text-white">
-                          Credit Contracts Table
+                          Loan Monitoring Table
                         </span>
                         <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold border border-outline-variant/30">
                           {isLoansExpandedAll ? `Showing all ${totalLoansCount} contracts (Full Table)` : `Showing ${visibleLoans.length} of ${totalLoansCount} contracts`}
@@ -1399,6 +1970,25 @@ function LoansPageContent() {
                               <th 
                                 className="px-6 py-4 cursor-pointer select-none group hover:text-primary dark:hover:text-secondary transition-colors"
                                 onClick={() => {
+                                  setLoansSortBy(prev => prev === 'date_desc' ? 'date_asc' : 'date_desc');
+                                  setLoansPage(1);
+                                }}
+                                title="Click to sort by Date Granted"
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <span>Date Granted</span>
+                                  {loansSortBy === 'date_desc' ? (
+                                    <ArrowDown className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                  ) : loansSortBy === 'date_asc' ? (
+                                    <ArrowUp className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                  ) : (
+                                    <ArrowUpDown className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
+                                  )}
+                                </div>
+                              </th>
+                              <th 
+                                className="px-6 py-4 cursor-pointer select-none group hover:text-primary dark:hover:text-secondary transition-colors"
+                                onClick={() => {
                                   setLoansSortBy(prev => prev === 'amount_desc' ? 'amount_asc' : 'amount_desc');
                                   setLoansPage(1);
                                 }}
@@ -1423,7 +2013,7 @@ function LoansPageContent() {
                           <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
                             {visibleLoans.length === 0 ? (
                               <tr>
-                                <td colSpan={isAdminOrManager ? 7 : 6} className="px-6 py-8 text-center text-neutral-500 italic">
+                                <td colSpan={isAdminOrManager ? 8 : 7} className="px-6 py-8 text-center text-neutral-500 italic">
                                   No contracts found matching search criteria.
                                 </td>
                               </tr>
@@ -1451,6 +2041,25 @@ function LoansPageContent() {
                                         </td>
                                       )}
                                       <td className="px-6 py-4 font-semibold text-primary dark:text-secondary">{loan.product_name || 'Legacy Product'}</td>
+                                      <td className="px-6 py-4 font-mono text-xs text-neutral-600 dark:text-neutral-300 whitespace-nowrap">
+                                        {loan.disbursed_at ? (
+                                          new Date(loan.disbursed_at).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                          })
+                                        ) : loan.created_at ? (
+                                          <span title="Record creation date (disbursed_at not set)">
+                                            {new Date(loan.created_at).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              year: 'numeric',
+                                            })}
+                                          </span>
+                                        ) : (
+                                          <span className="text-neutral-400 dark:text-neutral-500">—</span>
+                                        )}
+                                      </td>
                                       <td className="px-6 py-4 font-bold">{formatCurrency(parseFloat(loan.principal_amount))}</td>
                                       <td className="px-6 py-4 font-mono">
                                         {parseFloat(loan.interest_rate)}% ({loan.term_months}mo)
@@ -1470,7 +2079,7 @@ function LoansPageContent() {
                                     {/* Expanded Details Row */}
                                     {isExpanded && (
                                       <tr>
-                                        <td colSpan={isAdminOrManager ? 7 : 6} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
+                                        <td colSpan={isAdminOrManager ? 8 : 7} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
                                           {loadingDetails ? (
                                             <div className="flex items-center gap-2 py-4 justify-center">
                                               <div className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
@@ -1773,9 +2382,401 @@ function LoansPageContent() {
               })()
             )}
           </div>
-        ) : activeTab === 'calculator' ? (
+        ) : activeTab === 'vouchers' ? (
           <div className="space-y-6">
-            <LoanAmortizationCalculator />
+            {/* Header / Action Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h3 className="font-headline font-bold text-base text-on-surface dark:text-white flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-emerald-700" /> Check Voucher Registry
+                </h3>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                  Disbursement vouchers, bank draw checks, vendor payments, and release status logs.
+                </p>
+              </div>
+
+              {isAdminOrManager && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={openPurchaseCVModal}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Issue Check Voucher
+                  </button>
+                  <Link
+                    href="/dashboard/import"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-full text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all shadow-sm"
+                  >
+                    Import from Excel
+                  </Link>
+                  {checkVouchers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClearAllConfirmText('');
+                        setIsClearAllCvModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-900/50 rounded-full transition-all active:scale-95 cursor-pointer shadow-2xs"
+                      title="Remove all check voucher records"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Clear Registry
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Action Feedback Banner */}
+            {cvActionFeedback && (
+              <div className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-center justify-between gap-2 transition-all ${
+                cvActionFeedback.type === 'success'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                  : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {cvActionFeedback.type === 'success' ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0" />
+                  )}
+                  <span>{cvActionFeedback.message}</span>
+                </div>
+                <button onClick={() => setCvActionFeedback(null)} className="p-1 hover:opacity-75 cursor-pointer">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Unified Search Bar */}
+            <div className="flex items-center gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/60 shadow-sm">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search voucher no., name, check no., bank, description, folder..."
+                  value={cvSearch}
+                  onChange={e => setCvSearch(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') loadCheckVouchers();
+                  }}
+                  className="w-full pl-10 pr-10 py-2.5 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none text-on-surface dark:text-white transition-all"
+                />
+                {cvSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCvSearch('');
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer p-0.5"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={loadCheckVouchers}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>Search</span>
+              </button>
+            </div>
+
+            {/* Table */}
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm">
+              <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between">
+                <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-700" /> Recorded Check Vouchers
+                </h4>
+                <span className="text-xs text-neutral-500 font-medium">{checkVouchers.length} records</span>
+              </div>
+
+              {/* Bulk Actions Banner */}
+              {isAdminOrManager && selectedCvIds.length > 0 && (
+                <div className="px-6 py-2.5 bg-rose-50/90 dark:bg-rose-950/40 border-b border-rose-200 dark:border-rose-900/60 flex items-center justify-between flex-wrap gap-2 animate-fadeIn">
+                  <div className="flex items-center gap-2 text-xs font-bold text-rose-800 dark:text-rose-300">
+                    <span>{selectedCvIds.length} of {checkVouchers.length} check voucher(s) selected</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCvIds([])}
+                      className="px-3 py-1 text-xs font-semibold text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+                    >
+                      Deselect All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsBulkDeleteModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-full transition-all active:scale-95 cursor-pointer shadow-xs"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete Selected ({selectedCvIds.length})
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {cvLoading ? (
+                <div className="p-8 text-center text-xs text-neutral-500">Loading vouchers...</div>
+              ) : checkVouchers.length === 0 ? (
+                <div className="p-8 text-center text-xs text-neutral-500 italic">
+                  No check vouchers found. Import from Excel using the
+                  <Link href="/dashboard/import" className="text-emerald-700 font-bold ml-1">Import Hub</Link> or issue a new voucher.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
+                        {isAdminOrManager && (
+                          <th className="px-4 py-3 w-10 text-center">
+                            <input
+                              type="checkbox"
+                              checked={checkVouchers.length > 0 && selectedCvIds.length === checkVouchers.length}
+                              onChange={toggleSelectAllCvs}
+                              className="w-4 h-4 rounded border-outline-variant text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                              title="Select all check vouchers"
+                            />
+                          </th>
+                        )}
+                        {['Voucher No.', 'Voucher Date', 'Check No.', 'Name', 'Bank', 'Amount'].map(h => (
+                          <th key={h} className="px-4 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase whitespace-nowrap">{h}</th>
+                        ))}
+                        <th className="px-4 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right whitespace-nowrap">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
+                      {checkVouchers.map((cv: any) => {
+                        const hasDetails = Boolean(cv.details && Array.isArray(cv.details) && cv.details.length > 0);
+                        const isExpanded = expandedCvIds.includes(cv.id);
+
+                        return (
+                          <React.Fragment key={cv.id}>
+                            <tr
+                              onClick={() => {
+                                if (hasDetails) {
+                                  toggleExpandCv(cv.id);
+                                }
+                              }}
+                              className={`transition-colors ${
+                                hasDetails
+                                  ? 'cursor-pointer hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20'
+                                  : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/30'
+                              } ${isExpanded ? 'bg-emerald-50/50 dark:bg-emerald-950/30 font-medium' : ''}`}
+                            >
+                              {isAdminOrManager && (
+                                <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCvIds.includes(cv.id)}
+                                    onChange={() => toggleSelectCv(cv.id)}
+                                    className="w-4 h-4 rounded border-outline-variant text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                  />
+                                </td>
+                              )}
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {hasDetails ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => toggleExpandCv(cv.id, e)}
+                                      className="p-1 rounded-md text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors cursor-pointer"
+                                      title={isExpanded ? 'Hide accounting breakdown' : 'Click to view accounting breakdown'}
+                                    >
+                                      {isExpanded ? (
+                                        <ChevronDown className="w-3.5 h-3.5" />
+                                      ) : (
+                                        <ChevronRight className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 underline decoration-dotted decoration-emerald-500/50 underline-offset-2">
+                                      {cv.voucher_no}
+                                    </span>
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                      Details
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="pl-6">
+                                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                                      {cv.voucher_no}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">{cv.voucher_date ? new Date(cv.voucher_date).toLocaleDateString() : '—'}</td>
+                              <td className="px-4 py-3 font-mono">{cv.check_no || '—'}</td>
+                              <td className="px-4 py-3 font-semibold whitespace-nowrap">{cv.payee}</td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  cv.bank === 'BDO' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                  : cv.bank === 'MBTC' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                  : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+                                }`}>{cv.bank || '—'}</span>
+                              </td>
+                              <td className="px-4 py-3 font-mono font-bold text-right whitespace-nowrap">
+                                ₱{parseFloat(cv.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {hasDetails && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedCvForModal(cv)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-900/60 rounded-xl transition-all active:scale-95 cursor-pointer shadow-2xs"
+                                      title={`View breakdown details for voucher ${cv.voucher_no}`}
+                                    >
+                                      <Receipt className="w-3.5 h-3.5" />
+                                      <span>Details</span>
+                                    </button>
+                                  )}
+                                  {isAdminOrManager && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setCvToDelete(cv)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/60 rounded-xl transition-all active:scale-95 cursor-pointer shadow-2xs"
+                                      title={`Delete check voucher ${cv.voucher_no}`}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span>Delete</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+
+                            {/* Inline Accounting Breakdown Row */}
+                            {hasDetails && isExpanded && (
+                              <tr className="bg-neutral-50/95 dark:bg-neutral-900/90 border-b border-outline-variant/35 animate-fadeIn">
+                                <td colSpan={isAdminOrManager ? 8 : 7} className="px-4 sm:px-6 py-4">
+                                  <div className="bg-white dark:bg-surface-container-low border border-outline-variant/50 rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm">
+                                    {/* Sub-header */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-outline-variant/30 pb-3">
+                                      <div className="flex items-center gap-2.5">
+                                        <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                                          <Receipt className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                          <h5 className="font-headline font-bold text-xs sm:text-sm text-on-surface dark:text-white flex items-center gap-2">
+                                            Accounting Breakdown
+                                            <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">#{cv.voucher_no}</span>
+                                          </h5>
+                                          <p className="text-[11px] text-neutral-500 font-medium mt-0.5">
+                                            Payee: <strong className="text-on-surface dark:text-white">{cv.payee}</strong> • Check #{' '}
+                                            <strong className="font-mono text-on-surface dark:text-white">{cv.check_no || '—'}</strong> ({cv.bank || '—'})
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-3 text-[11px] text-neutral-500 flex-wrap">
+                                        {cv.voucher_date && (
+                                          <span>Voucher Date: <strong className="text-on-surface dark:text-white">{new Date(cv.voucher_date).toLocaleDateString()}</strong></span>
+                                        )}
+                                        {cv.managers_approval_date && (
+                                          <span>Approval: <strong className="text-on-surface dark:text-white">{new Date(cv.managers_approval_date).toLocaleDateString()}</strong></span>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => handlePrintCvBreakdown(cv, e)}
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-800/60 rounded-xl transition-all active:scale-95 cursor-pointer shadow-2xs ml-1"
+                                          title={`Print breakdown for CV #${cv.voucher_no}`}
+                                        >
+                                          <Printer className="w-3.5 h-3.5" />
+                                          <span>Print</span>
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Breakdown Table */}
+                                    {(() => {
+                                      const { rows, debitTotal, creditTotal } = getBalancedCvRows(cv);
+                                      return (
+                                        <div className="space-y-3">
+                                          <div className="flex items-center justify-between">
+                                            <h6 className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                                              Transaction Details
+                                            </h6>
+                                          </div>
+                                          <div className="overflow-x-auto rounded-xl border border-outline-variant/40 bg-surface-container-lowest dark:bg-neutral-900/60">
+                                            <table className="w-full text-xs text-left">
+                                              <thead className="bg-neutral-100 dark:bg-neutral-800 text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider border-b border-outline-variant/40">
+                                                <tr>
+                                                  <th className="px-4 py-2.5 w-12 text-center">#</th>
+                                                  <th className="px-4 py-2.5">Book of Accounts</th>
+                                                  <th className="px-4 py-2.5 text-right w-36">Debit</th>
+                                                  <th className="px-4 py-2.5 text-right w-36">Credit</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-outline-variant/20 font-body">
+                                                {rows.map((item, idx) => (
+                                                  <tr key={idx} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40">
+                                                    <td className="px-4 py-2.5 text-center font-mono text-[11px] text-neutral-400">{idx + 1}</td>
+                                                    <td className="px-4 py-2.5 font-semibold text-on-surface dark:text-white">
+                                                      {item.description}
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100">
+                                                      {item.debit !== null ? `₱${item.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-rose-600 dark:text-rose-400">
+                                                      {item.credit !== null ? `₱${item.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                              <tfoot className="bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30 font-bold">
+                                                <tr>
+                                                  <td colSpan={2} className="px-4 py-2.5 text-right uppercase text-[11px] text-neutral-600 dark:text-neutral-300 font-bold">
+                                                    Total:
+                                                  </td>
+                                                  <td className="px-4 py-2.5 text-right font-mono text-neutral-900 dark:text-neutral-100 text-xs whitespace-nowrap">
+                                                    ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                  </td>
+                                                  <td className="px-4 py-2.5 text-right font-mono text-rose-600 dark:text-rose-400 text-xs whitespace-nowrap">
+                                                    ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                  </td>
+                                                </tr>
+                                              </tfoot>
+                                            </table>
+                                          </div>
+
+                                          {/* Disbursed Amount Box below table */}
+                                          <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="flex-1">
+                                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block mb-0.5">
+                                                Disbursed Amount:
+                                              </span>
+                                              <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide">
+                                                {formatDisbursedInWords(parseFloat(cv.amount || 0))}
+                                              </p>
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                              <span className="font-mono font-extrabold text-sm text-emerald-700 dark:text-emerald-300">
+                                                ₱{parseFloat(cv.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           /* PRODUCTS TAB */
@@ -2793,7 +3794,7 @@ function LoansPageContent() {
               {/* Mini Sheet Preview */}
               <div className="bg-neutral-50 dark:bg-neutral-900/40 p-4 rounded-2xl border border-outline-variant/60 space-y-4 mt-2">
                 <div className="text-center pb-2 border-b border-outline-variant">
-                  <h4 className="font-bold text-neutral-800 dark:text-neutral-100 text-xs">University of Cebu METC MPC</h4>
+                  <h4 className="font-bold text-neutral-800 dark:text-neutral-100 text-xs">University of Cebu METC-MPC</h4>
                   <p className="text-[10px] text-neutral-500 font-semibold">CHECK DISBURSEMENT VOUCHER PREVIEW</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
@@ -3044,8 +4045,8 @@ function LoansPageContent() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
                   <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '42px', width: '42px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
                   <div>
-                    <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC MPC</h2>
-                    <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Loan Portal</p>
+                    <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC-MPC</h2>
+                    <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Loans, Savings, and Investment Portal</p>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -3149,8 +4150,8 @@ function LoansPageContent() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
                   <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '42px', width: '42px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
                   <div>
-                    <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC MPC</h2>
-                    <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Loan Portal</p>
+                    <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC-MPC</h2>
+                    <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Loans, Savings, and Investment Portal</p>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -3267,8 +4268,8 @@ function LoansPageContent() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
                   <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '42px', width: '42px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
                   <div>
-                    <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC MPC</h2>
-                    <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Loan Portal</p>
+                    <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC-MPC</h2>
+                    <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Loans, Savings, and Investment Portal</p>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -3377,11 +4378,11 @@ function LoansPageContent() {
             background: white !important;
           }
           /* Hide everything in body EXCEPT the print section portal */
-          body > *:not(#print-section) {
+          body > *:not(#print-section):not(#purchase-cv-print-section):not(#cv-breakdown-print-section) {
             display: none !important;
           }
           /* Show and size the print section */
-          #print-section {
+          #print-section, #purchase-cv-print-section, #cv-breakdown-print-section {
             display: block !important;
             width: 100% !important;
             height: auto !important;
@@ -3458,6 +4459,1229 @@ function LoansPageContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL: CREATE CHECK VOUCHER — STANDARDIZED FORMAT */}
+      {isPurchaseCVOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-4xl shadow-2xl relative animate-modal-pop max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-outline-variant/30 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">
+                      Create Check Voucher
+                    </h3>
+                    <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-300 dark:border-emerald-800/60">
+                      <span className="font-mono text-xs">CV #</span>
+                      <input
+                        type="text"
+                        value={cvVoucherNo}
+                        onChange={e => setCvVoucherNo(e.target.value)}
+                        placeholder="26-267"
+                        className="font-mono text-xs font-bold text-emerald-900 dark:text-emerald-200 bg-transparent border-b border-dashed border-emerald-400 dark:border-emerald-600 focus:border-emerald-600 focus:outline-none w-20 px-0.5 py-0"
+                        title="Voucher Number (Editable)"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    Disbursement voucher format matching standard accounting ledger
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPurchaseCVOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface transition-all active:scale-95 cursor-pointer focus:outline-none"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1">
+              {/* Voucher Meta Cards (4 columns matching the standard voucher) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">Voucher Date</label>
+                  <input
+                    type="date"
+                    value={cvDate}
+                    onChange={e => setCvDate(e.target.value)}
+                    className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded-lg px-2.5 py-1 text-xs text-on-surface dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">Name / Payee *</label>
+                  <input
+                    type="text"
+                    value={cvPayee}
+                    onChange={e => setCvPayee(e.target.value)}
+                    placeholder="Payee or Member name"
+                    className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded-lg px-2.5 py-1 text-xs text-on-surface dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">Check No.</label>
+                  <input
+                    type="text"
+                    value={cvCheckNo}
+                    onChange={e => setCvCheckNo(e.target.value)}
+                    placeholder="Check No."
+                    className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded-lg px-2.5 py-1 text-xs font-mono font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">Bank</label>
+                  <input
+                    type="text"
+                    value={cvBankName}
+                    onChange={e => setCvBankName(e.target.value)}
+                    placeholder="e.g. BDO"
+                    className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded-lg px-2.5 py-1 text-xs text-on-surface dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Description / Particulars */}
+              <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-outline-variant/30 text-xs">
+                <label className="font-bold text-neutral-500 block mb-1">Description / Particulars:</label>
+                <input
+                  type="text"
+                  value={cvRemarks}
+                  onChange={e => setCvRemarks(e.target.value)}
+                  placeholder="e.g. Regular Loan for Rabaya, Jeffrey or Payment for..."
+                  className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded-lg px-3 py-1.5 text-xs text-neutral-800 dark:text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+
+              {/* Transaction Details Table */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <span>Transaction Details</span>
+                    <span className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400">({cvTransactionRows.length} rows)</span>
+                  </h5>
+                  <button
+                    type="button"
+                    onClick={addNewCvRow}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Row</span>
+                  </button>
+                </div>
+                <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-neutral-100/70 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 font-bold border-b border-outline-variant/40">
+                        <th className="px-3 py-2.5 text-left w-10">#</th>
+                        <th className="px-3 py-2.5 text-left">Book of Accounts</th>
+                        <th className="px-3 py-2.5 text-right w-36">Debit (₱)</th>
+                        <th className="px-3 py-2.5 text-right w-36">Credit (₱)</th>
+                        <th className="px-2 py-2.5 text-center w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/20">
+                      {cvTransactionRows.map((row, idx) => (
+                        <tr key={idx} className="bg-white/40 dark:bg-neutral-900/40">
+                          <td className="px-3 py-2 text-neutral-400 font-mono text-center">{idx + 1}</td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              value={row.description}
+                              onChange={e => handleNewCvRowChange(idx, 'description', e.target.value)}
+                              placeholder="Account Title / Book of Accounts"
+                              className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/50 rounded px-2.5 py-1 text-xs text-on-surface dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={row.debit}
+                              onChange={e => handleNewCvRowChange(idx, 'debit', e.target.value)}
+                              placeholder="0.00"
+                              className="w-full text-right font-mono font-bold bg-white dark:bg-neutral-800 border border-outline-variant/50 rounded px-2.5 py-1 text-xs text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={row.credit}
+                              onChange={e => handleNewCvRowChange(idx, 'credit', e.target.value)}
+                              placeholder="0.00"
+                              className="w-full text-right font-mono font-bold bg-white dark:bg-neutral-800 border border-outline-variant/50 rounded px-2.5 py-1 text-xs text-rose-600 dark:text-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                            />
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeNewCvRow(idx)}
+                              disabled={cvTransactionRows.length <= 1}
+                              className="p-1 rounded text-neutral-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Remove Row"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30 font-bold">
+                      <tr>
+                        <td colSpan={2} className="px-3 py-2.5 font-bold text-right text-neutral-600 dark:text-neutral-400 uppercase tracking-wide">
+                          Total:
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono font-bold text-neutral-900 dark:text-neutral-100">
+                          ₱{calculateNewCvTotals().debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                          ₱{calculateNewCvTotals().creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Disbursed Amount Box below table */}
+                <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block mb-1">
+                      Disbursed Amount (Calculated Net):
+                    </span>
+                    <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide leading-relaxed">
+                      {formatDisbursedInWords(calculateNewCvTotals().disbursed)}
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <span className="font-mono font-extrabold text-base text-emerald-700 dark:text-emerald-300">
+                      ₱{calculateNewCvTotals().disbursed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Signatures Block matching physical document */}
+                <div className="pt-4 border-t border-outline-variant/30 space-y-4 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">PREPARED BY:</label>
+                      <input
+                        type="text"
+                        value={cvPreparedBy}
+                        onChange={e => setCvPreparedBy(e.target.value)}
+                        placeholder="Prepared By Name"
+                        className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded px-2 py-1 text-xs font-semibold text-on-surface dark:text-white uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">CHECKED BY:</label>
+                      <input
+                        type="text"
+                        value={cvCheckedBy}
+                        onChange={e => setCvCheckedBy(e.target.value)}
+                        placeholder="Checked By Name"
+                        className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded px-2 py-1 text-xs font-semibold text-on-surface dark:text-white uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">APPROVED BY:</label>
+                      <input
+                        type="text"
+                        value={cvApprovedBy}
+                        onChange={e => setCvApprovedBy(e.target.value)}
+                        placeholder="Approved By Name"
+                        className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded px-2 py-1 text-xs font-semibold text-on-surface dark:text-white uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Received By, Date */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">RECEIVED BY:</span>
+                      <div className="h-8"></div>
+                      <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                      <p className="text-[9px] text-neutral-500 mt-1">Signature over Printed Name</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">DATE:</span>
+                      <div className="h-8"></div>
+                      <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                    </div>
+                    <div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-outline-variant/30 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/40 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsPurchaseCVOpen(false)}
+                disabled={isSavingNewCv}
+                className="px-5 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSaveAndSubmitNewCv(false)}
+                  disabled={isSavingNewCv || !cvPayee.trim()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full border border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingNewCv ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>Save Voucher</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveAndSubmitNewCv(true)}
+                  disabled={isSavingNewCv || !cvPayee.trim()}
+                  className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-full bg-emerald-700 hover:bg-emerald-800 text-white shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Save & Print</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL: DELETE SINGLE CHECK VOUCHER */}
+      {cvToDelete && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl relative animate-modal-pop overflow-hidden">
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/50 flex items-center justify-center text-rose-600 dark:text-rose-400 flex-shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">Delete Check Voucher</h3>
+                  <p className="text-xs text-neutral-500">This action will remove the record from the registry.</p>
+                </div>
+              </div>
+
+              <div className="bg-neutral-50 dark:bg-neutral-800/40 rounded-2xl p-4 border border-outline-variant/30 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-neutral-500 font-medium">Voucher No:</span>
+                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">{cvToDelete.voucher_no}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500 font-medium">Payee:</span>
+                  <span className="font-semibold text-on-surface dark:text-white">{cvToDelete.payee}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500 font-medium">Amount:</span>
+                  <span className="font-mono font-bold text-on-surface dark:text-white">
+                    ₱{parseFloat(cvToDelete.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                {cvToDelete.check_no && (
+                  <div className="flex justify-between">
+                    <span className="text-neutral-500 font-medium">Check No:</span>
+                    <span className="font-mono text-neutral-600 dark:text-neutral-300">{cvToDelete.check_no}</span>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                Are you sure you want to permanently delete this check voucher?
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingCv}
+                  onClick={() => setCvToDelete(null)}
+                  className="px-4 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingCv}
+                  onClick={handleDeleteSingleVoucher}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full bg-rose-600 hover:bg-rose-700 text-white transition-all active:scale-95 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {isDeletingCv ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Voucher</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL: BULK DELETE CHECK VOUCHERS */}
+      {isBulkDeleteModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl relative animate-modal-pop overflow-hidden">
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/50 flex items-center justify-center text-rose-600 dark:text-rose-400 flex-shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">Delete Selected Vouchers</h3>
+                  <p className="text-xs text-neutral-500">Permanently remove selected records</p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-xs text-rose-800 dark:text-rose-300">
+                You have selected <strong>{selectedCvIds.length}</strong> check voucher record(s) for removal. Once deleted, these records cannot be recovered.
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingCv}
+                  onClick={() => setIsBulkDeleteModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingCv}
+                  onClick={handleBulkDeleteVouchers}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full bg-rose-600 hover:bg-rose-700 text-white transition-all active:scale-95 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {isDeletingCv ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deleting {selectedCvIds.length}...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete {selectedCvIds.length} Vouchers</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL: CLEAR ALL CHECK VOUCHERS */}
+      {isClearAllCvModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl relative animate-modal-pop overflow-hidden">
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/50 flex items-center justify-center text-rose-600 dark:text-rose-400 flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-headline font-bold text-base text-rose-700 dark:text-rose-400">Clear All Check Vouchers</h3>
+                  <p className="text-xs text-neutral-500">Purge entire check voucher registry</p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-900/60 text-xs text-rose-900 dark:text-rose-200 space-y-1">
+                <p className="font-bold">⚠️ Warning: Danger Zone</p>
+                <p>
+                  This action will permanently delete all <strong>{checkVouchers.length}</strong> recorded check vouchers in the registry.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400">
+                  To confirm, type <span className="font-mono font-extrabold text-rose-600">DELETE</span> below:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Type DELETE to confirm"
+                  value={clearAllConfirmText}
+                  onChange={e => setClearAllConfirmText(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-rose-300 dark:border-rose-900/60 rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-rose-500 outline-none font-mono text-on-surface dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingCv}
+                  onClick={() => {
+                    setIsClearAllCvModalOpen(false);
+                    setClearAllConfirmText('');
+                  }}
+                  className="px-4 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingCv || clearAllConfirmText.trim().toUpperCase() !== 'DELETE'}
+                  onClick={handleClearAllVouchers}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full bg-rose-600 hover:bg-rose-700 text-white transition-all active:scale-95 cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isDeletingCv ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Clearing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Clear All Records</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL: CHECK VOUCHER ACCOUNTING DETAILS */}
+      {selectedCvForModal && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-2xl shadow-2xl relative animate-modal-pop overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-outline-variant/30 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/40">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">
+                      Check Voucher
+                    </h3>
+                    {isEditingCvModal ? (
+                      <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-300 dark:border-emerald-800/60">
+                        <span className="font-mono text-xs">CV #</span>
+                        <input
+                          type="text"
+                          value={editCvFormData.voucher_no}
+                          onChange={e => setEditCvFormData((prev: any) => ({ ...prev, voucher_no: e.target.value }))}
+                          placeholder="26-267"
+                          className="font-mono text-xs font-bold text-emerald-900 dark:text-emerald-200 bg-transparent border-b border-dashed border-emerald-400 dark:border-emerald-600 focus:border-emerald-600 focus:outline-none w-20 px-0.5 py-0"
+                          title="Voucher Number (Editable)"
+                        />
+                      </div>
+                    ) : (
+                      <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-300 dark:border-emerald-800/60">
+                        CV #{selectedCvForModal.voucher_no}
+                      </span>
+                    )}
+                    {isEditingCvModal && (
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                        Editing
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    {isEditingCvModal ? 'Modify voucher details, breakdown line items, and signatories' : 'Accounting line items & deduction details'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCvForModal(null);
+                    setIsEditingCvModal(false);
+                  }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5">
+              {isEditingCvModal ? (
+                /* EDIT MODE */
+                <>
+                  {/* Editable Voucher Meta Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/30">
+                      <label className="text-[10px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider block mb-1">Voucher Date</label>
+                      <input
+                        type="date"
+                        value={editCvFormData.voucher_date}
+                        onChange={e => setEditCvFormData((prev: any) => ({ ...prev, voucher_date: e.target.value }))}
+                        className="w-full bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-lg px-2.5 py-1 text-xs text-on-surface dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div className="p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/30">
+                      <label className="text-[10px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider block mb-1">Name / Payee</label>
+                      <input
+                        type="text"
+                        value={editCvFormData.payee}
+                        onChange={e => setEditCvFormData((prev: any) => ({ ...prev, payee: e.target.value }))}
+                        placeholder="Payee Name"
+                        className="w-full bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-lg px-2.5 py-1 text-xs text-on-surface dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div className="p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/30">
+                      <label className="text-[10px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider block mb-1">Check No.</label>
+                      <input
+                        type="text"
+                        value={editCvFormData.check_no}
+                        onChange={e => setEditCvFormData((prev: any) => ({ ...prev, check_no: e.target.value }))}
+                        placeholder="Check No."
+                        className="w-full bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-lg px-2.5 py-1 text-xs font-mono font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div className="p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/30">
+                      <label className="text-[10px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider block mb-1">Bank</label>
+                      <input
+                        type="text"
+                        value={editCvFormData.bank}
+                        onChange={e => setEditCvFormData((prev: any) => ({ ...prev, bank: e.target.value }))}
+                        placeholder="e.g. BDO"
+                        className="w-full bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-lg px-2.5 py-1 text-xs text-on-surface dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Editable Description */}
+                  <div className="p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/30 text-xs">
+                    <label className="font-bold text-amber-800 dark:text-amber-400 block mb-1">Description / Particulars:</label>
+                    <input
+                      type="text"
+                      value={editCvFormData.particulars}
+                      onChange={e => setEditCvFormData((prev: any) => ({ ...prev, particulars: e.target.value }))}
+                      placeholder="e.g. Regular Loan for Rabaya, Jeffrey"
+                      className="w-full bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-lg px-3 py-1.5 text-xs text-neutral-800 dark:text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  {/* Editable Transaction Details Table */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                        <span>Transaction Details</span>
+                        <span className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400">({editCvFormData.rows.length} rows)</span>
+                      </h5>
+                      <button
+                        type="button"
+                        onClick={handleEditCvAddRow}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Row</span>
+                      </button>
+                    </div>
+                    <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-neutral-100/70 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 font-bold border-b border-outline-variant/40">
+                            <th className="px-3 py-2.5 text-left w-10">#</th>
+                            <th className="px-3 py-2.5 text-left">Book of Accounts</th>
+                            <th className="px-3 py-2.5 text-right w-36">Debit (₱)</th>
+                            <th className="px-3 py-2.5 text-right w-36">Credit (₱)</th>
+                            <th className="px-2 py-2.5 text-center w-10"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant/20">
+                          {editCvFormData.rows.map((row: any, idx: number) => (
+                            <tr key={idx} className="bg-white/40 dark:bg-neutral-900/40">
+                              <td className="px-3 py-2 text-neutral-400 font-mono text-center">{idx + 1}</td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="text"
+                                  value={row.description}
+                                  onChange={e => handleEditCvRowChange(idx, 'description', e.target.value)}
+                                  placeholder="Account Title / Book of Accounts"
+                                  className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/50 rounded px-2.5 py-1 text-xs text-on-surface dark:text-white font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={row.debit}
+                                  onChange={e => handleEditCvRowChange(idx, 'debit', e.target.value)}
+                                  placeholder="0.00"
+                                  className="w-full text-right font-mono font-bold bg-white dark:bg-neutral-800 border border-outline-variant/50 rounded px-2.5 py-1 text-xs text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={row.credit}
+                                  onChange={e => handleEditCvRowChange(idx, 'credit', e.target.value)}
+                                  placeholder="0.00"
+                                  className="w-full text-right font-mono font-bold bg-white dark:bg-neutral-800 border border-outline-variant/50 rounded px-2.5 py-1 text-xs text-rose-600 dark:text-rose-400 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                                />
+                              </td>
+                              <td className="px-2 py-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditCvRemoveRow(idx)}
+                                  className="p-1 rounded text-neutral-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                  title="Remove Row"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30 font-bold">
+                          <tr>
+                            <td colSpan={2} className="px-3 py-2.5 font-bold text-right text-neutral-600 dark:text-neutral-400 uppercase tracking-wide">
+                              Total:
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono font-bold text-neutral-900 dark:text-neutral-100">
+                              ₱{calculateEditCvTotals().debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                              ₱{calculateEditCvTotals().creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {/* Disbursed Amount Box below table */}
+                    <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block mb-1">
+                          Disbursed Amount (Calculated Net):
+                        </span>
+                        <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide leading-relaxed">
+                          {formatDisbursedInWords(calculateEditCvTotals().disbursed)}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="font-mono font-extrabold text-base text-emerald-700 dark:text-emerald-300">
+                          ₱{calculateEditCvTotals().disbursed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Editable Signatures Block */}
+                    <div className="pt-4 border-t border-outline-variant/30 space-y-4 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">PREPARED BY:</label>
+                          <input
+                            type="text"
+                            value={editCvFormData.signatories.prepared_by}
+                            onChange={e => setEditCvFormData((prev: any) => ({ ...prev, signatories: { ...prev.signatories, prepared_by: e.target.value } }))}
+                            placeholder="Prepared By Name"
+                            className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded px-2 py-1 text-xs font-semibold text-on-surface dark:text-white uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">CHECKED BY:</label>
+                          <input
+                            type="text"
+                            value={editCvFormData.signatories.checked_by}
+                            onChange={e => setEditCvFormData((prev: any) => ({ ...prev, signatories: { ...prev.signatories, checked_by: e.target.value } }))}
+                            placeholder="Checked By Name"
+                            className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded px-2 py-1 text-xs font-semibold text-on-surface dark:text-white uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block mb-1">APPROVED BY:</label>
+                          <input
+                            type="text"
+                            value={editCvFormData.signatories.approved_by}
+                            onChange={e => setEditCvFormData((prev: any) => ({ ...prev, signatories: { ...prev.signatories, approved_by: e.target.value } }))}
+                            placeholder="Approved By Name"
+                            className="w-full bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded px-2 py-1 text-xs font-semibold text-on-surface dark:text-white uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Row 2: Received By, Date */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">RECEIVED BY:</span>
+                          <div className="h-8"></div>
+                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                          <p className="text-[9px] text-neutral-500 mt-1">Signature over Printed Name</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">DATE:</span>
+                          <div className="h-8"></div>
+                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                        </div>
+                        <div></div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* VIEW / PRINT-READY MODE */
+                <>
+                  {/* Voucher Meta Summary Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Voucher Date</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
+                        {selectedCvForModal.voucher_date ? new Date(selectedCvForModal.voucher_date).toLocaleDateString() : '—'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Name</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5" title={selectedCvForModal.payee || selectedCvForModal.payee_name || '—'}>
+                        {selectedCvForModal.payee || selectedCvForModal.payee_name || '—'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Check No.</span>
+                      <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
+                        {selectedCvForModal.check_no || '—'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
+                        {selectedCvForModal.bank || '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  {(selectedCvForModal.particulars || selectedCvForModal.payee) && (
+                    <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-outline-variant/30 text-xs">
+                      <span className="font-bold text-neutral-500 block mb-0.5">Description:</span>
+                      <p className="text-neutral-700 dark:text-neutral-300 italic">
+                        {formatVoucherDescription(selectedCvForModal.particulars, selectedCvForModal.payee || selectedCvForModal.payee_name)}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Transaction Details Table */}
+                  {(() => {
+                    const { rows, debitTotal, creditTotal } = getBalancedCvRows(selectedCvForModal);
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                            Transaction Details
+                          </h5>
+                        </div>
+                        <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-neutral-100/70 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 font-bold border-b border-outline-variant/40">
+                                <th className="px-4 py-2.5 text-left w-12">#</th>
+                                <th className="px-4 py-2.5 text-left">Book of Accounts</th>
+                                <th className="px-4 py-2.5 text-right w-36">Debit</th>
+                                <th className="px-4 py-2.5 text-right w-36">Credit</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-outline-variant/20">
+                              {rows.length > 0 ? (
+                                rows.map((item, idx) => (
+                                  <tr key={idx} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
+                                    <td className="px-4 py-2.5 text-neutral-400 font-mono">{idx + 1}</td>
+                                    <td className="px-4 py-2.5 font-medium text-on-surface dark:text-white">
+                                      {item.description}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100">
+                                      {item.debit !== null ? `₱${item.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-rose-600 dark:text-rose-400">
+                                      {item.credit !== null ? `₱${item.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                    </td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={4} className="px-4 py-6 text-center text-neutral-500 italic">
+                                    No transaction breakdown details available for this voucher.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                            <tfoot className="bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30 font-bold">
+                              <tr>
+                                <td colSpan={2} className="px-4 py-2.5 font-bold text-right text-neutral-600 dark:text-neutral-400 uppercase tracking-wide">
+                                  Total:
+                                </td>
+                                <td className="px-4 py-2.5 text-right font-mono font-bold text-neutral-900 dark:text-neutral-100">
+                                  ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-4 py-2.5 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                                  ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+
+                        {/* Disbursed Amount Box below table */}
+                        <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block mb-1">
+                              Disbursed Amount:
+                            </span>
+                            <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide leading-relaxed">
+                              {formatDisbursedInWords(parseFloat(selectedCvForModal.amount || 0))}
+                            </p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <span className="font-mono font-extrabold text-base text-emerald-700 dark:text-emerald-300">
+                              ₱{parseFloat(selectedCvForModal.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Signatures Block matching physical document */}
+                        <div className="pt-4 border-t border-outline-variant/30 space-y-4 text-xs">
+                          {/* Row 1: Prepared By, Checked By, Approved By */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">PREPARED BY:</span>
+                              <div className="h-5"></div>
+                              <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
+                                {selectedCvForModal.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
+                              </p>
+                              <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">CHECKED BY:</span>
+                              <div className="h-5"></div>
+                              <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
+                                {selectedCvForModal.signatories?.checked_by || 'MANILYN VELOS'}
+                              </p>
+                              <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">APPROVED BY:</span>
+                              <div className="h-5"></div>
+                              <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
+                                {selectedCvForModal.signatories?.approved_by || 'MICHELLE M. PABLE'}
+                              </p>
+                              <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                            </div>
+                          </div>
+
+                          {/* Row 2: Received By, Date */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                              <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">RECEIVED BY:</span>
+                              <div className="h-8"></div>
+                              <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                              <p className="text-[9px] text-neutral-500 mt-1">Signature over Printed Name</p>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">DATE:</span>
+                              <div className="h-8"></div>
+                              <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                            </div>
+                            <div></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 border-t border-outline-variant/30 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/40">
+              {isEditingCvModal ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingCvModal(false)}
+                    disabled={isSavingCvEdit}
+                    className="px-5 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveCvEdit}
+                    disabled={isSavingCvEdit}
+                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-full bg-emerald-700 hover:bg-emerald-800 text-white shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingCvEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>{isSavingCvEdit ? 'Saving...' : 'Save Changes'}</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCvForModal(null);
+                      setIsEditingCvModal(false);
+                    }}
+                    className="px-5 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer shadow-2xs active:scale-95"
+                  >
+                    Close
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEditingCv(selectedCvForModal)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full border border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Edit Voucher</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePrintCvBreakdown(selectedCvForModal)}
+                      className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-full bg-emerald-700 hover:bg-emerald-800 text-white shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print Breakdown</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* HIDDEN PRINT-ONLY CONTAINER: CHECK VOUCHER */}
+      {printingCvBreakdown && typeof document !== 'undefined' && createPortal(
+        <div id="cv-breakdown-print-section" className="hidden print:block text-black bg-white font-sans" style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' }}>
+          <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '16px', boxSizing: 'border-box', padding: '28px 58px 28px 36px' }}>
+
+            {/* Brand Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '14px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
+                <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '48px', width: '48px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+                <div>
+                  <h2 style={{ fontSize: '15px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC-MPC</h2>
+                  <p style={{ fontSize: '10px', color: '#4b5563', fontWeight: '600', margin: '3px 0 0 0' }}>Loans, Savings, and Investment Portal</p>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <h1 style={{ fontSize: '15px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Check Voucher</h1>
+                <p style={{ fontSize: '18px', fontFamily: 'monospace', color: '#064e3b', fontWeight: '800', margin: '3px 0 0 0', letterSpacing: '0.03em' }}>CV #{printingCvBreakdown.voucher_no}</p>
+              </div>
+            </div>
+
+            {/* Info Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.2fr 1fr 0.8fr', gap: '16px', backgroundColor: '#ecfdf5', padding: '16px 22px', borderRadius: '14px', border: '1px solid #d1fae5' }}>
+              <div>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Voucher Date</span>
+                <p style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937', margin: '3px 0 0 0' }}>
+                  {printingCvBreakdown.voucher_date ? new Date(printingCvBreakdown.voucher_date).toLocaleDateString() : '—'}
+                </p>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Name</span>
+                <p style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937', margin: '3px 0 0 0' }}>
+                  {printingCvBreakdown.payee || printingCvBreakdown.payee_name || '—'}
+                </p>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Check No.</span>
+                <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#064e3b', margin: '3px 0 0 0', fontFamily: 'monospace', letterSpacing: '0.02em' }}>
+                  {printingCvBreakdown.check_no || 'PENDING'}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Bank</span>
+                <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937', margin: '3px 0 0 0' }}>
+                  {printingCvBreakdown.bank || '—'}
+                </p>
+              </div>
+            </div>
+
+            {/* Description */}
+            {(printingCvBreakdown.particulars || printingCvBreakdown.payee) && (
+              <div style={{ backgroundColor: '#f9fafb', padding: '10px 16px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '11px' }}>
+                <strong style={{ color: '#374151' }}>DESCRIPTION:</strong>{' '}
+                <span style={{ color: '#1f2937', fontStyle: 'italic' }}>
+                  {formatVoucherDescription(printingCvBreakdown.particulars, printingCvBreakdown.payee || printingCvBreakdown.payee_name)}
+                </span>
+              </div>
+            )}
+
+            {/* Transaction Details Table */}
+            {(() => {
+              const { rows, debitTotal, creditTotal } = getBalancedCvRows(printingCvBreakdown);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ border: '1px solid rgba(6, 78, 59, 0.2)', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+                    <div style={{ backgroundColor: '#064e3b', color: '#ffffff', padding: '6px 14px', fontWeight: 'bold', fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase', textAlign: 'center' }}>
+                      Transaction Details
+                    </div>
+                    <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#ecfdf5', color: '#064e3b', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid rgba(6, 78, 59, 0.15)' }}>
+                          <th style={{ padding: '8px 12px', width: '36px', textAlign: 'center', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>#</th>
+                          <th style={{ padding: '8px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>Book of Accounts</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>Debit (₱)</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>Credit (₱)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.length > 0 ? (
+                          rows.map((item, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.08)', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#fcfdfd' }}>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', fontFamily: 'monospace', color: '#6b7280', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                                {idx + 1}
+                              </td>
+                              <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#1f2937', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                                {item.description}
+                              </td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                                {item.debit !== null ? item.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                              </td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#dc2626' }}>
+                                {item.credit !== null ? item.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: '#6b7280', fontStyle: 'italic' }}>
+                              No breakdown line items recorded.
+                            </td>
+                          </tr>
+                        )}
+                        {/* Total row */}
+                        <tr style={{ backgroundColor: '#f9fafb', fontWeight: 'bold', fontSize: '10px', borderTop: '1px solid rgba(6, 78, 59, 0.15)' }}>
+                          <td colSpan={2} style={{ padding: '8px 12px', textAlign: 'right', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                            Total:
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                            ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#dc2626' }}>
+                            ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Below the table: Disbursed Amount with words and number */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ecfdf5', padding: '12px 18px', borderRadius: '10px', border: '1px solid #d1fae5', gap: '16px' }}>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#064e3b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px' }}>
+                        Disbursed Amount:
+                      </span>
+                      <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.4 }}>
+                        {formatDisbursedInWords(parseFloat(printingCvBreakdown.amount || 0))}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <span style={{ fontSize: '15px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
+                        ₱{parseFloat(printingCvBreakdown.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Signature Block matching physical document */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px', paddingTop: '22px', fontSize: '10px' }}>
+              {/* Row 1: Prepared By, Checked By, Approved By */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px' }}>
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    PREPARED BY:
+                  </span>
+                  <div style={{ height: '24px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                    {printingCvBreakdown.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                </div>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    CHECKED BY:
+                  </span>
+                  <div style={{ height: '24px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                    {printingCvBreakdown.signatories?.checked_by || 'MANILYN VELOS'}
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                </div>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    APPROVED BY:
+                  </span>
+                  <div style={{ height: '24px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                    {printingCvBreakdown.signatories?.approved_by || 'MICHELLE M. PABLE'}
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                </div>
+              </div>
+
+              {/* Row 2: Received By, Date */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px' }}>
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    RECEIVED BY:
+                  </span>
+                  <div style={{ height: '36px' }}></div>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                  <p style={{ color: '#4b5563', margin: '4px 0 0 0', fontSize: '9.5px', fontWeight: '500' }}>
+                    Signature over Printed Name
+                  </p>
+                </div>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    DATE:
+                  </span>
+                  <div style={{ height: '36px' }}></div>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                </div>
+
+                <div>{/* Empty cell for column alignment */}</div>
+              </div>
+            </div>
+
+            {/* Print Footer */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderTop: '1px solid #e5e7eb', paddingTop: '10px', fontSize: '8px', color: '#9ca3af' }}>
+              <div>
+                <div>Generated via UC-METC MPC Portal</div>
+                <div style={{ marginTop: '2px' }}>KADT Solutions</div>
+              </div>
+              <span>Printed on: {new Date().toLocaleString()}</span>
+            </div>
+
+          </div>
+        </div>,
+        document.body
       )}
     </>
   );

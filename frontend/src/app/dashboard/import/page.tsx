@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
@@ -27,7 +27,24 @@ import {
   HelpCircle,
   Trash2,
   UserMinus,
+  FileText,
 } from 'lucide-react';
+
+interface ParsedCheckVoucher {
+  id: string;
+  voucher_no: string;
+  voucher_date: string | null;
+  check_no: string | null;
+  payee: string;
+  bank: string | null;
+  particulars: string | null;
+  amount: number;
+  managers_approval_date: string | null;
+  date_released: string | null;
+  folder_name: string | null;
+  box_name: string | null;
+  existsInDb?: boolean;
+}
 
 interface ShareCapitalDeposit {
   row: number;
@@ -115,7 +132,7 @@ export default function ImportPage() {
   }
 
   const [step, setStep] = useState<'upload' | 'preview' | 'executing' | 'success'>('upload');
-  const [importMode, setImportMode] = useState<'loans' | 'members_registry'>('loans');
+  const [importMode, setImportMode] = useState<'loans' | 'members_registry' | 'check_vouchers'>('loans');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -128,6 +145,24 @@ export default function ImportPage() {
     totalProcessed: number;
     details: any[];
   } | null>(null);
+
+  // Check Voucher Import Result State
+  const [cvImportResult, setCvImportResult] = useState<{
+    imported: number;
+    skipped: number;
+    total: number;
+    records: any[];
+  } | null>(null);
+
+  // Check Voucher Review & Selection Desk State
+  const [cvSheetNames, setCvSheetNames] = useState<string[]>([]);
+  const [cvActiveSheet, setCvActiveSheet] = useState<string>('');
+  const [cvVouchers, setCvVouchers] = useState<ParsedCheckVoucher[]>([]);
+  const [cvSelectedIds, setCvSelectedIds] = useState<Set<string>>(new Set());
+  const [cvSearchQuery, setCvSearchQuery] = useState('');
+  const [cvFilterTab, setCvFilterTab] = useState<'all' | 'selected' | 'new' | 'existing'>('all');
+  const [isCvSheetLoading, setIsCvSheetLoading] = useState(false);
+  const [cvExecuting, setCvExecuting] = useState(false);
 
   // Preview Data
   const [summary, setSummary] = useState<ImportSummary | null>(null);
@@ -186,6 +221,45 @@ export default function ImportPage() {
 
     if (!isValid) {
       setErrorMsg('Please upload a valid Excel spreadsheet (.xlsx or .xls).');
+      return;
+    }
+
+    if (importMode === 'check_vouchers') {
+      setSelectedFile(file);
+      setErrorMsg(null);
+      setIsScanning(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post('/import/check-vouchers/preview', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        if (response.data.success && response.data.data) {
+          const { sheetNames, selectedSheet, vouchers } = response.data.data;
+          setCvSheetNames(sheetNames || []);
+          setCvActiveSheet(selectedSheet || sheetNames[0] || '');
+          setCvVouchers(vouchers || []);
+
+          // Pre-select vouchers that do not already exist in the database (or all if all are new/existing)
+          const initialSelected = new Set<string>();
+          (vouchers || []).forEach((v: ParsedCheckVoucher) => {
+            if (!v.existsInDb) {
+              initialSelected.add(v.id);
+            }
+          });
+          if (initialSelected.size === 0 && (vouchers || []).length > 0) {
+            (vouchers || []).forEach((v: ParsedCheckVoucher) => initialSelected.add(v.id));
+          }
+          setCvSelectedIds(initialSelected);
+          setStep('preview');
+        } else {
+          setErrorMsg(response.data.error?.message || 'Failed to inspect check vouchers.');
+        }
+      } catch (err: any) {
+        setErrorMsg(err.response?.data?.error?.message || 'Failed to parse check vouchers from Excel.');
+      } finally {
+        setIsScanning(false);
+      }
       return;
     }
 
@@ -345,11 +419,148 @@ export default function ImportPage() {
     setExcludedCount(0);
     setExecutionResult(null);
     setRegistryResult(null);
+    setCvImportResult(null);
     setProvisionResult(null);
     setProvisionError(null);
     setErrorMsg(null);
+    setCvSheetNames([]);
+    setCvActiveSheet('');
+    setCvVouchers([]);
+    setCvSelectedIds(new Set());
+    setCvSearchQuery('');
+    setCvFilterTab('all');
     setStep('upload');
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Check Voucher Sheet Switcher
+  const handleCvSheetChange = async (newSheet: string) => {
+    if (!selectedFile || newSheet === cvActiveSheet) return;
+    setCvActiveSheet(newSheet);
+    setIsCvSheetLoading(true);
+    setErrorMsg(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('sheetName', newSheet);
+      const response = await api.post('/import/check-vouchers/preview', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (response.data.success && response.data.data) {
+        const { vouchers } = response.data.data;
+        setCvVouchers(vouchers || []);
+        const newSelected = new Set<string>();
+        (vouchers || []).forEach((v: ParsedCheckVoucher) => {
+          if (!v.existsInDb) {
+            newSelected.add(v.id);
+          }
+        });
+        if (newSelected.size === 0 && (vouchers || []).length > 0) {
+          (vouchers || []).forEach((v: ParsedCheckVoucher) => newSelected.add(v.id));
+        }
+        setCvSelectedIds(newSelected);
+      } else {
+        setErrorMsg(response.data.error?.message || `Failed to read sheet "${newSheet}".`);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error?.message || `Failed to inspect sheet "${newSheet}".`);
+    } finally {
+      setIsCvSheetLoading(false);
+    }
+  };
+
+  // Check Voucher Selection Handlers
+  const toggleCvSelection = (id: string) => {
+    setCvSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllCv = () => {
+    const allIds = new Set(filteredCvVouchers.map((v) => v.id));
+    setCvSelectedIds(allIds);
+  };
+
+  const deselectAllCv = () => {
+    setCvSelectedIds(new Set());
+  };
+
+  const selectNewOnlyCv = () => {
+    const newIds = new Set(cvVouchers.filter((v) => !v.existsInDb).map((v) => v.id));
+    setCvSelectedIds(newIds);
+  };
+
+  // Filtered check vouchers
+  const filteredCvVouchers = useMemo(() => {
+    return cvVouchers.filter((v) => {
+      if (cvFilterTab === 'selected' && !cvSelectedIds.has(v.id)) return false;
+      if (cvFilterTab === 'new' && v.existsInDb) return false;
+      if (cvFilterTab === 'existing' && !v.existsInDb) return false;
+
+      if (!cvSearchQuery.trim()) return true;
+      const q = cvSearchQuery.toLowerCase();
+      return (
+        (v.voucher_no && v.voucher_no.toLowerCase().includes(q)) ||
+        (v.payee && v.payee.toLowerCase().includes(q)) ||
+        (v.check_no && v.check_no.toLowerCase().includes(q)) ||
+        (v.bank && v.bank.toLowerCase().includes(q)) ||
+        (v.particulars && v.particulars.toLowerCase().includes(q))
+      );
+    });
+  }, [cvVouchers, cvFilterTab, cvSelectedIds, cvSearchQuery]);
+
+  const cvSelectedTotalAmount = useMemo(() => {
+    return cvVouchers
+      .filter((v) => cvSelectedIds.has(v.id))
+      .reduce((sum, v) => sum + (v.amount || 0), 0);
+  }, [cvVouchers, cvSelectedIds]);
+
+  const cvAllFilteredSelected = filteredCvVouchers.length > 0 && filteredCvVouchers.every((v) => cvSelectedIds.has(v.id));
+  const cvSomeFilteredSelected = filteredCvVouchers.some((v) => cvSelectedIds.has(v.id)) && !cvAllFilteredSelected;
+
+  const toggleAllFilteredCv = () => {
+    if (cvAllFilteredSelected) {
+      setCvSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredCvVouchers.forEach((v) => next.delete(v.id));
+        return next;
+      });
+    } else {
+      setCvSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredCvVouchers.forEach((v) => next.add(v.id));
+        return next;
+      });
+    }
+  };
+
+  // Execute Check Voucher Import
+  const handleExecuteCvImport = async () => {
+    const selectedRecords = cvVouchers.filter((v) => cvSelectedIds.has(v.id));
+    if (selectedRecords.length === 0) {
+      setErrorMsg('Please select at least one check voucher to import.');
+      return;
+    }
+    setCvExecuting(true);
+    setErrorMsg(null);
+    try {
+      const response = await api.post('/import/check-vouchers/execute', {
+        records: selectedRecords,
+      });
+      if (response.data.success && response.data.data) {
+        setCvImportResult(response.data.data);
+        setStep('success');
+      } else {
+        setErrorMsg(response.data.error?.message || 'Failed to import selected check vouchers.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error?.message || 'Failed to import selected check vouchers.');
+    } finally {
+      setCvExecuting(false);
+    }
   };
 
   const handleProvisionAccounts = async () => {
@@ -454,6 +665,17 @@ export default function ImportPage() {
                   }`}
                 >
                   Member IDs & Credentials (Registry)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportMode('check_vouchers')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+                    importMode === 'check_vouchers'
+                      ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md scale-[1.02]'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                  }`}
+                >
+                  Purchase Check Vouchers
                 </button>
               </div>
             </div>
@@ -936,6 +1158,382 @@ export default function ImportPage() {
           </div>
         )}
 
+        {/* STEP 2 (CHECK VOUCHERS): PREVIEW & SELECTION DESK */}
+        {step === 'preview' && importMode === 'check_vouchers' && (
+          <div className="space-y-6">
+            {/* Top Bar Summary & Actions */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-surface-container-low p-5 rounded-3xl border border-outline-variant/60 shadow-sm">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
+                    Check Vouchers Inspection
+                  </span>
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                    File: <span className="font-semibold text-neutral-800 dark:text-neutral-200">{selectedFile?.name}</span>
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-bold font-headline text-on-surface dark:text-white mt-1">
+                  Select Sheet & Check Vouchers to Import
+                </h2>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                  Choose which sheet to inspect and toggle individual vouchers to include or exclude from import.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={resetImporter}
+                  className="px-4 py-2 text-xs font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all cursor-pointer"
+                >
+                  Choose Different File
+                </button>
+                <button
+                  onClick={handleExecuteCvImport}
+                  disabled={cvSelectedIds.size === 0 || cvExecuting}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm cursor-pointer"
+                >
+                  {cvExecuting ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileCheck className="w-4 h-4" />
+                  )}
+                  Import {cvSelectedIds.size} Selected Voucher{cvSelectedIds.size === 1 ? '' : 's'}
+                </button>
+              </div>
+            </div>
+
+            {/* Sheet Selector Bar */}
+            <div className="bg-white dark:bg-surface-container-low p-5 rounded-3xl border border-outline-variant/60 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    Active Sheet Selected
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <select
+                      value={cvActiveSheet}
+                      onChange={(e) => handleCvSheetChange(e.target.value)}
+                      disabled={isCvSheetLoading || cvExecuting}
+                      className="px-3.5 py-1.5 text-xs sm:text-sm font-bold bg-neutral-100 dark:bg-neutral-800 border border-outline-variant/60 rounded-xl text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer max-w-xs sm:max-w-md"
+                    >
+                      {cvSheetNames.map((sheet) => (
+                        <option key={sheet} value={sheet}>
+                          📄 {sheet}
+                        </option>
+                      ))}
+                    </select>
+                    {isCvSheetLoading && (
+                      <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Scanning sheet...
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick switch tabs for workbook sheets */}
+              {cvSheetNames.length > 1 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-bold text-neutral-500 mr-1">Sheets:</span>
+                  {cvSheetNames.slice(0, 6).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => handleCvSheetChange(s)}
+                      disabled={isCvSheetLoading || cvExecuting}
+                      className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        s === cvActiveSheet
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                  {cvSheetNames.length > 6 && (
+                    <span className="text-[11px] text-neutral-400">+{cvSheetNames.length - 6} more</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Metrics Counters */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                  Total in Sheet
+                </div>
+                <div className="text-xl sm:text-2xl font-bold font-headline text-on-surface dark:text-white mt-1">
+                  {cvVouchers.length}
+                </div>
+                <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1">
+                  Vouchers discovered
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  Selected to Import
+                </div>
+                <div className="text-xl sm:text-2xl font-bold font-headline text-emerald-600 dark:text-emerald-400 mt-1">
+                  {cvSelectedIds.size}
+                </div>
+                <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1">
+                  Will be saved to registry
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  Already in Database
+                </div>
+                <div className="text-xl sm:text-2xl font-bold font-headline text-amber-600 dark:text-amber-400 mt-1">
+                  {cvVouchers.filter((v) => v.existsInDb).length}
+                </div>
+                <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1">
+                  Existing voucher numbers
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                  Selected Disbursed
+                </div>
+                <div className="text-xl sm:text-2xl font-bold font-headline text-on-surface dark:text-white mt-1">
+                  ₱{cvSelectedTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1">
+                  Net check amount sum
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & Selection Toolbar */}
+            <div className="bg-white dark:bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
+              {/* Filter Tabs */}
+              <div className="flex bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setCvFilterTab('all')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    cvFilterTab === 'all'
+                      ? 'bg-white dark:bg-neutral-900 text-on-surface dark:text-white shadow-xs'
+                      : 'text-neutral-500 hover:text-on-surface'
+                  }`}
+                >
+                  All ({cvVouchers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCvFilterTab('selected')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    cvFilterTab === 'selected'
+                      ? 'bg-white dark:bg-neutral-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      : 'text-neutral-500 hover:text-on-surface'
+                  }`}
+                >
+                  Selected ({cvSelectedIds.size})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCvFilterTab('new')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    cvFilterTab === 'new'
+                      ? 'bg-white dark:bg-neutral-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      : 'text-neutral-500 hover:text-on-surface'
+                  }`}
+                >
+                  New Only ({cvVouchers.filter((v) => !v.existsInDb).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCvFilterTab('existing')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    cvFilterTab === 'existing'
+                      ? 'bg-white dark:bg-neutral-900 text-amber-600 dark:text-amber-400 shadow-xs'
+                      : 'text-neutral-500 hover:text-on-surface'
+                  }`}
+                >
+                  In DB ({cvVouchers.filter((v) => v.existsInDb).length})
+                </button>
+              </div>
+
+              {/* Quick Select Actions & Search */}
+              <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap">
+                <div className="relative flex-1 md:w-64">
+                  <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={cvSearchQuery}
+                    onChange={(e) => setCvSearchQuery(e.target.value)}
+                    placeholder="Search payee, voucher #, check #..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs bg-neutral-100 dark:bg-neutral-800 border border-outline-variant/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-on-surface dark:text-white placeholder:text-neutral-400"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={selectAllCv}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition-all cursor-pointer"
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={deselectAllCv}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition-all cursor-pointer"
+                >
+                  Deselect All
+                </button>
+                <button
+                  type="button"
+                  onClick={selectNewOnlyCv}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-all cursor-pointer"
+                >
+                  Select New Only
+                </button>
+              </div>
+            </div>
+
+            {/* Check Vouchers Interactive Table */}
+            <div className="bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto max-h-[550px]">
+                <table className="w-full text-xs text-left">
+                  <thead className="sticky top-0 z-10 bg-neutral-100/95 dark:bg-neutral-800/95 backdrop-blur-xs border-b border-outline-variant/40 text-[11px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                    <tr>
+                      <th className="w-10 px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={cvAllFilteredSelected}
+                          ref={(el) => {
+                            if (el) el.indeterminate = cvSomeFilteredSelected;
+                          }}
+                          onChange={toggleAllFilteredCv}
+                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        />
+                      </th>
+                      <th className="px-3 py-3">Voucher No.</th>
+                      <th className="px-3 py-3">Date</th>
+                      <th className="px-3 py-3">Check No.</th>
+                      <th className="px-4 py-3">Payee</th>
+                      <th className="px-3 py-3">Bank</th>
+                      <th className="px-4 py-3">Particulars</th>
+                      <th className="px-4 py-3 text-right">Disbursed Amount</th>
+                      <th className="px-3 py-3">Approval Date</th>
+                      <th className="px-3 py-3">Date Released</th>
+                      <th className="px-3 py-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/20 font-body">
+                    {filteredCvVouchers.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="py-12 text-center text-neutral-400 dark:text-neutral-500">
+                          <p className="font-semibold text-sm">No check vouchers match your search or filter.</p>
+                          <p className="text-xs mt-1">Try switching sheets or clearing your search term above.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredCvVouchers.map((v) => {
+                        const isSelected = cvSelectedIds.has(v.id);
+                        return (
+                          <tr
+                            key={v.id}
+                            onClick={() => toggleCvSelection(v.id)}
+                            className={`cursor-pointer transition-colors ${
+                              isSelected
+                                ? 'bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/30'
+                                : 'opacity-55 bg-white dark:bg-surface-container-low hover:opacity-85 hover:bg-neutral-50 dark:hover:bg-neutral-800/30'
+                            }`}
+                          >
+                            <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleCvSelection(v.id)}
+                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                              />
+                            </td>
+                            <td className="px-3 py-2.5 font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                              {v.voucher_no || '—'}
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-neutral-600 dark:text-neutral-400 font-mono">
+                              {v.voucher_date || '—'}
+                            </td>
+                            <td className="px-3 py-2.5 font-mono text-neutral-800 dark:text-neutral-200 whitespace-nowrap">
+                              {v.check_no || '—'}
+                            </td>
+                            <td className="px-4 py-2.5 font-semibold text-on-surface dark:text-white max-w-[200px] truncate">
+                              {v.payee}
+                            </td>
+                            <td className="px-3 py-2.5 text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
+                              {v.bank || '—'}
+                            </td>
+                            <td className="px-4 py-2.5 text-neutral-600 dark:text-neutral-400 max-w-[220px] truncate">
+                              {v.particulars || '—'}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-mono font-bold text-on-surface dark:text-white whitespace-nowrap">
+                              ₱{parseFloat(v.amount as any || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-neutral-600 dark:text-neutral-400 font-mono">
+                              {v.managers_approval_date || '—'}
+                            </td>
+                            <td className="px-3 py-2.5 whitespace-nowrap text-neutral-600 dark:text-neutral-400 font-mono">
+                              {v.date_released || '—'}
+                            </td>
+                            <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                              {v.existsInDb ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                                  In Database
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                  Ready
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Bottom Sticky Status / Action */}
+              <div className="p-4 bg-neutral-50 dark:bg-neutral-900 border-t border-outline-variant/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="text-xs text-neutral-600 dark:text-neutral-400 font-medium text-center sm:text-left">
+                  <span className="font-bold text-on-surface dark:text-white">{cvSelectedIds.size}</span> of{' '}
+                  <span className="font-bold text-on-surface dark:text-white">{cvVouchers.length}</span> check vouchers selected for import
+                  {cvSelectedIds.size > 0 && (
+                    <span className="ml-2 font-bold text-emerald-600 dark:text-emerald-400">
+                      (Total Disbursed: ₱{cvSelectedTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleExecuteCvImport}
+                    disabled={cvSelectedIds.size === 0 || cvExecuting}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {cvExecuting ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <FileCheck className="w-4 h-4" />
+                    )}
+                    Import {cvSelectedIds.size} Selected Check Voucher{cvSelectedIds.size === 1 ? '' : 's'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* STEP 3: EXECUTING INGESTION */}
         {step === 'executing' && (
           <div className="bg-white dark:bg-surface-container-low rounded-3xl p-12 border border-outline-variant/50 shadow-lg text-center space-y-6 max-w-lg mx-auto">
@@ -959,7 +1557,101 @@ export default function ImportPage() {
         )}
 
         {/* STEP 4: SUCCESS SUMMARY */}
-        {step === 'success' && registryResult && (
+        {step === 'success' && cvImportResult && (
+          <div className="bg-white dark:bg-surface-container-low rounded-3xl p-8 sm:p-12 border border-outline-variant/50 shadow-lg space-y-8 max-w-4xl mx-auto text-center">
+            <div className="w-20 h-20 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-12 h-12" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-2xl sm:text-3xl font-bold font-headline text-on-surface dark:text-white">
+                Check Vouchers Imported!
+              </h2>
+              <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 max-w-lg mx-auto">
+                Successfully processed check voucher records from your Excel file.
+              </p>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-3 gap-4 text-left">
+              <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-surface-container border border-outline-variant/40">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                  Total Processed
+                </div>
+                <div className="text-xl font-bold text-on-surface dark:text-white mt-1">
+                  {cvImportResult.total}
+                </div>
+              </div>
+              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                  Imported
+                </div>
+                <div className="text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">
+                  {cvImportResult.imported}
+                </div>
+              </div>
+              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  Skipped / Duplicates
+                </div>
+                <div className="text-xl font-bold text-amber-700 dark:text-amber-400 mt-1">
+                  {cvImportResult.skipped}
+                </div>
+              </div>
+            </div>
+
+            {/* Mini Table preview */}
+            {cvImportResult.records && cvImportResult.records.length > 0 && (
+              <div className="border border-outline-variant/40 rounded-2xl overflow-hidden text-left bg-neutral-50 dark:bg-neutral-900">
+                <div className="px-4 py-2.5 bg-neutral-100 dark:bg-neutral-800 border-b border-outline-variant/30 text-xs font-bold text-neutral-700 dark:text-neutral-300">
+                  Import Preview (First {cvImportResult.records.length} records)
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs font-mono">
+                    <thead>
+                      <tr className="border-b border-outline-variant/20 bg-neutral-100/50 dark:bg-neutral-800/50 text-[11px] text-neutral-500">
+                        <th className="px-3 py-2 text-left">Voucher No.</th>
+                        <th className="px-3 py-2 text-left">Payee</th>
+                        <th className="px-3 py-2 text-left">Bank</th>
+                        <th className="px-3 py-2 text-right">Amount</th>
+                        <th className="px-3 py-2 text-left">Folder</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/20">
+                      {cvImportResult.records.slice(0, 10).map((r: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-neutral-100 dark:hover:bg-neutral-800/40">
+                          <td className="px-3 py-2 font-bold text-emerald-700 dark:text-emerald-400">{r.voucher_no}</td>
+                          <td className="px-3 py-2 font-body truncate max-w-[150px]">{r.payee}</td>
+                          <td className="px-3 py-2">{r.bank || '—'}</td>
+                          <td className="px-3 py-2 text-right font-bold">₱{parseFloat(r.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                          <td className="px-3 py-2 font-body">{r.folder_name || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-outline-variant/40">
+              <Link
+                href="/dashboard/loans?tab=vouchers"
+                className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all"
+              >
+                <FileText className="w-4 h-4" />
+                View in Check Voucher Registry
+              </Link>
+              <button
+                onClick={resetImporter}
+                className="px-6 py-2.5 text-xs font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all"
+              >
+                Import More
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'success' && registryResult && !cvImportResult && (
           <div className="bg-white dark:bg-surface-container-low rounded-3xl p-8 sm:p-12 border border-outline-variant/50 shadow-lg space-y-8 max-w-3xl mx-auto text-center">
             <div className="w-20 h-20 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-12 h-12" />
@@ -1005,7 +1697,7 @@ export default function ImportPage() {
           </div>
         )}
 
-        {step === 'success' && executionResult && !registryResult && (
+        {step === 'success' && executionResult && !registryResult && !cvImportResult && (
           <div className="bg-white dark:bg-surface-container-low rounded-3xl p-8 sm:p-12 border border-outline-variant/50 shadow-lg space-y-8 max-w-3xl mx-auto text-center">
             <div className="w-20 h-20 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-12 h-12" />

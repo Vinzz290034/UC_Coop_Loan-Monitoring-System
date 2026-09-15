@@ -722,3 +722,335 @@ export const declinePlacementPayment = async (req, res, next) => {
     client.release();
   }
 };
+
+// ==========================================
+// 5. PURCHASE CHECK VOUCHER REGISTRY
+// ==========================================
+
+// @desc    Bulk import check voucher records (skips duplicates on voucher_no + check_no)
+// @route   POST /api/accounts/check-vouchers/import
+// @access  Protected (Admin, Staff)
+export const importCheckVouchers = async (req, res, next) => {
+  try {
+    const { records } = req.body;
+
+    if (!records || !Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No records provided. Expected { records: [...] }.' }
+      });
+    }
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (const r of records) {
+      const {
+        voucher_no, voucher_date, check_no, payee, bank,
+        particulars, amount, managers_approval_date, date_released,
+        folder_name, box_name
+      } = r;
+
+      if (!voucher_no || !payee) {
+        skipped++;
+        continue;
+      }
+
+      const result = await query(
+        `INSERT INTO check_vouchers
+           (voucher_no, voucher_date, check_no, payee, bank, particulars, amount,
+            managers_approval_date, date_released, folder_name, box_name, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (voucher_no, check_no) DO UPDATE SET
+            voucher_date = COALESCE(EXCLUDED.voucher_date, check_vouchers.voucher_date),
+            payee = EXCLUDED.payee,
+            bank = COALESCE(EXCLUDED.bank, check_vouchers.bank),
+            particulars = COALESCE(EXCLUDED.particulars, check_vouchers.particulars),
+            amount = EXCLUDED.amount,
+            managers_approval_date = COALESCE(EXCLUDED.managers_approval_date, check_vouchers.managers_approval_date),
+            date_released = COALESCE(EXCLUDED.date_released, check_vouchers.date_released),
+            folder_name = COALESCE(EXCLUDED.folder_name, check_vouchers.folder_name),
+            box_name = COALESCE(EXCLUDED.box_name, check_vouchers.box_name),
+            details = CASE WHEN EXCLUDED.details IS NOT NULL AND jsonb_array_length(EXCLUDED.details) > 0 THEN EXCLUDED.details ELSE check_vouchers.details END,
+            updated_at = CURRENT_TIMESTAMP
+         RETURNING id`,
+        [
+          voucher_no,
+          voucher_date || null,
+          check_no || null,
+          payee,
+          bank || null,
+          particulars || null,
+          amount ?? 0,
+          managers_approval_date || null,
+          date_released || null,
+          folder_name || null,
+          box_name || null,
+          JSON.stringify(r.details || [])
+        ]
+      );
+
+      if (result.rowCount > 0) {
+        imported++;
+      } else {
+        skipped++;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { imported, skipped }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Fetch all purchase check vouchers with optional search/filter
+// @route   GET /api/accounts/check-vouchers
+// @access  Protected (Admin, Staff)
+export const getCheckVouchers = async (req, res, next) => {
+  try {
+    const { search, folder, bank } = req.query;
+
+    const conditions = [];
+    const params = [];
+
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`(voucher_no ILIKE $${params.length} OR payee ILIKE $${params.length} OR particulars ILIKE $${params.length} OR check_no ILIKE $${params.length} OR folder_name ILIKE $${params.length} OR bank ILIKE $${params.length})`);
+    }
+
+    if (folder) {
+      params.push(`%${folder}%`);
+      conditions.push(`folder_name ILIKE $${params.length}`);
+    }
+
+    if (bank) {
+      params.push(`%${bank}%`);
+      conditions.push(`bank ILIKE $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await query(
+      `SELECT id, voucher_no, voucher_date, check_no, payee, bank, particulars,
+              amount, managers_approval_date, date_released, folder_name, box_name, details, signatories, created_at
+       FROM check_vouchers
+       ${whereClause}
+       ORDER BY voucher_date DESC NULLS LAST, created_at DESC
+       LIMIT 1000`,
+      params
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update a check voucher by ID
+// @route   PUT /api/accounts/check-vouchers/:id
+// @access  Protected (Admin, Staff)
+export const updateCheckVoucher = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const {
+      voucher_no,
+      voucher_date,
+      check_no,
+      payee,
+      bank,
+      particulars,
+      amount,
+      date_released,
+      details,
+      signatories
+    } = req.body;
+
+    const result = await query(
+      `UPDATE check_vouchers
+       SET voucher_no = COALESCE($1, voucher_no),
+           voucher_date = $2,
+           check_no = $3,
+           payee = COALESCE($4, payee),
+           bank = $5,
+           particulars = $6,
+           amount = COALESCE($7, amount),
+           date_released = $8,
+           details = COALESCE($9, details),
+           signatories = COALESCE($10, signatories),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $11
+       RETURNING *`,
+      [
+        voucher_no,
+        voucher_date || null,
+        check_no !== undefined ? check_no : null,
+        payee,
+        bank !== undefined ? bank : null,
+        particulars !== undefined ? particulars : null,
+        amount !== undefined ? parseFloat(amount) : null,
+        date_released || null,
+        details ? JSON.stringify(details) : null,
+        signatories ? JSON.stringify(signatories) : null,
+        id
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Check voucher not found' }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Check voucher updated successfully',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Create a new check voucher
+// @route   POST /api/accounts/check-vouchers
+// @access  Protected (Admin, Staff)
+export const createCheckVoucher = async (req, res, next) => {
+  try {
+    const {
+      voucher_no,
+      voucher_date,
+      check_no,
+      payee,
+      bank,
+      particulars,
+      amount,
+      date_released,
+      details,
+      signatories
+    } = req.body;
+
+    if (!payee || !voucher_no) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Voucher number and payee name are required' }
+      });
+    }
+
+    const defaultSignatories = {
+      prepared_by: 'LAMOSTE, CHINNETTE A.',
+      checked_by: 'MANILYN VELOS',
+      approved_by: 'MICHELLE M. PABLE'
+    };
+
+    const result = await query(
+      `INSERT INTO check_vouchers (
+        voucher_no,
+        voucher_date,
+        check_no,
+        payee,
+        bank,
+        particulars,
+        amount,
+        date_released,
+        details,
+        signatories
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING *`,
+      [
+        voucher_no.trim(),
+        voucher_date || new Date().toISOString().split('T')[0],
+        check_no || '',
+        payee.trim(),
+        bank || '',
+        particulars || '',
+        amount !== undefined ? parseFloat(amount) : 0,
+        date_released || null,
+        details ? JSON.stringify(details) : '[]',
+        JSON.stringify(signatories || defaultSignatories)
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Check voucher created successfully',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete a single check voucher by ID
+// @route   DELETE /api/accounts/check-vouchers/:id
+// @access  Protected (Admin, Staff)
+export const deleteCheckVoucher = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const result = await query(
+      'DELETE FROM check_vouchers WHERE id = $1 RETURNING id, voucher_no, payee',
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Check voucher not found or already removed' }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Check voucher ${result.rows[0].voucher_no} deleted successfully`,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Bulk delete check vouchers (by list of IDs or all)
+// @route   POST /api/accounts/check-vouchers/bulk-delete
+// @access  Protected (Admin, Staff)
+export const bulkDeleteCheckVouchers = async (req, res, next) => {
+  try {
+    const { ids, all } = req.body;
+
+    if (all === true) {
+      const result = await query('DELETE FROM check_vouchers RETURNING id');
+      return res.status(200).json({
+        success: true,
+        message: `All ${result.rowCount} check vouchers removed successfully`,
+        count: result.rowCount
+      });
+    }
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No check voucher IDs provided for deletion' }
+      });
+    }
+
+    const result = await query(
+      'DELETE FROM check_vouchers WHERE id = ANY($1::uuid[]) RETURNING id',
+      [ids]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `${result.rowCount} check voucher(s) removed successfully`,
+      count: result.rowCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
