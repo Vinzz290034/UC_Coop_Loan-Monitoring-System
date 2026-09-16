@@ -262,6 +262,26 @@ CREATE TABLE faqs_guides (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 20. Check Vouchers Table
+CREATE TABLE check_vouchers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    voucher_no VARCHAR(50) NOT NULL,
+    voucher_date DATE,
+    check_no VARCHAR(100),
+    payee VARCHAR(255) NOT NULL,
+    bank VARCHAR(100),
+    particulars TEXT,
+    amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+    managers_approval_date DATE,
+    date_released DATE,
+    folder_name VARCHAR(150),
+    box_name VARCHAR(150),
+    details JSONB DEFAULT '[]'::jsonb,
+    signatories JSONB DEFAULT '{"prepared_by":"LAMOSTE, CHINNETTE A.","checked_by":"MANILYN VELOS","approved_by":"MICHELLE M. PABLE"}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance optimization on critical query pathways
 CREATE INDEX idx_members_user_id ON members(user_id);
 CREATE INDEX idx_share_capital_member ON share_capital_transactions(member_id);
@@ -284,3 +304,7 @@ CREATE INDEX idx_calendar_events_date ON calendar_events(event_date);
 CREATE INDEX idx_calendar_events_type ON calendar_events(type);
 CREATE INDEX idx_faqs_guides_type ON faqs_guides(type);
 CREATE INDEX idx_faqs_guides_created_at ON faqs_guides(created_at DESC);
+CREATE INDEX idx_check_vouchers_voucher_date ON check_vouchers(voucher_date DESC);
+CREATE INDEX idx_check_vouchers_folder_name ON check_vouchers(folder_name);
+CREATE UNIQUE INDEX idx_check_vouchers_voucher_no_check_no ON check_vouchers(voucher_no, check_no);
+
