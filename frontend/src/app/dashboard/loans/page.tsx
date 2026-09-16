@@ -2544,9 +2544,12 @@ function LoansPageContent() {
                             />
                           </th>
                         )}
-                        {['Voucher No.', 'Voucher Date', 'Check No.', 'Name', 'Bank', 'Amount'].map(h => (
+                        {['Voucher No.', 'Voucher Date', 'Check No.', 'Name', 'Bank'].map(h => (
                           <th key={h} className="px-4 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase whitespace-nowrap">{h}</th>
                         ))}
+                        <th className="px-4 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right whitespace-nowrap">
+                          Amount
+                        </th>
                         <th className="px-4 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right whitespace-nowrap">
                           Action
                         </th>
