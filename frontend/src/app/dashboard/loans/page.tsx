@@ -232,7 +232,7 @@ function LoansPageContent() {
   };
 
   const formatDisbursedInWords = (amount: number): string => {
-    if (!amount || isNaN(amount) || amount <= 0) return 'ZERO';
+    if (!amount || isNaN(amount) || amount <= 0) return 'ZERO PESOS ONLY';
     const ones = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE',
       'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
     const tens = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
@@ -246,11 +246,13 @@ function LoansPageContent() {
     };
     const pesos = Math.floor(amount);
     const centavos = Math.round((amount - pesos) * 100);
-    const words = toWords(pesos).replace(/\s+/g, ' ').trim();
+    const words = pesos === 0 ? 'ZERO' : toWords(pesos).replace(/\s+/g, ' ').trim();
+    const currencyUnit = pesos === 1 ? 'PESO' : 'PESOS';
+
     if (centavos > 0) {
-      return `${words} AND ${centavos.toString().padStart(2, '0')}/100`;
+      return `${words} ${currencyUnit} AND ${centavos.toString().padStart(2, '0')}/100 ONLY`;
     }
-    return words;
+    return `${words} ${currencyUnit} ONLY`;
   };
 
   const getBalancedCvRows = (cv: any) => {
