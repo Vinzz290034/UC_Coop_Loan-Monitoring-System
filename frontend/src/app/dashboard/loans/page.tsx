@@ -255,9 +255,17 @@ function LoansPageContent() {
 
   const getBalancedCvRows = (cv: any) => {
     if (!cv) return { rows: [], debitTotal: 0, creditTotal: 0 };
-    const details = Array.isArray(cv.details)
-      ? cv.details.filter((d: any) => !/^CIB/i.test(d.book_of_account?.trim() || ''))
-      : [];
+    let details: any[] = [];
+    if (Array.isArray(cv.details)) {
+      details = cv.details;
+    } else if (typeof cv.details === 'string') {
+      try {
+        const parsed = JSON.parse(cv.details);
+        if (Array.isArray(parsed)) details = parsed;
+      } catch {
+        details = [];
+      }
+    }
 
     const rows: { description: string; debit: number | null; credit: number | null }[] = [];
     let debitTotal = 0;
@@ -280,6 +288,12 @@ function LoansPageContent() {
           credit: creditVal
         });
         creditTotal += creditVal;
+      } else if (item.book_of_account) {
+        rows.push({
+          description: item.book_of_account,
+          debit: null,
+          credit: null
+        });
       }
     }
 
@@ -4507,6 +4521,20 @@ function LoansPageContent() {
 
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-5 flex-1">
+              {cvActionFeedback && (
+                <div
+                  className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 ${
+                    cvActionFeedback.type === 'success'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+                  }`}
+                >
+                  <span className="font-semibold">{cvActionFeedback.message}</span>
+                  <button onClick={() => setCvActionFeedback(null)} className="p-1 hover:opacity-75 cursor-pointer">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               {/* Voucher Meta Cards (4 columns matching the standard voucher) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
@@ -5022,6 +5050,20 @@ function LoansPageContent() {
 
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-5">
+              {cvActionFeedback && (
+                <div
+                  className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 ${
+                    cvActionFeedback.type === 'success'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+                  }`}
+                >
+                  <span className="font-semibold">{cvActionFeedback.message}</span>
+                  <button onClick={() => setCvActionFeedback(null)} className="p-1 hover:opacity-75 cursor-pointer">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               {isEditingCvModal ? (
                 /* EDIT MODE */
                 <>
