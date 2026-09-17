@@ -885,7 +885,6 @@ export default function OverviewPage() {
   const [coMakerName, setCoMakerName] = useState<string>('');
   const [coMakerPhone, setCoMakerPhone] = useState<string>('');
   const [loanTerm, setLoanTerm] = useState<number>(1);
-  const [memberLafNo, setMemberLafNo] = useState<string>('');
 
   // Investment Form States
   const [investmentType, setInvestmentType] = useState<'share_capital' | 'fixed_deposit' | 'payday'>('share_capital');
@@ -1095,7 +1094,6 @@ export default function OverviewPage() {
       setSuccessData(null);
       setCoMakerName('');
       setCoMakerPhone('');
-      setMemberLafNo('');
       const res = await api.get('/loans/products');
       const activeProducts = res.data.data.filter((p: any) => p.is_active);
       setProducts(activeProducts);
@@ -1103,15 +1101,6 @@ export default function OverviewPage() {
         setSelectedProduct(activeProducts[0]);
         setLoanAmount(parseFloat(activeProducts[0].min_amount));
         setSelectedLoanCategory(getProductCategory(activeProducts[0].name));
-      }
-
-      try {
-        const lafRes = await api.get('/loans/next-laf-no');
-        if (lafRes.data?.data?.next_laf_no) {
-          setMemberLafNo(lafRes.data.data.next_laf_no);
-        }
-      } catch (err) {
-        console.error('Failed to fetch next LAF number:', err);
       }
     } catch (err: any) {
       setModalError('Failed to fetch available loan products. Please try again.');
@@ -1130,8 +1119,7 @@ export default function OverviewPage() {
         principal_amount: loanAmount,
         term_months: loanTerm,
         co_maker_name: coMakerName || undefined,
-        co_maker_phone: coMakerPhone || undefined,
-        laf_no: memberLafNo.trim() || undefined
+        co_maker_phone: coMakerPhone || undefined
       });
       setSuccessData(res.data.data);
       setWizardStep(3); // Go to success step
@@ -1930,48 +1918,6 @@ export default function OverviewPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Left column: Slider and Repayments */}
                             <div className="space-y-5">
-                              {/* LAF NO Tracking Field */}
-                              <div className="p-4 rounded-2xl border border-outline-variant/65 bg-surface-container-low space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <label className="text-xs font-bold text-on-surface dark:text-white flex items-center gap-1.5">
-                                    <FileText className="w-4 h-4 text-primary dark:text-secondary" />
-                                    <span>Loan Application Form (LAF) No. *</span>
-                                  </label>
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20">
-                                    Auto-Suggested
-                                  </span>
-                                </div>
-                                <div className="relative flex items-center">
-                                  <input
-                                    type="text"
-                                    value={memberLafNo}
-                                    onChange={(e) => setMemberLafNo(e.target.value)}
-                                    placeholder="e.g. 26-388"
-                                    className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-sm font-mono font-bold text-primary dark:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      try {
-                                        const lafRes = await api.get('/loans/next-laf-no');
-                                        if (lafRes.data?.data?.next_laf_no) {
-                                          setMemberLafNo(lafRes.data.data.next_laf_no);
-                                        }
-                                      } catch (err) {
-                                        console.error('Failed to refresh LAF:', err);
-                                      }
-                                    }}
-                                    className="absolute right-2 px-2.5 py-1 text-[11px] font-bold text-neutral-500 hover:text-primary dark:hover:text-secondary bg-neutral-100 dark:bg-neutral-800 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-                                    title="Reset to next sequential LAF No."
-                                  >
-                                    Refresh
-                                  </button>
-                                </div>
-                                <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
-                                  Sequential application number for sorting & tracking physical documents (editable if matching a paper form).
-                                </p>
-                              </div>
-
                               <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
                                 <span className="text-xs text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Requested Amortization Principal</span>
                                 <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
@@ -2151,7 +2097,7 @@ export default function OverviewPage() {
                           </div>
                         )}
                         <p className="text-sm text-neutral-600 dark:text-neutral-400 max-w-sm mx-auto">
-                          Your application has been received with status <strong className="text-primary font-bold">Pending Review</strong>. Please visit the cooperative office to complete physical requirements.
+                          Your application has been received with status <strong className="text-primary font-bold">Pending Review</strong>. Please visit the UC-Coop Office to complete physical requirements.
                         </p>
                         <div className="pt-4">
                           <button
@@ -2373,17 +2319,25 @@ export default function OverviewPage() {
 
                         {/* Bank Transfer Details */}
                         {paymentMethod === 'bank_transfer' && (
-                          <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
-                            <div className="flex justify-between items-center font-bold">
-                              <span>BDO Account No:</span>
-                              <span className="font-mono text-primary dark:text-secondary font-extrabold">0012-3456-7890</span>
+                          <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 dark:bg-surface-container space-y-2.5 text-xs">
+                            <div className="space-y-1 pb-1 border-b border-outline-variant/30">
+                              <div className="text-[10px] uppercase font-bold tracking-wider text-neutral-500 dark:text-neutral-400">
+                                Account Name:
+                              </div>
+                              <div className="font-semibold text-on-surface dark:text-white text-xs leading-snug">
+                                UNIVERSITY OF CEBU - METC MULTIPURPOSE COOPERATIVE (UC-METC MPC)
+                              </div>
+                            </div>
+                            <div className="flex justify-between items-center font-bold pt-0.5">
+                              <span className="text-neutral-600 dark:text-neutral-400">BDO Account No:</span>
+                              <span className="font-mono text-primary dark:text-secondary font-extrabold tracking-wider text-sm">007050082810</span>
                             </div>
                             <input
                               type="text"
                               placeholder="Enter Bank Deposit/Ref No. (e.g. BDO-98213)"
                               value={paymentRefNo}
                               onChange={(e) => setPaymentRefNo(e.target.value)}
-                              className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary"
+                              className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary text-on-surface dark:text-white"
                             />
                           </div>
                         )}

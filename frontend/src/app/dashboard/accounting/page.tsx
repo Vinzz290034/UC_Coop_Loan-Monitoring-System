@@ -633,12 +633,20 @@ export default function AccountingPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
-                      {shareData.transactions?.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="px-6 py-6 text-center text-neutral-600 dark:text-neutral-400 italic">No transactions booked.</td>
-                        </tr>
-                      ) : (
-                        shareData.transactions?.map((tx: any) => (
+                      {(() => {
+                        const postedTransactions = (shareData.transactions || []).filter(
+                          (tx: any) => !tx.status || tx.status === 'completed'
+                        );
+
+                        if (postedTransactions.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={6} className="px-6 py-6 text-center text-neutral-600 dark:text-neutral-400 italic">No transactions booked.</td>
+                            </tr>
+                          );
+                        }
+
+                        return postedTransactions.map((tx: any) => (
                           <tr key={tx.id} className="hover:bg-neutral/5">
                             <td className="px-4 sm:px-6 py-3 font-mono">{new Date(tx.transaction_date).toLocaleDateString()}</td>
                             <td className="px-4 sm:px-6 py-3">
@@ -681,8 +689,8 @@ export default function AccountingPage() {
                               </div>
                             </td>
                           </tr>
-                        ))
-                      )}
+                        ));
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -1132,10 +1140,18 @@ export default function AccountingPage() {
 
               {/* Bank Transfer Details */}
               {sharePaymentMethod === 'bank_transfer' && (
-                <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
-                  <div className="flex justify-between items-center font-bold">
+                <div className="p-3.5 border border-outline-variant/65 rounded-xl bg-neutral/5 dark:bg-surface-container space-y-2.5 text-xs">
+                  <div className="space-y-1 pb-1 border-b border-outline-variant/30">
+                    <div className="text-[10px] uppercase font-bold tracking-wider text-neutral-500 dark:text-neutral-400">
+                      Account Name:
+                    </div>
+                    <div className="font-semibold text-on-surface dark:text-white text-xs leading-snug">
+                      UNIVERSITY OF CEBU - METC MULTIPURPOSE COOPERATIVE (UC-METC MPC)
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center font-bold pt-0.5">
                     <span className="text-neutral-600 dark:text-neutral-400">BDO Account No:</span>
-                    <span className="font-mono text-primary dark:text-secondary font-extrabold">0012-3456-7890</span>
+                    <span className="font-mono text-primary dark:text-secondary font-extrabold tracking-wider text-sm">007050082810</span>
                   </div>
                   <input
                     type="text"
@@ -1533,11 +1549,6 @@ export default function AccountingPage() {
                   <span>Date Issued:</span>
                   <span>{new Date(selectedReceipt.date).toLocaleString()}</span>
                 </div>
-              </div>
-
-              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-800 dark:text-amber-300 space-y-1">
-                <strong className="block font-bold text-xs">📢 Office Cashier Instructions:</strong>
-                <p className="text-[11px] leading-relaxed">Present this payment slip to the UC METC Cooperative Office Cashier. Staff will issue your official receipt (OR) and activate your balance immediately.</p>
               </div>
 
               <div className="pt-2 space-y-2">

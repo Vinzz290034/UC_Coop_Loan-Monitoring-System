@@ -186,6 +186,7 @@ export const getTransactionReport = async (req, res, next) => {
         COALESCE(t.remarks, 'Share capital contribution/withdrawal') as description
       FROM share_capital_transactions t
       JOIN members m ON t.member_id = m.id
+      WHERE t.status = 'completed'
       
       UNION ALL
       

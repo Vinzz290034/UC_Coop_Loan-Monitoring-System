@@ -152,11 +152,15 @@ export const getShareCapital = async (req, res, next) => {
     );
 
     const balance = completedTx.rowCount > 0 ? parseFloat(completedTx.rows[0].balance_after) : 0;
+    const completedTransactions = txs.rows.filter(tx => !tx.status || tx.status === 'completed');
+    const pendingTransactions = txs.rows.filter(tx => tx.status === 'pending_payment');
 
     res.status(200).json({
       success: true,
       balance,
-      transactions: txs.rows
+      transactions: txs.rows,
+      completed_transactions: completedTransactions,
+      pending_transactions: pendingTransactions
     });
   } catch (error) {
     next(error);

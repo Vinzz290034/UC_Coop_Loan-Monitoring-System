@@ -373,7 +373,7 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
       if (row.includes('LAF NO') || row.includes('AMOUNT LOANED')) {
         startRow = r + 1;
         const findIdx = (predicate, fallback) => {
-          const idx = row.findIndex(predicate);
+          const idx = row.findIndex((c, i) => i >= 3 && predicate(c));
           return idx !== -1 ? idx : fallback;
         };
         colMap = {
@@ -387,11 +387,11 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
           principalDue: findIdx(c => c === 'PRINCIPAL' || c === 'PRINCIPAL DUE', 10),
           monthlyDue: findIdx(c => c.includes('MONTHLY DUE') || c === 'MONTHLY', 11),
           fines: findIdx(c => c.includes('FINE'), 12),
-          amountPaid: findIdx(c => c === 'AMOUNT PAID' || c.includes('AMT PAID'), 13),
-          balance: findIdx(c => c === 'BALANCE', 14),
-          principalBalance: findIdx(c => c.includes('PRINCIPAL') && c.includes('BALANCE'), 15),
-          invoiceNo: findIdx(c => c.includes('INVOICE'), 16),
-          datePaid: findIdx(c => c.includes('DATE PAID'), 17)
+          amountPaid: findIdx(c => c === 'AMOUNT PAID' || c.includes('AMT PAID'), 15),
+          balance: findIdx(c => c === 'BALANCE', 16),
+          principalBalance: findIdx(c => c.includes('PRINCIPAL') && c.includes('BALANCE'), 17),
+          invoiceNo: findIdx(c => c.includes('INVOICE'), 18),
+          datePaid: findIdx(c => c.includes('DATE PAID'), 19)
         };
         break;
       }
@@ -879,6 +879,13 @@ export const executeImport = async (req, res, next) => {
             loanMap.set(loanKey1, loanId);
             loanMap.set(loanKey2, loanId);
             loansCreated++;
+          } else {
+            if (loanStatus === 'fully_paid') {
+              await client.query(
+                `UPDATE loans SET status = 'fully_paid', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+                [loanId]
+              );
+            }
           }
 
           // 4. Insert Installments and Payments

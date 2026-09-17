@@ -8,13 +8,15 @@ import {
   getLoans,
   getLoanById,
   postRepayment,
+  getRepayments,
   rejectLoanApplication,
   getLoanMetricsSummary,
   previewAmortizationSchedule,
   getMyLoanHistory,
   getCalamityStatus,
   updateCalamityStatus,
-  getNextLafNumber
+  getNextLafNumber,
+  updateLoanLafNo
 } from '../controllers/loanController.js';
 import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
@@ -53,6 +55,7 @@ router.route('/metrics/summary')
 // 4. REPAYMENTS
 // ==========================================
 router.route('/repayments')
+  .get(getRepayments)
   .post(restrictTo('admin', 'staff'), postRepayment);
 
 // ==========================================
@@ -83,5 +86,8 @@ router.route('/:id/disburse')
 
 router.route('/:id/reject')
   .patch(restrictTo('admin', 'staff'), rejectLoanApplication);
+
+router.route('/:id/laf-no')
+  .patch(restrictTo('admin', 'staff'), updateLoanLafNo);
 
 export default router;

@@ -669,28 +669,30 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                                 }`}
                               >
                                 <td className="px-3.5 py-3 font-mono text-[11px] text-neutral-400">{idx + 1}</td>
-                                <td className="px-3.5 py-3 whitespace-nowrap">
-                                  <span className="font-mono text-[11px] font-bold text-primary dark:text-secondary px-2 py-0.5 rounded-md bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20">
-                                    LAF #{loan.laf_no || '—'}
-                                  </span>
+                                <td className="px-3.5 py-3 whitespace-nowrap font-mono">
+                                  {loan.status === 'pending_approval' ? (
+                                    <span className="text-neutral-400 font-sans">—</span>
+                                  ) : loan.laf_no ? (
+                                    <span className="font-mono text-[11px] font-bold text-primary dark:text-secondary px-2 py-0.5 rounded-md bg-primary/10 dark:bg-secondary/10 border border-primary/20 dark:border-secondary/20">
+                                      LAF #{loan.laf_no}
+                                    </span>
+                                  ) : (
+                                    <span className="text-neutral-400 font-sans">—</span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3 font-medium text-on-surface dark:text-white min-w-[200px] whitespace-nowrap">
                                   {loan.product_name || 'Loan Contract'}
                                 </td>
                                 <td className="px-3.5 py-3 font-mono text-[11px] text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
-                                  {loan.disbursed_at
-                                    ? new Date(loan.disbursed_at).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric'
-                                      })
-                                    : loan.created_at
-                                    ? new Date(loan.created_at).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric'
-                                      })
-                                    : '—'}
+                                  {loan.status !== 'pending_approval' && loan.disbursed_at ? (
+                                    new Date(loan.disbursed_at).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric'
+                                    })
+                                  ) : (
+                                    <span className="text-neutral-400">—</span>
+                                  )}
                                 </td>
                                 <td className="px-3.5 py-3 font-mono text-[11px] text-center whitespace-nowrap">
                                   {loan.term_months ? `${loan.term_months} mos` : '—'}
@@ -709,7 +711,11 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                                   )}
                                 </td>
                                 <td className="px-3.5 py-3 text-center whitespace-nowrap">
-                                  {isPaid ? (
+                                  {loan.status === 'pending_approval' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                      <Clock className="w-3 h-3" /> Pending
+                                    </span>
+                                  ) : isPaid ? (
                                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                                       <CheckCircle2 className="w-3 h-3" /> Fully Paid
                                     </span>
@@ -724,14 +730,20 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                                   )}
                                 </td>
                                 <td className="px-3.5 py-3 text-right whitespace-nowrap">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedLoanIdForLedger(loan.id)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-surface border border-outline-variant rounded-lg text-[11px] font-bold text-primary dark:text-secondary hover:bg-primary/10 dark:hover:bg-secondary/10 transition-all active:scale-95 cursor-pointer shadow-2xs"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    <span>Ledger</span>
-                                  </button>
+                                  {loan.status === 'pending_approval' ? (
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500 text-[10px] font-semibold cursor-not-allowed select-none">
+                                      Unavailable
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedLoanIdForLedger(loan.id)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-surface border border-outline-variant rounded-lg text-[11px] font-bold text-primary dark:text-secondary hover:bg-primary/10 dark:hover:bg-secondary/10 transition-all active:scale-95 cursor-pointer shadow-2xs"
+                                    >
+                                      <Eye className="w-3 h-3" />
+                                      <span>Ledger</span>
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -787,8 +799,22 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
-                        {shareCapital?.transactions && shareCapital.transactions.length > 0 ? (
-                          shareCapital.transactions.map((tx: any, idx: number) => (
+                        {(() => {
+                          const postedTxs = (shareCapital?.transactions || []).filter(
+                            (tx: any) => !tx.status || tx.status === 'completed'
+                          );
+
+                          if (postedTxs.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={7} className="px-4 py-8 text-center text-neutral-400 text-xs italic">
+                                  No share capital transactions recorded.
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return postedTxs.map((tx: any, idx: number) => (
                             <tr key={tx.id || idx} className="hover:bg-neutral/5 dark:hover:bg-white/5 transition-colors">
                               <td className="px-3.5 py-3 font-mono text-[11px] text-neutral-400">{idx + 1}</td>
                               <td className="px-3.5 py-3 font-mono text-[11px] whitespace-nowrap text-neutral-600 dark:text-neutral-300">
@@ -822,14 +848,8 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                                 {tx.remarks || 'Share capital placement'}
                               </td>
                             </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={7} className="px-4 py-8 text-center text-neutral-400 text-xs italic">
-                              No share capital transactions recorded.
-                            </td>
-                          </tr>
-                        )}
+                          ));
+                        })()}
                       </tbody>
                     </table>
                   </div>

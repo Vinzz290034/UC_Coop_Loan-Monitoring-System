@@ -338,18 +338,21 @@ export const applyForLoan = async (req, res, next) => {
     // Dynamic interest rate: 15% if 36 months, otherwise 2% (0.02)
     const finalInterestRate = finalTermMonths === 36 ? 0.1500 : 0.0200;
 
-    // Validate or auto-generate LAF No.
-    let finalLafNo = laf_no ? String(laf_no).trim() : null;
-    if (finalLafNo) {
-      const existingLaf = await query('SELECT id FROM loans WHERE LOWER(laf_no) = LOWER($1)', [finalLafNo]);
-      if (existingLaf.rowCount > 0) {
-        return res.status(400).json({
-          success: false,
-          error: { message: `LAF No. "${finalLafNo}" is already assigned to an existing loan. Please specify a unique LAF No.` }
-        });
+    // Validate or auto-generate LAF No. (Only staff and admin can specify LAF No.)
+    let finalLafNo = null;
+    if (req.user.role !== 'member') {
+      if (laf_no && String(laf_no).trim()) {
+        finalLafNo = String(laf_no).trim();
+        const existingLaf = await query('SELECT id FROM loans WHERE LOWER(laf_no) = LOWER($1)', [finalLafNo]);
+        if (existingLaf.rowCount > 0) {
+          return res.status(400).json({
+            success: false,
+            error: { message: `LAF No. "${finalLafNo}" is already assigned to an existing loan. Please specify a unique LAF No.` }
+          });
+        }
+      } else {
+        finalLafNo = await generateNextLafNo();
       }
-    } else {
-      finalLafNo = await generateNextLafNo();
     }
 
     const insertLoan = `
@@ -412,6 +415,20 @@ export const disburseLoan = async (req, res, next) => {
       });
     }
 
+    const { laf_no } = req.body;
+    let finalLaf = loan.laf_no;
+    if (laf_no && String(laf_no).trim()) {
+      finalLaf = String(laf_no).trim();
+      const existingLaf = await client.query('SELECT id FROM loans WHERE LOWER(laf_no) = LOWER($1) AND id != $2', [finalLaf, id]);
+      if (existingLaf.rowCount > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          error: { message: `LAF No. "${finalLaf}" is already assigned to another loan.` }
+        });
+      }
+    }
+
     const disbursementDate = new Date();
     const termMonths = parseInt(loan.term_months, 10);
     
@@ -431,13 +448,14 @@ export const disburseLoan = async (req, res, next) => {
     // 2. Update loan status to disbursed
     const updateLoan = `
       UPDATE loans
-      SET status = 'disbursed', disbursed_at = $1, maturity_date = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3
+      SET status = 'disbursed', disbursed_at = $1, maturity_date = $2, laf_no = COALESCE($3, laf_no), updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
       RETURNING *
     `;
     const updatedLoanResult = await client.query(updateLoan, [
       disbursementDate.toISOString(),
       maturityDateStr,
+      finalLaf,
       id
     ]);
 
@@ -871,6 +889,97 @@ export const postRepayment = async (req, res, next) => {
   }
 };
 
+// @desc    Get all loan repayment logs (with member, loan, and allocation details)
+// @route   GET /api/loans/repayments
+// @access  Private (Admin, Staff, Member)
+export const getRepayments = async (req, res, next) => {
+  try {
+    const { loan_id, member_id, search, payment_method } = req.query;
+
+    let sql = `
+      SELECT 
+        lp.id,
+        lp.loan_id,
+        lp.amount,
+        lp.payment_date,
+        lp.payment_method,
+        lp.reference_no,
+        lp.created_at,
+        l.laf_no,
+        l.status as loan_status,
+        l.principal_amount,
+        COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
+        lp_prod.name as product_name,
+        m.id as member_id,
+        m.first_name,
+        m.middle_name,
+        m.last_name,
+        m.member_no,
+        COALESCE((SELECT SUM(principal_allocated) FROM loan_payment_allocations WHERE loan_payment_id = lp.id), 0) as principal_paid,
+        COALESCE((SELECT SUM(interest_allocated) FROM loan_payment_allocations WHERE loan_payment_id = lp.id), 0) as interest_paid
+      FROM loan_payments lp
+      JOIN loans l ON lp.loan_id = l.id
+      JOIN members m ON l.member_id = m.id
+      LEFT JOIN loan_products lp_prod ON l.loan_product_id = lp_prod.id
+      WHERE 1=1
+    `;
+
+    const params = [];
+
+    // Security: Regular members can only view payments related to their own loans
+    if (req.user.role === 'member') {
+      const memberCheck = await query('SELECT id FROM members WHERE user_id = $1', [req.user.id]);
+      if (memberCheck.rowCount === 0) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: []
+        });
+      }
+      params.push(memberCheck.rows[0].id);
+      sql += ` AND l.member_id = $${params.length}`;
+    } else if (member_id) {
+      params.push(member_id);
+      sql += ` AND l.member_id = $${params.length}`;
+    }
+
+    if (loan_id) {
+      params.push(loan_id);
+      sql += ` AND lp.loan_id = $${params.length}`;
+    }
+
+    if (payment_method && payment_method !== 'all') {
+      params.push(payment_method);
+      sql += ` AND LOWER(lp.payment_method) = LOWER($${params.length})`;
+    }
+
+    if (search) {
+      params.push(`%${search.trim()}%`);
+      sql += ` AND (
+        m.first_name ILIKE $${params.length} OR
+        m.last_name ILIKE $${params.length} OR
+        COALESCE(m.member_no, '') ILIKE $${params.length} OR
+        COALESCE(lp.reference_no, '') ILIKE $${params.length} OR
+        COALESCE(l.laf_no, '') ILIKE $${params.length} OR
+        lp.id::text ILIKE $${params.length} OR
+        lp.loan_id::text ILIKE $${params.length}
+      )`;
+    }
+
+    sql += ` ORDER BY lp.payment_date DESC`;
+
+    const result = await query(sql, params);
+
+    res.status(200).json({
+      success: true,
+      count: result.rowCount,
+      data: result.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Reject a pending loan application with underwriter remarks
 // @route   PATCH /api/loans/:id/reject
 // @access  Protected (Admin, Manager)
@@ -1197,6 +1306,55 @@ export const updateCalamityStatus = async (req, res, next) => {
       success: true,
       is_calamity_declared: Boolean(is_calamity_declared),
       message: `State of Calamity declared status updated to ${valueStr}.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update or assign LAF number for a loan (Admin/Staff only)
+// @route   PATCH /api/loans/:id/laf-no
+// @access  Protected (Admin, Staff)
+export const updateLoanLafNo = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { laf_no } = req.body;
+
+    if (!laf_no || !String(laf_no).trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide a valid LAF No.' }
+      });
+    }
+
+    const trimmedLaf = String(laf_no).trim();
+    const existingLaf = await query(
+      'SELECT id FROM loans WHERE LOWER(laf_no) = LOWER($1) AND id != $2',
+      [trimmedLaf, id]
+    );
+    if (existingLaf.rowCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `LAF No. "${trimmedLaf}" is already assigned to another loan.` }
+      });
+    }
+
+    const result = await query(
+      'UPDATE loans SET laf_no = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [trimmedLaf, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Loan not found.' }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `LAF No. successfully set to "${trimmedLaf}".`,
+      data: result.rows[0]
     });
   } catch (error) {
     next(error);

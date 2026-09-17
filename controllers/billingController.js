@@ -388,6 +388,7 @@ export const getPayrollCollectionList = async (req, res, next) => {
         SUM(amount) as total_share_deposit
       FROM share_capital_transactions
       WHERE transaction_type = 'credit'
+        AND status = 'completed'
         AND transaction_date BETWEEN $1 AND $2
       GROUP BY member_id
     `, [startDate, endDate]);

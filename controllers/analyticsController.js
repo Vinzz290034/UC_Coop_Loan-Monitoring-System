@@ -270,7 +270,7 @@ export const getFinancialSummary = async (req, res, next) => {
         COALESCE(SUM(CASE WHEN sc.transaction_type = 'debit' THEN sc.amount ELSE 0 END), 0) as debits,
         COALESCE(SUM(CASE WHEN sc.transaction_type = 'credit' THEN sc.amount ELSE -sc.amount END), 0) as net_change
       FROM month_series ms
-      LEFT JOIN share_capital_transactions sc ON DATE_TRUNC('month', sc.transaction_date) = ms.month
+      LEFT JOIN share_capital_transactions sc ON DATE_TRUNC('month', sc.transaction_date) = ms.month AND sc.status = 'completed'
       GROUP BY ms.month
       ORDER BY ms.month ASC
     `;
