@@ -236,24 +236,33 @@ function LoansPageContent() {
   const [checkVouchers, setCheckVouchers] = useState<any[]>([]);
   const [cvLoading, setCvLoading] = useState(false);
   const [cvSearch, setCvSearch] = useState('');
+  const [cvPage, setCvPage] = useState(1);
+  const [cvLimit] = useState(25);
+  const [cvTotalCount, setCvTotalCount] = useState(0);
+  const [cvTotalPages, setCvTotalPages] = useState(1);
 
-  const loadCheckVouchers = useCallback(async () => {
+  const loadCheckVouchers = useCallback(async (page = cvPage) => {
     try {
       setCvLoading(true);
-      const params: Record<string, string> = {};
+      const params: Record<string, string | number> = { page, limit: cvLimit };
       if (cvSearch.trim()) params.search = cvSearch.trim();
       const res = await api.get('/accounts/check-vouchers', { params });
       setCheckVouchers(res.data.data || []);
+      if (res.data.pagination) {
+        setCvTotalCount(res.data.pagination.total);
+        setCvTotalPages(res.data.pagination.totalPages);
+        setCvPage(res.data.pagination.page);
+      }
     } catch (err) {
       console.error('Failed to load check vouchers:', err);
     } finally {
       setCvLoading(false);
     }
-  }, [cvSearch]);
+  }, [cvSearch, cvPage, cvLimit]);
 
   useEffect(() => {
-    if (activeTab === 'vouchers') loadCheckVouchers();
-  }, [activeTab, loadCheckVouchers]);
+    if (activeTab === 'vouchers') loadCheckVouchers(1);
+  }, [activeTab]);
 
   // Check Voucher Deletion & Selection State
   const [selectedCvIds, setSelectedCvIds] = useState<string[]>([]);
@@ -290,16 +299,8 @@ function LoansPageContent() {
 
   const formatVoucherDescription = (particulars?: string, payee?: string) => {
     const p = (particulars || '').trim();
-    const name = (payee || '').trim();
-    if (!p && !name) return 'Loan disbursement';
-    if (!p) return `Loan disbursement for ${name}`;
-    if (!name) return p;
-    const lowerP = p.toLowerCase();
-    const lowerName = name.toLowerCase();
-    if (lowerP.includes('for ') || lowerP.includes(lowerName)) {
-      return p;
-    }
-    return `${p} for ${name}`;
+    if (!p) return 'Loan disbursement';
+    return p;
   };
 
   const formatDisbursedInWords = (amount: number): string => {
@@ -3248,7 +3249,7 @@ function LoansPageContent() {
               </div>
               <button
                 type="button"
-                onClick={loadCheckVouchers}
+                onClick={() => { setCvPage(1); loadCheckVouchers(1); }}
                 className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap"
               >
                 <Search className="w-3.5 h-3.5" />
@@ -3262,7 +3263,9 @@ function LoansPageContent() {
                 <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
                   <FileText className="w-4 h-4 text-emerald-700" /> Recorded Check Vouchers
                 </h4>
-                <span className="text-xs text-neutral-500 font-medium">{checkVouchers.length} records</span>
+                <span className="text-xs text-neutral-500 font-medium">
+                  {cvTotalCount > 0 ? `${cvTotalCount} total records` : `${checkVouchers.length} records`}
+                </span>
               </div>
 
               {/* Bulk Actions Banner */}
@@ -3547,6 +3550,75 @@ function LoansPageContent() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* Pagination Controls */}
+              {cvTotalPages > 1 && (
+                <div className="px-6 py-4 border-t border-outline-variant/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Page <strong className="text-on-surface dark:text-white">{cvPage}</strong> of{' '}
+                    <strong className="text-on-surface dark:text-white">{cvTotalPages}</strong>
+                    {' '}· Showing {checkVouchers.length} of {cvTotalCount} vouchers
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={cvPage <= 1 || cvLoading}
+                      onClick={() => { const p = 1; setCvPage(p); loadCheckVouchers(p); }}
+                      className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                      title="First page"
+                    >«</button>
+                    <button
+                      type="button"
+                      disabled={cvPage <= 1 || cvLoading}
+                      onClick={() => { const p = cvPage - 1; setCvPage(p); loadCheckVouchers(p); }}
+                      className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >‹ Prev</button>
+
+                    {/* Page number pills */}
+                    {Array.from({ length: Math.min(5, cvTotalPages) }, (_, i) => {
+                      let p: number;
+                      if (cvTotalPages <= 5) {
+                        p = i + 1;
+                      } else if (cvPage <= 3) {
+                        p = i + 1;
+                      } else if (cvPage >= cvTotalPages - 2) {
+                        p = cvTotalPages - 4 + i;
+                      } else {
+                        p = cvPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          disabled={cvLoading}
+                          onClick={() => { setCvPage(p); loadCheckVouchers(p); }}
+                          className={`w-8 h-8 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                            p === cvPage
+                              ? 'bg-emerald-600 text-white shadow-sm'
+                              : 'border border-outline-variant/60 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={cvPage >= cvTotalPages || cvLoading}
+                      onClick={() => { const p = cvPage + 1; setCvPage(p); loadCheckVouchers(p); }}
+                      className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >Next ›</button>
+                    <button
+                      type="button"
+                      disabled={cvPage >= cvTotalPages || cvLoading}
+                      onClick={() => { const p = cvTotalPages; setCvPage(p); loadCheckVouchers(p); }}
+                      className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                      title="Last page"
+                    >»</button>
+                  </div>
                 </div>
               )}
             </div>

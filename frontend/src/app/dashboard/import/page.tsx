@@ -165,6 +165,7 @@ export default function ImportPage() {
   const [cvFilterTab, setCvFilterTab] = useState<'all' | 'selected' | 'new' | 'existing'>('all');
   const [isCvSheetLoading, setIsCvSheetLoading] = useState(false);
   const [cvExecuting, setCvExecuting] = useState(false);
+  const [cvDateFrom, setCvDateFrom] = useState<string>('');
 
   // Preview Data
   const [summary, setSummary] = useState<ImportSummary | null>(null);
@@ -497,10 +498,17 @@ export default function ImportPage() {
 
   // Filtered check vouchers
   const filteredCvVouchers = useMemo(() => {
+    const fromDate = cvDateFrom ? new Date(cvDateFrom) : null;
     return cvVouchers.filter((v) => {
       if (cvFilterTab === 'selected' && !cvSelectedIds.has(v.id)) return false;
       if (cvFilterTab === 'new' && v.existsInDb) return false;
       if (cvFilterTab === 'existing' && !v.existsInDb) return false;
+
+      // Date-from filter: skip vouchers before the selected date
+      if (fromDate && v.voucher_date) {
+        const vDate = new Date(v.voucher_date);
+        if (!isNaN(vDate.getTime()) && vDate < fromDate) return false;
+      }
 
       if (!cvSearchQuery.trim()) return true;
       const q = cvSearchQuery.toLowerCase();
@@ -512,7 +520,7 @@ export default function ImportPage() {
         (v.particulars && v.particulars.toLowerCase().includes(q))
       );
     });
-  }, [cvVouchers, cvFilterTab, cvSelectedIds, cvSearchQuery]);
+  }, [cvVouchers, cvFilterTab, cvSelectedIds, cvSearchQuery, cvDateFrom]);
 
   const cvSelectedTotalAmount = useMemo(() => {
     return cvVouchers
@@ -1387,6 +1395,47 @@ export default function ImportPage() {
 
               {/* Quick Select Actions & Search */}
               <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap">
+
+                {/* Date From Filter */}
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+                    From Date:
+                  </label>
+                  <input
+                    type="date"
+                    value={cvDateFrom}
+                    onChange={(e) => setCvDateFrom(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs bg-neutral-100 dark:bg-neutral-800 border border-outline-variant/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-on-surface dark:text-white cursor-pointer"
+                  />
+                  {cvDateFrom && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Select all currently visible (filtered) vouchers
+                        setCvSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          filteredCvVouchers.forEach((v) => next.add(v.id));
+                          return next;
+                        });
+                      }}
+                      className="px-2.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg transition-all cursor-pointer whitespace-nowrap"
+                      title={`Select all vouchers from ${cvDateFrom} onwards`}
+                    >
+                      Select From Date
+                    </button>
+                  )}
+                  {cvDateFrom && (
+                    <button
+                      type="button"
+                      onClick={() => setCvDateFrom('')}
+                      className="px-2 py-1.5 text-xs font-semibold text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition-all cursor-pointer"
+                      title="Clear date filter"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
                 <div className="relative flex-1 md:w-64">
                   <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input

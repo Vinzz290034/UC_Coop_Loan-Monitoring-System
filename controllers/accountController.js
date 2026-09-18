@@ -815,7 +815,7 @@ export const importCheckVouchers = async (req, res, next) => {
 // @access  Protected (Admin, Staff)
 export const getCheckVouchers = async (req, res, next) => {
   try {
-    const { search, folder, bank } = req.query;
+    const { search, folder, bank, page, limit } = req.query;
 
     const conditions = [];
     const params = [];
@@ -837,19 +837,40 @@ export const getCheckVouchers = async (req, res, next) => {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
+    // Pagination
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const pageSize = Math.min(200, Math.max(1, parseInt(limit) || 25));
+    const offset = (pageNum - 1) * pageSize;
+
+    // Get total count for pagination
+    const countResult = await query(
+      `SELECT COUNT(*) AS total FROM check_vouchers ${whereClause}`,
+      params
+    );
+    const totalCount = parseInt(countResult.rows[0]?.total || '0', 10);
+
+    // Paginated data — oldest first (ascending by voucher_date, then voucher_no)
+    params.push(pageSize);
+    params.push(offset);
     const result = await query(
       `SELECT id, voucher_no, voucher_date, check_no, payee, bank, particulars,
               amount, managers_approval_date, date_released, folder_name, box_name, details, signatories, created_at
        FROM check_vouchers
        ${whereClause}
-       ORDER BY voucher_date DESC NULLS LAST, created_at DESC
-       LIMIT 1000`,
+       ORDER BY voucher_date ASC NULLS LAST, voucher_no ASC, created_at ASC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
 
     res.status(200).json({
       success: true,
-      data: result.rows
+      data: result.rows,
+      pagination: {
+        total: totalCount,
+        page: pageNum,
+        limit: pageSize,
+        totalPages: Math.ceil(totalCount / pageSize)
+      }
     });
   } catch (error) {
     next(error);
