@@ -857,7 +857,7 @@ export const getCheckVouchers = async (req, res, next) => {
               amount, managers_approval_date, date_released, folder_name, box_name, details, signatories, created_at
        FROM check_vouchers
        ${whereClause}
-       ORDER BY voucher_date ASC NULLS LAST, voucher_no ASC, created_at ASC
+       ORDER BY voucher_date DESC NULLS LAST, voucher_no DESC, created_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );

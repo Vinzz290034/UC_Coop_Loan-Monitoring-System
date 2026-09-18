@@ -445,6 +445,7 @@ function LoansPageContent() {
         { description: 'Loans Receivable- Regular', debit: String(cv.amount || 0), credit: '' }
       ]
     });
+    setSelectedCvForModal(cv); // needed so the modal portal renders
     setIsEditingCvModal(true);
   };
 
@@ -3402,17 +3403,18 @@ function LoansPageContent() {
                               </td>
                               <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-1.5">
-                                  {hasDetails && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedCvForModal(cv)}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-900/60 rounded-xl transition-all active:scale-95 cursor-pointer shadow-2xs"
-                                      title={`View breakdown details for voucher ${cv.voucher_no}`}
-                                    >
-                                      <Receipt className="w-3.5 h-3.5" />
-                                      <span>Details</span>
-                                    </button>
-                                  )}
+                                  {/* Details button — shown on ALL vouchers.
+                                      If it has existing breakdown, opens view modal.
+                                      If it has no breakdown yet, opens edit modal to add one. */}
+                                  <button
+                                    type="button"
+                                    onClick={() => hasDetails ? setSelectedCvForModal(cv) : startEditingCv(cv)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-900/60 rounded-xl transition-all active:scale-95 cursor-pointer shadow-2xs"
+                                    title={hasDetails ? `View breakdown for voucher ${cv.voucher_no}` : `Add breakdown details for voucher ${cv.voucher_no}`}
+                                  >
+                                    <Receipt className="w-3.5 h-3.5" />
+                                    <span>Details</span>
+                                  </button>
                                   {isAdminOrManager && (
                                     <button
                                       type="button"
