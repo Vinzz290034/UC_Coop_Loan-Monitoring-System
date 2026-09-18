@@ -133,6 +133,22 @@ export default function AccountingPage() {
     }
   }, [user]);
 
+  // Sync activeTab from ?tab= query param (e.g. from notification clicks)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const syncTabFromUrl = () => {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab');
+        if (tabParam === 'share_capital' || tabParam === 'fixed_deposits' || tabParam === 'investments') {
+          setActiveTab(tabParam);
+        }
+      };
+      syncTabFromUrl();
+      window.addEventListener('popstate', syncTabFromUrl);
+      return () => window.removeEventListener('popstate', syncTabFromUrl);
+    }
+  }, []);
+
   // Main data loader (fetches all ledgers for selected member)
   const loadLedgerData = useCallback(async () => {
     if (!selectedMemberId) return;
@@ -336,6 +352,40 @@ export default function AccountingPage() {
     }).format(val || 0);
   };
 
+  const formatAmountInWords = (amount: number): string => {
+    if (!amount || isNaN(amount) || amount <= 0) return 'ZERO PESOS ONLY';
+    const ones = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE',
+      'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
+    const tens = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+    const toWords = (n: number): string => {
+      if (n === 0) return '';
+      if (n < 20) return ones[n] + ' ';
+      if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? '-' + ones[n % 10] : '') + ' ';
+      if (n < 1000) return ones[Math.floor(n / 100)] + ' HUNDRED ' + toWords(n % 100);
+      if (n < 1000000) return toWords(Math.floor(n / 1000)).trim() + ' THOUSAND ' + toWords(n % 1000);
+      return toWords(Math.floor(n / 1000000)).trim() + ' MILLION ' + toWords(n % 1000000);
+    };
+    const pesos = Math.floor(amount);
+    const centavos = Math.round((amount - pesos) * 100);
+    const words = pesos === 0 ? 'ZERO' : toWords(pesos).replace(/\s+/g, ' ').trim();
+    const currencyUnit = pesos === 1 ? 'PESO' : 'PESOS';
+
+    if (centavos > 0) {
+      return `${words} ${currencyUnit} AND ${centavos.toString().padStart(2, '0')}/100 ONLY`;
+    }
+    return `${words} ${currencyUnit} ONLY`;
+  };
+
+  const getCleanReceiptNumber = (tx: any) => {
+    if (!tx) return 'AR-2026-0001';
+    if (tx.invoice_no && tx.invoice_no !== 'SD' && tx.invoice_no !== 'HAND-IN') {
+      return `AR-${tx.invoice_no}`;
+    }
+    const year = tx.transaction_date ? new Date(tx.transaction_date).getFullYear() : 2026;
+    const cleanId = String(tx.id || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
+    return `AR-${year}-${cleanId || '0001'}`;
+  };
+
   const handlePrint = () => {
     // Dismiss the modal immediately so the user knows it's currently printing
     setCompletedReceiptMode(null);
@@ -358,7 +408,7 @@ export default function AccountingPage() {
     try {
       setDownloadingTxId(txObj.id);
       const html2canvas = (await import('html2canvas-pro')).default;
-      const receiptNo = `TXN-${new Date(txObj.transaction_date).getFullYear()}-${String(txObj.id).padStart(6, '0')}`;
+      const receiptNo = getCleanReceiptNumber(txObj);
 
       const isModalOpen = completedReceiptTx?.id === txObj.id && completedReceiptMode === 'receipt';
 
@@ -385,9 +435,9 @@ export default function AccountingPage() {
         left: 0;
         z-index: -9999;
         pointer-events: none;
-        width: 800px;
+        width: 740px;
         box-sizing: border-box !important;
-        padding: 32px;
+        padding: 24px 32px;
         background: #ffffff;
         color: #000000;
         display: block !important;
@@ -1581,12 +1631,23 @@ export default function AccountingPage() {
 
       {/* MODAL 6: COMPLETED CONTRIBUTION RECEIPT PREVIEW */}
       {completedReceiptMode === 'receipt' && completedReceiptTx && auditedMember && mounted && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto font-sans">
-            <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30 mb-4">
-              <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-primary" /> Acknowledgement Receipt
-              </h3>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/70 backdrop-blur-md p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-2xl shadow-2xl p-6 md:p-7 relative animate-modal-pop max-h-[92vh] overflow-y-auto font-sans flex flex-col gap-5">
+            {/* Modal Top Bar */}
+            <div className="flex justify-between items-center pb-3 border-b border-outline-variant/30">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">
+                    Acknowledgement Receipt
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 font-medium">
+                    {new Date(completedReceiptTx.transaction_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} • {new Date(completedReceiptTx.transaction_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => { setCompletedReceiptMode(null); setCompletedReceiptTx(null); }}
                 className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
@@ -1596,169 +1657,394 @@ export default function AccountingPage() {
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="bg-neutral-50 dark:bg-neutral-900/40 p-4 rounded-2xl border border-outline-variant/60 space-y-3">
-                <h5 className="font-bold text-on-surface dark:text-white text-xs">Transaction Details</h5>
-                <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-[10px]">
-                  <p><strong>Tracking Number:</strong> TXN-{new Date(completedReceiptTx.transaction_date).getFullYear()}-{String(completedReceiptTx.id).padStart(6, '0')}</p>
-                  <p><strong>Member Name:</strong> {auditedMember.last_name}, {auditedMember.first_name}</p>
-                  <p><strong>Account Type:</strong> Share Capital (CBU)</p>
-                  <p><strong>Date Booked:</strong> {new Date(completedReceiptTx.transaction_date).toLocaleString()}</p>
-                  <p><strong>Transaction Type:</strong> {completedReceiptTx.transaction_type === 'credit' ? 'Deposit (Capital Injection)' : 'Withdrawal (Equity Out)'}</p>
-                  <p><strong>Remarks:</strong> {completedReceiptTx.remarks || 'Standard capital account adjustment'}</p>
-                  <p className="col-span-2 text-xs border-t border-outline-variant/20 pt-2 mt-1">
-                    <strong className="text-primary dark:text-secondary">Amount:</strong> <strong className="text-sm text-primary dark:text-secondary">{formatCurrency(parseFloat(completedReceiptTx.amount))}</strong>
+            {/* Receipt Preview Paper Card */}
+            <div className="p-5 md:p-6 rounded-2xl border border-outline-variant/60 bg-neutral-50/70 dark:bg-neutral-900/40 space-y-4 text-xs">
+              {/* Paper Header */}
+              <div className="flex justify-between items-center border-b-2 border-emerald-800/80 pb-3.5">
+                <div className="flex items-center gap-3">
+                  <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" className="h-11 w-11 rounded-full object-cover" />
+                  <div>
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-900 dark:text-emerald-300">
+                      University of Cebu - METC MPC
+                    </h4>
+                    <p className="text-[11px] text-neutral-600 dark:text-neutral-400 font-semibold mt-0.5">
+                      Loans, Savings, and Investment Portal
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[12px] font-extrabold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider block">
+                    Acknowledgement Receipt
+                  </span>
+                  <span className="text-xs font-bold text-neutral-900 dark:text-white block mt-1">
+                    {new Date(completedReceiptTx.transaction_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </span>
+                  <span className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-400 block mt-0.5">
+                    {new Date(completedReceiptTx.transaction_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Member & Details Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/30">
+                <div>
+                  <span className="text-[9px] font-bold uppercase text-emerald-700 dark:text-emerald-400 tracking-wider block">
+                    Received From
+                  </span>
+                  <p className="font-bold text-neutral-900 dark:text-white text-xs mt-0.5">
+                    {auditedMember.last_name}, {auditedMember.first_name} {auditedMember.middle_name || ''}
                   </p>
-                  <p className="col-span-2 text-xs">
-                    <strong className="text-neutral-600 dark:text-neutral-400">Balance After:</strong> <strong className="text-neutral-700 dark:text-neutral-350">{formatCurrency(parseFloat(completedReceiptTx.balance_after))}</strong>
+                  <p className="text-[10px] font-mono text-neutral-500">
+                    ID: {auditedMember.member_no || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold uppercase text-emerald-700 dark:text-emerald-400 tracking-wider block">
+                    Transaction Type
+                  </span>
+                  <p className="font-bold text-neutral-900 dark:text-white text-xs mt-0.5">
+                    {completedReceiptTx.transaction_type === 'credit' ? 'Share Capital Deposit' : 'Share Capital Withdrawal'}
+                  </p>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                    Status: Completed
+                  </p>
+                </div>
+                <div className="sm:text-right">
+                  <span className="text-[9px] font-bold uppercase text-emerald-700 dark:text-emerald-400 tracking-wider block">
+                    Payment Method
+                  </span>
+                  <p className="font-bold text-neutral-900 dark:text-white text-xs mt-0.5">
+                    {completedReceiptTx.remarks?.toLowerCase().includes('bdo') || completedReceiptTx.remarks?.toLowerCase().includes('bank') ? 'Bank Transfer (BDO)' : (completedReceiptTx.remarks?.toLowerCase().includes('gcash') ? 'GCash' : (completedReceiptTx.remarks?.toLowerCase().includes('salary') || completedReceiptTx.invoice_no === 'SD' ? 'Salary Deduction' : 'Hand-in (Cash)'))}
+                  </p>
+                  <p className="text-[10px] text-neutral-500 font-mono">
+                    Ref: {completedReceiptTx.invoice_no || 'SD'}
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-outline-variant/30">
-                <button
-                  type="button"
-                  onClick={() => { setCompletedReceiptMode(null); setCompletedReceiptTx(null); }}
-                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={() => downloadContributionReceipt(completedReceiptTx)}
-                  disabled={downloadingTxId === completedReceiptTx.id}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {downloadingTxId === completedReceiptTx.id ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Downloading...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" /> Download
-                    </>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
-                >
-                  <Printer className="w-4 h-4" /> Print Receipt
-                </button>
-              </div>
+              {/* Breakdown Ledger Table */}
+              {(() => {
+                const currentBalance = parseFloat(completedReceiptTx.balance_after || 0);
+                const txAmount = parseFloat(completedReceiptTx.amount || 0);
+                const prevBalance = completedReceiptTx.transaction_type === 'credit' ? Math.max(0, currentBalance - txAmount) : (currentBalance + txAmount);
+
+                return (
+                  <div className="space-y-2.5">
+                    <div className="border border-emerald-800/20 rounded-xl overflow-hidden bg-white dark:bg-surface-container">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-emerald-900 text-white text-[9.5px] uppercase tracking-wider font-bold">
+                            <th className="py-2 px-3 w-8 text-center">#</th>
+                            <th className="py-2 px-3">Particulars / Accounting Breakdown</th>
+                            <th className="py-2 px-3 w-28 text-center">Reference</th>
+                            <th className="py-2 px-3 text-right w-36">Amount (₱)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                          <tr>
+                            <td className="py-2.5 px-3 text-center text-neutral-500 font-mono">1</td>
+                            <td className="py-2.5 px-3">
+                              <span className="font-bold text-neutral-900 dark:text-white block">
+                                {completedReceiptTx.transaction_type === 'credit' ? 'Share Capital Contribution (Capital Build-Up)' : 'Share Capital Withdrawal'}
+                              </span>
+                              <p className="text-[10px] text-neutral-500 mt-0.5">
+                                {completedReceiptTx.remarks || 'Direct member equity deposit booked to member share capital account.'}
+                              </p>
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-mono text-neutral-600 dark:text-neutral-400 text-[11px]">
+                              {completedReceiptTx.invoice_no || 'SD'}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-neutral-900 dark:text-white">
+                              {txAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                          <tr className="bg-neutral-50 dark:bg-neutral-900/30">
+                            <td colSpan={3} className="py-2 px-3 text-right text-neutral-600 dark:text-neutral-400 font-medium">
+                              Previous Account Balance:
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-neutral-600 dark:text-neutral-400 font-semibold">
+                              ₱{prevBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                          <tr className="bg-neutral-50 dark:bg-neutral-900/30">
+                            <td colSpan={3} className="py-2 px-3 text-right text-emerald-700 dark:text-emerald-400 font-bold">
+                              {completedReceiptTx.transaction_type === 'credit' ? 'Deposit Added:' : 'Withdrawal Deducted:'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                              {completedReceiptTx.transaction_type === 'credit' ? '+' : '-'} ₱{txAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                          <tr className="bg-emerald-50 dark:bg-emerald-950/40 border-t border-emerald-800/30">
+                            <td colSpan={3} className="py-2.5 px-3 text-right font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider text-[10px]">
+                              Updated Total Share Capital Balance:
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-extrabold text-emerald-900 dark:text-emerald-300 text-sm">
+                              ₱{currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Amount in words banner */}
+                    <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/30 gap-3">
+                      <div className="flex-1">
+                        <span className="text-[9px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider block">
+                          Amount Received in Words:
+                        </span>
+                        <p className="text-[11px] font-bold text-neutral-900 dark:text-white uppercase leading-snug mt-0.5">
+                          {formatAmountInWords(txAmount)}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-base font-mono font-extrabold text-emerald-800 dark:text-emerald-400">
+                          ₱{txAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+            </div>
+
+            {/* Modal Action Buttons */}
+            <div className="pt-2 flex items-center justify-end gap-3 border-t border-outline-variant/30">
+              <button
+                type="button"
+                onClick={() => { setCompletedReceiptMode(null); setCompletedReceiptTx(null); }}
+                className="px-5 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadContributionReceipt(completedReceiptTx)}
+                disabled={downloadingTxId === completedReceiptTx.id}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {downloadingTxId === completedReceiptTx.id ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" /> Download PNG
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" /> Print Receipt
+              </button>
             </div>
           </div>
         </div>,
         document.body
       )}
 
-      {/* HIDDEN PRINT-ONLY CONTAINER */}
-      {completedReceiptTx && auditedMember && (
-        <div id="print-section" className="hidden print:block text-black bg-white font-sans" style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' }}>
-          <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '24px', boxSizing: 'border-box' }}>
-            <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px', boxSizing: 'border-box' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '42px', width: '42px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
-                <div>
-                  <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC MPC</h2>
-                  <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Loan Portal</p>
+      {/* HIDDEN PRINT-ONLY CONTAINER: STANDARDIZED COOPERATIVE ACKNOWLEDGEMENT RECEIPT */}
+      {completedReceiptTx && auditedMember && mounted && typeof document !== 'undefined' && createPortal(
+        <div id="print-section" className="hidden print:block text-black bg-white font-sans" style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box', width: '100%' }}>
+          <div style={{ maxWidth: '720px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px', boxSizing: 'border-box', padding: '16px 20px' }}>
+            
+            {/* Cooperative Letterhead Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2.5px solid #064e3b', paddingBottom: '14px', boxSizing: 'border-box', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: '1 1 auto', minWidth: 0 }}>
+                <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '52px', width: '52px', borderRadius: '50%', objectFit: 'cover', display: 'block', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <h2 style={{ fontSize: '15px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.02em', color: '#064e3b', margin: 0, lineHeight: 1.2 }}>
+                    University of Cebu - METC MPC
+                  </h2>
+                  <p style={{ fontSize: '11px', color: '#374151', fontWeight: '600', margin: '4px 0 0 0', lineHeight: 1.2 }}>
+                    Loans, Savings, and Investment Portal
+                  </p>
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap' }}>Acknowledgement Receipt</h1>
-                <p style={{ fontSize: '9px', fontFamily: 'monospace', color: '#6b7280', margin: '2px 0 0 0' }}>
-                  TXN-{new Date(completedReceiptTx.transaction_date).getFullYear()}-{String(completedReceiptTx.id).padStart(6, '0')}
+                <h1 style={{ fontSize: '15px', fontWeight: '800', color: '#064e3b', textTransform: 'uppercase', margin: 0, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+                  Acknowledgement Receipt
+                </h1>
+                <p style={{ fontSize: '13px', color: '#111827', fontWeight: 'bold', margin: '5px 0 0 0' }}>
+                  {new Date(completedReceiptTx.transaction_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+                <p style={{ fontSize: '11px', color: '#374151', fontWeight: '600', margin: '2px 0 0 0' }}>
+                  {new Date(completedReceiptTx.transaction_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', backgroundColor: '#ecfdf5', padding: '16px', borderRadius: '16px', border: '1px solid #d1fae5', fontSize: '10px' }}>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Received From</span>
-                <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>
-                  {auditedMember.last_name}, {auditedMember.first_name}
+            {/* Member & Transaction Profile Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 1fr', gap: '14px', backgroundColor: '#ecfdf5', padding: '14px 18px', borderRadius: '12px', border: '1px solid #a7f3d0', fontSize: '10px' }}>
+              <div>
+                <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block', letterSpacing: '0.03em' }}>
+                  Received From (Member)
+                </span>
+                <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#111827', margin: '2px 0 0 0' }}>
+                  {auditedMember.last_name}, {auditedMember.first_name} {auditedMember.middle_name || ''}
                 </p>
-                <p style={{ fontSize: '9px', color: '#6b7280', fontFamily: 'monospace', margin: '2px 0 0 0' }}>Member ID: {auditedMember.member_no || 'N/A'}</p>
+                <p style={{ fontSize: '9px', color: '#4b5563', fontFamily: 'monospace', margin: '2px 0 0 0' }}>
+                  Member ID: {auditedMember.member_no || 'N/A'}
+                </p>
               </div>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Transaction Type</span>
-                <p style={{ fontWeight: 'bold', color: '#1f2937', textTransform: 'capitalize', margin: '2px 0 0 0' }}>
+              <div>
+                <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block', letterSpacing: '0.03em' }}>
+                  Transaction Type
+                </span>
+                <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#111827', margin: '2px 0 0 0' }}>
                   {completedReceiptTx.transaction_type === 'credit' ? 'Share Capital Deposit' : 'Share Capital Withdrawal'}
                 </p>
-                <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Status: Completed</p>
+                <p style={{ fontSize: '9px', color: '#059669', fontWeight: 'bold', margin: '2px 0 0 0' }}>
+                  Status: Completed (Official Entry)
+                </p>
               </div>
-              <div style={{ textAlign: 'right', flex: 1 }}>
-                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Date and Time</span>
-                <p style={{ fontWeight: 'bold', color: '#064e3b', margin: '2px 0 0 0' }}>{new Date(completedReceiptTx.transaction_date).toLocaleDateString()}</p>
-                <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{new Date(completedReceiptTx.transaction_date).toLocaleTimeString()}</p>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block', letterSpacing: '0.03em' }}>
+                  Payment Channel
+                </span>
+                <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#111827', margin: '2px 0 0 0' }}>
+                  {completedReceiptTx.remarks?.toLowerCase().includes('bdo') || completedReceiptTx.remarks?.toLowerCase().includes('bank') ? 'Bank Transfer (BDO)' : (completedReceiptTx.remarks?.toLowerCase().includes('gcash') ? 'GCash' : (completedReceiptTx.remarks?.toLowerCase().includes('salary') || completedReceiptTx.invoice_no === 'SD' ? 'Salary Deduction' : 'Hand-in (Cash)'))}
+                </p>
+                <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                  Ref: {completedReceiptTx.invoice_no || 'SD'}
+                </p>
               </div>
             </div>
 
-            <div style={{ border: '1px solid rgba(6, 78, 59, 0.1)', borderRadius: '16px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
-              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    <th style={{ padding: '10px 16px' }}>Ledger Details</th>
-                    <th style={{ padding: '10px 16px', textAlign: 'right', width: '192px', borderLeft: '1px solid rgba(4, 120, 87, 0.2)' }}>Valuation Change (₱)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span style={{ fontWeight: 'bold', color: '#1f2937', display: 'block' }}>
-                        {completedReceiptTx.transaction_type === 'credit' ? 'Share Capital Contribution' : 'Share Capital Withdrawal'}
+            {/* Financial Ledger Table */}
+            {(() => {
+              const currentBalance = parseFloat(completedReceiptTx.balance_after || 0);
+              const txAmount = parseFloat(completedReceiptTx.amount || 0);
+              const prevBalance = completedReceiptTx.transaction_type === 'credit' ? Math.max(0, currentBalance - txAmount) : (currentBalance + txAmount);
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ border: '1px solid rgba(6, 78, 59, 0.18)', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+                    <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          <th style={{ padding: '9px 14px', width: '36px', textAlign: 'center' }}>#</th>
+                          <th style={{ padding: '9px 14px' }}>Particulars / Ledger Description</th>
+                          <th style={{ padding: '9px 14px', width: '120px', textAlign: 'center' }}>Reference</th>
+                          <th style={{ padding: '9px 14px', textAlign: 'right', width: '150px' }}>Amount (₱)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                          <td style={{ padding: '10px 14px', textAlign: 'center', color: '#6b7280', fontFamily: 'monospace' }}>1</td>
+                          <td style={{ padding: '10px 14px' }}>
+                            <span style={{ fontWeight: 'bold', color: '#111827', display: 'block', fontSize: '11px' }}>
+                              {completedReceiptTx.transaction_type === 'credit' ? 'Share Capital Contribution (Capital Build-Up)' : 'Share Capital Withdrawal'}
+                            </span>
+                            <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                              {completedReceiptTx.remarks || 'Direct member equity deposit booked to member share capital account.'}
+                            </p>
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'center', fontFamily: 'monospace', color: '#4b5563', fontSize: '9.5px' }}>
+                            {completedReceiptTx.invoice_no || 'SD'}
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', fontSize: '12px', color: '#111827' }}>
+                            {txAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                        <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                          <td colSpan={3} style={{ padding: '8px 14px', textAlign: 'right', color: '#4b5563', fontWeight: '600' }}>
+                            Previous Account Balance:
+                          </td>
+                          <td style={{ padding: '8px 14px', textAlign: 'right', fontFamily: 'monospace', color: '#4b5563', fontWeight: '600' }}>
+                            ₱{prevBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                        <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                          <td colSpan={3} style={{ padding: '8px 14px', textAlign: 'right', color: '#047857', fontWeight: 'bold' }}>
+                            {completedReceiptTx.transaction_type === 'credit' ? 'Deposit Added:' : 'Withdrawal Deducted:'}
+                          </td>
+                          <td style={{ padding: '8px 14px', textAlign: 'right', fontFamily: 'monospace', color: '#047857', fontWeight: 'bold' }}>
+                            {completedReceiptTx.transaction_type === 'credit' ? '+' : '-'} ₱{txAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                        <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1.5px solid #064e3b' }}>
+                          <td colSpan={3} style={{ padding: '10px 14px', textAlign: 'right', color: '#064e3b', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '10.5px' }}>
+                            Updated Total Share Capital Balance:
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', fontWeight: '800', fontSize: '13px' }}>
+                            ₱{currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Amount in Words Banner */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0fdf4', padding: '12px 18px', borderRadius: '10px', border: '1px solid #bbf7d0', gap: '16px' }}>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '2px' }}>
+                        Amount Received in Words:
                       </span>
-                      <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{completedReceiptTx.remarks || 'Standard capital account deposit adjustment.'}</p>
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#1f2937', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                      {parseFloat(completedReceiptTx.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)', backgroundColor: '#f9fafb' }}>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span style={{ fontWeight: 'bold', color: '#4b5563', display: 'block' }}>Total Account Balance</span>
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: '600', color: '#4b5563', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                      {parseFloat(completedReceiptTx.balance_after).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                  <tr style={{ backgroundColor: '#ecfdf5', fontWeight: 'bold', fontSize: '10px' }}>
-                    <td style={{ padding: '10px 16px', textAlign: 'right', color: '#064e3b' }}>NET VALUE</td>
-                    <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                      {parseFloat(completedReceiptTx.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.4 }}>
+                        {formatAmountInWords(txAmount)}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <span style={{ fontSize: '17px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
+                        ₱{txAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Official Certification Note */}
+            <div style={{ backgroundColor: '#f9fafb', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '9px', lineHeight: '1.5', color: '#4b5563' }}>
+              <strong style={{ color: '#1f2937' }}>CERTIFICATION:</strong> This is an official system-generated Acknowledgement Receipt confirming the recorded equity transaction under the records of the University of Cebu - METC Multipurpose Cooperative (UC-METC MPC). The member&apos;s share capital passbook and ledger have been credited/debited and updated accordingly.
             </div>
 
-            <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '16px', border: '1px solid #f3f4f6', fontSize: '10px', lineHeight: '1.625', color: '#4b5563' }}>
-              <p style={{ margin: 0 }}>
-                <strong>RECEIPT STATUS:</strong> This is an official system-generated transaction receipt acknowledging the ledger booking of the specified equity change. The member&apos;s share capital balance has been credited/debited and updated accordingly.
-              </p>
+            {/* Official Receipt Footer */}
+            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '10px', marginTop: '12px', fontSize: '9px', color: '#6b7280', lineHeight: 1.4, fontWeight: 'normal' }}>
+              <p style={{ margin: 0, color: '#6b7280', fontWeight: 'normal' }}>Generated via UC-METC MPC Portal</p>
+              <p style={{ margin: '2px 0 0 0', color: '#6b7280', fontWeight: 'normal' }}>KADT Solutions</p>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <style dangerouslySetInnerHTML={{
         __html: `
         @media print {
-          body * {
-            visibility: hidden !important;
+          @page {
+            size: portrait;
+            margin: 10mm 15mm;
           }
-          #print-section, #print-section * {
-            visibility: visible !important;
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            width: 100% !important;
+            height: auto !important;
+          }
+          /* Hide the entire web app and all modals, leaving ONLY #print-section */
+          body > *:not(#print-section) {
+            display: none !important;
           }
           #print-section {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            display: block !important;
+            position: static !important;
             width: 100% !important;
-            background: white !important;
-            color: black !important;
-            padding: 24px !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #000000 !important;
             box-sizing: border-box !important;
           }
         }

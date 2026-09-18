@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import {
   Bell,
@@ -13,17 +14,19 @@ import {
   Inbox,
   Filter,
   RotateCw,
+  WalletCards,
+  Banknote,
+  User as UserIcon,
+  CalendarClock,
+  LifeBuoy,
+  Megaphone,
+  CalendarCheck,
 } from 'lucide-react';
-
-interface Notification {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  reference_id: string | null;
-  is_read: boolean;
-  created_at: string;
-}
+import {
+  NotificationData,
+  getNotificationDestination,
+  getNotificationActionLabel,
+} from '@/lib/notificationRoutes';
 
 function timeAgo(dateStr: string) {
   const now = new Date();
@@ -39,21 +42,40 @@ function timeAgo(dateStr: string) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function getNotificationIcon(type: string) {
-  switch (type) {
-    case 'contact_message': return MessageSquare;
-    case 'system': return Info;
-    default: return Bell;
+function getNotificationIcon(type: string, title: string = '', message: string = '') {
+  const t = (type || '').toLowerCase();
+  const tit = (title || '').toLowerCase();
+  const msg = (message || '').toLowerCase();
+
+  if (t === 'contact_message' || tit.includes('message') || tit.includes('inquiry')) return MessageSquare;
+  if (
+    t === 'account' ||
+    t.includes('capital') ||
+    tit.includes('capital') ||
+    tit.includes('deposit') ||
+    tit.includes('placement') ||
+    msg.includes('share capital') ||
+    msg.includes('fixed deposit')
+  ) {
+    return WalletCards;
   }
+  if (t.startsWith('loan') || tit.includes('loan') || msg.includes('loan') || tit.includes('repayment')) return Banknote;
+  if (t.startsWith('profile') || tit.includes('profile')) return UserIcon;
+  if (t.includes('appointment') || tit.includes('appointment')) return CalendarClock;
+  if (t.includes('support') || t.includes('ticket') || tit.includes('ticket') || tit.includes('support')) return LifeBuoy;
+  if (t.includes('announcement') || tit.includes('announcement')) return Megaphone;
+  if (t.includes('billing') || tit.includes('billing')) return CalendarCheck;
+  if (t === 'system') return Info;
+  return Bell;
 }
 
-function groupByDate(notifications: Notification[]) {
+function groupByDate(notifications: NotificationData[]) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  const groups: { label: string; items: Notification[] }[] = [
+  const groups: { label: string; items: NotificationData[] }[] = [
     { label: 'Today', items: [] },
     { label: 'Yesterday', items: [] },
     { label: 'Earlier', items: [] },
@@ -75,7 +97,8 @@ function groupByDate(notifications: Notification[]) {
 }
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const router = useRouter();
@@ -111,13 +134,12 @@ export default function NotificationsPage() {
     } catch { /* silent */ }
   };
 
-  const handleNotificationClick = (notif: Notification) => {
+  const handleNotificationClick = (notif: NotificationData) => {
     if (!notif.is_read) {
       handleMarkAsRead(notif.id);
     }
-    if (notif.type === 'contact_message') {
-      router.push('/dashboard/messages');
-    }
+    const destination = getNotificationDestination(notif, user?.role);
+    router.push(destination);
   };
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -208,17 +230,19 @@ export default function NotificationsPage() {
               </h3>
               <div className="space-y-2">
                 {group.items.map((notif) => {
-                  const Icon = getNotificationIcon(notif.type);
+                  const Icon = getNotificationIcon(notif.type, notif.title, notif.message);
+                  const actionLabel = getNotificationActionLabel(notif);
                   return (
                     <div
                       key={notif.id}
-                      className={`bg-white dark:bg-neutral-900 border rounded-2xl p-4 flex items-start gap-3.5 transition-all ${!notif.is_read
+                      onClick={() => handleNotificationClick(notif)}
+                      className={`group bg-white dark:bg-neutral-900 border rounded-2xl p-4 flex items-start gap-3.5 transition-all cursor-pointer hover:shadow-md hover:border-primary/40 dark:hover:border-secondary/40 ${!notif.is_read
                         ? 'border-primary/20 dark:border-secondary/20 bg-primary/[0.02] dark:bg-secondary/[0.02]'
                         : 'border-outline-variant/50'
                         }`}
                     >
-                      <div className={`mt-0.5 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${!notif.is_read
-                        ? 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary'
+                      <div className={`mt-0.5 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${!notif.is_read
+                        ? 'bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary group-hover:bg-primary/20 dark:group-hover:bg-secondary/20'
                         : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500'
                         }`}>
                         <Icon className="w-5 h-5" />
@@ -226,7 +250,7 @@ export default function NotificationsPage() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className={`text-sm font-bold truncate ${!notif.is_read ? 'text-on-surface dark:text-white' : 'text-neutral-600 dark:text-neutral-300'}`}>
+                          <span className={`text-sm font-bold truncate group-hover:text-primary dark:group-hover:text-secondary transition-colors ${!notif.is_read ? 'text-on-surface dark:text-white' : 'text-neutral-600 dark:text-neutral-300'}`}>
                             {notif.title}
                           </span>
                           {!notif.is_read && (
@@ -240,20 +264,26 @@ export default function NotificationsPage() {
                           <span className="text-[10px] text-neutral-400 dark:text-neutral-500 font-semibold">
                             {timeAgo(notif.created_at)}
                           </span>
-                          {notif.type === 'contact_message' && (
-                            <button
-                              onClick={() => handleNotificationClick(notif)}
-                              className="text-[10px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
-                            >
-                              View Message →
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNotificationClick(notif);
+                            }}
+                            className="text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer inline-flex items-center gap-1"
+                          >
+                            {actionLabel}
+                          </button>
                         </div>
                       </div>
 
                       {!notif.is_read && (
                         <button
-                          onClick={() => handleMarkAsRead(notif.id)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkAsRead(notif.id);
+                          }}
                           className="p-1.5 rounded-lg text-neutral-400 hover:text-primary dark:hover:text-secondary hover:bg-neutral/5 transition-colors flex-shrink-0 cursor-pointer"
                           title="Mark as read"
                         >

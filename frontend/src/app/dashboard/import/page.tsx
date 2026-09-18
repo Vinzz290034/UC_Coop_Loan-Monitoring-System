@@ -28,7 +28,9 @@ import {
   Trash2,
   UserMinus,
   FileText,
+  FileEdit,
 } from 'lucide-react';
+import LoanEditorTab from '@/components/import/LoanEditorTab';
 
 interface ParsedCheckVoucher {
   id: string;
@@ -132,7 +134,7 @@ export default function ImportPage() {
   }
 
   const [step, setStep] = useState<'upload' | 'preview' | 'executing' | 'success'>('upload');
-  const [importMode, setImportMode] = useState<'loans' | 'members_registry' | 'check_vouchers'>('loans');
+  const [importMode, setImportMode] = useState<'loans' | 'members_registry' | 'check_vouchers' | 'loan_editor'>('loans');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -636,18 +638,20 @@ export default function ImportPage() {
               <div>
                 <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
                   <FileSpreadsheet className="w-4 h-4 text-primary dark:text-secondary" />
-                  Select Excel Import Purpose
+                  {importMode === 'loan_editor' ? 'Member Loan Adjustments & Data Correction' : 'Select Excel Import Purpose'}
                 </h3>
                 <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mt-1">
-                  Choose your spreadsheet layout type before uploading.
+                  {importMode === 'loan_editor'
+                    ? 'Manually edit loan parameters, rectify imported legacy figures, or zero out balances across the system.'
+                    : 'Choose your spreadsheet layout type before uploading.'}
                 </p>
               </div>
 
-              <div className="flex bg-neutral-100 dark:bg-neutral-800/80 p-1.5 rounded-2xl border border-outline-variant/40 w-full sm:w-auto">
+              <div className="flex bg-neutral-100 dark:bg-neutral-800/80 p-1.5 rounded-2xl border border-outline-variant/40 w-full sm:w-auto overflow-x-auto">
                 <button
                   type="button"
                   onClick={() => setImportMode('loans')}
-                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                     importMode === 'loans'
                       ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md scale-[1.02]'
                       : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
@@ -658,7 +662,7 @@ export default function ImportPage() {
                 <button
                   type="button"
                   onClick={() => setImportMode('members_registry')}
-                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                     importMode === 'members_registry'
                       ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md scale-[1.02]'
                       : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
@@ -669,7 +673,7 @@ export default function ImportPage() {
                 <button
                   type="button"
                   onClick={() => setImportMode('check_vouchers')}
-                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
                     importMode === 'check_vouchers'
                       ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md scale-[1.02]'
                       : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
@@ -677,90 +681,109 @@ export default function ImportPage() {
                 >
                   Purchase Check Vouchers
                 </button>
-              </div>
-            </div>
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-3xl p-8 sm:p-14 text-center cursor-pointer transition-all duration-300 ${
-                isDragging
-                  ? 'border-primary dark:border-secondary bg-primary/5 dark:bg-secondary/10 scale-[1.01]'
-                  : 'border-outline-variant/60 hover:border-primary dark:hover:border-secondary bg-white dark:bg-surface-container-low hover:shadow-lg'
-              }`}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx, .xls"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-
-              <div className="flex flex-col items-center justify-center space-y-4">
-                <div className="w-20 h-20 rounded-full bg-primary/10 dark:bg-secondary/15 flex items-center justify-center text-primary dark:text-secondary shadow-inner">
-                  {isScanning ? (
-                    <RefreshCw className="w-10 h-10 animate-spin" />
-                  ) : (
-                    <Upload className="w-10 h-10" />
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="font-headline text-lg sm:text-xl font-bold text-on-surface dark:text-white">
-                    {isScanning ? 'Scanning & Parsing Workbook...' : 'Upload Files Here'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 max-w-md mx-auto">
-                    Drag and drop your cooperative Excel workbook (.xlsx or .xls) here, or click to browse files from your computer.
-                  </p>
-                </div>
-
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-[11px] font-medium text-neutral-600 dark:text-neutral-400">
-                  <ShieldCheck className="w-3.5 h-3.5 text-success" />
-                  Safe Dry-Run: No database changes will occur until you confirm after preview.
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setImportMode('loan_editor')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                    importMode === 'loan_editor'
+                      ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md scale-[1.02]'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                  }`}
+                >
+                  <FileEdit className="w-3.5 h-3.5" />
+                  Member Loan Adjustments
+                </button>
               </div>
             </div>
 
-            {/* Quick Feature Highlights */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-5 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-on-surface dark:text-white">Member Auto-Discovery</h4>
-                  <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5">
-                    Parses sheet tabs (e.g. <code>SARMIENTO, JONATHAN</code>) to ingest cooperative accounts.
-                  </p>
-                </div>
-              </div>
+            {importMode === 'loan_editor' ? (
+              <LoanEditorTab />
+            ) : (
+              <>
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-3xl p-8 sm:p-14 text-center cursor-pointer transition-all duration-300 ${
+                    isDragging
+                      ? 'border-primary dark:border-secondary bg-primary/5 dark:bg-secondary/10 scale-[1.01]'
+                      : 'border-outline-variant/60 hover:border-primary dark:hover:border-secondary bg-white dark:bg-surface-container-low hover:shadow-lg'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx, .xls"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
 
-              <div className="p-5 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                  <WalletCards className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-on-surface dark:text-white">Shared Capital Ledger</h4>
-                  <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5">
-                    Extracts columns A–C deposits with dates and running equity balances.
-                  </p>
-                </div>
-              </div>
+                  <div className="flex flex-col items-center justify-center space-y-4">
+                    <div className="w-20 h-20 rounded-full bg-primary/10 dark:bg-secondary/15 flex items-center justify-center text-primary dark:text-secondary shadow-inner">
+                      {isScanning ? (
+                        <RefreshCw className="w-10 h-10 animate-spin" />
+                      ) : (
+                        <Upload className="w-10 h-10" />
+                      )}
+                    </div>
 
-              <div className="p-5 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <Banknote className="w-5 h-5" />
+                    <div className="space-y-2">
+                      <h3 className="font-headline text-lg sm:text-xl font-bold text-on-surface dark:text-white">
+                        {isScanning ? 'Scanning & Parsing Workbook...' : 'Upload Files Here'}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 max-w-md mx-auto">
+                        Drag and drop your cooperative Excel workbook (.xlsx or .xls) here, or click to browse files from your computer.
+                      </p>
+                    </div>
+
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-[11px] font-medium text-neutral-600 dark:text-neutral-400">
+                      <ShieldCheck className="w-3.5 h-3.5 text-success" />
+                      Safe Dry-Run: No database changes will occur until you confirm after preview.
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-on-surface dark:text-white">Loans & Repayments</h4>
-                  <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5">
-                    Captures LAF numbers, amounts, amortized schedules, invoices, and payment receipts.
-                  </p>
+
+                {/* Quick Feature Highlights */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-5 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm flex items-start gap-3">
+                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-on-surface dark:text-white">Member Auto-Discovery</h4>
+                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5">
+                        Parses sheet tabs (e.g. <code>SARMIENTO, JONATHAN</code>) to ingest cooperative accounts.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm flex items-start gap-3">
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                      <WalletCards className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-on-surface dark:text-white">Shared Capital Ledger</h4>
+                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5">
+                        Extracts columns A–C deposits with dates and running equity balances.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm flex items-start gap-3">
+                    <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      <Banknote className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-on-surface dark:text-white">Loans & Repayments</h4>
+                      <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-0.5">
+                        Captures LAF numbers, amounts, amortized schedules, invoices, and payment receipts.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         )}
 

@@ -56,6 +56,7 @@ import {
   RefreshCw,
   Filter
 } from 'lucide-react';
+import LoanApprovalModal from '@/components/loans/LoanApprovalModal';
 
 interface LoanProduct {
   id: number | string;
@@ -875,6 +876,29 @@ function LoansPageContent() {
   const [repayRefNo, setRepayRefNo] = useState('');
   const [repaySubmitting, setRepaySubmitting] = useState(false);
   const [repayError, setRepayError] = useState<string | null>(null);
+
+  // Loan Approval & Deductions Modal State
+  const [approvalModalLoan, setApprovalModalLoan] = useState<any>(null);
+  const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+
+  const openApprovalModal = (loanItem: any, details?: any) => {
+    const combined = { ...loanItem, ...(details || {}) };
+    setApprovalModalLoan(combined);
+    setIsApprovalModalOpen(true);
+  };
+
+  const handleApprovalSuccess = async (updatedLoan: any, message: string) => {
+    showDialog('Success', message, 'success');
+    fetchLoans();
+    if (expandedLoanId && updatedLoan?.id && String(expandedLoanId) === String(updatedLoan.id)) {
+      try {
+        const response = await api.get(`/loans/${updatedLoan.id}`);
+        setLoanDetails(response.data.data);
+      } catch (err) {
+        console.warn('Failed to refresh expanded loan details:', err);
+      }
+    }
+  };
 
   // Print & Document Generation States
   const [printLoan, setPrintLoan] = useState<any>(null);
@@ -2406,6 +2430,19 @@ function LoansPageContent() {
                                                         : <span className="italic text-neutral-600 dark:text-neutral-400/50">Un-disbursed</span>}
                                                     </p>
                                                   </div>
+                                                  <div>
+                                                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase">
+                                                      {loanDetails.status === 'pending_approval' ? 'Net Take-Home (Est.)' : 'Net Proceeds Released'}
+                                                    </span>
+                                                    <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                                      ₱{parseFloat(loanDetails.net_proceeds || loanDetails.principal_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </p>
+                                                    {parseFloat(loanDetails.total_deductions || 0) > 0 && (
+                                                      <span className="text-[10px] text-neutral-500 block">
+                                                        (Less: ₱{parseFloat(loanDetails.total_deductions).toLocaleString('en-US', { minimumFractionDigits: 2 })} deductions)
+                                                      </span>
+                                                    )}
+                                                  </div>
                                                 </div>
 
                                                 {/* Action Buttons: Check Voucher, Print Schedule, Excel Export, Disburse / Reject */}
@@ -2458,8 +2495,18 @@ function LoansPageContent() {
                                                       </button>
                                                       <button
                                                         type="button"
-                                                        onClick={() => handleDisburseLoan(loan.id)}
+                                                        onClick={() => openApprovalModal(loan, loanDetails)}
+                                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                                                        title="Edit loan amount, terms, and configure deductions before approval"
+                                                      >
+                                                        <Pencil className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                                        Edit & Adjust
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => openApprovalModal(loan, loanDetails)}
                                                         className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-full text-xs shadow hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                                                        title="Review loan parameters, customize deductions, and disburse"
                                                       >
                                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                                         Approve & Disburse
@@ -4473,6 +4520,20 @@ function LoansPageContent() {
           </div>
         </div>
       )}
+
+      {/* MODAL 3.5: LOAN APPROVAL & DEDUCTIONS ADJUSTMENT */}
+      {isApprovalModalOpen && approvalModalLoan && (
+        <LoanApprovalModal
+          isOpen={isApprovalModalOpen}
+          onClose={() => {
+            setIsApprovalModalOpen(false);
+            setApprovalModalLoan(null);
+          }}
+          loan={approvalModalLoan}
+          onSuccess={handleApprovalSuccess}
+        />
+      )}
+
       {/* MODAL 4: PRINT CHECK VOUCHER PREVIEW */}
       {isPrintModalOpen && printMode === 'voucher' && printLoan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
@@ -4670,43 +4731,90 @@ function LoansPageContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b border-[#064e3b]/10 bg-white">
-                      <td className="py-2 px-3 text-center font-mono text-neutral-500 border-r border-[#064e3b]/10">1</td>
-                      <td className="py-2 px-3 font-bold text-neutral-800 border-r border-[#064e3b]/10">{bookOfAccount || 'Accounts Payable'}</td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-neutral-900 border-r border-[#064e3b]/10">
-                        {parseFloat(printLoan.principal_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono text-neutral-400">—</td>
-                    </tr>
-                    <tr className="bg-[#f9fafb] font-bold text-[10.5px]">
-                      <td colSpan={2} className="py-2 px-3 text-right text-neutral-700 uppercase tracking-wider border-r border-[#064e3b]/10">
-                        Total:
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono text-neutral-900 border-r border-[#064e3b]/10">
-                        ₱{parseFloat(printLoan.principal_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono text-[#dc2626]">₱0.00</td>
-                    </tr>
+                    {(() => {
+                      let deds: any[] = [];
+                      if (printLoan.deductions_breakdown) {
+                        try {
+                          deds = typeof printLoan.deductions_breakdown === 'string'
+                            ? JSON.parse(printLoan.deductions_breakdown)
+                            : printLoan.deductions_breakdown;
+                        } catch {}
+                      }
+                      const principalVal = parseFloat(printLoan.principal_amount || 0);
+                      const totalDed = Array.isArray(deds) ? deds.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0) : 0;
+
+                      return (
+                        <>
+                          <tr className="border-b border-[#064e3b]/10 bg-white">
+                            <td className="py-2 px-3 text-center font-mono text-neutral-500 border-r border-[#064e3b]/10">1</td>
+                            <td className="py-2 px-3 font-bold text-neutral-800 border-r border-[#064e3b]/10">{bookOfAccount || 'Loans Receivable - Regular'}</td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-neutral-900 border-r border-[#064e3b]/10">
+                              {principalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-neutral-400">—</td>
+                          </tr>
+                          {Array.isArray(deds) && deds.map((d: any, idx: number) => (
+                            <tr key={`ded-${idx}`} className="border-b border-[#064e3b]/10 bg-neutral-50/60">
+                              <td className="py-2 px-3 text-center font-mono text-neutral-500 border-r border-[#064e3b]/10">{idx + 2}</td>
+                              <td className="py-2 px-3 text-neutral-700 border-r border-[#064e3b]/10 italic">Less: {d.name}</td>
+                              <td className="py-2 px-3 text-right font-mono text-neutral-400 border-r border-[#064e3b]/10">—</td>
+                              <td className="py-2 px-3 text-right font-mono text-[#dc2626] font-semibold">
+                                {parseFloat(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="bg-[#f9fafb] font-bold text-[10.5px]">
+                            <td colSpan={2} className="py-2 px-3 text-right text-neutral-700 uppercase tracking-wider border-r border-[#064e3b]/10">
+                              Total:
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-neutral-900 border-r border-[#064e3b]/10">
+                              ₱{principalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-[#dc2626]">
+                              ₱{totalDed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        </>
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>
 
               {/* Disbursed Amount Box */}
-              <div className="flex justify-between items-center bg-[#ecfdf5] p-3 px-4 rounded-xl border border-[#d1fae5] gap-4">
-                <div className="flex-1">
-                  <span className="text-[9px] font-bold text-[#064e3b] uppercase tracking-wider block mb-1">
-                    Disbursed Amount:
-                  </span>
-                  <p className="text-[11px] font-bold text-neutral-900 uppercase tracking-wide leading-snug m-0">
-                    {formatDisbursedInWords(parseFloat(printLoan.principal_amount || 0))}
-                  </p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <span className="text-base font-mono font-extrabold text-[#064e3b]">
-                    ₱{parseFloat(printLoan.principal_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                let deds: any[] = [];
+                if (printLoan.deductions_breakdown) {
+                  try {
+                    deds = typeof printLoan.deductions_breakdown === 'string'
+                      ? JSON.parse(printLoan.deductions_breakdown)
+                      : printLoan.deductions_breakdown;
+                  } catch {}
+                }
+                const principalVal = parseFloat(printLoan.principal_amount || 0);
+                const totalDed = Array.isArray(deds) ? deds.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0) : 0;
+                const netVal = printLoan.net_proceeds !== undefined && printLoan.net_proceeds !== null
+                  ? parseFloat(printLoan.net_proceeds)
+                  : Math.max(0, principalVal - totalDed);
+
+                return (
+                  <div className="flex justify-between items-center bg-[#ecfdf5] p-3 px-4 rounded-xl border border-[#d1fae5] gap-4">
+                    <div className="flex-1">
+                      <span className="text-[9px] font-bold text-[#064e3b] uppercase tracking-wider block mb-1">
+                        Disbursed Amount (Net Take-Home):
+                      </span>
+                      <p className="text-[11px] font-bold text-neutral-900 uppercase tracking-wide leading-snug m-0">
+                        {formatDisbursedInWords(netVal)}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className="text-base font-mono font-extrabold text-[#064e3b]">
+                        ₱{netVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Signatures Block */}
               <div className="pt-3 space-y-5 text-xs">
@@ -5447,93 +5555,144 @@ function LoansPageContent() {
             /* Print-only Official Receipt Sheet */
             <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '24px', boxSizing: 'border-box', padding: '24px 32px' }}>
               {/* Brand Header */}
-              <div className="border-b-2 border-emerald-800 pb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '16px', boxSizing: 'border-box' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                  <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '42px', width: '42px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+              {/* Brand Header */}
+              <div className="border-b-2 border-emerald-800 pb-3.5" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2.5px solid #064e3b', paddingBottom: '14px', boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
+                  <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '48px', width: '48px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
                   <div>
-                    <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC-MPC</h2>
-                    <p style={{ fontSize: '9px', color: '#6b7280', fontWeight: '600', margin: '2px 0 0 0' }}>Loans, Savings, and Investment Portal</p>
+                    <h2 style={{ fontSize: '15px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.03em', color: '#064e3b', margin: 0 }}>University of Cebu - METC MPC</h2>
+                    <p style={{ fontSize: '10px', color: '#374151', fontWeight: '600', margin: '2px 0 0 0' }}>Multipurpose Cooperative • Alumnos, Mambaling, Cebu City</p>
+                    <p style={{ fontSize: '8.5px', color: '#6b7280', margin: '2px 0 0 0' }}>CDA Reg. No. 9520-07000123 | CIN: 0102070123</p>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap' }}>Official Payment Receipt</h1>
-                  <p style={{ fontSize: '9px', fontFamily: 'monospace', color: '#6b7280', margin: '2px 0 0 0' }}>OR-{new Date(printPayment.payment_date).getFullYear()}-{String(printPayment.id).padStart(6, '0')}</p>
+                  <h1 style={{ fontSize: '13px', fontWeight: '800', color: '#064e3b', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Official Payment Receipt</h1>
+                  <p style={{ fontSize: '15px', fontFamily: 'monospace', color: '#111827', fontWeight: '800', margin: '2px 0 0 0' }}>
+                    OR-{new Date(printPayment.payment_date).getFullYear()}-{String(printPayment.receipt_no || printPayment.reference_no || printPayment.id).replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase()}
+                  </p>
+                  <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>
+                    {new Date(printPayment.payment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} • {new Date(printPayment.payment_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
               </div>
 
               {/* Modern Info Grid */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', backgroundColor: '#ecfdf5', padding: '16px', borderRadius: '16px', border: '1px solid #d1fae5', fontSize: '10px' }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Received From</span>
-                  <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{printLoan.last_name}, {printLoan.first_name}</p>
-                  <p style={{ fontSize: '9px', color: '#6b7280', fontFamily: 'monospace', margin: '2px 0 0 0' }}>Member ID: {printLoan.member_no || `#${printLoan.member_id || printLoan.borrower_id}`}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 1fr', gap: '14px', backgroundColor: '#ecfdf5', padding: '14px 18px', borderRadius: '12px', border: '1px solid #a7f3d0', fontSize: '10px' }}>
+                <div>
+                  <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block', letterSpacing: '0.03em' }}>Received From (Borrower)</span>
+                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#111827', margin: '2px 0 0 0' }}>{printLoan.last_name}, {printLoan.first_name}</p>
+                  <p style={{ fontSize: '9px', color: '#4b5563', fontFamily: 'monospace', margin: '2px 0 0 0' }}>Member ID: {printLoan.member_no || `#${printLoan.member_id || printLoan.borrower_id}`}</p>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Payment Channel</span>
-                  <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{printPayment.payment_method}</p>
-                  <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Ref No: {printPayment.reference_no || 'N/A'}</p>
+                <div>
+                  <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block', letterSpacing: '0.03em' }}>Loan Reference</span>
+                  <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#111827', margin: '2px 0 0 0' }}>
+                    {printLoan.laf_no ? `LAF #${printLoan.laf_no}` : (printLoan.product_name || 'Regular Loan')}
+                  </p>
+                  <p style={{ fontSize: '9px', color: '#059669', fontWeight: 'bold', margin: '2px 0 0 0' }}>Status: Posted to Ledger</p>
                 </div>
-                <div style={{ textAlign: 'right', flex: 1 }}>
-                  <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Date and Time</span>
-                  <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{new Date(printPayment.payment_date).toLocaleDateString()}</p>
-                  <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>{new Date(printPayment.payment_date).toLocaleTimeString()}</p>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block', letterSpacing: '0.03em' }}>Payment Channel</span>
+                  <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#111827', margin: '2px 0 0 0' }}>{printPayment.payment_method || 'Salary Deduction'}</p>
+                  <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Ref: {printPayment.reference_no || 'SD'}</p>
                 </div>
               </div>
 
               {/* Receipt Summary Table */}
-              <div style={{ border: '1px solid rgba(6, 78, 59, 0.1)', borderRadius: '16px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+              <div style={{ border: '1px solid rgba(6, 78, 59, 0.18)', borderRadius: '12px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
                 <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      <th style={{ padding: '10px 16px' }}>Payment Allocation Details</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'right', width: '192px', borderLeft: '1px solid rgba(4, 120, 87, 0.2)' }}>Amount Received (₱)</th>
+                    <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <th style={{ padding: '9px 14px' }}>Payment Allocation Details</th>
+                      <th style={{ padding: '9px 14px', textAlign: 'right', width: '192px', borderLeft: '1px solid rgba(4, 120, 87, 0.2)' }}>Amount Received (₱)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontWeight: 'bold', color: '#1f2937', display: 'block' }}>Applied to Loan Principal</span>
-                        <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Principal recovery allocated for Contract #{printLoan.id} ({printLoan.product_name})</p>
+                    <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#111827', display: 'block', fontSize: '11px' }}>Applied to Loan Principal</span>
+                        <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Principal recovery allocated for Contract {printLoan.laf_no ? `LAF #${printLoan.laf_no}` : `#${printLoan.id}`} ({printLoan.product_name || 'Loan'})</p>
                       </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#1f2937', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', borderLeft: '1px solid #e5e7eb' }}>
                         {parseFloat(printPayment.principal_paid || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
-                    <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                      <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontWeight: 'bold', color: '#1f2937', display: 'block' }}>Applied to Loan Interest</span>
+                    <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#111827', display: 'block', fontSize: '11px' }}>Applied to Loan Interest</span>
                         <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Interest earned / collected on active balance</p>
                       </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#1f2937', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', borderLeft: '1px solid #e5e7eb' }}>
                         {parseFloat(printPayment.interest_paid || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
-                    <tr style={{ backgroundColor: '#ecfdf5', fontWeight: 'bold', fontSize: '10px' }}>
-                      <td style={{ padding: '10px 16px', textAlign: 'right', color: '#064e3b' }}>TOTAL PAID AMOUNT</td>
-                      <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', borderLeft: '1px solid rgba(6, 78, 59, 0.05)' }}>
-                        {parseFloat(printPayment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <tr style={{ backgroundColor: '#ecfdf5', fontWeight: 'bold', fontSize: '10.5px', borderTop: '1.5px solid #064e3b' }}>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', color: '#064e3b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>TOTAL PAID AMOUNT</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b', borderLeft: '1px solid rgba(6, 78, 59, 0.1)', fontSize: '13px' }}>
+                        ₱{parseFloat(printPayment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
 
+              {/* Amount in Words Banner */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0fdf4', padding: '12px 18px', borderRadius: '10px', border: '1px solid #bbf7d0', gap: '16px' }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '2px' }}>
+                    Amount Received in Words:
+                  </span>
+                  <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.4 }}>
+                    {formatDisbursedInWords(parseFloat(printPayment.amount || 0))}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <span style={{ fontSize: '17px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
+                    ₱{parseFloat(printPayment.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
               {/* Declaration Note */}
-              <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '16px', border: '1px solid #f3f4f6', fontSize: '10px', lineHeight: '1.625', color: '#4b5563' }}>
-                <p style={{ margin: 0 }}><strong>RECEIPT STATUS:</strong> This is an official system-generated billing receipt acknowledging the payment booking of the specified amount under credit contract #{printLoan.id}. The borrower&apos;s outstanding amortization ledger has been credited accordingly.</p>
+              <div style={{ backgroundColor: '#f9fafb', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '9px', lineHeight: '1.5', color: '#4b5563' }}>
+                <strong style={{ color: '#1f2937' }}>RECEIPT STATUS:</strong> This is an official system-generated billing receipt acknowledging the payment booking of the specified amount under credit contract {printLoan.laf_no ? `LAF #${printLoan.laf_no}` : `#${printLoan.id}`}. The borrower&apos;s outstanding amortization ledger has been credited accordingly.
               </div>
 
               {/* Signatures */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '32px', paddingTop: '32px', fontSize: '9px', textAlign: 'center' }}>
-                <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#022c22', margin: 0 }}>{releasedBy}</p>
-                  <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
-                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Authorized Cashier / Staff</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', paddingTop: '16px', fontSize: '9.5px', textAlign: 'center' }}>
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '9px', display: 'block', letterSpacing: '0.04em' }}>
+                    RECEIVED / POSTED BY:
+                  </span>
+                  <div style={{ height: '28px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '11.5px', letterSpacing: '0.02em' }}>
+                    {releasedBy || 'Authorized Co-op Staff'}
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827', margin: '0 8px 4px 8px' }}></div>
+                  <span style={{ fontSize: '8.5px', color: '#6b7280', textTransform: 'uppercase' }}>Cashier / Posting Clerk</span>
                 </div>
-                <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #d1fae5' }}>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#064e3b', margin: 0 }}>{printLoan.last_name}, {printLoan.first_name}</p>
-                  <div style={{ height: '1px', backgroundColor: '#a7f3d0', margin: '8px 0' }}></div>
-                  <p style={{ color: '#059669', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Borrower Acknowledgment</p>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '9px', display: 'block', letterSpacing: '0.04em' }}>
+                    VERIFIED & CHECKED BY:
+                  </span>
+                  <div style={{ height: '28px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '11.5px', letterSpacing: '0.02em' }}>
+                    Accounting Officer
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827', margin: '0 8px 4px 8px' }}></div>
+                  <span style={{ fontSize: '8.5px', color: '#6b7280', textTransform: 'uppercase' }}>Bookkeeper / Manager</span>
+                </div>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '9px', display: 'block', letterSpacing: '0.04em' }}>
+                    ACKNOWLEDGED BY:
+                  </span>
+                  <div style={{ height: '28px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#064e3b', margin: '0 0 4px 0', fontSize: '11.5px', letterSpacing: '0.02em' }}>
+                    {printLoan.last_name}, {printLoan.first_name}
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #064e3b', margin: '0 8px 4px 8px' }}></div>
+                  <span style={{ fontSize: '8.5px', color: '#047857', textTransform: 'uppercase' }}>Borrower / Payor</span>
                 </div>
               </div>
             </div>
@@ -5547,8 +5706,8 @@ function LoansPageContent() {
         __html: `
         @media print {
           @page {
-            size: A4 portrait;
-            margin: 20mm 24mm;
+            size: portrait;
+            margin: 10mm 15mm;
           }
           * {
             -webkit-print-color-adjust: exact !important;

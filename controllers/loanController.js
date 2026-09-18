@@ -415,7 +415,20 @@ export const disburseLoan = async (req, res, next) => {
       });
     }
 
-    const { laf_no } = req.body;
+    const {
+      laf_no,
+      principal_amount,
+      term_months,
+      interest_rate,
+      amortization_type,
+      payment_mode,
+      deductions,
+      disbursement_method,
+      disbursement_reference,
+      disbursement_remarks,
+      disbursement_date
+    } = req.body;
+
     let finalLaf = loan.laf_no;
     if (laf_no && String(laf_no).trim()) {
       finalLaf = String(laf_no).trim();
@@ -429,33 +442,86 @@ export const disburseLoan = async (req, res, next) => {
       }
     }
 
-    const disbursementDate = new Date();
-    const termMonths = parseInt(loan.term_months, 10);
+    // Determine final parameters (edited or fallback to original)
+    const finalPrincipal = principal_amount !== undefined && !isNaN(parseFloat(principal_amount)) && parseFloat(principal_amount) > 0
+      ? parseFloat(principal_amount)
+      : parseFloat(loan.principal_amount);
+
+    let finalRate = loan.interest_rate;
+    if (interest_rate !== undefined && !isNaN(parseFloat(interest_rate))) {
+      const parsedRate = parseFloat(interest_rate);
+      finalRate = parsedRate > 1 ? parsedRate / 100 : parsedRate;
+    }
+
+    const finalTerms = term_months !== undefined && parseInt(term_months, 10) > 0
+      ? parseInt(term_months, 10)
+      : parseInt(loan.term_months, 10);
+
+    const finalAmortizationType = amortization_type || loan.amortization_type || 'diminishing_balance';
+    const finalPaymentMode = payment_mode || loan.payment_mode;
+
+    // Deductions calculation
+    const deductionsList = Array.isArray(deductions)
+      ? deductions
+          .filter(d => d && d.name && !isNaN(parseFloat(d.amount)) && parseFloat(d.amount) > 0)
+          .map(d => ({ name: String(d.name).trim(), amount: parseFloat(d.amount) }))
+      : [];
+    const totalDeductions = deductionsList.reduce((sum, d) => sum + d.amount, 0);
+    const netProceeds = Math.max(0, finalPrincipal - totalDeductions);
+
+    const disbursementDate = disbursement_date ? new Date(disbursement_date) : new Date();
     
     // Calculate maturity date
     const maturityDate = new Date(disbursementDate);
-    maturityDate.setMonth(maturityDate.getMonth() + termMonths);
+    maturityDate.setMonth(maturityDate.getMonth() + finalTerms);
     const maturityDateStr = maturityDate.toISOString().split('T')[0];
 
     // 1. Generate amortization schedule
     let schedule = [];
-    if (loan.amortization_type === 'flat_rate') {
-      schedule = calculateFlatRate(loan.principal_amount, loan.interest_rate, termMonths, disbursementDate);
-    } else if (loan.amortization_type === 'diminishing_balance') {
-      schedule = calculateDiminishingBalance(loan.principal_amount, loan.interest_rate, termMonths, disbursementDate);
+    if (finalAmortizationType === 'flat_rate') {
+      schedule = calculateFlatRate(finalPrincipal, finalRate, finalTerms, disbursementDate);
+    } else {
+      schedule = calculateDiminishingBalance(finalPrincipal, finalRate, finalTerms, disbursementDate);
     }
 
-    // 2. Update loan status to disbursed
+    // 2. Update loan status to disbursed with deductions and net proceeds
     const updateLoan = `
       UPDATE loans
-      SET status = 'disbursed', disbursed_at = $1, maturity_date = $2, laf_no = COALESCE($3, laf_no), updated_at = CURRENT_TIMESTAMP
-      WHERE id = $4
+      SET 
+        status = 'disbursed',
+        principal_amount = $1,
+        interest_rate = $2,
+        term_months = $3,
+        amortization_type = $4,
+        payment_mode = COALESCE($5, payment_mode),
+        disbursed_at = $6,
+        maturity_date = $7,
+        laf_no = COALESCE($8, laf_no),
+        net_proceeds = $9,
+        total_deductions = $10,
+        deductions_breakdown = $11,
+        disbursement_method = $12,
+        disbursement_reference = $13,
+        disbursement_remarks = $14,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $15
       RETURNING *
     `;
     const updatedLoanResult = await client.query(updateLoan, [
+      finalPrincipal,
+      finalRate,
+      finalTerms,
+      finalAmortizationType,
+      finalPaymentMode,
       disbursementDate.toISOString(),
       maturityDateStr,
       finalLaf,
+      netProceeds,
+      totalDeductions,
+      JSON.stringify(deductionsList),
+      disbursement_method || null,
+      disbursement_reference || null,
+      disbursement_remarks || null,
       id
     ]);
 
@@ -476,14 +542,74 @@ export const disburseLoan = async (req, res, next) => {
       ]);
     }
 
-    // 4. Create notification for member user
+    // 4. Record Audit Log
+    try {
+      await client.query(`
+        INSERT INTO audit_logs (user_id, action, module, entity_id, entity_type, details)
+        VALUES ($1, 'LOAN_DISBURSEMENT', 'loans', $2, 'loan', $3)
+      `, [
+        req.user.id,
+        String(id),
+        JSON.stringify({
+          principal_amount: finalPrincipal,
+          total_deductions: totalDeductions,
+          net_proceeds: netProceeds,
+          deductions: deductionsList,
+          laf_no: finalLaf,
+          disbursement_method: disbursement_method || 'Standard',
+          disbursement_reference
+        })
+      ]);
+    } catch (auditErr) {
+      console.warn('Audit log write warning:', auditErr.message);
+    }
+
+    // 5. Create notification for member user
     const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [loan.member_id]);
     if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
+      const deductionMsg = totalDeductions > 0
+        ? ` with net take-home proceeds of ₱${netProceeds.toLocaleString('en-US', { minimumFractionDigits: 2 })} (Deductions: ₱${totalDeductions.toLocaleString('en-US', { minimumFractionDigits: 2 })})`
+        : '';
       await client.query(
         `INSERT INTO notifications (user_id, title, message, type)
          VALUES ($1, 'Loan Application Approved & Disbursed', $2, 'loan_approval')`,
-        [memUserRes.rows[0].user_id, `Your loan application for ₱${parseFloat(loan.principal_amount).toLocaleString()} has been approved and disbursed. You can view your repayment schedule in your dashboard.`]
+        [memUserRes.rows[0].user_id, `Your loan application for ₱${finalPrincipal.toLocaleString('en-US', { minimumFractionDigits: 2 })} has been approved and disbursed${deductionMsg}. You can view your repayment schedule and deduction voucher in your portal.`]
       );
+    }
+
+    // 6. Check Voucher Integration (Auto-record check voucher if check disbursement)
+    if (disbursement_method === 'Check' || disbursement_reference) {
+      try {
+        const memData = await client.query('SELECT first_name, middle_name, last_name FROM members WHERE id = $1', [loan.member_id]);
+        const m = memData.rows[0] || {};
+        const payeeName = [m.first_name, m.middle_name, m.last_name].filter(Boolean).join(' ').trim().toUpperCase();
+        const vNo = finalLaf || `CV-${String(id).slice(0, 8)}`;
+        
+        const cvDetails = [
+          { book_of_account: 'Loans Receivable - Regular', amount: finalPrincipal }
+        ];
+        for (const d of deductionsList) {
+          cvDetails.push({ book_of_account: d.name, amount: -d.amount });
+        }
+        
+        await client.query(`
+          INSERT INTO check_vouchers (voucher_no, voucher_date, check_no, payee, bank, particulars, amount, date_released, details)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          ON CONFLICT DO NOTHING
+        `, [
+          vNo,
+          disbursementDate.toISOString().split('T')[0],
+          disbursement_reference || null,
+          payeeName,
+          req.body.bank_name || 'Coop Operating Bank',
+          `Disbursement proceeds for Loan LAF #${finalLaf || String(id).slice(0, 8)}`,
+          netProceeds,
+          disbursementDate.toISOString().split('T')[0],
+          JSON.stringify(cvDetails)
+        ]);
+      } catch (cvErr) {
+        console.warn('Check voucher auto-generation notice:', cvErr.message);
+      }
     }
 
     await client.query('COMMIT');
@@ -492,7 +618,10 @@ export const disburseLoan = async (req, res, next) => {
       success: true,
       message: 'Loan disbursed successfully. Amortization schedule generated.',
       loan: updatedLoanResult.rows[0],
-      schedule
+      schedule,
+      net_proceeds: netProceeds,
+      total_deductions: totalDeductions,
+      deductions: deductionsList
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -569,6 +698,7 @@ export const getLoans = async (req, res, next) => {
         m.first_name, 
         m.last_name,
         m.member_no,
+        m.phone,
         COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
         COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
         COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due
@@ -644,7 +774,7 @@ export const getLoanById = async (req, res, next) => {
     const { id } = req.params;
 
     const loanResult = await query(
-      `SELECT l.*, lp.name as product_name, m.first_name, m.last_name, m.member_no
+      `SELECT l.*, lp.name as product_name, m.first_name, m.last_name, m.member_no, m.phone
        FROM loans l
        LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
        LEFT JOIN members m ON l.member_id = m.id
@@ -1358,5 +1488,353 @@ export const updateLoanLafNo = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+// @desc    Manually adjust / edit member loan details
+// @route   PUT /api/loans/:id
+// @access  Protected (Admin, Staff)
+export const updateLoanDetails = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const {
+      laf_no,
+      principal_amount,
+      interest_rate,
+      term_months,
+      amortization_type,
+      status,
+      disbursed_at,
+      maturity_date,
+      co_maker_name,
+      co_maker_phone,
+      payment_mode,
+      recalculate_schedules,
+      mark_fully_paid,
+      deductions,
+      net_proceeds,
+      total_deductions,
+      remarks
+    } = req.body;
+
+    await client.query('BEGIN');
+
+    // 1. Fetch current loan
+    const loanCheck = await client.query('SELECT * FROM loans WHERE id = $1 FOR UPDATE', [id]);
+    if (loanCheck.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Loan record not found.' }
+      });
+    }
+
+    const currentLoan = loanCheck.rows[0];
+
+    // 2. Validate & check duplicate LAF No if provided
+    let finalLaf = currentLoan.laf_no;
+    if (laf_no !== undefined && laf_no !== null) {
+      const trimmedLaf = String(laf_no).trim();
+      if (trimmedLaf) {
+        const dupCheck = await client.query(
+          'SELECT id FROM loans WHERE LOWER(laf_no) = LOWER($1) AND id != $2',
+          [trimmedLaf, id]
+        );
+        if (dupCheck.rowCount > 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            success: false,
+            error: { message: `LAF No. "${trimmedLaf}" is already assigned to another loan.` }
+          });
+        }
+        finalLaf = trimmedLaf;
+      } else {
+        finalLaf = null;
+      }
+    }
+
+    // 3. Process principal amount
+    const finalPrincipal = principal_amount !== undefined && !isNaN(parseFloat(principal_amount))
+      ? parseFloat(principal_amount)
+      : parseFloat(currentLoan.principal_amount);
+
+    // 4. Process interest rate (handle % or decimal e.g. 2% vs 0.02)
+    let finalRate = currentLoan.interest_rate;
+    if (interest_rate !== undefined && !isNaN(parseFloat(interest_rate))) {
+      let r = parseFloat(interest_rate);
+      if (r > 1) r = r / 100;
+      finalRate = r;
+    }
+
+    // 5. Process terms
+    const finalTerms = term_months !== undefined && !isNaN(parseInt(term_months, 10))
+      ? parseInt(term_months, 10)
+      : parseInt(currentLoan.term_months, 10);
+
+    // 6. Process amortization type
+    const finalAmortType = amortization_type || currentLoan.amortization_type || 'diminishing_balance';
+
+    // 7. Process status
+    let finalStatus = status || currentLoan.status;
+
+    // 8. Process dates
+    let finalDisbursedAt = disbursed_at !== undefined
+      ? (disbursed_at ? new Date(disbursed_at).toISOString() : null)
+      : currentLoan.disbursed_at;
+
+    let finalMaturityDate = maturity_date !== undefined
+      ? (maturity_date ? new Date(maturity_date).toISOString().split('T')[0] : null)
+      : currentLoan.maturity_date;
+
+    // If maturity date not provided but disbursedAt and terms exist, calculate it
+    if (!finalMaturityDate && finalDisbursedAt && finalTerms > 0) {
+      const d = new Date(finalDisbursedAt);
+      d.setMonth(d.getMonth() + finalTerms);
+      finalMaturityDate = d.toISOString().split('T')[0];
+    }
+
+    // 9. Process Co-maker & payment mode
+    const finalCoMakerName = co_maker_name !== undefined ? (co_maker_name ? String(co_maker_name).trim() : null) : currentLoan.co_maker_name;
+    const finalCoMakerPhone = co_maker_phone !== undefined ? (co_maker_phone ? String(co_maker_phone).trim() : null) : currentLoan.co_maker_phone;
+    const finalPaymentMode = payment_mode !== undefined ? (payment_mode ? String(payment_mode).trim() : null) : currentLoan.payment_mode;
+
+    // 10. Handle 'mark_fully_paid' or setting status to 'fully_paid'
+    if (mark_fully_paid || finalStatus === 'fully_paid') {
+      finalStatus = 'fully_paid';
+      // Mark all existing repayment schedules as paid so balance drops to 0 across the entire system
+      await client.query(`
+        UPDATE repayment_schedules
+        SET 
+          principal_paid = principal_due,
+          interest_paid = interest_due,
+          status = 'paid',
+          updated_at = CURRENT_TIMESTAMP
+        WHERE loan_id = $1 AND status != 'paid'
+      `, [id]);
+    } else if (recalculate_schedules && finalStatus === 'disbursed') {
+      // Check if existing payments exist
+      const paymentsCheck = await client.query('SELECT COUNT(*) FROM loan_payments WHERE loan_id = $1', [id]);
+      const paymentCount = parseInt(paymentsCheck.rows[0].count, 10);
+
+      // If no payments yet, safe to recreate schedules with new terms/principal/rate
+      if (paymentCount === 0) {
+        await client.query('DELETE FROM repayment_schedules WHERE loan_id = $1', [id]);
+        const startDate = finalDisbursedAt ? new Date(finalDisbursedAt) : new Date();
+        let newSchedule = [];
+        if (finalAmortType === 'flat_rate') {
+          newSchedule = calculateFlatRate(finalPrincipal, finalRate, finalTerms, startDate);
+        } else {
+          newSchedule = calculateDiminishingBalance(finalPrincipal, finalRate, finalTerms, startDate);
+        }
+
+        const insertInstallment = `
+          INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, status)
+          VALUES ($1, $2, $3, $4, $5, $6, 'unpaid')
+        `;
+        for (const inst of newSchedule) {
+          await client.query(insertInstallment, [
+            id,
+            inst.installment_number,
+            inst.due_date,
+            inst.principal_due,
+            inst.interest_due,
+            inst.total_due
+          ]);
+        }
+      }
+    }
+
+    let finalDeductionsBreakdown = currentLoan.deductions_breakdown;
+    let finalTotalDeductions = currentLoan.total_deductions;
+    let finalNetProceeds = currentLoan.net_proceeds;
+
+    if (Array.isArray(deductions)) {
+      const validDeds = deductions
+        .filter(d => d && d.name && !isNaN(parseFloat(d.amount)) && parseFloat(d.amount) > 0)
+        .map(d => ({ name: String(d.name).trim(), amount: parseFloat(d.amount) }));
+      finalDeductionsBreakdown = JSON.stringify(validDeds);
+      finalTotalDeductions = validDeds.reduce((sum, d) => sum + d.amount, 0);
+      finalNetProceeds = Math.max(0, finalPrincipal - finalTotalDeductions);
+    } else if (net_proceeds !== undefined) {
+      finalNetProceeds = parseFloat(net_proceeds);
+      finalTotalDeductions = total_deductions !== undefined ? parseFloat(total_deductions) : finalTotalDeductions;
+    }
+
+    // 11. Update loan in database
+    const updateQuery = `
+      UPDATE loans
+      SET 
+        laf_no = $1,
+        principal_amount = $2,
+        interest_rate = $3,
+        term_months = $4,
+        amortization_type = $5,
+        status = $6,
+        disbursed_at = $7,
+        maturity_date = $8,
+        co_maker_name = $9,
+        co_maker_phone = $10,
+        payment_mode = $11,
+        net_proceeds = $12,
+        total_deductions = $13,
+        deductions_breakdown = $14,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $15
+      RETURNING *
+    `;
+
+    await client.query(updateQuery, [
+      finalLaf,
+      finalPrincipal,
+      finalRate,
+      finalTerms,
+      finalAmortType,
+      finalStatus,
+      finalDisbursedAt,
+      finalMaturityDate,
+      finalCoMakerName,
+      finalCoMakerPhone,
+      finalPaymentMode,
+      finalNetProceeds,
+      finalTotalDeductions,
+      finalDeductionsBreakdown,
+      id
+    ]);
+
+    // 12. Record Audit Trail
+    try {
+      await client.query(`
+        INSERT INTO audit_logs (user_id, action, module, entity_id, entity_type, details)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [
+        req.user.id,
+        'LOAN_MANUAL_ADJUSTMENT',
+        'loans',
+        String(id),
+        'loan',
+        JSON.stringify({
+          previous: {
+            laf_no: currentLoan.laf_no,
+            principal_amount: currentLoan.principal_amount,
+            status: currentLoan.status,
+            term_months: currentLoan.term_months,
+            interest_rate: currentLoan.interest_rate
+          },
+          updated: {
+            laf_no: finalLaf,
+            principal_amount: finalPrincipal,
+            status: finalStatus,
+            term_months: finalTerms,
+            interest_rate: finalRate
+          },
+          remarks: remarks || 'Manual loan correction by administrator'
+        })
+      ]);
+    } catch (auditErr) {
+      console.warn('Audit log write warning:', auditErr.message);
+    }
+
+    await client.query('COMMIT');
+
+    // 13. Fetch updated loan with member info & recalculated balances
+    const fullRes = await query(`
+      SELECT 
+        l.*, 
+        lp.name as product_name, 
+        m.first_name, 
+        m.last_name,
+        m.member_no,
+        COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
+        COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
+        COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due
+      FROM loans l
+      LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
+      LEFT JOIN members m ON l.member_id = m.id
+      WHERE l.id = $1
+    `, [id]);
+
+    res.status(200).json({
+      success: true,
+      message: `Loan (LAF: ${finalLaf || id.slice(0, 8)}) successfully adjusted.`,
+      data: fullRes.rows[0]
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
+// @desc    Delete errant or mistakenly imported loan
+// @route   DELETE /api/loans/:id
+// @access  Protected (Admin only)
+export const deleteLoan = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    await client.query('BEGIN');
+
+    // Check if loan exists
+    const loanCheck = await client.query('SELECT * FROM loans WHERE id = $1 FOR UPDATE', [id]);
+    if (loanCheck.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Loan record not found.' }
+      });
+    }
+
+    const loan = loanCheck.rows[0];
+
+    // Check if actual incoming payments exist
+    const paymentsCheck = await client.query('SELECT COUNT(*) FROM loan_payments WHERE loan_id = $1', [id]);
+    const paymentCount = parseInt(paymentsCheck.rows[0].count, 10);
+    if (paymentCount > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: { message: `Cannot delete loan with ${paymentCount} recorded payment(s). Set status to 'cancelled' instead.` }
+      });
+    }
+
+    // Delete schedules & loan
+    await client.query('DELETE FROM repayment_schedules WHERE loan_id = $1', [id]);
+    await client.query('DELETE FROM loans WHERE id = $1', [id]);
+
+    // Audit log
+    try {
+      await client.query(`
+        INSERT INTO audit_logs (user_id, action, module, entity_id, entity_type, details)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [
+        req.user.id,
+        'LOAN_MANUAL_DELETE',
+        'loans',
+        String(id),
+        'loan',
+        JSON.stringify({
+          deleted_loan: loan
+        })
+      ]);
+    } catch (auditErr) {
+      console.warn('Audit log write warning:', auditErr.message);
+    }
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      message: `Loan (LAF: ${loan.laf_no || id.slice(0, 8)}) successfully deleted.`
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
   }
 };

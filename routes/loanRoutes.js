@@ -16,7 +16,9 @@ import {
   getCalamityStatus,
   updateCalamityStatus,
   getNextLafNumber,
-  updateLoanLafNo
+  updateLoanLafNo,
+  updateLoanDetails,
+  deleteLoan
 } from '../controllers/loanController.js';
 import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
@@ -76,7 +78,9 @@ router.route('/')
   .get(getLoans);
 
 router.route('/:id')
-  .get(getLoanById);
+  .get(getLoanById)
+  .put(restrictTo('admin', 'staff'), updateLoanDetails)
+  .delete(restrictTo('admin'), deleteLoan);
 
 // ==========================================
 // 7. LOAN ACTIONS (DISBURSE & REJECT)
