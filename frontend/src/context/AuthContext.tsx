@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import api from '../lib/api';
+import SessionTimeoutHandler from '@/components/SessionTimeoutHandler';
 
 export interface User {
   id: number;
@@ -295,6 +296,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+      <SessionTimeoutHandler />
     </AuthContext.Provider>
   );
 }

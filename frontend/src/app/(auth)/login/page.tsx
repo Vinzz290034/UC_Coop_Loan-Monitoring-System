@@ -12,6 +12,7 @@ import {
   EyeOff,
   CheckCircle2,
   UserPlus,
+  Clock,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import BackButton from '@/components/BackButton';
@@ -23,6 +24,7 @@ function LoginForm() {
   const { login } = useAuth();
   const searchParams = useSearchParams();
   const resetSuccess = searchParams.get('reset') === 'success';
+  const isTimeout = searchParams.get('reason') === 'timeout';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -57,6 +59,13 @@ function LoginForm() {
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {isTimeout && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-2xl text-xs font-bold flex items-center gap-2.5">
+            <Clock className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>Your session has expired due to 5 minutes of inactivity. Please sign in again to continue.</span>
+          </div>
+        )}
+
         {resetSuccess && (
           <div className="p-4 bg-primary/10 border border-primary/20 text-primary dark:text-secondary rounded-2xl text-xs font-bold flex items-center gap-2.5">
             <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-primary dark:text-secondary" />
