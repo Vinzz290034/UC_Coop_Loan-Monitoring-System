@@ -326,6 +326,31 @@ function LoansPageContent() {
     return `${words} ${currencyUnit} ONLY`;
   };
 
+  const getCvDisbursedAmount = (cv: any): number => {
+    if (!cv) return 0;
+    let details: any[] = [];
+    if (Array.isArray(cv.details)) {
+      details = cv.details;
+    } else if (typeof cv.details === 'string') {
+      try {
+        const parsed = JSON.parse(cv.details);
+        if (Array.isArray(parsed)) details = parsed;
+      } catch {
+        details = [];
+      }
+    }
+
+    for (const item of details) {
+      const desc = (item.book_of_account || item.description || '').trim();
+      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
+        const val = Math.abs(typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0));
+        if (val > 0) return val;
+      }
+    }
+
+    return parseFloat(cv.amount || 0);
+  };
+
   const getBalancedCvRows = (cv: any) => {
     if (!cv) return { rows: [], debitTotal: 0, creditTotal: 0 };
     let details: any[] = [];
@@ -447,14 +472,28 @@ function LoansPageContent() {
   const calculateEditCvTotals = () => {
     let debitTotal = 0;
     let creditTotal = 0;
+    let cibAmount = 0;
     for (const r of editCvFormData.rows || []) {
       const d = parseFloat(r.debit) || 0;
       const c = parseFloat(r.credit) || 0;
       debitTotal += d;
       creditTotal += c;
+
+      const desc = (r.description || '').trim();
+      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
+        cibAmount = c || d || 0;
+      }
     }
-    const disbursed = Math.max(0, debitTotal - creditTotal);
-    return { debitTotal, creditTotal, disbursed: disbursed > 0 ? disbursed : (debitTotal || 0) };
+
+    let disbursed = 0;
+    if (cibAmount > 0) {
+      disbursed = cibAmount;
+    } else {
+      const netDiff = Math.max(0, debitTotal - creditTotal);
+      disbursed = netDiff > 0 ? netDiff : (debitTotal || creditTotal || 0);
+    }
+
+    return { debitTotal, creditTotal, disbursed };
   };
 
   const handleSaveCvEdit = async () => {
@@ -634,8 +673,7 @@ function LoansPageContent() {
   const [cvCheckedBy, setCvCheckedBy] = useState('MANILYN VELOS');
   const [cvApprovedBy, setCvApprovedBy] = useState('MICHELLE M. PABLE');
   const [cvTransactionRows, setCvTransactionRows] = useState<{ description: string; debit: string; credit: string }[]>([
-    { description: 'Loans Receivable- Regular', debit: '', credit: '' },
-    { description: 'Service fee Revenue', debit: '', credit: '' }
+    { description: '', debit: '', credit: '' }
   ]);
 
   const getNextVoucherNo = () => {
@@ -672,8 +710,7 @@ function LoansPageContent() {
     setCvCheckedBy('MANILYN VELOS');
     setCvApprovedBy('MICHELLE M. PABLE');
     setCvTransactionRows([
-      { description: 'Loans Receivable- Regular', debit: '', credit: '' },
-      { description: 'Service fee Revenue', debit: '', credit: '' }
+      { description: '', debit: '', credit: '' }
     ]);
     setIsPurchaseCVOpen(true);
   };
@@ -695,14 +732,28 @@ function LoansPageContent() {
   const calculateNewCvTotals = () => {
     let debitTotal = 0;
     let creditTotal = 0;
+    let cibAmount = 0;
     for (const r of cvTransactionRows) {
       const d = parseFloat(r.debit) || 0;
       const c = parseFloat(r.credit) || 0;
       debitTotal += d;
       creditTotal += c;
+
+      const desc = (r.description || '').trim();
+      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
+        cibAmount = c || d || 0;
+      }
     }
-    const disbursed = Math.max(0, debitTotal - creditTotal);
-    return { debitTotal, creditTotal, disbursed: disbursed > 0 ? disbursed : (debitTotal || 0) };
+
+    let disbursed = 0;
+    if (cibAmount > 0) {
+      disbursed = cibAmount;
+    } else {
+      const netDiff = Math.max(0, debitTotal - creditTotal);
+      disbursed = netDiff > 0 ? netDiff : (debitTotal || creditTotal || 0);
+    }
+
+    return { debitTotal, creditTotal, disbursed };
   };
 
   const handleSaveAndSubmitNewCv = async (shouldPrint: boolean = false) => {
@@ -3352,7 +3403,7 @@ function LoansPageContent() {
                                 }`}>{cv.bank || '—'}</span>
                               </td>
                               <td className="px-4 py-3 font-mono font-bold text-right whitespace-nowrap">
-                                ₱{parseFloat(cv.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                ₱{getCvDisbursedAmount(cv).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </td>
                               <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-1.5">
@@ -3483,12 +3534,12 @@ function LoansPageContent() {
                                                 Disbursed Amount:
                                               </span>
                                               <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide">
-                                                {formatDisbursedInWords(parseFloat(cv.amount || 0))}
+                                                {formatDisbursedInWords(getCvDisbursedAmount(cv))}
                                               </p>
                                             </div>
                                             <div className="text-right flex-shrink-0">
                                               <span className="font-mono font-extrabold text-sm text-emerald-700 dark:text-emerald-300">
-                                                ₱{parseFloat(cv.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                ₱{getCvDisbursedAmount(cv).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                               </span>
                                             </div>
                                           </div>
@@ -5920,7 +5971,7 @@ function LoansPageContent() {
                 <div className="flex items-center justify-between">
                   <h5 className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                     <span>Transaction Details</span>
-                    <span className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400">({cvTransactionRows.length} rows)</span>
+                    <span className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400">({cvTransactionRows.length} {cvTransactionRows.length === 1 ? 'row' : 'rows'})</span>
                   </h5>
                   <button
                     type="button"
@@ -6717,12 +6768,12 @@ function LoansPageContent() {
                               Disbursed Amount:
                             </span>
                             <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide leading-relaxed">
-                              {formatDisbursedInWords(parseFloat(selectedCvForModal.amount || 0))}
+                              {formatDisbursedInWords(getCvDisbursedAmount(selectedCvForModal))}
                             </p>
                           </div>
                           <div className="text-right flex-shrink-0">
                             <span className="font-mono font-extrabold text-base text-emerald-700 dark:text-emerald-300">
-                              ₱{parseFloat(selectedCvForModal.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ₱{getCvDisbursedAmount(selectedCvForModal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </div>
                         </div>
@@ -6964,12 +7015,12 @@ function LoansPageContent() {
                         Disbursed Amount:
                       </span>
                       <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.4 }}>
-                        {formatDisbursedInWords(parseFloat(printingCvBreakdown.amount || 0))}
+                        {formatDisbursedInWords(getCvDisbursedAmount(printingCvBreakdown))}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <span style={{ fontSize: '15px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
-                        ₱{parseFloat(printingCvBreakdown.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₱{getCvDisbursedAmount(printingCvBreakdown).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>

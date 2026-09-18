@@ -1682,18 +1682,23 @@ export const parseCheckVouchersFromSheet = (sheet, sheetName = '') => {
     let details = [];
 
     if (v.subRows && v.subRows.length > 1) {
-      const lastRow = v.subRows[v.subRows.length - 1];
-      const precedingSum = v.subRows.slice(0, -1).reduce((sum, item) => sum + item.amount, 0);
-      const roundedPreceding = Math.round(precedingSum * 100) / 100;
-      const roundedLast = Math.round(lastRow.amount * 100) / 100;
-
-      if (Math.abs(roundedPreceding - roundedLast) < 0.05 && roundedLast !== 0) {
-        finalAmount = roundedLast;
-      } else if (lastRow.amount > 0 && (!lastRow.bookOfAccount || /total|net/i.test(lastRow.bookOfAccount))) {
-        finalAmount = lastRow.amount;
+      const cibRow = v.subRows.find(item => /cib\b|cash\s*in\s*bank/i.test(item.bookOfAccount || ''));
+      if (cibRow && Math.abs(cibRow.amount) > 0) {
+        finalAmount = Math.abs(cibRow.amount);
       } else {
-        const totalSum = v.subRows.reduce((sum, item) => sum + item.amount, 0);
-        finalAmount = Math.round(totalSum * 100) / 100;
+        const lastRow = v.subRows[v.subRows.length - 1];
+        const precedingSum = v.subRows.slice(0, -1).reduce((sum, item) => sum + item.amount, 0);
+        const roundedPreceding = Math.round(precedingSum * 100) / 100;
+        const roundedLast = Math.round(lastRow.amount * 100) / 100;
+
+        if (Math.abs(roundedPreceding - roundedLast) < 0.05 && roundedLast !== 0) {
+          finalAmount = roundedLast;
+        } else if (lastRow.amount > 0 && (!lastRow.bookOfAccount || /total|net/i.test(lastRow.bookOfAccount))) {
+          finalAmount = lastRow.amount;
+        } else {
+          const totalSum = v.subRows.reduce((sum, item) => sum + item.amount, 0);
+          finalAmount = Math.round(totalSum * 100) / 100;
+        }
       }
 
       // Filter subRows to build clean breakdown line items
