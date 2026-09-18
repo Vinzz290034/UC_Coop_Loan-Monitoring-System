@@ -733,34 +733,32 @@ export default function LoanApprovalModal({
                   />
                 </div>
 
-                {/* Bank / Member GCash / Cash Source */}
-                <div>
-                  <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                    {disbursementMethod === 'Check'
-                      ? 'Disbursing Bank'
-                      : disbursementMethod === 'GCash'
-                      ? 'Member GCash / Mobile No.'
-                      : 'Cash Source'}
-                  </label>
-                  <input
-                    type="text"
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    placeholder={
-                      disbursementMethod === 'Check'
-                        ? 'BDO / Landbank'
-                        : disbursementMethod === 'GCash'
-                        ? (loan?.phone || 'e.g. 0917 123 4567')
-                        : 'Cash on Hand / Cash Drawer'
-                    }
-                    className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded-xl text-xs focus:outline-none focus:border-primary"
-                  />
-                  {disbursementMethod === 'GCash' && (
-                    <span className="text-[10px] text-neutral-500 mt-1 block">
-                      Loan proceeds will be sent to the member's personal GCash number.
-                    </span>
-                  )}
-                </div>
+                {/* Bank / Member GCash — hidden for Cash on Hand */}
+                {disbursementMethod !== 'Cash' && (
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                      {disbursementMethod === 'Check'
+                        ? 'Disbursing Bank'
+                        : 'Member GCash / Mobile No.'}
+                    </label>
+                    <input
+                      type="text"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      placeholder={
+                        disbursementMethod === 'Check'
+                          ? 'BDO / Landbank'
+                          : (loan?.phone || 'e.g. 0917 123 4567')
+                      }
+                      className="w-full px-3 py-2 bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded-xl text-xs focus:outline-none focus:border-primary"
+                    />
+                    {disbursementMethod === 'GCash' && (
+                      <span className="text-[10px] text-neutral-500 mt-1 block">
+                        Loan proceeds will be sent to the member's personal GCash number.
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Remarks / Particulars */}

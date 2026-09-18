@@ -2553,15 +2553,7 @@ function LoansPageContent() {
                                                         <Pencil className="w-3.5 h-3.5 text-primary dark:text-secondary" />
                                                         Edit & Adjust
                                                       </button>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => openApprovalModal(loan, loanDetails)}
-                                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-full text-xs shadow hover:shadow-lg transition-all active:scale-95 cursor-pointer"
-                                                        title="Review loan parameters, customize deductions, and disburse"
-                                                      >
-                                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                                        Approve & Disburse
-                                                      </button>
+
                                                     </>
                                                   )}
                                                 </div>
