@@ -42,14 +42,15 @@ export default function AccountingPage() {
     setMounted(true);
   }, []);
 
-  // Active Tab: 'share_capital' | 'fixed_deposits' | 'investments'
-  const [activeTab, setActiveTab] = useState<'share_capital' | 'fixed_deposits' | 'investments'>('share_capital');
+  // Active Tab: 'savings' | 'share_capital' | 'fixed_deposits' | 'investments'
+  const [activeTab, setActiveTab] = useState<'savings' | 'share_capital' | 'fixed_deposits' | 'investments'>('savings');
 
   // Member selection
   const [members, setMembers] = useState<any[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string>('');
 
   // Ledgers data state
+  const [savingsData, setSavingsData] = useState<any>(null);
   const [shareData, setShareData] = useState<any>(null);
   const [fixedDeposits, setFixedDeposits] = useState<any[]>([]);
   const [investments, setInvestments] = useState<any[]>([]);
@@ -58,9 +59,25 @@ export default function AccountingPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Modals state
+  const [isSavingsDepositModalOpen, setIsSavingsDepositModalOpen] = useState(false);
+  const [isSavingsWithdrawModalOpen, setIsSavingsWithdrawModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isFDModalOpen, setIsFDModalOpen] = useState(false);
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
+
+  // Form Fields: Savings Deposit & Withdrawal
+  const [savingsDepositAmount, setSavingsDepositAmount] = useState('');
+  const [savingsDepositRef, setSavingsDepositRef] = useState('');
+  const [savingsDepositMethod, setSavingsDepositMethod] = useState<'cash' | 'gcash' | 'bank_transfer' | 'payroll'>('cash');
+  const [savingsDepositRemarks, setSavingsDepositRemarks] = useState('');
+  const [savingsDepositSubmitting, setSavingsDepositSubmitting] = useState(false);
+  const [savingsDepositError, setSavingsDepositError] = useState<string | null>(null);
+
+  const [savingsWithdrawAmount, setSavingsWithdrawAmount] = useState('');
+  const [savingsWithdrawRef, setSavingsWithdrawRef] = useState('');
+  const [savingsWithdrawRemarks, setSavingsWithdrawRemarks] = useState('');
+  const [savingsWithdrawSubmitting, setSavingsWithdrawSubmitting] = useState(false);
+  const [savingsWithdrawError, setSavingsWithdrawError] = useState<string | null>(null);
 
   // Investment Transaction Modal State
   const [selectedInvestmentForTx, setSelectedInvestmentForTx] = useState<any | null>(null);
@@ -139,7 +156,7 @@ export default function AccountingPage() {
       const syncTabFromUrl = () => {
         const params = new URLSearchParams(window.location.search);
         const tabParam = params.get('tab');
-        if (tabParam === 'share_capital' || tabParam === 'fixed_deposits' || tabParam === 'investments') {
+        if (tabParam === 'savings' || tabParam === 'share_capital' || tabParam === 'fixed_deposits' || tabParam === 'investments') {
           setActiveTab(tabParam);
         }
       };
@@ -157,12 +174,14 @@ export default function AccountingPage() {
       setLoading(true);
       setError(null);
 
-      const [shareRes, fdRes, invRes] = await Promise.all([
+      const [savingsRes, shareRes, fdRes, invRes] = await Promise.all([
+        api.get(`/accounts/savings/${selectedMemberId}`).catch(() => ({ data: { data: null } })),
         api.get(`/accounts/share-capital/${selectedMemberId}`).catch(() => ({ data: null })),
         api.get(`/accounts/fixed-deposits/${selectedMemberId}`).catch(() => ({ data: { data: [] } })),
         api.get(`/accounts/investments/${selectedMemberId}`).catch(() => ({ data: { data: [] } }))
       ]);
 
+      if (savingsRes.data?.data) setSavingsData(savingsRes.data.data);
       if (shareRes.data) setShareData(shareRes.data);
       if (fdRes.data) setFixedDeposits(fdRes.data.data || []);
       if (invRes.data) setInvestments(invRes.data.data || []);
@@ -178,6 +197,94 @@ export default function AccountingPage() {
   useEffect(() => {
     loadLedgerData();
   }, [loadLedgerData]);
+
+  // Submission Handlers: Savings Deposit
+  const handleSavingsDepositSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMemberId || !savingsDepositAmount) {
+      setSavingsDepositError('Please enter the deposit amount.');
+      return;
+    }
+
+    const numAmount = parseFloat(savingsDepositAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setSavingsDepositError('Please enter a valid amount greater than zero.');
+      return;
+    }
+
+    setSavingsDepositError(null);
+    setSavingsDepositSubmitting(true);
+
+    try {
+      await api.post('/accounts/savings/deposit', {
+        member_id: selectedMemberId,
+        amount: numAmount,
+        payment_method: savingsDepositMethod,
+        reference_no: savingsDepositRef.trim() || undefined,
+        remarks: savingsDepositRemarks.trim() || 'Savings account cash deposit'
+      });
+
+      setSavingsDepositAmount('');
+      setSavingsDepositRef('');
+      setSavingsDepositRemarks('');
+      setIsSavingsDepositModalOpen(false);
+      await loadLedgerData();
+    } catch (err: any) {
+      setSavingsDepositError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to process savings deposit.');
+    } finally {
+      setSavingsDepositSubmitting(false);
+    }
+  };
+
+  // Submission Handlers: Savings Withdrawal
+  const handleSavingsWithdrawSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMemberId || !savingsWithdrawAmount) {
+      setSavingsWithdrawError('Please enter the withdrawal amount.');
+      return;
+    }
+
+    const numAmount = parseFloat(savingsWithdrawAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setSavingsWithdrawError('Please enter a valid amount greater than zero.');
+      return;
+    }
+
+    const currentBal = parseFloat(savingsData?.account?.balance || 0);
+    const maintBal = parseFloat(savingsData?.account?.maintaining_balance || 100);
+
+    if (numAmount > currentBal) {
+      setSavingsWithdrawError(`Insufficient balance. Current balance is ₱${currentBal.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`);
+      return;
+    }
+
+    if (currentBal - numAmount < maintBal) {
+      setSavingsWithdrawError(`Withdrawal exceeds maintaining balance policy (Min. ₱${maintBal.toFixed(2)}). Maximum withdrawable: ₱${Math.max(0, currentBal - maintBal).toLocaleString('en-US', { minimumFractionDigits: 2 })}.`);
+      return;
+    }
+
+    setSavingsWithdrawError(null);
+    setSavingsWithdrawSubmitting(true);
+
+    try {
+      await api.post('/accounts/savings/withdraw', {
+        member_id: selectedMemberId,
+        amount: numAmount,
+        reference_no: savingsWithdrawRef.trim() || undefined,
+        remarks: savingsWithdrawRemarks.trim() || 'Counter cash withdrawal'
+      });
+
+      setSavingsWithdrawAmount('');
+      setSavingsWithdrawRef('');
+      setSavingsWithdrawRemarks('');
+      setIsSavingsWithdrawModalOpen(false);
+      await loadLedgerData();
+    } catch (err: any) {
+      setSavingsWithdrawError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to process savings withdrawal.');
+    } finally {
+      setSavingsWithdrawSubmitting(false);
+    }
+  };
 
   // Submission Handlers: Share Capital
   const handleShareSubmit = async (e: React.FormEvent) => {
@@ -495,6 +602,28 @@ export default function AccountingPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {activeTab === 'savings' && (
+            <>
+              <button
+                onClick={() => setIsSavingsDepositModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Deposit Savings
+              </button>
+
+              {isAdminOrManager && (
+                <button
+                  onClick={() => setIsSavingsWithdrawModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-tertiary hover:bg-tertiary/90 text-white rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                >
+                  <TrendingDown className="w-4 h-4" />
+                  Withdraw Cash
+                </button>
+              )}
+            </>
+          )}
+
           {activeTab === 'share_capital' && (
             <button
               onClick={() => setIsShareModalOpen(true)}
@@ -548,6 +677,22 @@ export default function AccountingPage() {
 
       {/* Nav Tabs Bar */}
       <div className="flex items-center gap-2 p-1.5 bg-neutral-100 dark:bg-neutral-800/60 rounded-2xl w-fit border border-outline-variant/30 overflow-x-auto max-w-full">
+        <button
+          onClick={() => setActiveTab('savings')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'savings'
+              ? 'bg-white dark:bg-neutral-900 text-primary dark:text-secondary shadow-xs'
+              : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+            }`}
+        >
+          <WalletCards className="w-4 h-4" />
+          <span>Savings Account (Passbook)</span>
+          {savingsData?.account?.balance !== undefined && (
+            <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
+              ₱{parseFloat(savingsData.account.balance || 0).toLocaleString()}
+            </span>
+          )}
+        </button>
+
         <button
           onClick={() => setActiveTab('share_capital')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'share_capital'
@@ -655,6 +800,183 @@ export default function AccountingPage() {
         </div>
       ) : (
         <>
+          {/* TAB 0: SAVINGS ACCOUNT (PASSBOOK) */}
+          {activeTab === 'savings' && savingsData && (
+            <div className="space-y-6">
+              {/* Account Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
+                  <div className="flex items-center justify-between text-neutral-500">
+                    <span className="text-[10px] uppercase font-bold tracking-wider font-label">Account Number</span>
+                    <WalletCards className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <h3 className="font-mono text-base font-extrabold text-on-surface dark:text-white mt-2">
+                    {savingsData.account?.account_number || 'SAV-NEW'}
+                  </h3>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold uppercase">
+                      {savingsData.account?.status || 'Active'}
+                    </span>
+                    <span className="text-[10px] text-neutral-400 font-mono">
+                      Int: {(parseFloat(savingsData.account?.interest_rate || 0.02) * 100).toFixed(1)}% p.a.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-5 bg-emerald-500/10 border border-emerald-500/30 rounded-3xl shadow-xs">
+                  <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300">
+                    <span className="text-[10px] uppercase font-bold tracking-wider font-label">Available Savings</span>
+                    <Coins className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <h3 className="font-headline text-2xl font-extrabold text-emerald-800 dark:text-emerald-300 mt-1">
+                    {formatCurrency(parseFloat(savingsData.account?.balance || 0))}
+                  </h3>
+                  <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-1">
+                    Min. Maintaining: {formatCurrency(parseFloat(savingsData.account?.maintaining_balance || 100))}
+                  </p>
+                </div>
+
+                <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
+                  <div className="flex items-center justify-between text-neutral-500">
+                    <span className="text-[10px] uppercase font-bold tracking-wider font-label">Total Deposits</span>
+                    <TrendingUp className="w-4 h-4 text-primary" />
+                  </div>
+                  <h3 className="font-headline text-xl font-bold text-primary dark:text-secondary mt-1">
+                    {formatCurrency(
+                      (savingsData.transactions || [])
+                        .filter((tx: any) => tx.transaction_type === 'deposit')
+                        .reduce((acc: number, tx: any) => acc + parseFloat(tx.amount || 0), 0)
+                    )}
+                  </h3>
+                  <p className="text-[10px] text-neutral-400 mt-1">Cumulative cash/check inflows</p>
+                </div>
+
+                <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
+                  <div className="flex items-center justify-between text-neutral-500">
+                    <span className="text-[10px] uppercase font-bold tracking-wider font-label">Total Withdrawals</span>
+                    <TrendingDown className="w-4 h-4 text-tertiary" />
+                  </div>
+                  <h3 className="font-headline text-xl font-bold text-tertiary mt-1">
+                    {formatCurrency(
+                      (savingsData.transactions || [])
+                        .filter((tx: any) => tx.transaction_type === 'withdrawal' || tx.transaction_type === 'loan_offset')
+                        .reduce((acc: number, tx: any) => acc + parseFloat(tx.amount || 0), 0)
+                    )}
+                  </h3>
+                  <p className="text-[10px] text-neutral-400 mt-1">Outflows & loan deductions</p>
+                </div>
+              </div>
+
+              {/* Transactions Ledger Table */}
+              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
+                <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between flex-wrap gap-2">
+                  <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
+                    <History className="w-4 h-4 text-emerald-600" /> Savings Passbook & Transaction Ledger
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsSavingsDepositModalOpen(true)}
+                      className="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Deposit
+                    </button>
+                    {isAdminOrManager && (
+                      <button
+                        onClick={() => setIsSavingsWithdrawModalOpen(true)}
+                        className="px-3 py-1.5 text-xs font-bold bg-tertiary/10 hover:bg-tertiary/20 text-tertiary rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <TrendingDown className="w-3.5 h-3.5" /> Withdraw
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Tx Date</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Type</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Ref #</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amount</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Balance After</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Performed By</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Remarks</th>
+                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
+                      {(() => {
+                        const txs = savingsData.transactions || [];
+                        if (txs.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={8} className="px-6 py-8 text-center text-neutral-500 italic">
+                                No savings transactions recorded yet. Click &quot;Deposit&quot; to initialize this member&apos;s passbook.
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return txs.map((tx: any) => (
+                          <tr key={tx.id} className="hover:bg-neutral-500/5 transition-colors">
+                            <td className="px-4 sm:px-6 py-3 font-mono">{new Date(tx.transaction_date).toLocaleDateString()}</td>
+                            <td className="px-4 sm:px-6 py-3">
+                              {tx.transaction_type === 'deposit' ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                                  <TrendingUp className="w-3.5 h-3.5" /> Deposit
+                                </span>
+                              ) : tx.transaction_type === 'withdrawal' ? (
+                                <span className="inline-flex items-center gap-1 text-tertiary font-bold">
+                                  <TrendingDown className="w-3.5 h-3.5" /> Withdrawal
+                                </span>
+                              ) : tx.transaction_type === 'loan_offset' ? (
+                                <span className="inline-flex items-center gap-1 text-blue-600 font-bold">
+                                  <ArrowRightLeft className="w-3.5 h-3.5" /> Loan Payment
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-purple-600 font-bold capitalize">
+                                  {tx.transaction_type}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 font-mono text-xs text-neutral-500">{tx.reference_no || '-'}</td>
+                            <td className="px-4 sm:px-6 py-3 font-bold">
+                              <span className={tx.transaction_type === 'deposit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-tertiary'}>
+                                {tx.transaction_type === 'deposit' ? '+' : '-'} {formatCurrency(parseFloat(tx.amount))}
+                              </span>
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 font-mono font-bold text-neutral-600 dark:text-neutral-400 hidden sm:table-cell">
+                              {formatCurrency(parseFloat(tx.balance_after))}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 text-neutral-500 hidden md:table-cell font-mono text-xs">
+                              {tx.performer_name || 'System'}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 text-neutral-600 dark:text-neutral-400 hidden lg:table-cell">
+                              {tx.remarks || '-'}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 text-right">
+                              <button
+                                onClick={() => openContributionReceiptModal({
+                                  ...tx,
+                                  title: `Savings ${tx.transaction_type.toUpperCase()}`,
+                                  member: auditedMember
+                                })}
+                                className="px-3 py-1 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 text-on-surface dark:text-white rounded-lg text-[10px] font-bold transition-all active:scale-95 inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Printer className="w-3 h-3" /> Slip
+                              </button>
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: SHARE CAPITAL LEDGER */}
           {activeTab === 'share_capital' && shareData && (
             <div className="space-y-6">
@@ -949,6 +1271,281 @@ export default function AccountingPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* MODAL 0A: SAVINGS DEPOSIT */}
+      {isSavingsDepositModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-outline-variant/50 mb-4">
+              <div>
+                <h3 className="font-headline font-bold text-xl text-on-surface dark:text-white flex items-center gap-2">
+                  <PlusCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  Deposit into Savings Account
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Credit funds to member passbook / regular savings ledger
+                </p>
+              </div>
+              <button
+                onClick={() => setIsSavingsDepositModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {savingsDepositError && (
+              <div className="p-3 mb-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2">
+                <AlertTriangle className="w-4.5 h-4.5 flex-shrink-0" />
+                <span>{savingsDepositError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSavingsDepositSubmit} className="space-y-5">
+              {/* Account summary banner */}
+              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs flex items-center justify-between">
+                <div>
+                  <span className="text-emerald-700 dark:text-emerald-300 block font-medium">Account Number</span>
+                  <span className="font-bold font-mono text-on-surface dark:text-white">
+                    {savingsData?.account?.account_number || 'SAV-NEW'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-emerald-700 dark:text-emerald-300 block font-medium">Current Balance</span>
+                  <span className="font-extrabold font-headline text-emerald-800 dark:text-emerald-300">
+                    {formatCurrency(parseFloat(savingsData?.account?.balance || 0))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Amount Input */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
+                  Deposit Amount (₱):
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="e.g. 1000"
+                  value={savingsDepositAmount}
+                  onChange={(e) => setSavingsDepositAmount(e.target.value)}
+                  className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent font-bold text-lg focus:outline-none focus:border-primary text-on-surface dark:text-white"
+                />
+              </div>
+
+              {/* Payment Channel */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">Deposit Channel / Method:</label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { id: 'cash', label: 'Cash (Over Counter)', desc: 'Direct counter cash hand-in' },
+                    { id: 'gcash', label: 'GCash Wallet', desc: 'Online mobile transfer' },
+                    { id: 'bank_transfer', label: 'Bank Deposit', desc: 'Direct bank transfer' },
+                    { id: 'payroll', label: 'Payroll Deduction', desc: 'Salary deduction deduction' }
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSavingsDepositMethod(m.id as any)}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        savingsDepositMethod === m.id
+                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                          : 'border-outline-variant/65 bg-transparent hover:border-neutral/30 text-on-surface dark:text-white'
+                      }`}
+                    >
+                      <span className="font-bold text-xs block">{m.label}</span>
+                      <span className="text-[9px] text-neutral-400 block mt-0.5">{m.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reference Number */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
+                  Receipt / Reference Number (Optional):
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. OR-2026-9912 or GCash Ref"
+                  value={savingsDepositRef}
+                  onChange={(e) => setSavingsDepositRef(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-outline-variant/65 rounded-xl bg-transparent text-xs text-on-surface dark:text-white focus:outline-none focus:border-primary font-mono"
+                />
+              </div>
+
+              {/* Remarks */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
+                  Remarks / Notes:
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Payday emergency fund savings"
+                  value={savingsDepositRemarks}
+                  onChange={(e) => setSavingsDepositRemarks(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-outline-variant/65 rounded-xl bg-transparent text-xs text-on-surface dark:text-white focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-outline-variant/50">
+                <button
+                  type="button"
+                  onClick={() => setIsSavingsDepositModalOpen(false)}
+                  className="px-4 py-2.5 text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingsDepositSubmitting}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl hover:shadow-lg transition-all active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  {savingsDepositSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing...
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle className="w-3.5 h-3.5" /> Confirm Deposit
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL 0B: SAVINGS WITHDRAWAL */}
+      {isSavingsWithdrawModalOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-outline-variant/50 mb-4">
+              <div>
+                <h3 className="font-headline font-bold text-xl text-on-surface dark:text-white flex items-center gap-2">
+                  <TrendingDown className="w-5 h-5 text-tertiary" />
+                  Withdraw Cash from Savings
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Process member counter cash withdrawal slip
+                </p>
+              </div>
+              <button
+                onClick={() => setIsSavingsWithdrawModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {savingsWithdrawError && (
+              <div className="p-3 mb-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2">
+                <AlertTriangle className="w-4.5 h-4.5 flex-shrink-0" />
+                <span>{savingsWithdrawError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSavingsWithdrawSubmit} className="space-y-5">
+              {/* Account summary banner */}
+              <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500">Available Savings Balance:</span>
+                  <span className="font-extrabold font-headline text-on-surface dark:text-white text-base">
+                    {formatCurrency(parseFloat(savingsData?.account?.balance || 0))}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30 text-[11px]">
+                  <span className="text-neutral-500">Required Maintaining Balance:</span>
+                  <span className="font-bold text-neutral-600 dark:text-neutral-400 font-mono">
+                    {formatCurrency(parseFloat(savingsData?.account?.maintaining_balance || 100))}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">Max Withdrawable Now:</span>
+                  <span className="font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(Math.max(0, parseFloat(savingsData?.account?.balance || 0) - parseFloat(savingsData?.account?.maintaining_balance || 100)))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Amount Input */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
+                  Withdrawal Amount (₱):
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="e.g. 500"
+                  value={savingsWithdrawAmount}
+                  onChange={(e) => setSavingsWithdrawAmount(e.target.value)}
+                  className="w-full px-4 py-3 border border-outline-variant/65 rounded-2xl bg-transparent font-bold text-lg focus:outline-none focus:border-tertiary text-on-surface dark:text-white"
+                />
+              </div>
+
+              {/* Reference / Withdrawal Slip # */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
+                  Withdrawal Slip / Voucher # (Optional):
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. WDL-2026-0045"
+                  value={savingsWithdrawRef}
+                  onChange={(e) => setSavingsWithdrawRef(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-outline-variant/65 rounded-xl bg-transparent text-xs text-on-surface dark:text-white focus:outline-none focus:border-primary font-mono"
+                />
+              </div>
+
+              {/* Remarks */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
+                  Reason / Remarks:
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Medical emergency withdrawal"
+                  value={savingsWithdrawRemarks}
+                  onChange={(e) => setSavingsWithdrawRemarks(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-outline-variant/65 rounded-xl bg-transparent text-xs text-on-surface dark:text-white focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-outline-variant/50">
+                <button
+                  type="button"
+                  onClick={() => setIsSavingsWithdrawModalOpen(false)}
+                  className="px-4 py-2.5 text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingsWithdrawSubmitting}
+                  className="px-5 py-2.5 bg-tertiary hover:bg-tertiary/90 text-white font-bold text-xs rounded-xl hover:shadow-lg transition-all active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  {savingsWithdrawSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing...
+                    </>
+                  ) : (
+                    <>
+                      <TrendingDown className="w-3.5 h-3.5" /> Confirm Cash Payout
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL 1: BOOK SHARE CAPITAL TRANSACTION */}

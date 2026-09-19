@@ -1161,3 +1161,415 @@ export const syncCheckVoucherWithRevolvingFund = async (req, res, next) => {
   }
 };
 
+// ==========================================
+// 6. SAVINGS ACCOUNTS & PASSBOOK LEDGER
+// ==========================================
+
+// @desc    Get all savings accounts summary and list
+// @route   GET /api/accounts/savings
+// @access  Protected (Admin, Staff)
+export const getAllSavingsAccounts = async (req, res, next) => {
+  try {
+    const listQuery = `
+      SELECT 
+        sa.id,
+        sa.member_id,
+        sa.account_number,
+        sa.balance,
+        sa.maintaining_balance,
+        sa.interest_rate,
+        sa.status,
+        sa.created_at,
+        sa.updated_at,
+        m.first_name,
+        m.last_name,
+        m.middle_name,
+        m.member_no,
+        m.email,
+        m.phone
+      FROM savings_accounts sa
+      JOIN members m ON m.id = sa.member_id
+      ORDER BY sa.balance DESC, m.last_name ASC
+    `;
+
+    const summaryQuery = `
+      SELECT 
+        COUNT(*)::int as total_accounts,
+        COALESCE(SUM(balance), 0)::numeric as total_savings_pool,
+        COALESCE(AVG(balance), 0)::numeric as avg_savings_balance,
+        COUNT(CASE WHEN balance > 0 THEN 1 END)::int as funded_accounts
+      FROM savings_accounts
+      WHERE status = 'active'
+    `;
+
+    const [listResult, summaryResult] = await Promise.all([
+      query(listQuery),
+      query(summaryQuery)
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        accounts: listResult.rows,
+        summary: summaryResult.rows[0]
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get savings account and transaction ledger for a specific member
+// @route   GET /api/accounts/savings/:memberId
+// @access  Protected (Admin, Staff, Member)
+export const getSavingsAccount = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    let { memberId } = req.params;
+
+    if (req.user.role === 'member') {
+      const authMemberId = req.user.profile?.id;
+      if (!authMemberId) {
+        const memLookup = await client.query('SELECT id FROM members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+        if (memLookup.rowCount > 0) {
+          memberId = memLookup.rows[0].id;
+        } else {
+          return res.status(403).json({
+            success: false,
+            error: { message: 'Authenticated user session is not linked to a member profile.' }
+          });
+        }
+      } else {
+        memberId = authMemberId;
+      }
+    }
+
+    if (!memberId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Member ID is required.' }
+      });
+    }
+
+    // Ensure savings account exists for member, otherwise create it
+    let accountCheck = await client.query(
+      `SELECT sa.*, m.first_name, m.last_name, m.middle_name, m.member_no, m.email, m.phone
+       FROM savings_accounts sa
+       JOIN members m ON m.id = sa.member_id
+       WHERE sa.member_id = $1`,
+      [memberId]
+    );
+
+    if (accountCheck.rowCount === 0) {
+      const memberInfo = await client.query('SELECT id, member_no FROM members WHERE id = $1', [memberId]);
+      if (memberInfo.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Member not found.' }
+        });
+      }
+
+      const rawNo = memberInfo.rows[0].member_no
+        ? memberInfo.rows[0].member_no.replace(/[^a-zA-Z0-9]/g, '')
+        : memberInfo.rows[0].id.slice(0, 8);
+      const generatedAccountNo = `SAV-${rawNo}`;
+
+      await client.query(
+        `INSERT INTO savings_accounts (member_id, account_number, balance, maintaining_balance, status)
+         VALUES ($1, $2, 0.00, 100.00, 'active')
+         ON CONFLICT (member_id) DO NOTHING`,
+        [memberId, generatedAccountNo]
+      );
+
+      accountCheck = await client.query(
+        `SELECT sa.*, m.first_name, m.last_name, m.middle_name, m.member_no, m.email, m.phone
+         FROM savings_accounts sa
+         JOIN members m ON m.id = sa.member_id
+         WHERE sa.member_id = $1`,
+        [memberId]
+      );
+    }
+
+    const account = accountCheck.rows[0];
+
+    // Fetch transactions
+    const txResult = await client.query(
+      `SELECT st.*, u.username as performer_name
+       FROM savings_transactions st
+       LEFT JOIN users u ON u.id = st.performed_by
+       WHERE st.savings_account_id = $1
+       ORDER BY st.transaction_date DESC, st.id DESC`,
+      [account.id]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        account,
+        transactions: txResult.rows
+      }
+    });
+  } catch (error) {
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
+// @desc    Deposit cash/funds into Member Savings Account
+// @route   POST /api/accounts/savings/deposit
+// @access  Protected (Admin, Staff, Member)
+export const postSavingsDeposit = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    let { member_id, amount, reference_no, payment_method, remarks } = req.body;
+
+    if (req.user.role === 'member') {
+      member_id = req.user.profile?.id;
+      if (!member_id) {
+        const memLookup = await client.query('SELECT id FROM members WHERE user_id = $1 LIMIT 1', [req.user.id]);
+        if (memLookup.rowCount > 0) {
+          member_id = memLookup.rows[0].id;
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: { message: 'Authenticated user session is not linked to a member profile.' }
+          });
+        }
+      }
+    }
+
+    if (!member_id || !amount) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide member_id and amount.' }
+      });
+    }
+
+    const depositAmount = parseFloat(amount);
+    if (isNaN(depositAmount) || depositAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Deposit amount must be a positive number.' }
+      });
+    }
+
+    await client.query('BEGIN');
+
+    // Fetch and lock savings account
+    let accountResult = await client.query(
+      'SELECT id, balance, status FROM savings_accounts WHERE member_id = $1 FOR UPDATE',
+      [member_id]
+    );
+
+    if (accountResult.rowCount === 0) {
+      const memberInfo = await client.query('SELECT id, member_no FROM members WHERE id = $1', [member_id]);
+      if (memberInfo.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({
+          success: false,
+          error: { message: 'Member not found.' }
+        });
+      }
+
+      const rawNo = memberInfo.rows[0].member_no
+        ? memberInfo.rows[0].member_no.replace(/[^a-zA-Z0-9]/g, '')
+        : memberInfo.rows[0].id.slice(0, 8);
+      const generatedAccountNo = `SAV-${rawNo}`;
+
+      await client.query(
+        `INSERT INTO savings_accounts (member_id, account_number, balance, maintaining_balance, status)
+         VALUES ($1, $2, 0.00, 100.00, 'active')`,
+        [member_id, generatedAccountNo]
+      );
+
+      accountResult = await client.query(
+        'SELECT id, balance, status FROM savings_accounts WHERE member_id = $1 FOR UPDATE',
+        [member_id]
+      );
+    }
+
+    const account = accountResult.rows[0];
+
+    if (account.status !== 'active') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: { message: `Cannot deposit into an account with status '${account.status}'.` }
+      });
+    }
+
+    const currentBalance = parseFloat(account.balance || 0);
+    const newBalance = currentBalance + depositAmount;
+
+    // Insert transaction
+    const txInsert = await client.query(
+      `INSERT INTO savings_transactions (
+        savings_account_id,
+        transaction_type,
+        amount,
+        balance_after,
+        reference_no,
+        payment_method,
+        performed_by,
+        remarks,
+        status
+      ) VALUES ($1, 'deposit', $2, $3, $4, $5, $6, $7, 'completed')
+      RETURNING *`,
+      [
+        account.id,
+        depositAmount,
+        newBalance,
+        reference_no || `DEP-${Date.now().toString().slice(-6)}`,
+        payment_method || 'cash',
+        req.user.id,
+        remarks || 'Cash deposit to savings account'
+      ]
+    );
+
+    // Update account balance
+    await client.query(
+      'UPDATE savings_accounts SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newBalance, account.id]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      success: true,
+      message: `Successfully deposited ₱${depositAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} into Savings Account.`,
+      data: {
+        transaction: txInsert.rows[0],
+        new_balance: newBalance
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
+// @desc    Withdraw cash/funds from Member Savings Account
+// @route   POST /api/accounts/savings/withdraw
+// @access  Protected (Admin, Staff)
+export const postSavingsWithdrawal = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { member_id, amount, reference_no, payment_method, remarks } = req.body;
+
+    if (!member_id || !amount) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide member_id and withdrawal amount.' }
+      });
+    }
+
+    const withdrawAmount = parseFloat(amount);
+    if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Withdrawal amount must be a positive number.' }
+      });
+    }
+
+    await client.query('BEGIN');
+
+    // Fetch and lock savings account
+    const accountResult = await client.query(
+      'SELECT id, balance, maintaining_balance, status FROM savings_accounts WHERE member_id = $1 FOR UPDATE',
+      [member_id]
+    );
+
+    if (accountResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Savings account not found for this member.' }
+      });
+    }
+
+    const account = accountResult.rows[0];
+
+    if (account.status !== 'active') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: { message: `Cannot withdraw from an account with status '${account.status}'.` }
+      });
+    }
+
+    const currentBalance = parseFloat(account.balance || 0);
+    const maintainingBalance = parseFloat(account.maintaining_balance || 100);
+
+    if (currentBalance < withdrawAmount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: `Insufficient savings balance. Current balance is ₱${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
+        }
+      });
+    }
+
+    const balanceAfter = currentBalance - withdrawAmount;
+
+    if (balanceAfter < maintainingBalance) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: `Withdrawal violates maintaining balance policy. Minimum maintaining balance required is ₱${maintainingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}. Maximum withdrawable: ₱${Math.max(0, currentBalance - maintainingBalance).toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
+        }
+      });
+    }
+
+    // Insert withdrawal transaction
+    const txInsert = await client.query(
+      `INSERT INTO savings_transactions (
+        savings_account_id,
+        transaction_type,
+        amount,
+        balance_after,
+        reference_no,
+        payment_method,
+        performed_by,
+        remarks,
+        status
+      ) VALUES ($1, 'withdrawal', $2, $3, $4, $5, $6, $7, 'completed')
+      RETURNING *`,
+      [
+        account.id,
+        withdrawAmount,
+        balanceAfter,
+        reference_no || `WDL-${Date.now().toString().slice(-6)}`,
+        payment_method || 'cash',
+        req.user.id,
+        remarks || 'Counter cash withdrawal from savings account'
+      ]
+    );
+
+    // Update account balance
+    await client.query(
+      'UPDATE savings_accounts SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [balanceAfter, account.id]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      success: true,
+      message: `Successfully processed withdrawal of ₱${withdrawAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`,
+      data: {
+        transaction: txInsert.rows[0],
+        new_balance: balanceAfter
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
+  }
+};

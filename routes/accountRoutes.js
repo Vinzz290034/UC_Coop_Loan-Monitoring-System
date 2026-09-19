@@ -16,7 +16,11 @@ import {
   updateCheckVoucher,
   deleteCheckVoucher,
   bulkDeleteCheckVouchers,
-  syncCheckVoucherWithRevolvingFund
+  syncCheckVoucherWithRevolvingFund,
+  getAllSavingsAccounts,
+  getSavingsAccount,
+  postSavingsDeposit,
+  postSavingsWithdrawal
 } from '../controllers/accountController.js';
 import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
@@ -24,6 +28,19 @@ const router = express.Router();
 
 // Apply auth protection to all account endpoints
 router.use(protect);
+
+// 0. Savings Accounts & Passbook Ledger
+router.route('/savings')
+  .get(restrictTo('admin', 'staff'), getAllSavingsAccounts);
+
+router.route('/savings/deposit')
+  .post(restrictTo('admin', 'staff', 'member'), requireApprovedProfile, postSavingsDeposit);
+
+router.route('/savings/withdraw')
+  .post(restrictTo('admin', 'staff'), requireApprovedProfile, postSavingsWithdrawal);
+
+router.route('/savings/:memberId')
+  .get(getSavingsAccount);
 
 // 1. Share Capital Ledger
 router.route('/share-capital')

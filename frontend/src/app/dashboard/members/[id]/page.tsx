@@ -36,6 +36,7 @@ import {
   Eye,
   Receipt,
   Wallet,
+  WalletCards,
   Banknote,
   AlertCircle,
   CircleDollarSign
@@ -54,6 +55,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
 
   const [member, setMember] = useState<any>(null);
   const [balances, setBalances] = useState<any>(null);
+  const [savingsAccount, setSavingsAccount] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,10 +139,11 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
       }
 
       // Parallel fetch for financial portfolios
-      const [balancesRes, loansRes, scRes] = await Promise.allSettled([
+      const [balancesRes, loansRes, scRes, savingsRes] = await Promise.allSettled([
         api.get(`/members/${memberId}/dashboard-summary`),
         api.get(`/loans?member_id=${memberId}`),
-        api.get(`/accounts/share-capital/${memberId}`)
+        api.get(`/accounts/share-capital/${memberId}`),
+        api.get(`/accounts/savings/${memberId}`)
       ]);
 
       if (balancesRes.status === 'fulfilled') {
@@ -151,6 +154,9 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
       }
       if (scRes.status === 'fulfilled') {
         setShareCapital(scRes.value.data || null);
+      }
+      if (savingsRes.status === 'fulfilled') {
+        setSavingsAccount(savingsRes.value.data?.data || null);
       }
     } catch (err: any) {
       console.error('Error fetching member profile:', err);
@@ -488,7 +494,19 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
           {balances && (
             <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm space-y-4">
               <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white">Financial Position Ledger</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+                  <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400 font-label flex items-center gap-1">
+                    <WalletCards className="w-3.5 h-3.5" /> Savings Passbook
+                  </span>
+                  <div className="font-headline text-base font-extrabold text-emerald-800 dark:text-emerald-300 mt-1 font-mono">
+                    {formatCurrency(parseFloat(savingsAccount?.account?.balance || 0))}
+                  </div>
+                  <div className="text-[9px] text-emerald-600/80 dark:text-emerald-400/80 font-mono mt-0.5">
+                    {savingsAccount?.account?.account_number || 'SAV-NEW'}
+                  </div>
+                </div>
+
                 <div className="p-4 bg-neutral/5 rounded-2xl">
                   <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 font-label">Share Capital</span>
                   <div className="font-headline text-base font-extrabold text-on-surface dark:text-white mt-1">
