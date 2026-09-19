@@ -98,6 +98,34 @@ CREATE TABLE fixed_deposit_transactions (
     transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 6.1 Regular Savings Accounts
+CREATE TABLE savings_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id UUID NOT NULL UNIQUE REFERENCES members(id) ON DELETE CASCADE,
+    account_number VARCHAR(50) UNIQUE,
+    balance NUMERIC(15, 2) NOT NULL DEFAULT 0.00 CHECK (balance >= 0),
+    maintaining_balance NUMERIC(15, 2) NOT NULL DEFAULT 100.00,
+    interest_rate NUMERIC(5, 4) NOT NULL DEFAULT 0.0200,
+    status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'dormant', 'closed')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 6.2 Savings Transactions
+CREATE TABLE savings_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    savings_account_id UUID NOT NULL REFERENCES savings_accounts(id) ON DELETE CASCADE,
+    transaction_type VARCHAR(50) NOT NULL CHECK (transaction_type IN ('deposit', 'withdrawal', 'interest_credit', 'loan_offset', 'transfer', 'fee')),
+    amount NUMERIC(15, 2) NOT NULL CHECK (amount > 0),
+    balance_after NUMERIC(15, 2) NOT NULL,
+    reference_no VARCHAR(100),
+    payment_method VARCHAR(50) DEFAULT 'cash',
+    performed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    remarks TEXT,
+    transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) NOT NULL DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'cancelled'))
+);
+
 -- 7. Investments Registry
 CREATE TABLE investments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
