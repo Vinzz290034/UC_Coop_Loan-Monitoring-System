@@ -438,13 +438,167 @@ export const updateLiquidation = async (req, res, next) => {
 };
 
 
-// @desc    Quick link / unlink a Check Voucher to a Liquidation Form
+// Helper to sync category breakdown amounts from an LF into its linked Check Voucher
+export const syncVoucherWithLiquidationData = async (liquidationId, checkVoucherId) => {
+  // 1. Get liquidation form details
+  const lfRes = await query('SELECT * FROM revolving_fund_liquidations WHERE id = $1', [liquidationId]);
+  if (lfRes.rows.length === 0) {
+    throw new Error('Liquidation form not found');
+  }
+  const lf = lfRes.rows[0];
+
+  // 2. Get active items
+  const itemsRes = await query(`
+    SELECT particulars, account_name, category, amount
+    FROM rf_liquidation_items
+    WHERE liquidation_id = $1 AND is_cancelled = false
+    ORDER BY sort_order ASC, item_date ASC NULLS LAST
+  `, [liquidationId]);
+
+  const categoryTotals = {};
+  const accountTotals = {};
+  let rawTotal = 0;
+
+  for (const item of itemsRes.rows) {
+    const amt = parseFloat(item.amount) || 0;
+    if (amt > 0) {
+      rawTotal += amt;
+      const cat = (item.category || 'Operation').trim();
+      categoryTotals[cat] = Math.round(((categoryTotals[cat] || 0) + amt) * 100) / 100;
+
+      const acct = (item.account_name || '').trim();
+      if (acct) {
+        accountTotals[acct] = Math.round(((accountTotals[acct] || 0) + amt) * 100) / 100;
+      }
+    }
+  }
+
+  const totalLiquidated = Math.round(rawTotal * 100) / 100;
+
+  // 3. Get check voucher
+  const cvRes = await query('SELECT * FROM check_vouchers WHERE id = $1', [checkVoucherId]);
+  if (cvRes.rows.length === 0) {
+    throw new Error('Check voucher not found');
+  }
+  const cv = cvRes.rows[0];
+
+  // Parse existing details
+  let existingDetails = [];
+  if (Array.isArray(cv.details)) {
+    existingDetails = cv.details;
+  } else if (typeof cv.details === 'string') {
+    try {
+      const parsed = JSON.parse(cv.details);
+      if (Array.isArray(parsed)) existingDetails = parsed;
+    } catch {}
+  }
+
+  const updatedRows = [];
+  const matchedCategories = new Set();
+  let hasBankRow = false;
+
+  if (existingDetails.length > 0) {
+    for (const row of existingDetails) {
+      const desc = (row.book_of_account || row.description || '').trim();
+      const descLower = desc.toLowerCase();
+
+      // Check if this row is a bank / credit account
+      if (
+        /cib\b|cash\s*in\s*bank|metrobank|bdo|landbank|pnb|bpi|bank/i.test(descLower) ||
+        (parseFloat(row.credit) > 0) ||
+        (parseFloat(row.amount) < 0)
+      ) {
+        hasBankRow = true;
+        updatedRows.push({
+          book_of_account: desc || `CIB-${cv.bank || 'Metrobank'}`,
+          amount: -totalLiquidated
+        });
+        continue;
+      }
+
+      // Check if row matches a category (exact or case-insensitive)
+      const matchedCat = Object.keys(categoryTotals).find(c => c.toLowerCase() === descLower);
+      if (matchedCat) {
+        matchedCategories.add(matchedCat.toLowerCase());
+        updatedRows.push({
+          book_of_account: desc,
+          amount: categoryTotals[matchedCat]
+        });
+        continue;
+      }
+
+      // Check if row matches an account
+      const matchedAcct = Object.keys(accountTotals).find(a => a.toLowerCase() === descLower);
+      if (matchedAcct) {
+        updatedRows.push({
+          book_of_account: desc,
+          amount: accountTotals[matchedAcct]
+        });
+        continue;
+      }
+
+      // Preserve row as-is
+      updatedRows.push({
+        book_of_account: desc,
+        amount: parseFloat(row.amount) || parseFloat(row.debit) || 0
+      });
+    }
+  }
+
+  // If there are categories not yet present in existing rows, add them
+  for (const [cat, amt] of Object.entries(categoryTotals)) {
+    if (!matchedCategories.has(cat.toLowerCase())) {
+      const bankIdx = updatedRows.findIndex(r => r.amount < 0);
+      const newRow = { book_of_account: cat, amount: amt };
+      if (bankIdx >= 0) {
+        updatedRows.splice(bankIdx, 0, newRow);
+      } else {
+        updatedRows.push(newRow);
+      }
+    }
+  }
+
+  // If no bank row exists, append one for balancing credit
+  if (!hasBankRow) {
+    const bankName = cv.bank ? `CIB-${cv.bank}` : 'CIB-Metrobank';
+    updatedRows.push({
+      book_of_account: bankName,
+      amount: -totalLiquidated
+    });
+  }
+
+  // Update check voucher with balanced rows and amount
+  const updateCvRes = await query(`
+    UPDATE check_vouchers
+    SET
+      amount = $1,
+      details = $2::jsonb,
+      particulars = COALESCE(NULLIF(particulars, ''), $3),
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $4
+    RETURNING *
+  `, [
+    totalLiquidated,
+    JSON.stringify(updatedRows),
+    `Revolving Fund Replenishment - ${lf.sheet_name || lf.lf_no}`,
+    checkVoucherId
+  ]);
+
+  return {
+    checkVoucher: updateCvRes.rows[0],
+    categoryTotals,
+    totalLiquidated,
+    rows: updatedRows
+  };
+};
+
+// @desc    Quick link / unlink a Check Voucher to a Liquidation Form (with optional auto-sync)
 // @route   POST /api/revolving-funds/:id/link-voucher
 // @access  Protected (Admin, Staff)
 export const linkCheckVoucher = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { check_voucher_id } = req.body;
+    const { check_voucher_id, auto_sync_amounts } = req.body;
 
     let voucherNo = null;
     if (check_voucher_id) {
@@ -468,10 +622,52 @@ export const linkCheckVoucher = async (req, res, next) => {
       RETURNING *
     `, [check_voucher_id || null, voucherNo, id]);
 
+    let syncResult = null;
+    if (check_voucher_id && auto_sync_amounts) {
+      try {
+        syncResult = await syncVoucherWithLiquidationData(id, check_voucher_id);
+      } catch (err) {
+        console.warn('Auto-sync check voucher amounts failed:', err);
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: updateRes.rows[0],
-      message: check_voucher_id ? `Linked to Check Voucher ${voucherNo}.` : 'Unlinked from Check Voucher.'
+      syncResult,
+      message: check_voucher_id
+        ? `Linked to Check Voucher ${voucherNo}${syncResult ? ` and synchronized ₱${syncResult.totalLiquidated.toLocaleString('en-US', { minimumFractionDigits: 2 })}.` : '.'}`
+        : 'Unlinked from Check Voucher.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Explicitly sync / auto-populate amounts from Liquidation Form to its linked Check Voucher
+// @route   POST /api/revolving-funds/:id/sync-voucher-amounts
+// @access  Protected (Admin, Staff)
+export const syncVoucherAmounts = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const lfRes = await query('SELECT * FROM revolving_fund_liquidations WHERE id = $1', [id]);
+    if (lfRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: { message: 'Liquidation form not found' } });
+    }
+    const lf = lfRes.rows[0];
+    const cvId = req.body.check_voucher_id || lf.check_voucher_id;
+    if (!cvId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No check voucher linked to this liquidation form' }
+      });
+    }
+
+    const result = await syncVoucherWithLiquidationData(id, cvId);
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: `Successfully synchronized ₱${result.totalLiquidated.toLocaleString('en-US', { minimumFractionDigits: 2 })} from ${lf.lf_no} to Check Voucher.`
     });
   } catch (error) {
     next(error);

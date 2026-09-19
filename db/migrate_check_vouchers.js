@@ -27,7 +27,7 @@ export async function migrateCheckVouchers() {
       );
 
       ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '[]'::jsonb;
-      ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS signatories JSONB DEFAULT '{"prepared_by":"LAMOSTE, CHINNETTE A.","checked_by":"MANILYN VELOS","approved_by":"MICHELLE M. PABLE"}'::jsonb;
+      ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS signatories JSONB DEFAULT '{"prepared_by":"LAMOSTE, CHINNETTE A.","checked_by":"MARILOU LARIOSA","approved_by":"MICHELLE M. PABLE"}'::jsonb;
 
       CREATE INDEX IF NOT EXISTS idx_check_vouchers_voucher_date ON check_vouchers(voucher_date DESC);
       CREATE INDEX IF NOT EXISTS idx_check_vouchers_folder_name ON check_vouchers(folder_name);

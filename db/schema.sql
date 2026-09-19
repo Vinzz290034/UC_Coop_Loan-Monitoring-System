@@ -277,7 +277,7 @@ CREATE TABLE check_vouchers (
     folder_name VARCHAR(150),
     box_name VARCHAR(150),
     details JSONB DEFAULT '[]'::jsonb,
-    signatories JSONB DEFAULT '{"prepared_by":"LAMOSTE, CHINNETTE A.","checked_by":"MANILYN VELOS","approved_by":"MICHELLE M. PABLE"}'::jsonb,
+    signatories JSONB DEFAULT '{"prepared_by":"LAMOSTE, CHINNETTE A.","checked_by":"MARILOU LARIOSA","approved_by":"MICHELLE M. PABLE"}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

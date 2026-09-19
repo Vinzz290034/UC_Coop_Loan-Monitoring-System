@@ -15,7 +15,8 @@ import {
   createCheckVoucher,
   updateCheckVoucher,
   deleteCheckVoucher,
-  bulkDeleteCheckVouchers
+  bulkDeleteCheckVouchers,
+  syncCheckVoucherWithRevolvingFund
 } from '../controllers/accountController.js';
 import { protect, restrictTo, requireApprovedProfile } from '../middleware/authMiddleware.js';
 
@@ -64,6 +65,9 @@ router.route('/check-vouchers/import')
 
 router.route('/check-vouchers/bulk-delete')
   .post(restrictTo('admin', 'staff'), bulkDeleteCheckVouchers);
+
+router.route('/check-vouchers/:id/sync-revolving-fund')
+  .post(restrictTo('admin', 'staff'), syncCheckVoucherWithRevolvingFund);
 
 router.route('/check-vouchers/:id')
   .put(restrictTo('admin', 'staff'), updateCheckVoucher)

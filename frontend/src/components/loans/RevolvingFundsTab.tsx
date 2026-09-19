@@ -27,7 +27,8 @@ import {
   DollarSign,
   Calendar,
   ChevronUp,
-  PieChart
+  PieChart,
+  Sparkles
 } from 'lucide-react';
 
 interface LiquidationItem {
@@ -219,6 +220,9 @@ export default function RevolvingFundsTab({
   const [cvLoading, setCvLoading] = useState(false);
   const [cvSearch, setCvSearch] = useState('');
   const [savingLink, setSavingLink] = useState(false);
+  const [autoSyncOnLink, setAutoSyncOnLink] = useState(true);
+  const [syncingVoucherId, setSyncingVoucherId] = useState<string | null>(null);
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState<{ id: string; text: string } | null>(null);
 
   // Print state
   const [printingLf, setPrintingLf] = useState<{
@@ -375,6 +379,7 @@ export default function RevolvingFundsTab({
   // Open Link Voucher modal
   const openLinkModal = async (lf: LiquidationForm) => {
     setLinkingLf(lf);
+    setAutoSyncOnLink(true);
     setCvLoading(true);
     try {
       // Query check vouchers
@@ -394,14 +399,37 @@ export default function RevolvingFundsTab({
     try {
       setSavingLink(true);
       await api.post(`/revolving-funds/${linkingLf.id}/link-voucher`, {
-        check_voucher_id: cvId
+        check_voucher_id: cvId,
+        auto_sync_amounts: cvId ? autoSyncOnLink : false
       });
       setLinkingLf(null);
       await loadLiquidations(page);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to link check voucher:', err);
+      alert(err?.response?.data?.message || 'Failed to link check voucher');
     } finally {
       setSavingLink(false);
+    }
+  };
+
+  // Quick sync liquidation breakdown amounts to linked check voucher
+  const handleSyncVoucherAmounts = async (lf: LiquidationForm, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      setSyncingVoucherId(lf.id);
+      const res = await api.post(`/revolving-funds/${lf.id}/sync-voucher-amounts`);
+      if (res.data.success) {
+        setSyncSuccessMsg({
+          id: lf.id,
+          text: `Successfully synced ₱${Number(res.data.data?.amount || lf.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })} into CV #${res.data.data?.voucher_no || lf.voucher_no}!`
+        });
+        setTimeout(() => setSyncSuccessMsg(null), 5000);
+      }
+    } catch (err: any) {
+      console.error('Failed to sync amounts to check voucher:', err);
+      alert(err?.response?.data?.message || 'Failed to sync amounts to check voucher.');
+    } finally {
+      setSyncingVoucherId(null);
     }
   };
 
@@ -972,16 +1000,40 @@ export default function RevolvingFundsTab({
                                 </div>
 
                                 <div className="flex items-center gap-2">
+                                  {(lf.check_voucher_id || lf.voucher_no) && (
+                                    <button
+                                      type="button"
+                                      disabled={syncingVoucherId === lf.id}
+                                      onClick={e => handleSyncVoucherAmounts(lf, e)}
+                                      title={`Auto-sync category debit & bank credit rows totaling ₱${Number(lf.total_liquidated || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} into CV #${lf.voucher_no || ''}`}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/60 rounded-xl transition-all shadow-xs"
+                                    >
+                                      {syncingVoucherId === lf.id ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                                      ) : (
+                                        <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                      )}
+                                      <span>{syncingVoucherId === lf.id ? 'Syncing...' : `Sync Amounts to CV #${lf.voucher_no}`}</span>
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={e => handlePrint(lf, e)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/60 rounded-xl transition-all"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-neutral-700 hover:text-neutral-800 dark:text-neutral-300 bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-xl transition-all"
                                   >
                                     <Printer className="w-3.5 h-3.5" />
                                     <span>Print Form</span>
                                   </button>
                                 </div>
                               </div>
+
+                              {/* Sync Success Message Banner */}
+                              {syncSuccessMsg && syncSuccessMsg.id === lf.id && (
+                                <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 dark:bg-emerald-950/50 dark:border-emerald-700 dark:text-emerald-200 rounded-xl text-xs font-medium flex items-center gap-2 animate-fadeIn">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                  <span>{syncSuccessMsg.text}</span>
+                                </div>
+                              )}
 
                               {/* Clean Structured Category Expense Grid */}
                               {details && (() => {
@@ -1254,6 +1306,32 @@ export default function RevolvingFundsTab({
                   placeholder="Filter by voucher #, payee, or particulars..."
                   className="w-full pl-9 pr-3 py-2 text-xs bg-neutral-100 dark:bg-neutral-800 border border-outline-variant/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
+              </div>
+
+              {/* Auto-Add Category Amounts Toggle */}
+              <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 block">
+                      Auto-Add Category Amounts to Voucher
+                    </span>
+                    <span className="text-[11px] text-emerald-700 dark:text-emerald-400 leading-tight block">
+                      Auto-fills CV rows with breakdown totaling <strong>₱{Number(linkingLf.total_liquidated || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> and balances bank credit.
+                    </span>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={autoSyncOnLink}
+                    onChange={e => setAutoSyncOnLink(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-neutral-300 peer-focus:outline-none rounded-full peer dark:bg-neutral-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
               </div>
 
               {cvLoading ? (

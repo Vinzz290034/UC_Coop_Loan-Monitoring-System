@@ -58,7 +58,8 @@ import {
   Layers,
   RotateCcw,
   ArrowRight,
-  ExternalLink
+  ExternalLink,
+  Zap
 } from 'lucide-react';
 import LoanApprovalModal from '@/components/loans/LoanApprovalModal';
 import RevolvingFundsTab from '@/components/loans/RevolvingFundsTab';
@@ -424,6 +425,7 @@ function LoansPageContent() {
   // Check Voucher Modal Edit State
   const [isEditingCvModal, setIsEditingCvModal] = useState(false);
   const [isSavingCvEdit, setIsSavingCvEdit] = useState(false);
+  const [isSyncingCvRf, setIsSyncingCvRf] = useState(false);
   const [editCvFormData, setEditCvFormData] = useState<any>({
     id: '',
     voucher_no: '',
@@ -435,7 +437,7 @@ function LoansPageContent() {
     particulars: '',
     signatories: {
       prepared_by: 'LAMOSTE, CHINNETTE A.',
-      checked_by: 'MANILYN VELOS',
+      checked_by: 'MARILOU LARIOSA',
       approved_by: 'MICHELLE M. PABLE',
       received_by: ''
     },
@@ -455,7 +457,7 @@ function LoansPageContent() {
       particulars: cv.particulars || '',
       signatories: {
         prepared_by: cv.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.',
-        checked_by: cv.signatories?.checked_by || 'MANILYN VELOS',
+        checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
         approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE',
         received_by: cv.signatories?.received_by || ''
       },
@@ -687,6 +689,73 @@ function LoansPageContent() {
     }
   };
 
+  const handleSyncCvRevolvingFund = async () => {
+    if (!selectedCvForModal?.id) return;
+    try {
+      setIsSyncingCvRf(true);
+      const res = await api.post(`/accounts/check-vouchers/${selectedCvForModal.id}/sync-revolving-fund`);
+      if (res.data?.success && res.data?.data) {
+        const updatedCv = res.data.data;
+        setSelectedCvForModal(updatedCv);
+        setCheckVouchers((prev: any[]) =>
+          prev.map(v => (v.id === updatedCv.id ? { ...v, ...updatedCv } : v))
+        );
+        if (printingCvBreakdown && printingCvBreakdown.id === updatedCv.id) {
+          setPrintingCvBreakdown((prev: any) => ({ ...prev, ...updatedCv }));
+        }
+        setCvActionFeedback({
+          type: 'success',
+          message: res.data.message || `Amounts synchronized from ${res.data.lf?.lf_no || 'liquidation form'} successfully!`
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to sync check voucher with revolving fund:', err);
+      setCvActionFeedback({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to synchronize amounts from Revolving Fund.'
+      });
+    } finally {
+      setIsSyncingCvRf(false);
+    }
+  };
+
+  const handleAutoFillEditCvFromRf = async () => {
+    if (!editCvFormData.id) return;
+    try {
+      setIsSyncingCvRf(true);
+      const res = await api.post(`/accounts/check-vouchers/${editCvFormData.id}/sync-revolving-fund`);
+      if (res.data?.success && res.data?.data) {
+        const updatedCv = res.data.data;
+        const { rows } = getBalancedCvRows(updatedCv);
+        setEditCvFormData((prev: any) => ({
+          ...prev,
+          amount: updatedCv.amount,
+          rows: rows.map(r => ({
+            description: r.description,
+            debit: r.debit !== null ? String(r.debit) : '',
+            credit: r.credit !== null ? String(r.credit) : ''
+          }))
+        }));
+        setSelectedCvForModal(updatedCv);
+        setCheckVouchers((prev: any[]) =>
+          prev.map(v => (v.id === updatedCv.id ? { ...v, ...updatedCv } : v))
+        );
+        setCvActionFeedback({
+          type: 'success',
+          message: res.data.message || 'Check Voucher rows auto-populated from linked Liquidation Form!'
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to auto-fill edit rows from RF:', err);
+      setCvActionFeedback({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to auto-fill amounts from Revolving Fund.'
+      });
+    } finally {
+      setIsSyncingCvRf(false);
+    }
+  };
+
   useEffect(() => {
     if (cvActionFeedback) {
       const timer = setTimeout(() => setCvActionFeedback(null), 5000);
@@ -789,7 +858,7 @@ function LoansPageContent() {
   const [cvCheckNo, setCvCheckNo] = useState('');
   const [cvRemarks, setCvRemarks] = useState('');
   const [cvPreparedBy, setCvPreparedBy] = useState('LAMOSTE, CHINNETTE A.');
-  const [cvCheckedBy, setCvCheckedBy] = useState('MANILYN VELOS');
+  const [cvCheckedBy, setCvCheckedBy] = useState('MARILOU LARIOSA');
   const [cvApprovedBy, setCvApprovedBy] = useState('MICHELLE M. PABLE');
   const [cvTransactionRows, setCvTransactionRows] = useState<{ description: string; debit: string; credit: string }[]>([
     { description: '', debit: '', credit: '' }
@@ -826,7 +895,7 @@ function LoansPageContent() {
     setCvCheckNo('');
     setCvRemarks('');
     setCvPreparedBy('LAMOSTE, CHINNETTE A.');
-    setCvCheckedBy('MANILYN VELOS');
+    setCvCheckedBy('MARILOU LARIOSA');
     setCvApprovedBy('MICHELLE M. PABLE');
     setCvTransactionRows([
       { description: '', debit: '', credit: '' }
@@ -925,7 +994,7 @@ function LoansPageContent() {
         details: detailsToSave,
         signatories: {
           prepared_by: cvPreparedBy.trim() || 'LAMOSTE, CHINNETTE A.',
-          checked_by: cvCheckedBy.trim() || 'MANILYN VELOS',
+          checked_by: cvCheckedBy.trim() || 'MARILOU LARIOSA',
           approved_by: cvApprovedBy.trim() || 'MICHELLE M. PABLE'
         }
       };
@@ -1087,7 +1156,7 @@ function LoansPageContent() {
   const [voucherDescription, setVoucherDescription] = useState('');
   const [bookOfAccount, setBookOfAccount] = useState('Accounts Payable');
   const [preparedBy, setPreparedBy] = useState('LAMOSTE');
-  const [checkedBy, setCheckedBy] = useState('MANILYN');
+  const [checkedBy, setCheckedBy] = useState('MARILOU LARIOSA');
   const [approvedBy, setApprovedBy] = useState('MICHELLE');
   const [releasedBy, setReleasedBy] = useState('Michelle Pable');
 
@@ -1151,7 +1220,7 @@ function LoansPageContent() {
 
     setBookOfAccount('Accounts Payable');
     setPreparedBy('LAMOSTE');
-    setCheckedBy('MANILYN');
+    setCheckedBy('MARILOU LARIOSA');
     setApprovedBy('MICHELLE');
     setPrintedDate(new Date().toLocaleString('en-US', {
       month: 'numeric',
@@ -5128,7 +5197,7 @@ function LoansPageContent() {
                   <div>
                     <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">CHECKED BY:</span>
                     <div className="h-4"></div>
-                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{checkedBy || 'MANILYN'}</p>
+                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{checkedBy || 'MARILOU LARIOSA'}</p>
                     <div className="border-b-[1.5px] border-neutral-900"></div>
                   </div>
                   <div>
@@ -5682,7 +5751,7 @@ function LoansPageContent() {
                     </span>
                     <div style={{ height: '24px' }}></div>
                     <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
-                      {checkedBy || 'MANILYN'}
+                      {checkedBy || 'MARILOU LARIOSA'}
                     </p>
                     <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                   </div>
@@ -6765,14 +6834,28 @@ function LoansPageContent() {
                         <span>Transaction Details</span>
                         <span className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400">({editCvFormData.rows.length} rows)</span>
                       </h5>
-                      <button
-                        type="button"
-                        onClick={handleEditCvAddRow}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add Row</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {isRevolvingVoucher(selectedCvForModal) && (
+                          <button
+                            type="button"
+                            disabled={isSyncingCvRf}
+                            onClick={handleAutoFillEditCvFromRf}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-amber-800 dark:text-amber-200 bg-amber-100/80 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition cursor-pointer active:scale-95 disabled:opacity-50"
+                            title="Auto-fill debits from linked liquidation categories and credit bank"
+                          >
+                            {isSyncingCvRf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5 text-amber-600" />}
+                            <span>Auto-Fill from {selectedCvForModal.revolving_fund?.lf_no || 'LF'}</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleEditCvAddRow}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Row</span>
+                        </button>
+                      </div>
                     </div>
                     <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
                       <table className="w-full text-xs">
@@ -6992,15 +7075,38 @@ function LoansPageContent() {
                           </p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => jumpToRevolvingFund(selectedCvForModal.revolving_fund, extractRfNumber(selectedCvForModal))}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white shadow-2xs transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto"
-                        title="Navigate to Revolving Funds and view breakdown items"
-                      >
-                        <span>Open Liquidation Form</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                        <button
+                          type="button"
+                          disabled={isSyncingCvRf}
+                          onClick={handleSyncCvRevolvingFund}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 text-white shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+                          title="Auto-calculate and populate category debit amounts and bank credit from linked liquidation form"
+                        >
+                          {isSyncingCvRf ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Zap className="w-3.5 h-3.5" />
+                          )}
+                          <span>
+                            {isSyncingCvRf ? 'Syncing...' : (
+                              selectedCvForModal.revolving_fund?.total_liquidated
+                                ? `Auto-Add Amounts (₱${parseFloat(selectedCvForModal.revolving_fund.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })})`
+                                : 'Auto-Add Amounts'
+                            )}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => jumpToRevolvingFund(selectedCvForModal.revolving_fund, extractRfNumber(selectedCvForModal))}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+                          title="Navigate to Revolving Funds and view breakdown items"
+                        >
+                          <span>Open Form</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -7013,6 +7119,26 @@ function LoansPageContent() {
                           <h5 className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
                             Transaction Details
                           </h5>
+                          {isRevolvingVoucher(selectedCvForModal) && (
+                            <div className="flex items-center gap-2 text-xs">
+                              {debitTotal > 0 ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span>Amounts Populated</span>
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={isSyncingCvRf}
+                                  onClick={handleSyncCvRevolvingFund}
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                                >
+                                  <Zap className="w-3 h-3 text-amber-500 animate-pulse" />
+                                  <span>Amounts Empty — Click to Auto-Add</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
                           <table className="w-full text-xs">
@@ -7097,7 +7223,7 @@ function LoansPageContent() {
                               <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">CHECKED BY:</span>
                               <div className="h-5"></div>
                               <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
-                                {selectedCvForModal.signatories?.checked_by || 'MANILYN'}
+                                {selectedCvForModal.signatories?.checked_by || 'MARILOU LARIOSA'}
                               </p>
                               <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                             </div>
@@ -7352,7 +7478,7 @@ function LoansPageContent() {
                   </span>
                   <div style={{ height: '24px' }}></div>
                   <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
-                    {printingCvBreakdown.signatories?.checked_by || 'MANILYN'}
+                    {printingCvBreakdown.signatories?.checked_by || 'MARILOU LARIOSA'}
                   </p>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                 </div>

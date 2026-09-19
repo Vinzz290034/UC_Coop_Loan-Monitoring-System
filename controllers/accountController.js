@@ -987,7 +987,7 @@ export const createCheckVoucher = async (req, res, next) => {
 
     const defaultSignatories = {
       prepared_by: 'LAMOSTE, CHINNETTE A.',
-      checked_by: 'MANILYN VELOS',
+      checked_by: 'MARILOU LARIOSA',
       approved_by: 'MICHELLE M. PABLE'
     };
 
@@ -1090,6 +1090,71 @@ export const bulkDeleteCheckVouchers = async (req, res, next) => {
       success: true,
       message: `${result.rowCount} check voucher(s) removed successfully`,
       count: result.rowCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Sync a Check Voucher with its linked Revolving Fund Liquidation Form
+// @route   POST /api/accounts/check-vouchers/:id/sync-revolving-fund
+// @access  Protected (Admin, Staff)
+export const syncCheckVoucherWithRevolvingFund = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const cvRes = await query('SELECT * FROM check_vouchers WHERE id = $1', [id]);
+    if (cvRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: { message: 'Check voucher not found.' } });
+    }
+    const cv = cvRes.rows[0];
+
+    // Find linked liquidation form
+    const lfRes = await query(`
+      SELECT * FROM revolving_fund_liquidations
+      WHERE check_voucher_id = $1 OR voucher_no = $2
+      ORDER BY created_at DESC LIMIT 1
+    `, [cv.id, cv.voucher_no]);
+
+    if (lfRes.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No revolving fund liquidation form linked to this voucher.' }
+      });
+    }
+
+    const lf = lfRes.rows[0];
+    const { syncVoucherWithLiquidationData } = await import('./revolvingFundController.js');
+    const result = await syncVoucherWithLiquidationData(lf.id, cv.id);
+
+    // Also attach revolving_fund metadata to the response so the UI has complete info
+    const fullCvRes = await query(`
+      SELECT cv.*,
+        (
+          SELECT JSON_BUILD_OBJECT(
+            'id', rf.id,
+            'lf_no', rf.lf_no,
+            'sheet_name', rf.sheet_name,
+            'custodian_name', rf.custodian_name,
+            'total_liquidated', rf.total_liquidated
+          )
+          FROM revolving_fund_liquidations rf
+          WHERE rf.check_voucher_id = cv.id OR rf.voucher_no = cv.voucher_no
+          LIMIT 1
+        ) AS revolving_fund
+      FROM check_vouchers cv
+      WHERE cv.id = $1
+    `, [cv.id]);
+
+    res.status(200).json({
+      success: true,
+      data: fullCvRes.rows[0] || result.checkVoucher,
+      lf: {
+        id: lf.id,
+        lf_no: lf.lf_no,
+        sheet_name: lf.sheet_name,
+        total_liquidated: result.totalLiquidated
+      },
+      message: `Successfully synchronized ₱${result.totalLiquidated.toLocaleString('en-US', { minimumFractionDigits: 2 })} from ${lf.lf_no} into Check Voucher #${cv.voucher_no}.`
     });
   } catch (error) {
     next(error);

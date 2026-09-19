@@ -7,6 +7,7 @@ import {
   updateLiquidation,
   deleteLiquidation,
   linkCheckVoucher,
+  syncVoucherAmounts,
   addLiquidationItem,
   updateLiquidationItem,
   deleteLiquidationItem
@@ -28,6 +29,9 @@ router.route('/:id')
 
 router.route('/:id/link-voucher')
   .post(linkCheckVoucher);
+
+router.route('/:id/sync-voucher-amounts')
+  .post(syncVoucherAmounts);
 
 router.route('/:id/items')
   .post(addLiquidationItem);
