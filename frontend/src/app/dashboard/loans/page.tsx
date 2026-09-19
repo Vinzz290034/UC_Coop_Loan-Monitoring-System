@@ -6020,7 +6020,7 @@ function LoansPageContent() {
             background: white !important;
           }
           /* Hide everything in body EXCEPT the print section portal */
-          body > *:not(#print-section):not(#purchase-cv-print-section):not(#cv-breakdown-print-section) {
+          body > *:not(#print-section):not(#purchase-cv-print-section):not(#cv-breakdown-print-section):not(#coop-printable-lf-sheet) {
             display: none !important;
           }
           /* Show and size the print section */
@@ -6033,6 +6033,17 @@ function LoansPageContent() {
             margin: 0 !important;
             padding: 0 !important;
             box-sizing: border-box !important;
+          }
+          #coop-printable-lf-sheet {
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            background: white !important;
+            color: black !important;
+            box-sizing: border-box !important;
+            padding: 14mm 24mm 20mm 24mm !important;
+            margin: 0 auto !important;
           }
         }
       `}} />
