@@ -31,6 +31,7 @@ import {
   FileEdit,
 } from 'lucide-react';
 import LoanEditorTab from '@/components/import/LoanEditorTab';
+import RevolvingFundImportPreview from '@/components/import/RevolvingFundImportPreview';
 
 interface ParsedCheckVoucher {
   id: string;
@@ -134,11 +135,34 @@ export default function ImportPage() {
   }
 
   const [step, setStep] = useState<'upload' | 'preview' | 'executing' | 'success'>('upload');
-  const [importMode, setImportMode] = useState<'loans' | 'members_registry' | 'check_vouchers' | 'loan_editor'>('loans');
+  const [importMode, setImportMode] = useState<'loans' | 'members_registry' | 'check_vouchers' | 'loan_editor' | 'revolving_funds'>('loans');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Read URL query parameter ?mode=...
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const m = params.get('mode');
+      if (m === 'revolving_funds' || m === 'revolving') {
+        setImportMode('revolving_funds');
+      } else if (m === 'check_vouchers' || m === 'vouchers') {
+        setImportMode('check_vouchers');
+      }
+    }
+  }, []);
+
+  // Revolving Fund Import State
+  const [rfSheetNames, setRfSheetNames] = useState<string[]>([]);
+  const [rfCandidateSheets, setRfCandidateSheets] = useState<string[]>([]);
+  const [rfActiveSheet, setRfActiveSheet] = useState<string>('');
+  const [rfForm, setRfForm] = useState<any | null>(null);
+  const [rfSuggestedVouchers, setRfSuggestedVouchers] = useState<any[]>([]);
+  const [isRfSheetLoading, setIsRfSheetLoading] = useState(false);
+  const [rfExecuting, setRfExecuting] = useState(false);
+  const [rfImportResult, setRfImportResult] = useState<any | null>(null);
 
   // Registry Update Result State
   const [registryResult, setRegistryResult] = useState<{
@@ -224,6 +248,35 @@ export default function ImportPage() {
 
     if (!isValid) {
       setErrorMsg('Please upload a valid Excel spreadsheet (.xlsx or .xls).');
+      return;
+    }
+
+    if (importMode === 'revolving_funds') {
+      setSelectedFile(file);
+      setErrorMsg(null);
+      setIsScanning(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post('/import/revolving-funds/preview', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        if (response.data.success && response.data.data) {
+          const { sheetNames, candidateSheets, selectedSheet, form, suggestedVouchers } = response.data.data;
+          setRfSheetNames(sheetNames || []);
+          setRfCandidateSheets(candidateSheets || []);
+          setRfActiveSheet(selectedSheet || sheetNames[0] || '');
+          setRfForm(form || null);
+          setRfSuggestedVouchers(suggestedVouchers || []);
+          setStep('preview');
+        } else {
+          setErrorMsg(response.data.error?.message || 'Failed to inspect revolving fund liquidation.');
+        }
+      } catch (err: any) {
+        setErrorMsg(err.response?.data?.error?.message || 'Failed to parse revolving fund liquidation from Excel.');
+      } finally {
+        setIsScanning(false);
+      }
       return;
     }
 
@@ -432,6 +485,11 @@ export default function ImportPage() {
     setCvSelectedIds(new Set());
     setCvSearchQuery('');
     setCvFilterTab('all');
+    setRfImportResult(null);
+    setRfForm(null);
+    setRfSheetNames([]);
+    setRfCandidateSheets([]);
+    setRfActiveSheet('');
     setStep('upload');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -573,6 +631,52 @@ export default function ImportPage() {
     }
   };
 
+  // Switch Revolving Fund Sheet in Preview
+  const handleRfSheetChange = async (newSheet: string) => {
+    if (!selectedFile) return;
+    setIsRfSheetLoading(true);
+    setErrorMsg(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('sheetName', newSheet);
+      const res = await api.post('/import/revolving-funds/preview', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success && res.data.data) {
+        setRfActiveSheet(res.data.data.selectedSheet);
+        setRfForm(res.data.data.form);
+      }
+    } catch (err: any) {
+      setErrorMsg('Failed to switch worksheet.');
+    } finally {
+      setIsRfSheetLoading(false);
+    }
+  };
+
+  // Execute Revolving Fund Import
+  const handleExecuteRfImport = async (form: any, cvId: string | null) => {
+    if (!form) return;
+    setRfExecuting(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.post('/import/revolving-funds/execute', {
+        form,
+        check_voucher_id: cvId
+      });
+      if (res.data.success && res.data.data) {
+        setRfImportResult(res.data.data);
+        setStep('success');
+      } else {
+        setErrorMsg(res.data.error?.message || 'Failed to import Revolving Fund Liquidation Form.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error?.message || 'Failed to import Revolving Fund Liquidation Form.');
+    } finally {
+      setRfExecuting(false);
+    }
+  };
+
   const handleProvisionAccounts = async () => {
     setProvisioning(true);
     setProvisionError(null);
@@ -688,6 +792,17 @@ export default function ImportPage() {
                   }`}
                 >
                   Purchase Check Vouchers
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportMode('revolving_funds')}
+                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+                    importMode === 'revolving_funds'
+                      ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md scale-[1.02]'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                  }`}
+                >
+                  Revolving Fund Liquidation
                 </button>
                 <button
                   type="button"
@@ -1606,6 +1721,22 @@ export default function ImportPage() {
           </div>
         )}
 
+        {step === 'preview' && importMode === 'revolving_funds' && (
+          <RevolvingFundImportPreview
+            fileName={selectedFile?.name || ''}
+            sheetNames={rfSheetNames}
+            candidateSheets={rfCandidateSheets}
+            activeSheet={rfActiveSheet}
+            form={rfForm}
+            suggestedVouchers={rfSuggestedVouchers}
+            onSheetChange={handleRfSheetChange}
+            onExecuteImport={handleExecuteRfImport}
+            onReset={resetImporter}
+            isExecuting={rfExecuting}
+            isLoadingSheet={isRfSheetLoading}
+          />
+        )}
+
         {/* STEP 3: EXECUTING INGESTION */}
         {step === 'executing' && (
           <div className="bg-white dark:bg-surface-container-low rounded-3xl p-12 border border-outline-variant/50 shadow-lg text-center space-y-6 max-w-lg mx-auto">
@@ -1718,6 +1849,39 @@ export default function ImportPage() {
                 className="px-6 py-2.5 text-xs font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all"
               >
                 Import More
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'success' && rfImportResult && (
+          <div className="bg-white dark:bg-surface-container-low rounded-3xl p-8 sm:p-12 border border-outline-variant/50 shadow-lg space-y-8 max-w-4xl mx-auto text-center">
+            <div className="w-20 h-20 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-12 h-12" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-2xl sm:text-3xl font-bold font-headline text-on-surface dark:text-white">
+                Liquidation Form {rfImportResult.lf_no} Imported!
+              </h2>
+              <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 max-w-lg mx-auto">
+                Successfully ingested {rfImportResult.item_count} voucher line items with total liquidated expenses of ₱{Number(rfImportResult.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-outline-variant/40">
+              <Link
+                href="/dashboard/loans?tab=revolving_funds"
+                className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all"
+              >
+                <Layers className="w-4 h-4" />
+                View in Revolving Funds Tab
+              </Link>
+              <button
+                onClick={resetImporter}
+                className="px-6 py-2.5 text-xs font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all cursor-pointer"
+              >
+                Import Another Sheet
               </button>
             </div>
           </div>

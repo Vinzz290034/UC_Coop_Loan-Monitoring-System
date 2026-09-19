@@ -22,6 +22,7 @@ import { migrateFixVillarinLoans } from './migrate_fix_villarin_loans.js';
 import { migrateFixPonterosLoans } from './migrate_fix_ponteros_loans.js';
 import { migrateFixVelosLoans } from './migrate_fix_velos_loans.js';
 import { migrateLoanDeductions } from './migrate_loan_deductions.js';
+import { migrateRevolvingFunds } from './migrate_revolving_funds.js';
 
 export async function runMigrations() {
   console.log('[System Startup] Running automated database migrations...');
@@ -49,6 +50,7 @@ export async function runMigrations() {
     await migrateFixPonterosLoans();
     await migrateFixVelosLoans();
     await migrateLoanDeductions();
+    await migrateRevolvingFunds();
     console.log('[System Startup] All database migrations completed successfully.');
   } catch (error) {
     console.error('[System Startup] Database migration error:', error);

@@ -23,6 +23,7 @@ import calendarRoutes from './routes/calendarRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
 import importRoutes from './routes/importRoutes.js';
+import revolvingFundRoutes from './routes/revolvingFundRoutes.js';
 
 dotenv.config();
 
@@ -121,6 +122,7 @@ app.use('/api/calendar', calendarRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/revolving-funds', revolvingFundRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

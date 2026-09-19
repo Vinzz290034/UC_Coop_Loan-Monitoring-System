@@ -2126,3 +2126,456 @@ export const importCheckVouchersFromExcel = async (req, res, next) => {
   }
 };
 
+// Helper: Parse a single Revolving Fund Liquidation Form sheet
+export const parseRevolvingFundSheet = (sheet, sheetName = '', defaultYear = 2026) => {
+  if (!sheet) return null;
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:Z500');
+
+  // Detect base year from sheetName or defaultYear
+  const yearMatch = (sheetName || '').match(/(?:19|20)\d{2}/);
+  if (yearMatch) {
+    defaultYear = parseInt(yearMatch[0], 10);
+  }
+
+  // 1. Detect LF Number
+  let lfNo = '';
+  // Check sheet name e.g. "RF-48" -> "LF-48"
+  const sheetRfMatch = sheetName.match(/^(?:RF|LF)[-_ ]*(\d+)/i);
+  if (sheetRfMatch) {
+    lfNo = `LF-${sheetRfMatch[1]}`;
+  }
+
+  // Scan first 12 rows for LF / RF number if not found
+  for (let r = 0; r <= Math.min(12, range.e.r); r++) {
+    for (let c = 0; c <= Math.min(6, range.e.c); c++) {
+      const val = String(cellVal(sheet, r, c) || '').trim();
+      const lfMatch = val.match(/(?:LF|RF)\s*(?:no\.?|#)?\s*([0-9]+[A-Za-z0-9-_]*)/i);
+      if (lfMatch && (!lfNo || val.toLowerCase().includes('lf no'))) {
+        lfNo = `LF-${lfMatch[1]}`;
+        break;
+      }
+    }
+    if (lfNo && lfNo.startsWith('LF-')) break;
+  }
+  if (!lfNo) {
+    lfNo = sheetName ? `LF-${sheetName}` : 'LF-01';
+  }
+
+  // 2. Detect Authorized Amount ("Amount for liquidation")
+  let authorizedAmount = 100000;
+  let foundAuthAmt = false;
+  for (let r = 0; r <= Math.min(12, range.e.r); r++) {
+    for (let c = 0; c <= Math.min(6, range.e.c); c++) {
+      const val = String(cellVal(sheet, r, c) || '').trim().toLowerCase();
+      if (/amount\s*(?:for\s*)?liquidation|liquidation\s*amount/i.test(val)) {
+        // Look in same cell or cells to the right
+        for (let colOffset = 1; colOffset <= 4; colOffset++) {
+          const rawAmt = cellVal(sheet, r, c + colOffset);
+          if (rawAmt !== null && rawAmt !== undefined && rawAmt !== '') {
+            const parsed = typeof rawAmt === 'number' ? rawAmt : parseFloat(String(rawAmt).replace(/[^0-9.-]/g, ''));
+            if (!isNaN(parsed) && parsed > 0) {
+              authorizedAmount = parsed;
+              foundAuthAmt = true;
+              break;
+            }
+          }
+        }
+        if (foundAuthAmt) break;
+      }
+    }
+    if (foundAuthAmt) break;
+  }
+
+  // 3. Scan for Table Header Row
+  let headerRow = -1;
+  let colMap = {
+    date: -1,
+    particulars: -1,
+    amount: -1,
+    accounts: -1,
+    category: -1,
+    notes: -1
+  };
+
+  for (let r = 0; r <= Math.min(15, range.e.r); r++) {
+    const tempMap = { date: -1, particulars: -1, amount: -1, accounts: -1, category: -1, notes: -1 };
+    let matches = 0;
+
+    for (let c = 0; c <= range.e.c; c++) {
+      const val = String(cellVal(sheet, r, c) || '').trim().toLowerCase();
+      if (!val) continue;
+
+      if (/purchase|release.*date|^date$/i.test(val) && tempMap.date === -1) {
+        tempMap.date = c;
+        matches++;
+      } else if (/particulars|rf\s*voucher|voucher/i.test(val) && tempMap.particulars === -1) {
+        tempMap.particulars = c;
+        matches++;
+      } else if (/^amount$|disbursed|expense/i.test(val) && tempMap.amount === -1) {
+        tempMap.amount = c;
+        matches++;
+      } else if (/account/i.test(val) && tempMap.accounts === -1) {
+        tempMap.accounts = c;
+        matches++;
+      } else if (/remark/i.test(val) && tempMap.category === -1) {
+        tempMap.category = c;
+        matches++;
+      }
+    }
+
+    if (matches >= 2) {
+      headerRow = r;
+      colMap = tempMap;
+      break;
+    }
+  }
+
+  // Fallback column map if headers not explicitly detected
+  if (headerRow === -1) {
+    headerRow = 6; // Row 7 in 1-based indexing
+    colMap = { date: 0, particulars: 1, amount: 2, accounts: 3, category: 4, notes: 5 };
+  } else {
+    if (colMap.date === -1) colMap.date = 0;
+    if (colMap.particulars === -1) colMap.particulars = 1;
+    if (colMap.amount === -1) colMap.amount = 2;
+    if (colMap.accounts === -1) colMap.accounts = 3;
+    if (colMap.category === -1) colMap.category = 4;
+    colMap.notes = (colMap.category !== -1 ? colMap.category + 1 : 5);
+  }
+
+  // 4. Parse Rows
+  const items = [];
+  let totalLiquidated = 0;
+  let emptyRowCount = 0;
+
+  for (let r = headerRow + 1; r <= range.e.r; r++) {
+    const rawDate = cellVal(sheet, r, colMap.date);
+    const rawParticulars = cellVal(sheet, r, colMap.particulars);
+    const rawAmount = cellVal(sheet, r, colMap.amount);
+    const rawAccounts = cellVal(sheet, r, colMap.accounts);
+    const rawCategory = cellVal(sheet, r, colMap.category);
+    const rawNotes = cellVal(sheet, r, colMap.notes);
+
+    const particularsStr = String(rawParticulars || '').trim();
+    const accountsStr = String(rawAccounts || '').trim();
+    const categoryStr = String(rawCategory || '').trim();
+    const notesStr = String(rawNotes || '').trim();
+
+    // Stop parsing if row is a TOTAL, footer note, or signature block
+    if (
+      /total|grand\s*total/i.test(particularsStr) ||
+      /total|grand\s*total/i.test(accountsStr) ||
+      /date\s*submitted|date\s*approved|prepared\s*by|checked\s*by|approved\s*by|submitted\s*by|received\s*by|note\s*:/i.test(particularsStr) ||
+      /date\s*submitted|date\s*approved|prepared\s*by|checked\s*by|approved\s*by|submitted\s*by|received\s*by|note\s*:/i.test(accountsStr) ||
+      /date\s*submitted|date\s*approved|prepared\s*by|checked\s*by|approved\s*by|submitted\s*by|received\s*by|note\s*:/i.test(notesStr)
+    ) {
+      break;
+    }
+
+    // Check if empty
+    if (!rawDate && !particularsStr && rawAmount === null && !accountsStr && !notesStr) {
+      emptyRowCount++;
+      if (emptyRowCount >= 15) break; // 15 consecutive blanks = end of table
+      continue;
+    }
+    emptyRowCount = 0;
+
+    // Skip if row has no amount and no voucher number or date (e.g. standalone notes or footer remnants)
+    if (!rawAmount && !/voucher|rf|cv|check/i.test(particularsStr) && !rawDate) {
+      continue;
+    }
+
+    // Parse amount
+    let amt = 0;
+    if (typeof rawAmount === 'number') {
+      amt = Math.abs(rawAmount);
+    } else if (rawAmount) {
+      const clean = String(rawAmount).replace(/[^0-9.-]/g, '');
+      const parsed = parseFloat(clean);
+      if (!isNaN(parsed)) amt = Math.abs(parsed);
+    }
+
+    // Parse date
+    let itemDate = null;
+    let itemDateRaw = '';
+    if (rawDate) {
+      itemDateRaw = String(rawDate instanceof Date ? rawDate.toLocaleDateString() : rawDate).trim();
+      itemDate = parseVoucherDate(rawDate, defaultYear);
+    }
+
+    // Check cancelled status
+    const isCancelled = /cancelled|cancel/i.test(particularsStr) ||
+                        /cancelled|cancel/i.test(categoryStr) ||
+                        /cancelled|cancel/i.test(notesStr) ||
+                        (amt === 0 && /cancel/i.test(particularsStr));
+
+    if (!isCancelled) {
+      totalLiquidated += amt;
+    }
+
+    items.push({
+      sort_order: items.length + 1,
+      item_date: itemDate,
+      item_date_raw: itemDateRaw,
+      particulars: particularsStr || `Item #${items.length + 1}`,
+      amount: amt,
+      account_name: accountsStr,
+      category: categoryStr,
+      remarks: notesStr,
+      is_cancelled: isCancelled
+    });
+  }
+
+  // Calculate period dates from items
+  const validDates = items.filter(i => i.item_date).map(i => i.item_date).sort();
+  const periodStart = validDates[0] || null;
+  const periodEnd = validDates[validDates.length - 1] || null;
+
+  return {
+    lf_no: lfNo,
+    sheet_name: sheetName,
+    authorized_amount: authorizedAmount,
+    total_liquidated: Math.round(totalLiquidated * 100) / 100,
+    remaining_balance: Math.round((authorizedAmount - totalLiquidated) * 100) / 100,
+    period_start: periodStart,
+    period_end: periodEnd,
+    custodian_name: 'Michelle M. Pable',
+    item_count: items.length,
+    items
+  };
+};
+
+// @desc    Preview Revolving Fund Liquidation sheets from Excel
+// @route   POST /api/import/revolving-funds/preview
+// @access  Protected (Admin, Staff)
+export const previewRevolvingFunds = async (req, res, next) => {
+  const filePath = req.file?.path;
+  try {
+    if (!filePath) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No Excel file uploaded.' }
+      });
+    }
+
+    const workbook = XLSX.readFile(filePath, { cellDates: true });
+    const sheetNames = workbook.SheetNames || [];
+    if (sheetNames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Uploaded workbook contains no worksheets.' }
+      });
+    }
+
+    // Discover sheets that look like Liquidation Forms (RF-..., LF-..., or containing "LIQUIDATION")
+    const candidateSheets = [];
+    for (const name of sheetNames) {
+      if (/^(?:RF|LF)[-_ ]?\d+/i.test(name)) {
+        candidateSheets.push(name);
+      } else {
+        const testSheet = workbook.Sheets[name];
+        if (testSheet) {
+          const r0c0 = String(cellVal(testSheet, 0, 0) || '');
+          const r2c0 = String(cellVal(testSheet, 2, 0) || '');
+          const r2c1 = String(cellVal(testSheet, 2, 1) || '');
+          if (/liquidation/i.test(r0c0) || /liquidation/i.test(r2c0) || /liquidation/i.test(r2c1)) {
+            candidateSheets.push(name);
+          }
+        }
+      }
+    }
+
+    // Requested sheet or default to first candidate or first sheet
+    const requestedSheet = req.body.sheetName || req.query.sheetName;
+    let selectedSheet = sheetNames[0];
+    if (requestedSheet && sheetNames.includes(requestedSheet)) {
+      selectedSheet = requestedSheet;
+    } else if (candidateSheets.length > 0) {
+      selectedSheet = candidateSheets[0];
+    }
+
+    const sheet = workbook.Sheets[selectedSheet];
+    if (!sheet) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Sheet "${selectedSheet}" could not be opened.` }
+      });
+    }
+
+    const parsedForm = parseRevolvingFundSheet(sheet, selectedSheet);
+
+    // Query existing check vouchers to suggest potential links (e.g. vouchers with "Revolving" or "Replenishment")
+    const cvSuggestions = await query(`
+      SELECT id, voucher_no, check_no, payee, bank, amount, voucher_date, particulars
+      FROM check_vouchers
+      WHERE particulars ILIKE '%revolving%' OR particulars ILIKE '%replenishment%'
+      ORDER BY voucher_date DESC NULLS LAST
+      LIMIT 20
+    `);
+
+    // Check if this LF already exists in DB
+    const existingLf = await query(
+      'SELECT id, lf_no, voucher_no, total_liquidated FROM revolving_fund_liquidations WHERE lf_no ILIKE $1',
+      [parsedForm.lf_no]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        sheetNames,
+        candidateSheets,
+        selectedSheet,
+        form: {
+          ...parsedForm,
+          existsInDb: existingLf.rows.length > 0,
+          existingRecord: existingLf.rows[0] || null
+        },
+        suggestedVouchers: cvSuggestions.rows
+      }
+    });
+  } catch (error) {
+    next(error);
+  } finally {
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.warn('Failed to clean up temp file:', err.message);
+      }
+    }
+  }
+};
+
+// @desc    Execute import of parsed Revolving Fund Liquidation Form
+// @route   POST /api/import/revolving-funds/execute
+// @access  Protected (Admin, Staff)
+export const executeRevolvingFundsImport = async (req, res, next) => {
+  try {
+    const { form, check_voucher_id } = req.body;
+
+    if (!form || !form.lf_no) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid Liquidation Form data.' }
+      });
+    }
+
+    const {
+      lf_no,
+      sheet_name,
+      authorized_amount = 100000,
+      custodian_name = 'Michelle M. Pable',
+      period_start,
+      period_end,
+      items = []
+    } = form;
+
+    // Check voucher linking
+    let finalVoucherNo = null;
+    if (check_voucher_id) {
+      const cvRes = await query('SELECT voucher_no FROM check_vouchers WHERE id = $1', [check_voucher_id]);
+      if (cvRes.rows.length > 0) {
+        finalVoucherNo = cvRes.rows[0].voucher_no;
+      }
+    }
+
+    // Upsert LF
+    const existingRes = await query('SELECT id FROM revolving_fund_liquidations WHERE lf_no ILIKE $1', [lf_no.trim()]);
+    let liquidationId;
+
+    if (existingRes.rows.length > 0) {
+      liquidationId = existingRes.rows[0].id;
+      await query(`
+        UPDATE revolving_fund_liquidations
+        SET 
+          sheet_name = $1,
+          check_voucher_id = COALESCE($2, check_voucher_id),
+          voucher_no = COALESCE($3, voucher_no),
+          authorized_amount = $4,
+          custodian_name = $5,
+          period_start = $6,
+          period_end = $7,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $8
+      `, [
+        sheet_name || lf_no,
+        check_voucher_id || null,
+        finalVoucherNo,
+        parseFloat(authorized_amount) || 0,
+        custodian_name,
+        period_start || null,
+        period_end || null,
+        liquidationId
+      ]);
+      // Remove old items for clean re-import
+      await query('DELETE FROM rf_liquidation_items WHERE liquidation_id = $1', [liquidationId]);
+    } else {
+      const insertRes = await query(`
+        INSERT INTO revolving_fund_liquidations
+          (lf_no, sheet_name, check_voucher_id, voucher_no, authorized_amount, custodian_name, period_start, period_end)
+        VALUES
+          ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id
+      `, [
+        lf_no.trim(),
+        sheet_name || lf_no,
+        check_voucher_id || null,
+        finalVoucherNo,
+        parseFloat(authorized_amount) || 0,
+        custodian_name,
+        period_start || null,
+        period_end || null
+      ]);
+      liquidationId = insertRes.rows[0].id;
+    }
+
+    // Insert items
+    let totalLiq = 0;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const amt = parseFloat(item.amount) || 0;
+      const isCancelled = Boolean(item.is_cancelled);
+      if (!isCancelled) totalLiq += amt;
+
+      await query(`
+        INSERT INTO rf_liquidation_items
+          (liquidation_id, item_date, item_date_raw, particulars, amount, account_name, category, remarks, is_cancelled, sort_order)
+        VALUES
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `, [
+        liquidationId,
+        item.item_date || null,
+        item.item_date_raw || null,
+        item.particulars || '',
+        amt,
+        item.account_name || '',
+        item.category || '',
+        item.remarks || '',
+        isCancelled,
+        i + 1
+      ]);
+    }
+
+    // Update total_liquidated
+    await query(`
+      UPDATE revolving_fund_liquidations
+      SET total_liquidated = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `, [totalLiq, liquidationId]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: liquidationId,
+        lf_no,
+        total_liquidated: totalLiq,
+        item_count: items.length
+      },
+      message: `Liquidation Form ${lf_no} with ${items.length} line items imported successfully.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+

@@ -815,10 +815,15 @@ export const importCheckVouchers = async (req, res, next) => {
 // @access  Protected (Admin, Staff)
 export const getCheckVouchers = async (req, res, next) => {
   try {
-    const { search, folder, bank, page, limit } = req.query;
+    const { search, folder, bank, page, limit, id } = req.query;
 
     const conditions = [];
     const params = [];
+
+    if (id) {
+      params.push(id);
+      conditions.push(`id = $${params.length}`);
+    }
 
     if (search) {
       params.push(`%${search}%`);
@@ -854,7 +859,19 @@ export const getCheckVouchers = async (req, res, next) => {
     params.push(offset);
     const result = await query(
       `SELECT id, voucher_no, voucher_date, check_no, payee, bank, particulars,
-              amount, managers_approval_date, date_released, folder_name, box_name, details, signatories, created_at
+              amount, managers_approval_date, date_released, folder_name, box_name, details, signatories, created_at,
+              (
+                SELECT JSON_BUILD_OBJECT(
+                  'id', rf.id,
+                  'lf_no', rf.lf_no,
+                  'sheet_name', rf.sheet_name,
+                  'custodian_name', rf.custodian_name,
+                  'total_liquidated', rf.total_liquidated
+                )
+                FROM revolving_fund_liquidations rf
+                WHERE rf.check_voucher_id = check_vouchers.id OR rf.voucher_no = check_vouchers.voucher_no
+                LIMIT 1
+              ) AS revolving_fund
        FROM check_vouchers
        ${whereClause}
        ORDER BY voucher_date DESC NULLS LAST, voucher_no DESC, created_at DESC

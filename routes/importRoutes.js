@@ -10,7 +10,9 @@ import {
   provisionImportedAccounts,
   importCheckVouchersFromExcel,
   previewCheckVouchers,
-  executeCheckVouchersImport
+  executeCheckVouchersImport,
+  previewRevolvingFunds,
+  executeRevolvingFundsImport
 } from '../controllers/importController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -57,6 +59,8 @@ router.post('/members-registry', upload.single('file'), importMembersRegistry);
 router.post('/check-vouchers', upload.single('file'), importCheckVouchersFromExcel);
 router.post('/check-vouchers/preview', upload.single('file'), previewCheckVouchers);
 router.post('/check-vouchers/execute', executeCheckVouchersImport);
+router.post('/revolving-funds/preview', upload.single('file'), previewRevolvingFunds);
+router.post('/revolving-funds/execute', executeRevolvingFundsImport);
 router.post('/provision-accounts', restrictTo('admin'), provisionImportedAccounts);
 
 export default router;

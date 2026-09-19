@@ -54,9 +54,14 @@ import {
   Plus,
   Save,
   RefreshCw,
-  Filter
+  Filter,
+  Layers,
+  RotateCcw,
+  ArrowRight,
+  ExternalLink
 } from 'lucide-react';
 import LoanApprovalModal from '@/components/loans/LoanApprovalModal';
+import RevolvingFundsTab from '@/components/loans/RevolvingFundsTab';
 
 interface LoanProduct {
   id: number | string;
@@ -151,7 +156,7 @@ function LoansPageContent() {
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
   const isVerified = isAdminOrManager || user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
 
-  const [activeTab, setActiveTab] = useState<'loans' | 'payments' | 'products' | 'vouchers'>('loans');
+  const [activeTab, setActiveTab] = useState<'loans' | 'payments' | 'products' | 'vouchers' | 'revolving_funds'>('loans');
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -160,8 +165,8 @@ function LoansPageContent() {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'payments' || tab === 'vouchers' || tab === 'products' || tab === 'loans') {
-      setActiveTab(tab as any);
+    if (tab === 'payments' || tab === 'vouchers' || tab === 'products' || tab === 'loans' || tab === 'revolving_funds' || tab === 'revolving') {
+      setActiveTab(tab === 'revolving' ? 'revolving_funds' : (tab as any));
     }
   }, [searchParams]);
 
@@ -241,11 +246,12 @@ function LoansPageContent() {
   const [cvTotalCount, setCvTotalCount] = useState(0);
   const [cvTotalPages, setCvTotalPages] = useState(1);
 
-  const loadCheckVouchers = useCallback(async (page = cvPage) => {
+  const loadCheckVouchers = useCallback(async (page = 1, searchOverride?: string) => {
     try {
       setCvLoading(true);
+      const searchTerm = searchOverride !== undefined ? searchOverride : cvSearch;
       const params: Record<string, string | number> = { page, limit: cvLimit };
-      if (cvSearch.trim()) params.search = cvSearch.trim();
+      if (searchTerm.trim()) params.search = searchTerm.trim();
       const res = await api.get('/accounts/check-vouchers', { params });
       setCheckVouchers(res.data.data || []);
       if (res.data.pagination) {
@@ -258,11 +264,27 @@ function LoansPageContent() {
     } finally {
       setCvLoading(false);
     }
-  }, [cvSearch, cvPage, cvLimit]);
+  }, [cvSearch, cvLimit]);
 
+  // Live real-time debounced search & instant revert on erase
   useEffect(() => {
-    if (activeTab === 'vouchers') loadCheckVouchers(1);
-  }, [activeTab]);
+    if (activeTab !== 'vouchers') return;
+
+    // If search is empty or erased, instantly revert to original full list
+    if (!cvSearch.trim()) {
+      setCvPage(1);
+      loadCheckVouchers(1, '');
+      return;
+    }
+
+    // Debounce typing by 250ms so user sees matching vouchers appear as they type
+    const timer = setTimeout(() => {
+      setCvPage(1);
+      loadCheckVouchers(1, cvSearch);
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [cvSearch, activeTab]);
 
   // Check Voucher Deletion & Selection State
   const [selectedCvIds, setSelectedCvIds] = useState<string[]>([]);
@@ -447,6 +469,101 @@ function LoansPageContent() {
     });
     setSelectedCvForModal(cv); // needed so the modal portal renders
     setIsEditingCvModal(true);
+  };
+
+  const openCheckVoucherModalByIdOrNo = async (voucherIdOrNo: string, fallbackVoucherNo?: string) => {
+    if (!voucherIdOrNo && !fallbackVoucherNo) return;
+    try {
+      const primary = (voucherIdOrNo || '').trim();
+      const secondary = (fallbackVoucherNo || '').trim();
+
+      // Check current in-memory vouchers first
+      let cv = checkVouchers.find(v => 
+        (primary && (v.id === primary || v.voucher_no === primary)) || 
+        (secondary && (v.id === secondary || v.voucher_no === secondary))
+      );
+
+      // If not in memory, fetch directly from backend API
+      if (!cv) {
+        if (primary) {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(primary);
+          const params: Record<string, any> = { limit: 1 };
+          if (isUuid) {
+            params.id = primary;
+          } else {
+            params.search = primary;
+          }
+          const res = await api.get('/accounts/check-vouchers', { params });
+          if (res.data?.success && res.data?.data && res.data.data.length > 0) {
+            cv = res.data.data[0];
+          }
+        }
+
+        if (!cv && secondary && secondary !== primary) {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secondary);
+          const params: Record<string, any> = { limit: 1 };
+          if (isUuid) {
+            params.id = secondary;
+          } else {
+            params.search = secondary;
+          }
+          const res = await api.get('/accounts/check-vouchers', { params });
+          if (res.data?.success && res.data?.data && res.data.data.length > 0) {
+            cv = res.data.data[0];
+          }
+        }
+      }
+
+      if (cv) {
+        setCvSearch('');
+        setActiveTab('vouchers');
+        setCheckVouchers(prev => prev.some(v => v.id === cv.id) ? prev : [cv, ...prev]);
+        const hasDetails = Boolean(cv.details && Array.isArray(cv.details) && cv.details.length > 0);
+        if (hasDetails) {
+          setIsEditingCvModal(false);
+          setSelectedCvForModal(cv);
+        } else {
+          startEditingCv(cv);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to open check voucher modal:', err);
+    }
+  };
+
+  // Vice-versa link states & navigation to Revolving Funds
+  const [rfTargetSearch, setRfTargetSearch] = useState<string>('');
+  const [rfTargetId, setRfTargetId] = useState<string>('');
+
+  const isRevolvingVoucher = (cv: any) => {
+    if (!cv) return false;
+    if (cv.revolving_fund) return true;
+    const desc = ((cv.particulars || '') + ' ' + (cv.folder_name || '')).toLowerCase();
+    if (desc.includes('revolving') || desc.includes('replenishment') || /rf\s*#?\s*\d+/i.test(desc)) return true;
+    if (cv.details && Array.isArray(cv.details)) {
+      return cv.details.some((d: any) => 
+        /revolving|replenishment/i.test(d.book_of_account || '') ||
+        /revolving|replenishment/i.test(d.particulars || '')
+      );
+    }
+    return false;
+  };
+
+  const extractRfNumber = (cv: any) => {
+    if (!cv) return '';
+    if (cv.revolving_fund?.lf_no) return cv.revolving_fund.lf_no;
+    const match = (cv.particulars || '').match(/RF\s*#?\s*(\d+)/i);
+    if (match) return `LF-${match[1]}`;
+    return '';
+  };
+
+  const jumpToRevolvingFund = (rfObj?: any, fallbackLfNo?: string) => {
+    setSelectedCvForModal(null);
+    setIsEditingCvModal(false);
+    const target = rfObj?.lf_no || rfObj?.sheet_name || fallbackLfNo || '';
+    setRfTargetSearch(target);
+    setRfTargetId(rfObj?.id || '');
+    setActiveTab('revolving_funds');
   };
 
   const handleEditCvRowChange = (index: number, field: 'description' | 'debit' | 'credit', value: string) => {
@@ -2063,6 +2180,16 @@ function LoansPageContent() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('revolving_funds')}
+            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'revolving_funds'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+              }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Revolving Funds</span>
+          </button>
         </div>
 
         {/* TABS CONTAINER */}
@@ -3229,28 +3356,45 @@ function LoansPageContent() {
                   type="text"
                   placeholder="Search voucher no., name, check no., bank, description, folder..."
                   value={cvSearch}
-                  onChange={e => setCvSearch(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') loadCheckVouchers();
+                  onChange={e => {
+                    const val = e.target.value;
+                    setCvSearch(val);
+                    if (!val.trim()) {
+                      setCvPage(1);
+                      loadCheckVouchers(1, '');
+                    }
                   }}
-                  className="w-full pl-10 pr-10 py-2.5 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none text-on-surface dark:text-white transition-all"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      setCvPage(1);
+                      loadCheckVouchers(1, cvSearch);
+                    }
+                  }}
+                  className="w-full pl-10 pr-16 py-2.5 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 outline-none text-on-surface dark:text-white transition-all"
                 />
-                {cvSearch && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCvSearch('');
-                    }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer p-0.5"
-                    title="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  {cvLoading && (
+                    <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                  )}
+                  {cvSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCvSearch('');
+                        setCvPage(1);
+                        loadCheckVouchers(1, '');
+                      }}
+                      className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer p-0.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                      title="Clear search and show all vouchers"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => { setCvPage(1); loadCheckVouchers(1); }}
+                onClick={() => { setCvPage(1); loadCheckVouchers(1, cvSearch); }}
                 className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap"
               >
                 <Search className="w-3.5 h-3.5" />
@@ -3379,12 +3523,40 @@ function LoansPageContent() {
                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                                       Details
                                     </span>
+                                    {isRevolvingVoucher(cv) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          jumpToRevolvingFund(cv.revolving_fund, extractRfNumber(cv));
+                                        }}
+                                        className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1"
+                                        title="Jump to corresponding Revolving Fund Liquidation Form"
+                                      >
+                                        <RotateCcw className="w-2.5 h-2.5 text-amber-700 dark:text-amber-400" />
+                                        <span>{cv.revolving_fund?.lf_no || extractRfNumber(cv) || 'RF'} ↗</span>
+                                      </button>
+                                    )}
                                   </div>
                                 ) : (
-                                  <div className="pl-6">
+                                  <div className="pl-6 flex items-center gap-1.5">
                                     <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
                                       {cv.voucher_no}
                                     </span>
+                                    {isRevolvingVoucher(cv) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          jumpToRevolvingFund(cv.revolving_fund, extractRfNumber(cv));
+                                        }}
+                                        className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 hover:bg-amber-200 transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1"
+                                        title="Jump to corresponding Revolving Fund Liquidation Form"
+                                      >
+                                        <RotateCcw className="w-2.5 h-2.5 text-amber-700 dark:text-amber-400" />
+                                        <span>{cv.revolving_fund?.lf_no || extractRfNumber(cv) || 'RF'} ↗</span>
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </td>
@@ -3625,6 +3797,17 @@ function LoansPageContent() {
               )}
             </div>
           </div>
+        ) : activeTab === 'revolving_funds' ? (
+          <RevolvingFundsTab
+            isAdminOrManager={isAdminOrManager}
+            onViewCheckVoucher={openCheckVoucherModalByIdOrNo}
+            initialSearch={rfTargetSearch}
+            targetLiquidationId={rfTargetId}
+            onClearTarget={() => {
+              setRfTargetSearch('');
+              setRfTargetId('');
+            }}
+          />
         ) : (
           /* PRODUCTS TAB */
           <div className="space-y-6">
@@ -6764,6 +6947,49 @@ function LoansPageContent() {
                       <p className="text-neutral-700 dark:text-neutral-300 italic">
                         {formatVoucherDescription(selectedCvForModal.particulars, selectedCvForModal.payee || selectedCvForModal.payee_name)}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Linked Revolving Fund Banner / Vice-Versa Link */}
+                  {isRevolvingVoucher(selectedCvForModal) && (
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-emerald-500/5 to-transparent border border-amber-400/50 dark:border-amber-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs animate-fadeIn">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 flex items-center justify-center flex-shrink-0 shadow-2xs">
+                          <RotateCcw className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">
+                              Linked Liquidation Form
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-200/80 dark:bg-amber-900/80 text-amber-950 dark:text-amber-200">
+                              {selectedCvForModal.revolving_fund?.lf_no || extractRfNumber(selectedCvForModal) || 'Revolving Fund'}
+                            </span>
+                            {selectedCvForModal.revolving_fund?.sheet_name && (
+                              <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
+                                ({selectedCvForModal.revolving_fund.sheet_name})
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-neutral-600 dark:text-neutral-300 mt-0.5">
+                            Custodian: <span className="font-semibold text-neutral-800 dark:text-neutral-100">{selectedCvForModal.revolving_fund?.custodian_name || selectedCvForModal.payee || 'Michelle M. Pable'}</span>
+                            {selectedCvForModal.revolving_fund?.total_liquidated && (
+                              <span className="ml-2 font-mono text-emerald-700 dark:text-emerald-400">
+                                • Liquidated: ₱{parseFloat(selectedCvForModal.revolving_fund.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => jumpToRevolvingFund(selectedCvForModal.revolving_fund, extractRfNumber(selectedCvForModal))}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white shadow-2xs transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                        title="Navigate to Revolving Funds and view breakdown items"
+                      >
+                        <span>Open Liquidation Form</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   )}
 
