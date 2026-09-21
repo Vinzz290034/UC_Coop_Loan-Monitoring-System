@@ -494,31 +494,23 @@ export default function UsersPage() {
   return (
     <>
       <div className="space-y-6 animate-micro-elevate">
-        <div>
-          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-        </div>
-
-        {/* Page Header */}
-        <div className="flex items-start justify-between flex-wrap gap-4">
+        {/* Top Header & Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-headline text-3xl font-bold text-on-surface dark:text-white">
-              User Management
-            </h1>
-            <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-              System-wide user directory with profile, login tracking, and activity monitoring
-            </p>
+            <BackButton href="/dashboard">Back to System Dashboard</BackButton>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
             <button
               onClick={exportToExcel}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-surface-container-low border border-emerald-600/40 hover:border-emerald-600 text-emerald-700 dark:text-emerald-400 font-label text-sm font-bold rounded-full shadow-sm hover:shadow-md hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-surface-container-low border border-emerald-600/40 hover:border-emerald-600 text-emerald-700 dark:text-emerald-400 font-label text-xs font-bold rounded-xl shadow-xs hover:shadow-sm hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               Export Excel
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold rounded-xl shadow-md hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-xs font-bold rounded-xl shadow-xs hover:scale-[1.01] active:scale-95 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Create Account
