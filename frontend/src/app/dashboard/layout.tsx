@@ -102,9 +102,9 @@ function DashboardLayoutContent({
       allowed: true,
     },
     {
-      name: 'Calendar',
+      name: 'Calendar & Appointments',
       path: '/dashboard/calendar',
-      icon: Calendar,
+      icon: CalendarClock,
       allowed: true,
     },
     {
@@ -136,12 +136,6 @@ function DashboardLayoutContent({
       path: '/dashboard/import',
       icon: FileUp,
       allowed: isAdminOrStaff,
-    },
-    {
-      name: 'Appointments',
-      path: '/dashboard/appointments',
-      icon: CalendarClock,
-      allowed: user.role !== 'staff',
     },
     {
       name: 'Reports',
