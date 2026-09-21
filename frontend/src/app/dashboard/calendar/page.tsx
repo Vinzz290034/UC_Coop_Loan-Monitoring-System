@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useBreadcrumb } from '@/context/BreadcrumbContext';
 import BackButton from '@/components/BackButton';
+import AppointmentsSection from '@/components/calendar/AppointmentsSection';
 import api from '@/lib/api';
 import {
   ChevronLeft,
@@ -12,7 +14,6 @@ import {
   Trash2,
   Calendar as CalendarIcon,
   Filter,
-  Info,
   AlertCircle,
   Clock,
   Briefcase,
@@ -21,7 +22,9 @@ import {
   X,
   Loader2,
   CalendarDays,
-  Sparkles
+  CalendarClock,
+  Sparkles,
+  CalendarCheck,
 } from 'lucide-react';
 
 interface CalendarEvent {
@@ -35,14 +38,37 @@ interface CalendarEvent {
   is_system: boolean;
 }
 
-export default function CalendarPage() {
+function CalendarPageContent() {
   const { user } = useAuth();
   const { setBreadcrumbLabel } = useBreadcrumb();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
-  // Set breadcrumb title
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'appointments'>(
+    tabParam === 'appointments' ? 'appointments' : 'calendar'
+  );
+  const [pendingAppointmentsCount, setPendingAppointmentsCount] = useState(0);
+
+  // Synchronize active tab with URL query parameter
   useEffect(() => {
-    setBreadcrumbLabel('calendar', 'Calendar');
-  }, [setBreadcrumbLabel]);
+    if (tabParam === 'appointments') {
+      setActiveTab('appointments');
+      setBreadcrumbLabel('calendar', 'Calendar & Appointments');
+    } else {
+      setActiveTab('calendar');
+      setBreadcrumbLabel('calendar', 'Calendar & Appointments');
+    }
+  }, [tabParam, setBreadcrumbLabel]);
+
+  const handleTabChange = (tab: 'calendar' | 'appointments') => {
+    setActiveTab(tab);
+    if (tab === 'appointments') {
+      router.replace('/dashboard/calendar?tab=appointments');
+    } else {
+      router.replace('/dashboard/calendar');
+    }
+  };
 
   // Calendar Date Navigation States
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -60,7 +86,7 @@ export default function CalendarPage() {
     payment_deadline: true,
     office_duty: true,
     holiday: true,
-    special_schedule: true
+    special_schedule: true,
   });
 
   // Modal / Interactive States
@@ -77,7 +103,7 @@ export default function CalendarPage() {
     description: '',
     type: 'announcement' as CalendarEvent['type'],
     status: 'open',
-    event_date: ''
+    event_date: '',
   });
 
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
@@ -89,14 +115,12 @@ export default function CalendarPage() {
       setError(null);
       const res = await api.get('/calendar');
       if (res.data && res.data.success) {
-        // Strip timezone suffix or parse accurately to local date
         const formattedEvents = res.data.data.map((evt: any) => {
-          // Format date string to YYYY-MM-DD
           const d = new Date(evt.event_date);
           const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           return {
             ...evt,
-            event_date: localDateStr
+            event_date: localDateStr,
           };
         });
         setEvents(formattedEvents);
@@ -119,7 +143,7 @@ export default function CalendarPage() {
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -139,7 +163,7 @@ export default function CalendarPage() {
 
   // Filter events based on type and filter settings
   const getFilteredEventsForDate = (dateStr: string) => {
-    return events.filter(evt => {
+    return events.filter((evt) => {
       if (evt.event_date !== dateStr) return false;
       return filters[evt.type];
     });
@@ -148,19 +172,18 @@ export default function CalendarPage() {
   // Open the day modal
   const handleDayClick = (dayNum: number) => {
     const clickedDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-    const dayEvents = events.filter(evt => evt.event_date === clickedDateStr);
+    const dayEvents = events.filter((evt) => evt.event_date === clickedDateStr);
 
     setSelectedDateStr(clickedDateStr);
     setSelectedDayEvents(dayEvents);
     setShowDayModal(true);
 
-    // Initialize creation form fields for that day
     setFormFields({
       title: '',
       description: '',
       type: 'announcement',
       status: 'open',
-      event_date: clickedDateStr
+      event_date: clickedDateStr,
     });
     setEditingEventId(null);
     setIsManaging(false);
@@ -174,41 +197,34 @@ export default function CalendarPage() {
     try {
       setActionLoading(true);
       if (editingEventId) {
-        // Edit event
         const res = await api.put(`/calendar/${editingEventId}`, formFields);
         if (res.data && res.data.success) {
           await fetchEvents();
-          // Update active events list for modal
-          const updatedEvents = events.map(evt =>
-            evt.id === editingEventId
-              ? { ...evt, ...formFields }
-              : evt
+          const updatedEvents = events.map((evt) =>
+            evt.id === editingEventId ? { ...evt, ...formFields } : evt
           );
-          setSelectedDayEvents(updatedEvents.filter(evt => evt.event_date === selectedDateStr));
+          setSelectedDayEvents(updatedEvents.filter((evt) => evt.event_date === selectedDateStr));
           setIsManaging(false);
           setEditingEventId(null);
         }
       } else {
-        // Create event
         const res = await api.post('/calendar', formFields);
         if (res.data && res.data.success) {
           await fetchEvents();
-          // Refresh local modal list
           const newEvent = {
             ...res.data.data,
-            event_date: formFields.event_date
+            event_date: formFields.event_date,
           };
-          setSelectedDayEvents(prev => [...prev, newEvent]);
+          setSelectedDayEvents((prev) => [...prev, newEvent]);
           setIsManaging(false);
         }
       }
 
-      // Reset input form titles
-      setFormFields(prev => ({
+      setFormFields((prev) => ({
         ...prev,
         title: '',
         description: '',
-        status: 'open'
+        status: 'open',
       }));
     } catch (err) {
       console.error(err);
@@ -218,7 +234,7 @@ export default function CalendarPage() {
     }
   };
 
-  // Delete event (Admin/Manager API call)
+  // Delete event
   const handleDeleteEvent = async (eventId: string) => {
     if (!window.confirm('Are you sure you want to delete this event?')) return;
 
@@ -227,8 +243,7 @@ export default function CalendarPage() {
       const res = await api.delete(`/calendar/${eventId}`);
       if (res.data && res.data.success) {
         await fetchEvents();
-        // Remove from current modal display
-        setSelectedDayEvents(prev => prev.filter(evt => evt.id !== eventId));
+        setSelectedDayEvents((prev) => prev.filter((evt) => evt.id !== eventId));
       }
     } catch (err) {
       console.error(err);
@@ -238,7 +253,6 @@ export default function CalendarPage() {
     }
   };
 
-  // Populate Edit form fields
   const startEditEvent = (evt: CalendarEvent) => {
     setEditingEventId(evt.id);
     setFormFields({
@@ -246,74 +260,88 @@ export default function CalendarPage() {
       description: evt.description || '',
       type: evt.type,
       status: evt.status,
-      event_date: evt.event_date
+      event_date: evt.event_date,
     });
     setIsManaging(true);
   };
 
-  // Style tags/badges based on type
-  const getBadgeStyles = (type: CalendarEvent['type'], status?: string) => {
+  // Badge/Tag style helpers
+  const getEventBadgeStyle = (type: CalendarEvent['type']) => {
     switch (type) {
       case 'announcement':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200/50';
+        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
       case 'payment_deadline':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border-red-200/50';
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
       case 'office_duty':
-        return status === 'closed'
-          ? 'bg-neutral-100 text-neutral-800 dark:bg-neutral-800/60 dark:text-neutral-300 border-neutral-300'
-          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200/50';
+        return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
       case 'holiday':
-        return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200/50';
+        return 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20';
       case 'special_schedule':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200/50';
+        return 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
       default:
-        return 'bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200';
+        return 'bg-neutral-100 text-neutral-600 border-neutral-200';
     }
   };
 
-  // Render events dots on cells
-  const getDotColorClass = (type: CalendarEvent['type'], status?: string) => {
+  const getEventDotColor = (type: CalendarEvent['type']) => {
     switch (type) {
-      case 'announcement': return 'bg-blue-500';
-      case 'payment_deadline': return 'bg-red-500';
-      case 'office_duty': return status === 'closed' ? 'bg-neutral-400' : 'bg-emerald-500';
-      case 'holiday': return 'bg-amber-500';
-      case 'special_schedule': return 'bg-purple-500';
-      default: return 'bg-neutral-400';
+      case 'announcement':
+        return 'bg-blue-500';
+      case 'payment_deadline':
+        return 'bg-amber-500';
+      case 'office_duty':
+        return 'bg-emerald-500';
+      case 'holiday':
+        return 'bg-rose-500';
+      case 'special_schedule':
+        return 'bg-purple-500';
+      default:
+        return 'bg-neutral-400';
     }
   };
 
-  // Helper to format Date string
-  const formatReadableDate = (dateStr: string | null) => {
-    if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const getEventIcon = (type: CalendarEvent['type']) => {
+    switch (type) {
+      case 'announcement':
+        return <Megaphone className="w-3.5 h-3.5 text-blue-500" />;
+      case 'payment_deadline':
+        return <CreditCard className="w-3.5 h-3.5 text-amber-500" />;
+      case 'office_duty':
+        return <Briefcase className="w-3.5 h-3.5 text-emerald-500" />;
+      case 'holiday':
+        return <CalendarDays className="w-3.5 h-3.5 text-rose-500" />;
+      case 'special_schedule':
+        return <Sparkles className="w-3.5 h-3.5 text-purple-500" />;
+      default:
+        return <CalendarIcon className="w-3.5 h-3.5 text-neutral-400" />;
+    }
   };
 
-  // Generate calendar grid array
+  // Build Calendar grid cells
   const calendarCells = [];
 
   // Previous Month's trailing days
-  const prevMonthDate = new Date(year, month, 0);
-  const prevMonthDays = prevMonthDate.getDate();
+  const prevMonthTotalDays = new Date(year, month, 0).getDate();
   for (let i = firstDayIndex - 1; i >= 0; i--) {
+    const day = prevMonthTotalDays - i;
     calendarCells.push({
-      dayNum: prevMonthDays - i,
+      dayNum: day,
       isCurrentMonth: false,
-      dateStr: `${month === 0 ? year - 1 : year}-${String(month === 0 ? 12 : month).padStart(2, '0')}-${String(prevMonthDays - i).padStart(2, '0')}`
+      dateStr: `${month === 0 ? year - 1 : year}-${String(month === 0 ? 12 : month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
     });
   }
 
-  // Active Month days
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Current Month's days
+  const today = new Date();
+  const isCurrentYearAndMonth = today.getFullYear() === year && today.getMonth() === month;
+  const currentDayNum = today.getDate();
+
   for (let i = 1; i <= daysInMonth; i++) {
-    const cellDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
     calendarCells.push({
       dayNum: i,
       isCurrentMonth: true,
-      dateStr: cellDateStr,
-      isToday: cellDateStr === todayStr
+      isToday: isCurrentYearAndMonth && currentDayNum === i,
+      dateStr: `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`,
     });
   }
 
@@ -323,372 +351,364 @@ export default function CalendarPage() {
     calendarCells.push({
       dayNum: i,
       isCurrentMonth: false,
-      dateStr: `${month === 11 ? year + 1 : year}-${String(month === 11 ? 1 : month + 2).padStart(2, '0')}-${String(i).padStart(2, '0')}`
+      dateStr: `${month === 11 ? year + 1 : year}-${String(month === 11 ? 1 : month + 2).padStart(2, '0')}-${String(i).padStart(2, '0')}`,
     });
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-micro-elevate">
       <div>
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
 
-      {/* Header Widget */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm transition-all">
-        <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
-            {/* <CalendarDays className="w-7 h-7 text-primary dark:text-secondary" /> */}
-            Calendar & Event Scheduler
-          </h1>
-          <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400 mt-1">
-            Track coop announcements, office hours, and your payment schedules.
-          </p>
-        </div>
+      {/* Top Combined Module Tab Switcher */}
+      <div className="flex border-b border-outline-variant/60 overflow-x-auto custom-scrollbar">
+        <button
+          type="button"
+          onClick={() => handleTabChange('calendar')}
+          className={`px-6 py-3.5 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'calendar'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+          }`}
+        >
+          <CalendarIcon className="w-4 h-4" />
+          <span>Interactive Calendar</span>
+        </button>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={resetToToday}
-            className="px-4 py-2 text-xs font-bold rounded-xl border border-outline-variant/60 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-800 dark:text-neutral-200 transition-colors"
-          >
-            Today
-          </button>
-          <div className="flex items-center rounded-xl border border-outline-variant/60 overflow-hidden">
-            <button
-              onClick={prevMonth}
-              className="p-2.5 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors"
-              title="Previous Month"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="px-4 text-xs font-black text-on-surface dark:text-white min-w-[120px] text-center bg-neutral/5 dark:bg-neutral/15 font-headline">
-              {monthNames[month]} {year}
-            </div>
-            <button
-              onClick={nextMonth}
-              className="p-2.5 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors"
-              title="Next Month"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Grid + Filter Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Filters Panel */}
-        <div className="lg:col-span-1 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm h-fit space-y-6">
-          <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2 pb-3 border-b border-outline-variant/45">
-            <Filter className="w-4 h-4 text-primary dark:text-secondary" />
-            Event Filters
-          </h3>
-
-          <div className="space-y-3.5">
-            {/* System Announcement Filter */}
-            <label className="flex items-center gap-3 cursor-pointer group select-none">
-              <input
-                type="checkbox"
-                checked={filters.announcement}
-                onChange={() => setFilters(prev => ({ ...prev, announcement: !prev.announcement }))}
-                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-outline-variant/80 dark:bg-surface-container-high dark:border-outline-variant/40"
-              />
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 group-hover:text-primary dark:group-hover:text-secondary transition-colors">
-                Announcements
-              </span>
-            </label>
-
-            {/* Payment Deadline Filter */}
-            <label className="flex items-center gap-3 cursor-pointer group select-none">
-              <input
-                type="checkbox"
-                checked={filters.payment_deadline}
-                onChange={() => setFilters(prev => ({ ...prev, payment_deadline: !prev.payment_deadline }))}
-                className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-outline-variant/80 dark:bg-surface-container-high dark:border-outline-variant/40"
-              />
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 group-hover:text-primary dark:group-hover:text-secondary transition-colors">
-                Payment Deadlines
-              </span>
-            </label>
-
-            {/* Office Duty Status Filter */}
-            <label className="flex items-center gap-3 cursor-pointer group select-none">
-              <input
-                type="checkbox"
-                checked={filters.office_duty}
-                onChange={() => setFilters(prev => ({ ...prev, office_duty: !prev.office_duty }))}
-                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-outline-variant/80 dark:bg-surface-container-high dark:border-outline-variant/40"
-              />
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 group-hover:text-primary dark:group-hover:text-secondary transition-colors">
-                Office Open status
-              </span>
-            </label>
-
-            {/* Holidays Filter */}
-            <label className="flex items-center gap-3 cursor-pointer group select-none">
-              <input
-                type="checkbox"
-                checked={filters.holiday}
-                onChange={() => setFilters(prev => ({ ...prev, holiday: !prev.holiday }))}
-                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-outline-variant/80 dark:bg-surface-container-high dark:border-outline-variant/40"
-              />
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 group-hover:text-primary dark:group-hover:text-secondary transition-colors">
-                Holidays
-              </span>
-            </label>
-
-            {/* Special Schedules Filter */}
-            <label className="flex items-center gap-3 cursor-pointer group select-none">
-              <input
-                type="checkbox"
-                checked={filters.special_schedule}
-                onChange={() => setFilters(prev => ({ ...prev, special_schedule: !prev.special_schedule }))}
-                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-outline-variant/80 dark:bg-surface-container-high dark:border-outline-variant/40"
-              />
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 group-hover:text-primary dark:group-hover:text-secondary transition-colors">
-                Special Schedules
-              </span>
-            </label>
-          </div>
-
-          <div className="pt-4 border-t border-outline-variant/35 rounded-xl bg-primary/5 dark:bg-secondary/5 p-4 space-y-2">
-            <h4 className="text-xs font-black text-primary dark:text-secondary flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5" />
-              Quick Info
-            </h4>
-            <p className="text-[11px] font-medium text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              Click on any day in the grid calendar to view detailed events, schedule loan appointments, or post custom notices (Admins).
-            </p>
-          </div>
-        </div>
-
-        {/* Calendar Grid Container */}
-        <div className="lg:col-span-3 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm transition-all">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-32 space-y-3">
-              <Loader2 className="w-10 h-10 text-primary dark:text-secondary animate-spin" />
-              <p className="text-xs font-bold text-neutral-600 dark:text-neutral-400">Loading events...</p>
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center space-y-2.5">
-              <AlertCircle className="w-12 h-12 text-tertiary" />
-              <p className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{error}</p>
-              <button
-                onClick={fetchEvents}
-                className="px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs rounded-xl"
-              >
-                Retry Loading
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Day Headers */}
-              <div className="grid grid-cols-7 gap-1 md:gap-2">
-                {daysOfWeek.map(d => (
-                  <div
-                    key={d}
-                    className="text-center text-xs font-black text-neutral-500 dark:text-neutral-400 py-2 select-none"
-                  >
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              {/* Grid Cells */}
-              <div className="grid grid-cols-7 gap-1 md:gap-2 select-none">
-                {calendarCells.map((cell, idx) => {
-                  const dayEvents = getFilteredEventsForDate(cell.dateStr);
-
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => handleDayClick(cell.dayNum)}
-                      className={`h-24 md:h-28 p-1.5 md:p-2 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer relative group overflow-hidden ${cell.isCurrentMonth
-                        ? 'bg-surface dark:bg-surface-container-high/40 hover:bg-primary/5 dark:hover:bg-secondary/5 border-outline-variant/30 dark:border-outline-variant/10'
-                        : 'bg-neutral-50 dark:bg-neutral-950/20 text-neutral-400 border-outline-variant/15 dark:border-outline-variant/5 hover:opacity-75'
-                        } ${cell.isToday ? 'ring-2 ring-primary dark:ring-secondary ring-offset-2 dark:ring-offset-neutral-900' : ''}`}
-                    >
-                      {/* Day Number */}
-                      <div className="flex justify-between items-center">
-                        <span
-                          className={`text-xs font-black p-1 rounded-lg ${cell.isToday
-                            ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-black'
-                            : 'text-neutral-700 dark:text-neutral-300'
-                            }`}
-                        >
-                          {cell.dayNum}
-                        </span>
-
-                        {cell.isToday && (
-                          <span className="text-[9px] uppercase tracking-wider text-primary dark:text-secondary font-black hidden md:inline-flex items-center gap-0.5">
-                            <Sparkles className="w-2.5 h-2.5 animate-pulse" />
-                            Today
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Event badges on desktop view */}
-                      {(() => {
-                        const nonDeadlineEvents = dayEvents.filter(e => e.type !== 'payment_deadline');
-                        const deadlineEvents = dayEvents.filter(e => e.type === 'payment_deadline');
-
-                        return (
-                          <div className="hidden md:flex flex-col gap-1 mt-1 overflow-hidden">
-                            {/* Render non-deadline events (max 2) */}
-                            {nonDeadlineEvents.slice(0, 2).map((evt) => (
-                              <div
-                                key={evt.id}
-                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md truncate border ${getBadgeStyles(evt.type, evt.status)}`}
-                                title={evt.title}
-                              >
-                                {evt.title}
-                              </div>
-                            ))}
-
-                            {/* Render payment deadlines summary or single badge */}
-                            {deadlineEvents.length === 1 && (
-                              <div
-                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md truncate border ${getBadgeStyles('payment_deadline')}`}
-                                title={deadlineEvents[0].title}
-                              >
-                                {deadlineEvents[0].title}
-                              </div>
-                            )}
-
-                            {deadlineEvents.length > 1 && (
-                              <div
-                                className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md truncate border bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/25 flex items-center justify-between gap-1"
-                                title={`${deadlineEvents.length} payment deadlines on this day. Click to view all details.`}
-                              >
-                                <span className="truncate">💳 {deadlineEvents.length} Payments Due</span>
-                              </div>
-                            )}
-
-                            {/* Overflow count for extra non-deadline events */}
-                            {nonDeadlineEvents.length > 2 && (
-                              <div className="text-[8px] font-black text-neutral-500 dark:text-neutral-400 pl-1">
-                                +{nonDeadlineEvents.length - 2} notices
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Event dots on mobile view */}
-                      <div className="flex md:hidden flex-row gap-1 flex-wrap mt-1 items-center">
-                        {dayEvents.slice(0, 4).map(evt => (
-                          <span
-                            key={evt.id}
-                            className={`w-1.5 h-1.5 rounded-full ${getDotColorClass(evt.type, evt.status)}`}
-                          />
-                        ))}
-                        {dayEvents.length > 4 && (
-                          <span className="text-[7px] font-bold text-neutral-400">+{dayEvents.length - 4}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+        <button
+          type="button"
+          onClick={() => handleTabChange('appointments')}
+          className={`px-6 py-3.5 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'appointments'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>Appointments & Schedules</span>
+          {pendingAppointmentsCount > 0 && (
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+              {pendingAppointmentsCount}
+            </span>
           )}
-        </div>
+        </button>
       </div>
 
-      {/* Day Events Details Modal */}
-      {showDayModal && (
-        <div key={selectedDateStr || 'day-modal'} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-sm animate-modal-backdrop">
-          <div key={`card-${selectedDateStr || 'day-modal'}`} className="bg-white dark:bg-surface-container bg-surface rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden border border-outline-variant/60 flex flex-col max-h-[90vh] animate-modal-pop">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-outline-variant/50 flex justify-between items-center bg-primary/5 dark:bg-secondary/5">
-              <div>
-                <h3 className="font-headline text-md font-black text-on-surface dark:text-white flex items-center gap-2">
-                  <CalendarIcon className="w-5 h-5 text-primary dark:text-secondary" />
-                  {formatReadableDate(selectedDateStr)}
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowDayModal(false)}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-                aria-label="Close modal"
-              >
-                <X className="w-4 h-4" />
-              </button>
+      {/* TAB 1: APPOINTMENTS SECTION */}
+      {activeTab === 'appointments' && (
+        <AppointmentsSection onPendingCountChange={setPendingAppointmentsCount} />
+      )}
+
+      {/* TAB 2: CALENDAR SECTION */}
+      {activeTab === 'calendar' && (
+        <div className="space-y-6">
+          {/* Header Widget */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm transition-all">
+            <div>
+              <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
+                Calendar & Schedule Tracker
+              </h1>
+              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mt-1">
+                Track cooperative operations, upcoming payment due dates, and community announcements.
+              </p>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1">
-              {/* Event Listings */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-black text-neutral-500 dark:text-neutral-400 uppercase tracking-widest">
-                  Scheduled Events
-                </h4>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={resetToToday}
+                className="px-4 py-2 text-xs font-bold rounded-xl border border-outline-variant/60 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-800 dark:text-neutral-200 transition-colors cursor-pointer"
+              >
+                Today
+              </button>
+              <div className="flex items-center rounded-xl border border-outline-variant/60 overflow-hidden">
+                <button
+                  onClick={prevMonth}
+                  className="p-2.5 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
+                  title="Previous Month"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="px-4 text-xs font-black text-on-surface dark:text-white min-w-[120px] text-center bg-neutral/5 dark:bg-neutral/15 font-headline">
+                  {monthNames[month]} {year}
+                </div>
+                <button
+                  onClick={nextMonth}
+                  className="p-2.5 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
+                  title="Next Month"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
 
-                {selectedDayEvents.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 border border-dashed border-outline-variant/60 rounded-2xl text-center p-4">
-                    <Clock className="w-8 h-8 text-neutral-400 mb-2" />
-                    <p className="text-xs font-bold text-neutral-600 dark:text-neutral-400">No events or deadlines for this day.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {selectedDayEvents.map(evt => (
+          {/* Main Grid + Filter Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Filters Panel */}
+            <div className="lg:col-span-1 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm h-fit space-y-6">
+              <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2 pb-3 border-b border-outline-variant/45">
+                <Filter className="w-4 h-4 text-primary dark:text-secondary" />
+                Event Categories
+              </h3>
+
+              <div className="space-y-3.5">
+                <label className="flex items-center gap-3 cursor-pointer group select-none">
+                  <input
+                    type="checkbox"
+                    checked={filters.announcement}
+                    onChange={(e) => setFilters({ ...filters, announcement: e.target.checked })}
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-outline-variant accent-blue-600 cursor-pointer"
+                  />
+                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    Announcements
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group select-none">
+                  <input
+                    type="checkbox"
+                    checked={filters.payment_deadline}
+                    onChange={(e) => setFilters({ ...filters, payment_deadline: e.target.checked })}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-outline-variant accent-amber-500 cursor-pointer"
+                  />
+                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    Payment Deadlines
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group select-none">
+                  <input
+                    type="checkbox"
+                    checked={filters.office_duty}
+                    onChange={(e) => setFilters({ ...filters, office_duty: e.target.checked })}
+                    className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 border-outline-variant accent-emerald-500 cursor-pointer"
+                  />
+                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    Office Operations
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group select-none">
+                  <input
+                    type="checkbox"
+                    checked={filters.holiday}
+                    onChange={(e) => setFilters({ ...filters, holiday: e.target.checked })}
+                    className="w-4 h-4 rounded text-rose-500 focus:ring-rose-500 border-outline-variant accent-rose-500 cursor-pointer"
+                  />
+                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    Holidays / Closed
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer group select-none">
+                  <input
+                    type="checkbox"
+                    checked={filters.special_schedule}
+                    onChange={(e) => setFilters({ ...filters, special_schedule: e.target.checked })}
+                    className="w-4 h-4 rounded text-purple-500 focus:ring-purple-500 border-outline-variant accent-purple-500 cursor-pointer"
+                  />
+                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                    Special Schedules
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Calendar Grid Container */}
+            <div className="lg:col-span-3 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm transition-all">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-32 space-y-3">
+                  <Loader2 className="w-10 h-10 text-primary dark:text-secondary animate-spin" />
+                  <p className="text-xs font-bold text-neutral-600 dark:text-neutral-400">Loading events...</p>
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-2.5">
+                  <AlertCircle className="w-12 h-12 text-tertiary" />
+                  <p className="text-sm font-bold text-on-surface dark:text-white">{error}</p>
+                  <button
+                    onClick={fetchEvents}
+                    className="px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs rounded-xl"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Days of Week Header */}
+                  <div className="grid grid-cols-7 gap-1.5 text-center">
+                    {daysOfWeek.map((day, idx) => (
                       <div
-                        key={evt.id}
-                        className="p-4 rounded-2xl border border-outline-variant/35 bg-surface-container-low dark:bg-surface-container-high/40 hover:shadow-sm transition-all"
+                        key={day}
+                        className={`text-xs font-black uppercase tracking-wider py-2 font-headline ${
+                          idx === 0 || idx === 6
+                            ? 'text-rose-500/80 dark:text-rose-400/80'
+                            : 'text-neutral-500 dark:text-neutral-400'
+                        }`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-black text-on-surface dark:text-white">
-                                {evt.title}
-                              </span>
-                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${getBadgeStyles(evt.type, evt.status)}`}>
-                                {evt.type.replace('_', ' ')}
-                              </span>
-                            </div>
-                            {evt.description && (
-                              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-300 leading-relaxed pt-1">
-                                {evt.description}
-                              </p>
-                            )}
-                            {evt.creator_name && (
-                              <p className="text-[10px] font-bold text-neutral-400 pt-1">
-                                Posted by: {evt.creator_name}
-                              </p>
-                            )}
-                          </div>
-
-                          {isAdminOrManager && evt.is_system && (
-                            <div className="flex gap-1.5">
-                              <button
-                                onClick={() => startEditEvent(evt)}
-                                className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-neutral/5 text-neutral-600 dark:text-neutral-300 transition-colors"
-                                title="Edit Event"
-                              >
-                                <Info className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteEvent(evt.id)}
-                                className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-tertiary/10 text-tertiary transition-colors"
-                                title="Delete Event"
-                                disabled={actionLoading}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                        {day}
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
 
-              {/* Admin/Manager Event Form Toggle button */}
+                  {/* 6x7 Grid of Days */}
+                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                    {calendarCells.map((cell, idx) => {
+                      const dayEvents = getFilteredEventsForDate(cell.dateStr);
+                      const hasEvents = dayEvents.length > 0;
+
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => handleDayClick(cell.dayNum)}
+                          className={`min-h-[75px] sm:min-h-[90px] p-2 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group select-none relative overflow-hidden ${
+                            cell.isToday
+                              ? 'bg-primary/5 dark:bg-secondary/10 border-primary/40 dark:border-secondary/40 shadow-xs'
+                              : cell.isCurrentMonth
+                                ? 'bg-neutral-50/50 dark:bg-neutral-800/30 border-outline-variant/35 hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-white dark:hover:bg-neutral-800/60'
+                                : 'bg-transparent border-transparent opacity-30 cursor-not-allowed pointer-events-none'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`text-xs font-bold leading-none ${
+                                cell.isToday
+                                  ? 'w-6 h-6 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 flex items-center justify-center font-black shadow-xs'
+                                  : 'text-on-surface dark:text-neutral-200'
+                              }`}
+                            >
+                              {cell.dayNum}
+                            </span>
+
+                            {hasEvents && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                                {dayEvents.length}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Event Indicators */}
+                          <div className="space-y-1 mt-1">
+                            {dayEvents.slice(0, 2).map((evt) => (
+                              <div
+                                key={evt.id}
+                                className={`text-[10px] font-semibold truncate px-1.5 py-0.5 rounded-md border flex items-center gap-1 ${getEventBadgeStyle(
+                                  evt.type
+                                )}`}
+                                title={evt.title}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getEventDotColor(evt.type)}`} />
+                                <span className="truncate">{evt.title}</span>
+                              </div>
+                            ))}
+
+                            {dayEvents.length > 2 && (
+                              <div className="text-[9px] font-bold text-neutral-400 pl-1">
+                                +{dayEvents.length - 2} more
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Day Events Drawer / Modal */}
+      {showDayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-xs animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-modal-pop">
+            <div className="p-6 border-b border-outline-variant/40 flex items-center justify-between bg-neutral-50 dark:bg-neutral-900/40">
+              <div>
+                <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white">
+                  Events on{' '}
+                  {selectedDateStr &&
+                    new Date(selectedDateStr + 'T00:00:00').toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                </h3>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Scheduled notifications and calendar notices
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDayModal(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 text-neutral-500 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              {/* List of existing events */}
+              {selectedDayEvents.length === 0 ? (
+                <div className="text-center py-8 text-neutral-400 space-y-2">
+                  <CalendarDays className="w-8 h-8 mx-auto opacity-40" />
+                  <p className="text-xs font-semibold">No scheduled events for this date.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {selectedDayEvents.map((evt) => (
+                    <div
+                      key={evt.id}
+                      className="p-4 rounded-2xl border border-outline-variant/60 bg-neutral-50/50 dark:bg-neutral-800/30 space-y-2 relative"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {getEventIcon(evt.type)}
+                          <h4 className="text-xs font-bold text-on-surface dark:text-white">{evt.title}</h4>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getEventBadgeStyle(
+                            evt.type
+                          )}`}
+                        >
+                          {evt.type.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </div>
+
+                      {evt.description && (
+                        <p className="text-xs text-neutral-600 dark:text-neutral-300 pl-5.5">
+                          {evt.description}
+                        </p>
+                      )}
+
+                      {/* Admin/Manager Actions */}
+                      {isAdminOrManager && (
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/30">
+                          <button
+                            onClick={() => startEditEvent(evt)}
+                            className="text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEvent(evt.id)}
+                            className="text-[11px] font-bold text-rose-500 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Event Creation Form (Admin only) */}
               {isAdminOrManager && !isManaging && (
                 <button
                   onClick={() => {
@@ -699,97 +719,81 @@ export default function CalendarPage() {
                       description: '',
                       type: 'announcement',
                       status: 'open',
-                      event_date: selectedDateStr || ''
+                      event_date: selectedDateStr || '',
                     });
                   }}
-                  className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-primary/40 dark:border-secondary/40 text-primary dark:text-secondary bg-primary/5 dark:bg-secondary/5 rounded-2xl text-xs font-bold hover:bg-primary/10 dark:hover:bg-secondary/10 transition-colors cursor-pointer"
+                  className="w-full py-2.5 rounded-xl border border-dashed border-primary/50 text-primary dark:text-secondary text-xs font-bold hover:bg-primary/5 dark:hover:bg-secondary/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  Add Event or Modify Office Schedule
+                  Add Event on this Day
                 </button>
               )}
 
-              {/* Event Editor Form (Admin/Manager) */}
               {isAdminOrManager && isManaging && (
-                <form onSubmit={handleSaveEvent} className="p-5 border border-outline-variant/65 rounded-2xl space-y-4 bg-neutral/5 dark:bg-neutral/10">
-                  <div className="flex justify-between items-center pb-2 border-b border-outline-variant/30">
-                    <h5 className="text-xs font-black text-on-surface dark:text-white flex items-center gap-1.5">
-                      {editingEventId ? 'Edit Calendar Entry' : 'Create Calendar Entry'}
-                    </h5>
-                    <button
-                      type="button"
-                      onClick={() => setIsManaging(false)}
-                      className="p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                <form onSubmit={handleSaveEvent} className="p-4 rounded-2xl border border-primary/30 bg-primary/5 dark:bg-secondary/5 space-y-3">
+                  <h4 className="text-xs font-bold text-primary dark:text-secondary">
+                    {editingEventId ? 'Edit Event Details' : 'Create New Event'}
+                  </h4>
 
-                  <div className="space-y-3.5">
-                    {/* Title */}
-                    <div className="space-y-1.5">
+                  <div className="space-y-2.5">
+                    <div>
                       <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-300">
-                        Event Title / Header
+                        Event Title *
                       </label>
                       <input
                         type="text"
                         required
                         value={formFields.title}
-                        onChange={e => setFormFields(prev => ({ ...prev, title: e.target.value }))}
-                        placeholder="e.g. Christmas Day, System Upgrade Maintenance"
-                        className="w-full px-3.5 py-2.5 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 focus:ring-1 focus:ring-primary dark:focus:ring-secondary text-xs font-medium text-on-surface dark:text-white"
+                        onChange={(e) => setFormFields((prev) => ({ ...prev, title: e.target.value }))}
+                        placeholder="e.g. Loan Payment Due Date"
+                        className="w-full px-3 py-2 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 text-xs font-semibold text-on-surface dark:text-white"
                       />
                     </div>
 
-                    {/* Description */}
-                    <div className="space-y-1.5">
+                    <div>
                       <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-300">
-                        Description / Details (Optional)
+                        Description
                       </label>
                       <textarea
                         rows={2}
                         value={formFields.description}
-                        onChange={e => setFormFields(prev => ({ ...prev, description: e.target.value }))}
-                        placeholder="Provide details about the schedule, timing, or links..."
-                        className="w-full px-3.5 py-2.5 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 focus:ring-1 focus:ring-primary dark:focus:ring-secondary text-xs font-medium text-on-surface dark:text-white resize-none"
+                        onChange={(e) => setFormFields((prev) => ({ ...prev, description: e.target.value }))}
+                        placeholder="Optional details or instructions..."
+                        className="w-full px-3 py-2 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 text-xs font-semibold text-on-surface dark:text-white resize-none"
                       />
                     </div>
 
-                    {/* Type and Status Row */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* Event Type */}
-                      <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
                         <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-300">
-                          Category Type
+                          Event Category
                         </label>
                         <select
                           value={formFields.type}
-                          onChange={e => {
-                            const val = e.target.value as CalendarEvent['type'];
-                            setFormFields(prev => ({
+                          onChange={(e) =>
+                            setFormFields((prev) => ({
                               ...prev,
-                              type: val,
-                              status: val === 'office_duty' ? 'open' : 'active'
-                            }));
-                          }}
+                              type: e.target.value as CalendarEvent['type'],
+                            }))
+                          }
                           className="w-full px-3 py-2 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 text-xs font-semibold text-on-surface dark:text-white"
                         >
                           <option value="announcement">Announcement</option>
-                          <option value="office_duty">Office duty status</option>
+                          <option value="payment_deadline">Payment Deadline</option>
+                          <option value="office_duty">Office Duty</option>
                           <option value="holiday">Holiday</option>
-                          <option value="special_schedule">Special schedule</option>
+                          <option value="special_schedule">Special Schedule</option>
                         </select>
                       </div>
 
-                      {/* Status (especially relevant for office duty) */}
                       {formFields.type === 'office_duty' ? (
-                        <div className="space-y-1.5">
+                        <div>
                           <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-300">
                             Office Status
                           </label>
                           <select
                             value={formFields.status}
-                            onChange={e => setFormFields(prev => ({ ...prev, status: e.target.value }))}
+                            onChange={(e) => setFormFields((prev) => ({ ...prev, status: e.target.value }))}
                             className="w-full px-3 py-2 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 text-xs font-semibold text-on-surface dark:text-white"
                           >
                             <option value="open">Open / On Duty</option>
@@ -797,13 +801,13 @@ export default function CalendarPage() {
                           </select>
                         </div>
                       ) : (
-                        <div className="space-y-1.5">
+                        <div>
                           <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-300">
-                            Status state
+                            Status State
                           </label>
                           <select
                             value={formFields.status}
-                            onChange={e => setFormFields(prev => ({ ...prev, status: e.target.value }))}
+                            onChange={(e) => setFormFields((prev) => ({ ...prev, status: e.target.value }))}
                             className="w-full px-3 py-2 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 text-xs font-semibold text-on-surface dark:text-white"
                           >
                             <option value="active">Active</option>
@@ -818,14 +822,14 @@ export default function CalendarPage() {
                     <button
                       type="button"
                       onClick={() => setIsManaging(false)}
-                      className="px-4 py-2 border border-outline-variant/60 rounded-xl text-neutral-700 dark:text-neutral-200 text-xs font-bold hover:bg-neutral/5"
+                      className="px-4 py-2 border border-outline-variant/60 rounded-xl text-neutral-700 dark:text-neutral-200 text-xs font-bold hover:bg-neutral/5 cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={actionLoading}
-                      className="px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-xs font-bold hover:opacity-90 flex items-center gap-1.5"
+                      className="px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-xs font-bold hover:opacity-90 flex items-center gap-1.5 cursor-pointer"
                     >
                       {actionLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                       {editingEventId ? 'Update Event' : 'Save Event'}
@@ -848,5 +852,20 @@ export default function CalendarPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CalendarPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center py-32 space-y-3">
+          <Loader2 className="w-10 h-10 text-primary dark:text-secondary animate-spin" />
+          <p className="text-xs font-bold text-neutral-600 dark:text-neutral-400">Loading Calendar & Appointments...</p>
+        </div>
+      }
+    >
+      <CalendarPageContent />
+    </Suspense>
   );
 }
