@@ -321,32 +321,20 @@ export default function SupportPage() {
 
   return (
     <div className="space-y-6 animate-micro-elevate">
-      <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-      </div>
-
-      {/* Page Header */}
+      {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
-            {/* <LifeBuoy className="w-7 h-7 text-primary dark:text-secondary" /> */}
-            {isAdminOrManager ? 'Support Desk Management' : 'Help & Support Center'}
-          </h1>
-          <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-            {isAdminOrManager
-              ? 'Review member support queues and publish FAQs or User Guides.'
-              : 'Browse FAQs, user guides, or submit assistance requests.'}
-          </p>
+          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           {isAdminOrManager && (
             <button
               onClick={() => {
                 setContentType('faq');
                 setIsContentModalOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-high border border-outline-variant/60 text-on-surface dark:text-white rounded-full font-bold text-xs shadow-sm hover:bg-neutral/5 transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 bg-surface-container-high border border-outline-variant/60 text-on-surface dark:text-white rounded-xl font-bold text-xs shadow-xs hover:bg-neutral/5 transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               New FAQ / Guide
@@ -356,7 +344,7 @@ export default function SupportPage() {
           {!isAdminOrManager && (
             <button
               onClick={() => setIsCreateOpen(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full font-bold text-xs shadow-sm hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl font-bold text-xs shadow-xs hover:shadow-lg transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               New Support Ticket
@@ -398,30 +386,6 @@ export default function SupportPage() {
           User Guides ({faqsAndGuides.filter(i => i.type === 'guide').length})
         </button>
       </div>
-
-      {/* Summary Cards (Only on Tickets tab) */}
-      {activeTab === 'tickets' && (
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: 'Open', count: statusCounts.open, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10', icon: MessageSquareText },
-            { label: 'In Progress', count: statusCounts.in_progress, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500/10', icon: Clock },
-            { label: 'Resolved', count: statusCounts.resolved, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10', icon: CheckCircle2 },
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="p-4 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-sm flex items-center gap-4"
-            >
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${stat.bg}`}>
-                <stat.icon className={`w-5 h-5 ${stat.color}`} />
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-400 font-label">{stat.label}</span>
-                <h3 className={`font-headline text-xl font-extrabold ${stat.color}`}>{stat.count}</h3>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Filters & Search Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
