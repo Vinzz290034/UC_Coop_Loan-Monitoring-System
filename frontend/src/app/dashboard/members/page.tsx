@@ -283,8 +283,8 @@ export default function MembersPage() {
 
       const worksheet = XLSX.utils.json_to_sheet(excelData);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Members Directory');
-      XLSX.writeFile(workbook, `Members_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Membership Directory');
+      XLSX.writeFile(workbook, `Membership_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err: any) {
       console.error('Export error:', err);
       alert('Failed to export report. Please try again.');
@@ -426,7 +426,7 @@ export default function MembersPage() {
         {/* Header and Exporter */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Members Directory</h1>
+            <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Membership Directory</h1>
             <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
               Cooperative registry list containing {members.length} members.
             </p>
@@ -546,7 +546,7 @@ export default function MembersPage() {
             <div className="flex items-center justify-between px-1 flex-wrap gap-2.5">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-on-surface dark:text-white">
-                  Members Table
+                  Membership Table
                 </span>
                 <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold border border-outline-variant/30">
                   {isExpandedAll ? `Showing all ${members.length} members (Full Roster)` : `Showing ${displayedMembers.length} of ${members.length} members`}

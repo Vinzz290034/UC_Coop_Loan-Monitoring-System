@@ -42,8 +42,8 @@ export default function AccountingPage() {
     setMounted(true);
   }, []);
 
-  // Active Tab: 'savings' | 'share_capital' | 'fixed_deposits' | 'investments'
-  const [activeTab, setActiveTab] = useState<'savings' | 'share_capital' | 'fixed_deposits' | 'investments'>('savings');
+  // Active Tab: 'savings' | 'share_capital' | 'fixed_deposits'
+  const [activeTab, setActiveTab] = useState<'savings' | 'share_capital' | 'fixed_deposits'>('savings');
 
   // Member selection
   const [members, setMembers] = useState<any[]>([]);
@@ -156,7 +156,7 @@ export default function AccountingPage() {
       const syncTabFromUrl = () => {
         const params = new URLSearchParams(window.location.search);
         const tabParam = params.get('tab');
-        if (tabParam === 'savings' || tabParam === 'share_capital' || tabParam === 'fixed_deposits' || tabParam === 'investments') {
+        if (tabParam === 'savings' || tabParam === 'share_capital' || tabParam === 'fixed_deposits') {
           setActiveTab(tabParam);
         }
       };
@@ -595,9 +595,9 @@ export default function AccountingPage() {
       {/* Header and Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Capital & Asset Accounts Ledger</h1>
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Shared Capital Ledger</h1>
           <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-            Monitor member share capital equity, fixed term deposits, and cooperative investment accounts.
+            Monitor member share capital equity, savings accounts, and fixed term deposits.
           </p>
         </div>
 
@@ -641,16 +641,6 @@ export default function AccountingPage() {
             >
               <Building className="w-4 h-4" />
               New Fixed Deposit
-            </button>
-          )}
-
-          {activeTab === 'investments' && (
-            <button
-              onClick={() => setIsInvModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
-            >
-              <PiggyBank className="w-4 h-4" />
-              Create Investment Account
             </button>
           )}
         </div>
@@ -702,23 +692,6 @@ export default function AccountingPage() {
         >
           <Coins className="w-4 h-4" />
           <span>Share Capital Ledger</span>
-        </button>
-
-
-        <button
-          onClick={() => setActiveTab('investments')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'investments'
-              ? 'bg-white dark:bg-neutral-900 text-primary dark:text-secondary shadow-xs'
-              : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-            }`}
-        >
-          <PiggyBank className="w-4 h-4" />
-          <span>Investments Ledger</span>
-          {investments.length > 0 && (
-            <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-extrabold">
-              {investments.length}
-            </span>
-          )}
         </button>
       </div>
 
@@ -1160,116 +1133,6 @@ export default function AccountingPage() {
             </div>
           )}
 
-          {/* TAB 3: INVESTMENTS LEDGER */}
-          {activeTab === 'investments' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl">
-                <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
-                  <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 font-label">Active Portfolios</span>
-                  <h3 className="font-headline text-2xl font-extrabold text-primary dark:text-secondary mt-1">
-                    {investments.length} Account(s)
-                  </h3>
-                  <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Member investment portfolios</p>
-                </div>
-
-                <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
-                  <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 font-label">Total Portfolio Balance</span>
-                  <h3 className="font-headline text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
-                    {formatCurrency(
-                      investments.reduce((sum: number, inv: any) => sum + parseFloat(inv.current_balance || 0), 0)
-                    )}
-                  </h3>
-                  <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Current combined balance</p>
-                </div>
-
-                <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
-                  <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 font-label">Accumulated Yield</span>
-                  <h3 className="font-headline text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">
-                    {formatCurrency(
-                      investments.reduce((sum: number, inv: any) => sum + parseFloat(inv.interest_yield || 0), 0)
-                    )}
-                  </h3>
-                  <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Total interest payouts earned</p>
-                </div>
-              </div>
-
-              {/* Investments List Card Grid */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
-                    <PiggyBank className="w-4 h-4 text-primary" /> Member Investment Portfolios
-                  </h4>
-                </div>
-
-                {investments.length === 0 ? (
-                  <div className="text-center py-12 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
-                    <PiggyBank className="w-8 h-8 text-neutral-400 mx-auto mb-2" />
-                    <p className="text-xs text-neutral-600 dark:text-neutral-400">No investment accounts recorded for this member profile.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {investments.map((inv: any) => (
-                      <div key={inv.id} className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl space-y-4 shadow-sm hover:border-primary/40 transition-all">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h5 className="font-headline font-bold text-sm text-on-surface dark:text-white">{inv.investment_name}</h5>
-                            <span className="text-[10px] text-neutral-400 font-mono">Created: {new Date(inv.created_at).toLocaleDateString()}</span>
-                          </div>
-
-                          {isAdminOrManager && (
-                            <button
-                              onClick={() => { setSelectedInvestmentForTx(inv); setInvTxError(null); }}
-                              className="px-3 py-1.5 bg-primary/10 dark:bg-secondary/15 hover:bg-primary/20 text-primary dark:text-secondary rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 active:scale-95"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Post Tx</span>
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-outline-variant/30 text-xs">
-                          <div>
-                            <span className="text-[9px] uppercase text-neutral-400 font-bold block">Principal</span>
-                            <span className="font-bold text-on-surface dark:text-white">{formatCurrency(parseFloat(inv.principal_amount))}</span>
-                          </div>
-
-                          <div>
-                            <span className="text-[9px] uppercase text-neutral-400 font-bold block">Current Balance</span>
-                            <span className="font-bold text-primary dark:text-secondary">{formatCurrency(parseFloat(inv.current_balance))}</span>
-                          </div>
-
-                          <div>
-                            <span className="text-[9px] uppercase text-neutral-400 font-bold block">Yield Earned</span>
-                            <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(parseFloat(inv.interest_yield))}</span>
-                          </div>
-                        </div>
-
-                        {/* Recent Transactions List */}
-                        {inv.transactions && inv.transactions.length > 0 && (
-                          <div className="space-y-2 pt-2 border-t border-outline-variant/30">
-                            <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">Transaction Log ({inv.transactions.length})</span>
-                            <div className="max-h-36 overflow-y-auto divide-y divide-outline-variant/20 text-xs">
-                              {inv.transactions.map((tx: any) => (
-                                <div key={tx.id} className="py-1.5 flex items-center justify-between text-[11px]">
-                                  <span className="capitalize font-bold text-neutral-700 dark:text-neutral-300">
-                                    {tx.transaction_type === 'yield_payout' ? '📈 Yield Payout' : tx.transaction_type === 'deposit' ? '💵 Deposit' : '💸 Withdrawal'}
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono font-bold">{formatCurrency(parseFloat(tx.amount))}</span>
-                                    <span className="text-[9px] text-neutral-400">{new Date(tx.transaction_date).toLocaleDateString()}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </>
       )}
 

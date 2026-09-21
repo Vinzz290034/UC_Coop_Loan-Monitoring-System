@@ -255,6 +255,14 @@ export const createLiquidation = async (req, res, next) => {
         const isCancelled = Boolean(item.is_cancelled || /cancelled/i.test(item.particulars || '') || /cancelled/i.test(item.remarks || ''));
         if (!isCancelled) totalLiq += amt;
 
+        let itemDate = item.item_date || null;
+        if (!itemDate && item.item_date_raw) {
+          const parsed = new Date(item.item_date_raw);
+          if (!isNaN(parsed.getTime())) {
+            itemDate = parsed.toISOString().split('T')[0];
+          }
+        }
+
         await query(`
           INSERT INTO rf_liquidation_items
             (liquidation_id, item_date, item_date_raw, particulars, amount, account_name, category, remarks, is_cancelled, sort_order)
@@ -262,7 +270,7 @@ export const createLiquidation = async (req, res, next) => {
             ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         `, [
           createdLf.id,
-          item.item_date || null,
+          itemDate,
           item.item_date_raw || null,
           item.particulars || '',
           amt,
@@ -274,12 +282,7 @@ export const createLiquidation = async (req, res, next) => {
         ]);
       }
 
-      await query(`
-        UPDATE revolving_fund_liquidations
-        SET total_liquidated = $1, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-      `, [totalLiq, createdLf.id]);
-
+      await recalculateLfTotal(createdLf.id);
       createdLf.total_liquidated = totalLiq;
     }
 
@@ -361,13 +364,31 @@ export const updateLiquidation = async (req, res, next) => {
     }
 
     // Upsert items if provided
-    if (Array.isArray(items) && items.length > 0) {
-      let totalLiq = 0;
+    if (Array.isArray(items)) {
+      // 1. Delete removed items
+      const incomingIds = items.filter(it => it.id).map(it => it.id);
+      if (incomingIds.length > 0) {
+        await query(
+          `DELETE FROM rf_liquidation_items WHERE liquidation_id = $1 AND id NOT IN (${incomingIds.map((_, idx) => `$${idx + 2}`).join(', ')})`,
+          [id, ...incomingIds]
+        );
+      } else if (items.length === 0) {
+        await query('DELETE FROM rf_liquidation_items WHERE liquidation_id = $1', [id]);
+      }
+
+      // 2. Insert or update items
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const amt = parseFloat(item.amount) || 0;
         const isCancelled = Boolean(item.is_cancelled || /cancelled/i.test(item.particulars || '') || /cancelled/i.test(item.remarks || ''));
-        if (!isCancelled) totalLiq += amt;
+
+        let itemDate = item.item_date || null;
+        if (!itemDate && item.item_date_raw) {
+          const parsed = new Date(item.item_date_raw);
+          if (!isNaN(parsed.getTime())) {
+            itemDate = parsed.toISOString().split('T')[0];
+          }
+        }
 
         if (item.id) {
           // Update existing item
@@ -385,7 +406,7 @@ export const updateLiquidation = async (req, res, next) => {
               sort_order = $9
             WHERE id = $10 AND liquidation_id = $11
           `, [
-            item.item_date || null,
+            itemDate,
             item.item_date_raw || null,
             item.particulars || '',
             amt,
@@ -406,7 +427,7 @@ export const updateLiquidation = async (req, res, next) => {
               ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           `, [
             id,
-            item.item_date || null,
+            itemDate,
             item.item_date_raw || null,
             item.particulars || '',
             amt,
@@ -419,17 +440,15 @@ export const updateLiquidation = async (req, res, next) => {
         }
       }
 
-      // Recalculate totals
-      await query(`
-        UPDATE revolving_fund_liquidations
-        SET total_liquidated = $1, item_count = $2, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $3
-      `, [totalLiq, items.filter(i => !i.is_cancelled).length, id]);
+      // Recalculate totals and period
+      await recalculateLfTotal(id);
     }
+
+    const updatedLf = await query('SELECT * FROM revolving_fund_liquidations WHERE id = $1', [id]);
 
     res.status(200).json({
       success: true,
-      data: updateRes.rows[0],
+      data: updatedLf.rows[0] || updateRes.rows[0],
       message: 'Liquidation Form updated successfully.'
     });
   } catch (error) {

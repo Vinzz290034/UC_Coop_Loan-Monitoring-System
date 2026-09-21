@@ -28,7 +28,8 @@ import {
   Calendar,
   ChevronUp,
   PieChart,
-  Sparkles
+  Sparkles,
+  Edit3
 } from 'lucide-react';
 
 interface LiquidationItem {
@@ -239,6 +240,7 @@ export default function RevolvingFundsTab({
   // Create / Edit modal state
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingLf, setEditingLf] = useState<LiquidationForm | null>(null);
+  const [loadingEditId, setLoadingEditId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     lf_no: '',
     sheet_name: '',
@@ -498,7 +500,7 @@ export default function RevolvingFundsTab({
       items: [
         {
           item_date_raw: '',
-          particulars: 'RF Voucher 001',
+          particulars: '',
           amount: 0,
           account_name: 'Office supplies',
           category: 'Operation',
@@ -509,39 +511,65 @@ export default function RevolvingFundsTab({
     setIsFormModalOpen(true);
   };
 
-  const openEditModal = async (lf: LiquidationForm) => {
+  const openEditModal = (lf: LiquidationForm) => {
     setEditingLf(lf);
-    let items = expandedDetailsMap[lf.id]?.items || [];
-    if (items.length === 0) {
-      try {
-        const res = await api.get(`/revolving-funds/${lf.id}`);
-        if (res.data.success && res.data.data) {
-          items = res.data.data.items || [];
-        }
-      } catch (err) {
-        console.error('Failed to load items for edit:', err);
-      }
-    }
 
-    setFormData({
-      lf_no: lf.lf_no,
-      sheet_name: lf.sheet_name || '',
-      authorized_amount: String(lf.authorized_amount || '100000'),
-      custodian_name: lf.custodian_name || 'Michelle M. Pable',
-      status: lf.status || 'open',
-      notes: lf.notes || '',
-      items: items.length > 0 ? items : [
+    const mapItems = (rawItems: LiquidationItem[]) =>
+      rawItems.length > 0 ? rawItems.map((it: any) => ({
+        ...it,
+        particulars: (!it.particulars || /^item\s*#\d+$/i.test(it.particulars.trim())) ? '' : it.particulars,
+        amount: Number(it.amount) || 0,
+        item_date_raw: it.item_date_raw || (it.item_date ? String(it.item_date).split('T')[0] : '')
+      })) : [
         {
           item_date_raw: '',
-          particulars: 'RF Voucher 001',
+          particulars: '',
           amount: 0,
           account_name: 'Office supplies',
           category: 'Operation',
           remarks: ''
         }
-      ]
+      ];
+
+    const existingItems = expandedDetailsMap[lf.id]?.items || [];
+
+    // INSTANT: Immediately open modal using in-memory cached items
+    setFormData({
+      lf_no: lf.lf_no,
+      sheet_name: lf.sheet_name || '',
+      authorized_amount: String(lf.authorized_amount ?? '100000'),
+      custodian_name: lf.custodian_name || 'Michelle M. Pable',
+      status: lf.status || 'open',
+      notes: lf.notes || '',
+      items: mapItems(existingItems)
     });
     setIsFormModalOpen(true);
+
+    // If items were not yet cached for this LF, load in the background
+    if (existingItems.length === 0) {
+      setLoadingEditId(lf.id);
+      api.get(`/revolving-funds/${lf.id}`)
+        .then(res => {
+          if (res.data?.success && res.data?.data) {
+            const fetchedItems = res.data.data.items || [];
+            setExpandedDetailsMap(prev => ({
+              ...prev,
+              [lf.id]: {
+                items: fetchedItems,
+                accountSummary: res.data.data.accountSummary || {},
+                categorySummary: res.data.data.categorySummary || {},
+                loading: false
+              }
+            }));
+            setFormData(prev => ({
+              ...prev,
+              items: mapItems(fetchedItems)
+            }));
+          }
+        })
+        .catch(err => console.error('Failed to load items in background:', err))
+        .finally(() => setLoadingEditId(null));
+    }
   };
 
   const handleSaveForm = async () => {
@@ -558,6 +586,25 @@ export default function RevolvingFundsTab({
           notes: formData.notes.trim() || null,
           items: formData.items
         });
+
+        // Refetch details for this liquidation so the breakdown accordion immediately reflects changes
+        try {
+          const detailRes = await api.get(`/revolving-funds/${editingLf.id}`);
+          if (detailRes.data?.success && detailRes.data?.data) {
+            const { items, accountSummary, categorySummary } = detailRes.data.data;
+            setExpandedDetailsMap(prev => ({
+              ...prev,
+              [editingLf.id]: {
+                items: items || [],
+                accountSummary: accountSummary || {},
+                categorySummary: categorySummary || {},
+                loading: false
+              }
+            }));
+          }
+        } catch (e) {
+          console.error('Failed to reload details:', e);
+        }
       } else {
         await api.post('/revolving-funds', {
           lf_no: formData.lf_no.trim(),
@@ -570,8 +617,9 @@ export default function RevolvingFundsTab({
       }
       setIsFormModalOpen(false);
       await loadLiquidations(page);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save liquidation form:', err);
+      alert(err.response?.data?.error?.message || 'Failed to save liquidation form.');
     } finally {
       setSavingForm(false);
     }
@@ -800,9 +848,6 @@ export default function RevolvingFundsTab({
                   <th className="px-4 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right whitespace-nowrap">
                     Balance
                   </th>
-                  <th className="px-4 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-center whitespace-nowrap">
-                    Status
-                  </th>
                   <th className="px-4 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right whitespace-nowrap">
                     Actions
                   </th>
@@ -922,21 +967,6 @@ export default function RevolvingFundsTab({
                           ₱{balAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
 
-                        {/* Status */}
-                        <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
-                              lf.status === 'replenished'
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
-                                : lf.status === 'closed'
-                                ? 'bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
-                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
-                            }`}
-                          >
-                            {lf.status || 'open'}
-                          </span>
-                        </td>
-
                         {/* Actions */}
                         <td className="px-4 py-3.5 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
@@ -963,6 +993,23 @@ export default function RevolvingFundsTab({
                             {isAdminOrManager && (
                               <button
                                 type="button"
+                                disabled={loadingEditId === lf.id}
+                                onClick={() => openEditModal(lf)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-neutral-700 dark:text-neutral-300 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 rounded-xl transition-all cursor-pointer"
+                                title="Edit Liquidation Form & Vouchers"
+                              >
+                                {loadingEditId === lf.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-500" />
+                                ) : (
+                                  <Edit3 className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
+                                )}
+                                <span>Edit</span>
+                              </button>
+                            )}
+
+                            {isAdminOrManager && (
+                              <button
+                                type="button"
                                 onClick={() => setLfToDelete(lf)}
                                 className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-rose-600 hover:text-rose-800 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 rounded-xl transition-all cursor-pointer"
                                 title="Delete Liquidation Form"
@@ -977,7 +1024,7 @@ export default function RevolvingFundsTab({
                       {/* INLINE EXPANDED BREAKDOWN ACCORDION */}
                       {isExpanded && (
                         <tr className="bg-neutral-50/95 dark:bg-neutral-900/90 border-b border-outline-variant/35 animate-fadeIn">
-                          <td colSpan={9} className="px-4 sm:px-6 py-4">
+                          <td colSpan={8} className="px-4 sm:px-6 py-4">
                             <div className="bg-white dark:bg-surface-container-low border border-outline-variant/50 rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm">
                               {/* Header info */}
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-outline-variant/30 pb-3">
@@ -1000,6 +1047,22 @@ export default function RevolvingFundsTab({
                                 </div>
 
                                 <div className="flex items-center gap-2">
+                                  {isAdminOrManager && (
+                                    <button
+                                      type="button"
+                                      disabled={loadingEditId === lf.id}
+                                      onClick={() => openEditModal(lf)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-neutral-700 hover:text-neutral-900 dark:text-neutral-200 dark:hover:text-white bg-white hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700 border border-neutral-300 dark:border-neutral-700 rounded-xl transition-all cursor-pointer shadow-xs"
+                                      title="Edit this Liquidation Form and its Vouchers"
+                                    >
+                                      {loadingEditId === lf.id ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                                      ) : (
+                                        <Edit3 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                      )}
+                                      <span>Edit Form</span>
+                                    </button>
+                                  )}
                                   {(lf.check_voucher_id || lf.voucher_no) && (
                                     <button
                                       type="button"
@@ -1144,10 +1207,11 @@ export default function RevolvingFundsTab({
                                       <tr>
                                         <th className="px-3 py-2.5">Date</th>
                                         <th className="px-3 py-2.5">Particulars / Voucher #</th>
+                                        <th className="px-4 py-2.5 text-right">Amount</th>
                                         <th className="px-3 py-2.5">Account</th>
                                         <th className="px-3 py-2.5">Category</th>
                                         <th className="px-4 py-2.5">Remarks / Details</th>
-                                        <th className="px-4 py-2.5 text-right">Amount</th>
+                                        {isAdminOrManager && <th className="px-3 py-2.5 text-center w-14">Action</th>}
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-outline-variant/20 font-body">
@@ -1162,11 +1226,22 @@ export default function RevolvingFundsTab({
                                             {item.item_date_raw || (item.item_date ? new Date(item.item_date).toLocaleDateString() : '—')}
                                           </td>
                                           <td className="px-3 py-2 font-semibold">
-                                            {item.particulars}
+                                            {(!item.particulars || /^item\s*#\d+$/i.test(item.particulars.trim())) ? (
+                                              <span className="text-neutral-400 font-normal italic">—</span>
+                                            ) : (
+                                              item.particulars
+                                            )}
                                             {item.is_cancelled && (
                                               <span className="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 no-underline">
                                                 CANCELLED
                                               </span>
+                                            )}
+                                          </td>
+                                          <td className="px-4 py-2 font-mono font-bold text-right whitespace-nowrap">
+                                            {item.amount > 0 ? (
+                                              `₱${Number(item.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                                            ) : (
+                                              '—'
                                             )}
                                           </td>
                                           <td className="px-3 py-2 font-medium text-neutral-700 dark:text-neutral-300">
@@ -1182,24 +1257,30 @@ export default function RevolvingFundsTab({
                                           <td className="px-4 py-2 text-neutral-600 dark:text-neutral-400">
                                             {item.remarks || '—'}
                                           </td>
-                                          <td className="px-4 py-2 font-mono font-bold text-right whitespace-nowrap">
-                                            {item.amount > 0 ? (
-                                              `₱${Number(item.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-                                            ) : (
-                                              '—'
-                                            )}
-                                          </td>
+                                          {isAdminOrManager && (
+                                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                                              <button
+                                                type="button"
+                                                onClick={() => openEditModal(lf)}
+                                                className="p-1 rounded-lg text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all cursor-pointer"
+                                                title="Edit in Liquidation Form"
+                                              >
+                                                <Edit3 className="w-3.5 h-3.5" />
+                                              </button>
+                                            </td>
+                                          )}
                                         </tr>
                                       ))}
                                     </tbody>
                                     <tfoot className="bg-neutral-100/60 dark:bg-neutral-800/60 font-bold border-t border-outline-variant/40">
                                       <tr>
-                                        <td colSpan={5} className="px-3 py-2.5 text-right uppercase text-[11px]">
+                                        <td colSpan={2} className="px-3 py-2.5 text-right uppercase text-[11px]">
                                           Total Liquidated:
                                         </td>
                                         <td className="px-4 py-2.5 font-mono text-right text-emerald-700 dark:text-emerald-400 text-sm">
                                           ₱{Number(lf.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                         </td>
+                                        <td colSpan={3 + (isAdminOrManager ? 1 : 0)}></td>
                                       </tr>
                                     </tfoot>
                                   </table>
@@ -1464,7 +1545,7 @@ export default function RevolvingFundsTab({
             <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
 
               {/* Header Meta — LF info */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1">LF Number *</label>
                   <input
@@ -1505,6 +1586,18 @@ export default function RevolvingFundsTab({
                     className="w-full px-3 py-2 text-xs bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
                   />
                 </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-500 mb-1">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={e => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs font-semibold bg-white dark:bg-neutral-800 border border-outline-variant/60 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer"
+                  >
+                    <option value="open">Open</option>
+                    <option value="replenished">Replenished</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </div>
               </div>
 
               {/* Line Items Spreadsheet Table */}
@@ -1533,11 +1626,11 @@ export default function RevolvingFundsTab({
                           <th className="px-3 py-2.5 text-left w-8">#</th>
                           <th className="px-3 py-2.5 text-left w-32">Date</th>
                           <th className="px-3 py-2.5 text-left w-40">Particulars / Voucher #</th>
+                          <th className="px-3 py-2.5 text-right w-28">Amount (₱)</th>
                           <th className="px-3 py-2.5 text-left">Account</th>
                           <th className="px-3 py-2.5 text-left w-32">Category</th>
                           <th className="px-3 py-2.5 text-left">Remarks / Details</th>
-                          <th className="px-3 py-2.5 text-right w-28">Amount (₱)</th>
-                          <th className="px-3 py-2.5 text-center w-10">✕</th>
+                          <th className="px-3 py-2.5 text-center w-24">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline-variant/20">
@@ -1561,10 +1654,10 @@ export default function RevolvingFundsTab({
                             <td className="px-2 py-1">
                               <input
                                 type="date"
-                                value={item.item_date_raw ? String(item.item_date_raw).split('T')[0] : ''}
+                                value={item.item_date_raw ? String(item.item_date_raw).split('T')[0] : (item.item_date ? String(item.item_date).split('T')[0] : '')}
                                 onChange={e => {
                                   const updated = [...formData.items];
-                                  updated[idx] = { ...updated[idx], item_date_raw: e.target.value };
+                                  updated[idx] = { ...updated[idx], item_date_raw: e.target.value, item_date: e.target.value || null };
                                   setFormData(prev => ({ ...prev, items: updated }));
                                 }}
                                 disabled={item.is_cancelled}
@@ -1576,15 +1669,32 @@ export default function RevolvingFundsTab({
                             <td className="px-2 py-1">
                               <input
                                 type="text"
-                                value={item.particulars}
+                                value={(!item.particulars || /^item\s*#\d+$/i.test(item.particulars.trim())) ? '' : item.particulars}
                                 onChange={e => {
                                   const updated = [...formData.items];
                                   updated[idx] = { ...updated[idx], particulars: e.target.value };
                                   setFormData(prev => ({ ...prev, items: updated }));
                                 }}
                                 disabled={item.is_cancelled}
-                                placeholder={`RF Voucher ${String(idx + 227).padStart(3, '0')}`}
+                                placeholder="RF Voucher"
                                 className="w-full px-2 py-1 text-[11px] font-mono bg-white dark:bg-neutral-800 border border-outline-variant/40 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-50"
+                              />
+                            </td>
+
+                            {/* Amount */}
+                            <td className="px-2 py-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={item.amount === 0 ? '' : item.amount}
+                                onChange={e => {
+                                  const updated = [...formData.items];
+                                  updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 };
+                                  setFormData(prev => ({ ...prev, items: updated }));
+                                }}
+                                disabled={item.is_cancelled}
+                                placeholder="0.00"
+                                className="w-full px-2 py-1 text-[11px] text-right font-mono font-bold bg-white dark:bg-neutral-800 border border-outline-variant/40 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-50"
                               />
                             </td>
 
@@ -1777,44 +1887,39 @@ export default function RevolvingFundsTab({
                               />
                             </td>
 
-                            {/* Amount */}
-                            <td className="px-2 py-1">
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={item.amount === 0 ? '' : item.amount}
-                                onChange={e => {
-                                  const updated = [...formData.items];
-                                  updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 };
-                                  setFormData(prev => ({ ...prev, items: updated }));
-                                }}
-                                disabled={item.is_cancelled}
-                                placeholder="0.00"
-                                className="w-full px-2 py-1 text-[11px] text-right font-mono font-bold bg-white dark:bg-neutral-800 border border-outline-variant/40 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-50"
-                              />
-                            </td>
-
                             {/* Cancel / Remove */}
-                            <td className="px-2 py-1 text-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (item.id) {
-                                    // Mark existing as cancelled (strikethrough)
-                                    const updated = [...formData.items];
-                                    updated[idx] = { ...updated[idx], is_cancelled: !item.is_cancelled };
-                                    setFormData(prev => ({ ...prev, items: updated }));
-                                  } else {
-                                    // Remove new rows entirely
+                            <td className="px-2 py-1 text-center whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1">
+                                {item.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...formData.items];
+                                      updated[idx] = { ...updated[idx], is_cancelled: !item.is_cancelled };
+                                      setFormData(prev => ({ ...prev, items: updated }));
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
+                                      item.is_cancelled
+                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                        : 'text-neutral-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                                    }`}
+                                    title={item.is_cancelled ? 'Restore voucher' : 'Mark as Cancelled voucher'}
+                                  >
+                                    {item.is_cancelled ? 'Restore' : 'Void'}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
                                     const updated = formData.items.filter((_, i) => i !== idx);
                                     setFormData(prev => ({ ...prev, items: updated }));
-                                  }
-                                }}
-                                className="p-1 rounded-md text-neutral-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
-                                title={item.is_cancelled ? 'Restore row' : 'Cancel / remove row'}
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                                  }}
+                                  className="p-1 rounded-md text-neutral-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                                  title="Delete row"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1839,14 +1944,14 @@ export default function RevolvingFundsTab({
                   type="button"
                   onClick={() => {
                     const lastItem = formData.items[formData.items.length - 1];
-                    // Auto-increment RF Voucher number
+                    // Auto-increment RF Voucher number if present, otherwise leave blank
                     const lastVoucherNum = lastItem?.particulars?.match(/RF Voucher (\d+)/i);
-                    const nextNum = lastVoucherNum ? parseInt(lastVoucherNum[1]) + 1 : formData.items.length + 227;
+                    const nextParticulars = lastVoucherNum ? `RF Voucher ${parseInt(lastVoucherNum[1]) + 1}` : '';
                     setFormData(prev => ({
                       ...prev,
                       items: [...prev.items, {
                         item_date_raw: lastItem?.item_date_raw || '',
-                        particulars: `RF Voucher ${nextNum}`,
+                        particulars: nextParticulars,
                         amount: 0,
                         account_name: '',
                         category: 'Operation',
@@ -1883,7 +1988,7 @@ export default function RevolvingFundsTab({
                   className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {savingForm ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                  <span>Save Liquidation Form</span>
+                  <span>{editingLf ? 'Update Liquidation Form' : 'Save Liquidation Form'}</span>
                 </button>
               </div>
             </div>
@@ -2057,10 +2162,10 @@ export default function RevolvingFundsTab({
                 <th style={{ padding: '6px 6px', textAlign: 'center', width: '28px', borderRight: '1px solid #d1d5db' }}>#</th>
                 <th style={{ padding: '6px 8px', textAlign: 'left', width: '80px', borderRight: '1px solid #d1d5db' }}>Date</th>
                 <th style={{ padding: '6px 8px', textAlign: 'left', width: '135px', borderRight: '1px solid #d1d5db' }}>Particulars / Voucher #</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right', width: '95px', borderRight: '1px solid #d1d5db' }}>Amount (₱)</th>
                 <th style={{ padding: '6px 8px', textAlign: 'left', borderRight: '1px solid #d1d5db' }}>Account</th>
                 <th style={{ padding: '6px 8px', textAlign: 'center', width: '85px', borderRight: '1px solid #d1d5db' }}>Category</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left', borderRight: '1px solid #d1d5db' }}>Remarks / Details</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right', width: '95px' }}>Amount (₱)</th>
+                <th style={{ padding: '6px 8px', textAlign: 'left' }}>Remarks / Details</th>
               </tr>
             </thead>
             <tbody>
@@ -2080,8 +2185,11 @@ export default function RevolvingFundsTab({
                     {item.item_date_raw ? String(item.item_date_raw).split('T')[0] : (item.item_date ? new Date(item.item_date).toLocaleDateString() : '—')}
                   </td>
                   <td style={{ padding: '5px 8px', borderRight: '1px solid #e5e7eb', fontWeight: item.is_cancelled ? 'normal' : '600' }}>
-                    {item.particulars}
+                    {(!item.particulars || /^item\s*#\d+$/i.test(item.particulars.trim())) ? '—' : item.particulars}
                     {item.is_cancelled && ' (CANCELLED)'}
+                  </td>
+                  <td style={{ padding: '5px 8px', textAlign: 'right', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                    {item.amount > 0 ? Number(item.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}
                   </td>
                   <td style={{ padding: '5px 8px', borderRight: '1px solid #e5e7eb' }}>
                     {item.account_name}
@@ -2091,23 +2199,21 @@ export default function RevolvingFundsTab({
                       {item.category || 'Operation'}
                     </span>
                   </td>
-                  <td style={{ padding: '5px 8px', borderRight: '1px solid #e5e7eb', color: '#4b5563' }}>
+                  <td style={{ padding: '5px 8px', color: '#4b5563' }}>
                     {item.remarks || '—'}
-                  </td>
-                  <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                    {item.amount > 0 ? Number(item.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr style={{ borderTop: '2px solid #111827', backgroundColor: '#f9fafb', fontWeight: 'bold' }}>
-                <td colSpan={6} style={{ padding: '7px 10px', textAlign: 'right', textTransform: 'uppercase', fontSize: '10px', letterSpacing: '0.04em' }}>
+                <td colSpan={3} style={{ padding: '7px 10px', textAlign: 'right', textTransform: 'uppercase', fontSize: '10px', letterSpacing: '0.04em' }}>
                   Total Amount Liquidated:
                 </td>
                 <td style={{ padding: '7px 8px', textAlign: 'right', fontFamily: 'monospace', fontSize: '11.5px', fontWeight: 'bold' }}>
                   ₱{Number(printingLf.form.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </td>
+                <td colSpan={3}></td>
               </tr>
             </tfoot>
           </table>

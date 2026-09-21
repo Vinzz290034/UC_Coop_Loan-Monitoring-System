@@ -2317,7 +2317,7 @@ export const parseRevolvingFundSheet = (sheet, sheetName = '', defaultYear = 202
       sort_order: items.length + 1,
       item_date: itemDate,
       item_date_raw: itemDateRaw,
-      particulars: particularsStr || `Item #${items.length + 1}`,
+      particulars: particularsStr || '',
       amount: amt,
       account_name: accountsStr,
       category: categoryStr,

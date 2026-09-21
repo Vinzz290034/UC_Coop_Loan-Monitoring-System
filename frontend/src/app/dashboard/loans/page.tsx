@@ -59,7 +59,8 @@ import {
   RotateCcw,
   ArrowRight,
   ExternalLink,
-  Zap
+  Zap,
+  History
 } from 'lucide-react';
 import LoanApprovalModal from '@/components/loans/LoanApprovalModal';
 import RevolvingFundsTab from '@/components/loans/RevolvingFundsTab';
@@ -167,9 +168,20 @@ function LoansPageContent() {
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab === 'payments' || tab === 'vouchers' || tab === 'products' || tab === 'loans' || tab === 'revolving_funds' || tab === 'revolving') {
-      setActiveTab(tab === 'revolving' ? 'revolving_funds' : (tab as any));
+      const resolvedTab = tab === 'revolving' ? 'revolving_funds' : (tab as any);
+      if (!isAdminOrManager && (resolvedTab === 'vouchers' || resolvedTab === 'revolving_funds')) {
+        setActiveTab('loans');
+      } else {
+        setActiveTab(resolvedTab);
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, isAdminOrManager]);
+
+  useEffect(() => {
+    if (!isAdminOrManager && (activeTab === 'vouchers' || activeTab === 'revolving_funds')) {
+      setActiveTab('loans');
+    }
+  }, [isAdminOrManager, activeTab]);
 
   // Loan Payments State
   const [loanPayments, setLoanPayments] = useState<any[]>([]);
@@ -269,7 +281,7 @@ function LoansPageContent() {
 
   // Live real-time debounced search & instant revert on erase
   useEffect(() => {
-    if (activeTab !== 'vouchers') return;
+    if (activeTab !== 'vouchers' || !isAdminOrManager) return;
 
     // If search is empty or erased, instantly revert to original full list
     if (!cvSearch.trim()) {
@@ -2208,57 +2220,79 @@ function LoansPageContent() {
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
               }`}
           >
-            Loan Monitoring
+            {isAdminOrManager ? 'Loan Monitoring' : 'Loan Application'}
           </button>
-          <button
-            onClick={() => setActiveTab('payments')}
-            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'payments'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-              }`}
-          >
-            <Banknote className="w-4 h-4" />
-            <span>Loan Payments</span>
-            {loanPayments.length > 0 && (
-              <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-extrabold">
-                {loanPayments.length}
-              </span>
-            )}
-          </button>
+          {isAdminOrManager ? (
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'payments'
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                }`}
+            >
+              <Banknote className="w-4 h-4" />
+              <span>Loan Payments</span>
+              {loanPayments.length > 0 && (
+                <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-extrabold">
+                  {loanPayments.length}
+                </span>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'payments'
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                }`}
+            >
+              <History className="w-4 h-4" />
+              <span>Transaction History</span>
+              {loanPayments.length > 0 && (
+                <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-extrabold">
+                  {loanPayments.length}
+                </span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('products')}
-            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === 'products'
+            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${activeTab === 'products'
               ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
               }`}
           >
             Loan Products Registry
           </button>
-          <button
-            onClick={() => setActiveTab('vouchers')}
-            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'vouchers'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-              }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>Check Voucher Registry</span>
-            {checkVouchers.length > 0 && (
-              <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-emerald-700/10 text-emerald-700 dark:text-emerald-400 font-extrabold">
-                {checkVouchers.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('revolving_funds')}
-            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'revolving_funds'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-              }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>Revolving Funds</span>
-          </button>
+          {isAdminOrManager && (
+            <button
+              onClick={() => setActiveTab('vouchers')}
+              className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'vouchers'
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Check Voucher Registry</span>
+              {checkVouchers.length > 0 && (
+                <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-emerald-700/10 text-emerald-700 dark:text-emerald-400 font-extrabold">
+                  {checkVouchers.length}
+                </span>
+              )}
+            </button>
+          )}
+          {isAdminOrManager && (
+            <button
+              onClick={() => setActiveTab('revolving_funds')}
+              className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'revolving_funds'
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Revolving Funds</span>
+            </button>
+          )}
         </div>
 
         {/* TABS CONTAINER */}
@@ -2424,7 +2458,7 @@ function LoansPageContent() {
                     <div className="flex items-center justify-between px-1 flex-wrap gap-2.5">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-on-surface dark:text-white">
-                          Loan Monitoring Table
+                          {isAdminOrManager ? 'Loan Monitoring Table' : 'Loan Application Table'}
                         </span>
                         <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold border border-outline-variant/30">
                           {isLoansExpandedAll ? `Showing all ${totalLoansCount} contracts (Full Table)` : `Showing ${visibleLoans.length} of ${totalLoansCount} contracts`}
@@ -2984,10 +3018,20 @@ function LoansPageContent() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h3 className="font-headline font-bold text-base text-on-surface dark:text-white flex items-center gap-2">
-                  <Banknote className="w-5 h-5 text-primary dark:text-secondary" /> Loan Repayments Ledger
+                  {isAdminOrManager ? (
+                    <>
+                      <Banknote className="w-5 h-5 text-primary dark:text-secondary" /> Loan Repayments Ledger
+                    </>
+                  ) : (
+                    <>
+                      <History className="w-5 h-5 text-primary dark:text-secondary" /> Loan Payment Transaction History
+                    </>
+                  )}
                 </h3>
                 <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
-                  Complete audit log of all loan amortizations, collections, and official payment receipts.
+                  {isAdminOrManager
+                    ? 'Complete audit log of all loan amortizations, collections, and official payment receipts.'
+                    : 'Personal transaction history of all loan repayments, amortization receipts, and payments toward your loan balance.'}
                 </p>
               </div>
 
@@ -3030,7 +3074,9 @@ function LoansPageContent() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="p-4 rounded-3xl bg-white dark:bg-surface-container-low border border-outline-variant/65 shadow-xs">
                     <div className="flex items-center justify-between text-neutral-500 mb-2">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Total Collections</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                        {isAdminOrManager ? 'Total Collections' : 'Total Repayments'}
+                      </span>
                       <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary flex items-center justify-center">
                         <Banknote className="w-4 h-4" />
                       </div>
@@ -3038,12 +3084,16 @@ function LoansPageContent() {
                     <div className="font-mono text-xl font-bold text-on-surface dark:text-white">
                       {formatCurrency(totalCollected)}
                     </div>
-                    <p className="text-[11px] text-neutral-500 mt-1 font-medium">All recorded loan repayments</p>
+                    <p className="text-[11px] text-neutral-500 mt-1 font-medium">
+                      {isAdminOrManager ? 'All recorded loan repayments' : 'Total payments on loan balance'}
+                    </p>
                   </div>
 
                   <div className="p-4 rounded-3xl bg-white dark:bg-surface-container-low border border-outline-variant/65 shadow-xs">
                     <div className="flex items-center justify-between text-neutral-500 mb-2">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Principal Recovered</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                        {isAdminOrManager ? 'Principal Recovered' : 'Principal Paid'}
+                      </span>
                       <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
                         <CreditCard className="w-4 h-4" />
                       </div>
@@ -3051,12 +3101,16 @@ function LoansPageContent() {
                     <div className="font-mono text-xl font-bold text-emerald-700 dark:text-emerald-400">
                       {formatCurrency(totalPrincipal)}
                     </div>
-                    <p className="text-[11px] text-neutral-500 mt-1 font-medium">Credited to principal balance</p>
+                    <p className="text-[11px] text-neutral-500 mt-1 font-medium">
+                      {isAdminOrManager ? 'Credited to principal balance' : 'Credited towards principal'}
+                    </p>
                   </div>
 
                   <div className="p-4 rounded-3xl bg-white dark:bg-surface-container-low border border-outline-variant/65 shadow-xs">
                     <div className="flex items-center justify-between text-neutral-500 mb-2">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Interest Earned</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                        {isAdminOrManager ? 'Interest Earned' : 'Interest Paid'}
+                      </span>
                       <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-700 dark:text-blue-400 flex items-center justify-center">
                         <Percent className="w-4 h-4" />
                       </div>
@@ -3064,7 +3118,7 @@ function LoansPageContent() {
                     <div className="font-mono text-xl font-bold text-blue-700 dark:text-blue-400">
                       {formatCurrency(totalInterest)}
                     </div>
-                    <p className="text-[11px] text-neutral-500 mt-1 font-medium">Finance charges & interest income</p>
+                    <p className="text-[11px] text-neutral-500 mt-1 font-medium">Finance charges & interest paid</p>
                   </div>
 
                   <div className="p-4 rounded-3xl bg-white dark:bg-surface-container-low border border-outline-variant/65 shadow-xs">
@@ -3077,7 +3131,9 @@ function LoansPageContent() {
                     <div className="font-mono text-xl font-bold text-on-surface dark:text-white">
                       {transactionCount}
                     </div>
-                    <p className="text-[11px] text-neutral-500 mt-1 font-medium">Successful payment entries</p>
+                    <p className="text-[11px] text-neutral-500 mt-1 font-medium">
+                      {isAdminOrManager ? 'Successful payment entries' : 'Payment receipts recorded'}
+                    </p>
                   </div>
                 </div>
               );
@@ -3092,7 +3148,7 @@ function LoansPageContent() {
                     type="text"
                     value={paymentsSearch}
                     onChange={(e) => setPaymentsSearch(e.target.value)}
-                    placeholder="Search borrower name, member ID, LAF #, receipt OR #, or reference no..."
+                    placeholder={isAdminOrManager ? "Search borrower name, member ID, LAF #, receipt OR #, or reference no..." : "Search LAF #, loan product, receipt OR #, or reference no..."}
                     className="w-full pl-10 pr-4 py-2 text-xs bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/50 rounded-2xl focus:outline-none focus:ring-1 focus:ring-primary dark:focus:ring-secondary text-on-surface dark:text-white"
                   />
                   {paymentsSearch && (
@@ -3141,7 +3197,7 @@ function LoansPageContent() {
             <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl overflow-hidden shadow-xs">
               {paymentsLoading ? (
                 <div className="p-6">
-                  <SkeletonTable rows={5} cols={8} />
+                  <SkeletonTable rows={5} cols={isAdminOrManager ? 10 : 9} />
                 </div>
               ) : loanPayments.length === 0 ? (
                 <div className="text-center py-16 px-4">
@@ -3152,7 +3208,9 @@ function LoansPageContent() {
                   <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
                     {paymentsSearch || paymentsMethodFilter !== 'all'
                       ? 'No repayment records matched your current search filters.'
-                      : 'There are currently no recorded loan repayments in the ledger.'}
+                      : isAdminOrManager
+                        ? 'There are currently no recorded loan repayments in the ledger.'
+                        : 'No payment records found for your active or past loans.'}
                   </p>
                   {(paymentsSearch || paymentsMethodFilter !== 'all') && (
                     <button
@@ -3181,7 +3239,7 @@ function LoansPageContent() {
                             <tr className="bg-neutral-50 dark:bg-neutral-900/60 border-b border-outline-variant/50 text-[11px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
                               <th className="px-4 py-3.5 whitespace-nowrap">Receipt</th>
                               <th className="px-4 py-3.5 whitespace-nowrap">Payment Date</th>
-                              <th className="px-4 py-3.5 whitespace-nowrap">Borrower</th>
+                              {isAdminOrManager && <th className="px-4 py-3.5 whitespace-nowrap">Borrower</th>}
                               <th className="px-4 py-3.5 whitespace-nowrap">LAF</th>
                               <th className="px-4 py-3.5 whitespace-nowrap">Product</th>
                               <th className="px-4 py-3.5 whitespace-nowrap">Payment Method</th>
@@ -3228,14 +3286,16 @@ function LoansPageContent() {
                                       <div className="text-[10px] text-neutral-500">{paymentTime}</div>
                                     )}
                                   </td>
-                                  <td className="px-4 py-3 whitespace-nowrap">
-                                    <div className="font-bold text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors">
-                                      {borrowerName}
-                                    </div>
-                                    <div className="text-[10px] font-mono text-neutral-500">
-                                      {p.member_no ? `ID: ${p.member_no}` : `#${p.member_id || '—'}`}
-                                    </div>
-                                  </td>
+                                  {isAdminOrManager && (
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                      <div className="font-bold text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors">
+                                        {borrowerName}
+                                      </div>
+                                      <div className="text-[10px] font-mono text-neutral-500">
+                                        {p.member_no ? `ID: ${p.member_no}` : `#${p.member_id || '—'}`}
+                                      </div>
+                                    </td>
+                                  )}
                                   <td className="px-4 py-3 whitespace-nowrap">
                                     {p.laf_no ? (
                                       <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
@@ -3350,7 +3410,7 @@ function LoansPageContent() {
               )}
             </div>
           </div>
-        ) : activeTab === 'vouchers' ? (
+        ) : activeTab === 'vouchers' && isAdminOrManager ? (
           <div className="space-y-6">
             {/* Header / Action Bar */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -3866,7 +3926,7 @@ function LoansPageContent() {
               )}
             </div>
           </div>
-        ) : activeTab === 'revolving_funds' ? (
+        ) : activeTab === 'revolving_funds' && isAdminOrManager ? (
           <RevolvingFundsTab
             isAdminOrManager={isAdminOrManager}
             onViewCheckVoucher={openCheckVoucherModalByIdOrNo}

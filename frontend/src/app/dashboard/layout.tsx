@@ -108,7 +108,7 @@ function DashboardLayoutContent({
       allowed: true,
     },
     {
-      name: 'Members',
+      name: 'Membership',
       path: '/dashboard/members',
       icon: Users,
       allowed: isAdminOrStaff,
@@ -120,7 +120,7 @@ function DashboardLayoutContent({
       allowed: true,
     },
     {
-      name: 'Capital Accounts',
+      name: 'Shared Capital',
       path: '/dashboard/accounting',
       icon: WalletCards,
       allowed: true,
@@ -437,7 +437,16 @@ function DashboardLayoutContent({
                 : pathname
                     .split('/')
                     .slice(2)
-                    .map((segment) => breadcrumbLabels[segment] || segment)
+                    .map((segment) => {
+                      const staticOverrides: Record<string, string> = {
+                        accounting: 'Shared Capital',
+                        members: 'Membership',
+                        billing: 'Billings',
+                        import: 'Data Import',
+                        support: 'Support Desk',
+                      };
+                      return breadcrumbLabels[segment] || staticOverrides[segment] || segment;
+                    })
                     .join(' / ')}
             </h2>
           </div>
