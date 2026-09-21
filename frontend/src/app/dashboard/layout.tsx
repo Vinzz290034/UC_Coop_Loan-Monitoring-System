@@ -102,12 +102,6 @@ function DashboardLayoutContent({
       allowed: true,
     },
     {
-      name: 'Calendar & Appointments',
-      path: '/dashboard/calendar',
-      icon: CalendarClock,
-      allowed: true,
-    },
-    {
       name: 'Membership',
       path: '/dashboard/members',
       icon: Users,
@@ -154,6 +148,12 @@ function DashboardLayoutContent({
       path: '/dashboard/support',
       icon: LifeBuoy,
       allowed: user.role === 'admin' || user.role === 'staff',
+    },
+    {
+      name: 'Calendar & Appointments',
+      path: '/dashboard/calendar',
+      icon: CalendarClock,
+      allowed: true,
     },
     {
       name: 'Notifications',
