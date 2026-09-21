@@ -266,38 +266,6 @@ export default function MessagesSection({ onUnreadCountChange }: MessagesSection
 
   return (
     <div className="space-y-6">
-      {/* Action Toolbar */}
-      {((!isMember && messages.length > 0) || isMember || (!isMember && unreadCount > 0)) && (
-        <div className="flex items-center justify-end gap-2 flex-wrap">
-          {!isMember && messages.length > 0 && (
-            <button
-              onClick={exportToExcel}
-              className="px-3.5 py-2 rounded-2xl border border-outline-variant/60 hover:bg-neutral/5 text-neutral-700 dark:text-neutral-300 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Export messages to Excel"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Export</span>
-            </button>
-          )}
-
-          {isMember && (
-            <button
-              onClick={() => setIsNewInquiryOpen(true)}
-              className="px-5 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" /> Compose Message
-            </button>
-          )}
-
-          {!isMember && unreadCount > 0 && (
-            <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-tertiary/10 text-tertiary border border-tertiary/20 text-xs font-bold">
-              <Inbox className="w-3.5 h-3.5" />
-              {unreadCount} unread
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Success notification banner for member */}
       {inquirySuccess && (
         <div className="p-4 bg-primary/15 dark:bg-secondary/15 border border-primary/30 dark:border-secondary/30 rounded-2xl text-xs font-bold text-primary dark:text-secondary flex items-center gap-2.5 animate-micro-elevate">
@@ -335,13 +303,36 @@ export default function MessagesSection({ onUnreadCountChange }: MessagesSection
                   {tab.label}
                 </button>
               ))}
-              <button
-                onClick={fetchMessages}
-                className="ml-auto p-2 rounded-xl text-neutral-450 hover:text-primary dark:hover:text-secondary hover:bg-neutral/5 transition-colors cursor-pointer"
-                title="Refresh"
-              >
-                <RotateCw className="w-4 h-4" />
-              </button>
+
+              <div className="ml-auto flex items-center gap-2">
+                {!isMember && (
+                  <button
+                    onClick={exportToExcel}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-outline-variant/60 hover:bg-neutral/5 text-neutral-700 dark:text-neutral-300 font-bold text-xs transition-colors cursor-pointer"
+                    title="Export messages to Excel"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    <span>Export Excel</span>
+                  </button>
+                )}
+
+                {isMember && (
+                  <button
+                    onClick={() => setIsNewInquiryOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-xs font-bold hover:shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" /> Compose Message
+                  </button>
+                )}
+
+                <button
+                  onClick={fetchMessages}
+                  className="p-2 rounded-xl text-neutral-450 hover:text-primary dark:hover:text-secondary hover:bg-neutral/5 transition-colors cursor-pointer"
+                  title="Refresh"
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
 
