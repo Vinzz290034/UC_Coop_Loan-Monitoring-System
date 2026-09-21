@@ -54,10 +54,10 @@ function CalendarPageContent() {
   useEffect(() => {
     if (tabParam === 'appointments') {
       setActiveTab('appointments');
-      setBreadcrumbLabel('calendar', 'Calendar & Appointments');
+      setBreadcrumbLabel('calendar', 'Schedule');
     } else {
       setActiveTab('calendar');
-      setBreadcrumbLabel('calendar', 'Calendar & Appointments');
+      setBreadcrumbLabel('calendar', 'Schedule');
     }
   }, [tabParam, setBreadcrumbLabel]);
 
@@ -361,38 +361,73 @@ function CalendarPageContent() {
         <BackButton href="/dashboard">Back to System Dashboard</BackButton>
       </div>
 
-      {/* Top Combined Module Tab Switcher */}
-      <div className="flex border-b border-outline-variant/60 overflow-x-auto custom-scrollbar">
-        <button
-          type="button"
-          onClick={() => handleTabChange('calendar')}
-          className={`px-6 py-3.5 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'calendar'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-          }`}
-        >
-          <CalendarIcon className="w-4 h-4" />
-          <span>Interactive Calendar</span>
-        </button>
+      {/* Top Combined Module Tab Switcher & Month Navigation Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-outline-variant/60 gap-3">
+        <div className="flex overflow-x-auto custom-scrollbar">
+          <button
+            type="button"
+            onClick={() => handleTabChange('calendar')}
+            className={`px-6 py-3.5 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'calendar'
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+            }`}
+          >
+            <CalendarIcon className="w-4 h-4" />
+            <span>Interactive Calendar</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => handleTabChange('appointments')}
-          className={`px-6 py-3.5 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'appointments'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          <span>Appointments & Schedules</span>
-          {pendingAppointmentsCount > 0 && (
-            <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
-              {pendingAppointmentsCount}
-            </span>
+          <button
+            type="button"
+            onClick={() => handleTabChange('appointments')}
+            className={`px-6 py-3.5 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'appointments'
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Appointments & Schedules</span>
+            {pendingAppointmentsCount > 0 && (
+              <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+                {pendingAppointmentsCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Right side: Actions container (Today & Month Switcher on calendar tab, or Appointment actions) */}
+        <div id="calendar-header-actions" className="flex items-center gap-2 self-end sm:self-center mb-2 sm:mb-0">
+          {activeTab === 'calendar' && (
+            <>
+              <button
+                onClick={resetToToday}
+                className="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-outline-variant/60 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-800 dark:text-neutral-200 transition-colors cursor-pointer"
+              >
+                Today
+              </button>
+              <div className="flex items-center rounded-xl border border-outline-variant/60 overflow-hidden bg-white dark:bg-surface-container-low shadow-xs">
+                <button
+                  onClick={prevMonth}
+                  className="p-2 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
+                  title="Previous Month"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <div className="px-3 text-xs font-black text-on-surface dark:text-white min-w-[115px] text-center bg-neutral/5 dark:bg-neutral/15 font-headline">
+                  {monthNames[month]} {year}
+                </div>
+                <button
+                  onClick={nextMonth}
+                  className="p-2 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
+                  title="Next Month"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </>
           )}
-        </button>
+        </div>
       </div>
 
       {/* TAB 1: APPOINTMENTS SECTION */}
@@ -403,45 +438,6 @@ function CalendarPageContent() {
       {/* TAB 2: CALENDAR SECTION */}
       {activeTab === 'calendar' && (
         <div className="space-y-6">
-          {/* Header Widget */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm transition-all">
-            <div>
-              <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
-                Calendar & Schedule Tracker
-              </h1>
-              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mt-1">
-                Track cooperative operations, upcoming payment due dates, and community announcements.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={resetToToday}
-                className="px-4 py-2 text-xs font-bold rounded-xl border border-outline-variant/60 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-800 dark:text-neutral-200 transition-colors cursor-pointer"
-              >
-                Today
-              </button>
-              <div className="flex items-center rounded-xl border border-outline-variant/60 overflow-hidden">
-                <button
-                  onClick={prevMonth}
-                  className="p-2.5 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
-                  title="Previous Month"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <div className="px-4 text-xs font-black text-on-surface dark:text-white min-w-[120px] text-center bg-neutral/5 dark:bg-neutral/15 font-headline">
-                  {monthNames[month]} {year}
-                </div>
-                <button
-                  onClick={nextMonth}
-                  className="p-2.5 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
-                  title="Next Month"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
 
           {/* Main Grid + Filter Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

@@ -11,13 +11,13 @@ export default function AppointmentsPage() {
   const { setBreadcrumbLabel } = useBreadcrumb();
 
   useEffect(() => {
-    setBreadcrumbLabel('appointments', 'Appointments & Schedules');
+    setBreadcrumbLabel('appointments', 'Schedule');
   }, [setBreadcrumbLabel]);
 
   return (
     <div className="space-y-6 animate-micro-elevate">
       <div>
-        <BackButton href="/dashboard/calendar">Back to Calendar & Appointments</BackButton>
+        <BackButton href="/dashboard/calendar">Back to Schedule</BackButton>
       </div>
 
       <AppointmentsSection />

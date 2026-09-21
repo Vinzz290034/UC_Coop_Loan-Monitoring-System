@@ -269,13 +269,13 @@ export default function AppointmentsSection({ onPendingCountChange }: Appointmen
 
   return (
     <div className="space-y-6">
-      {/* Action Buttons Header */}
-      {(filteredAppointments.length > 0 || user?.role === 'member') && (
-        <div className="flex items-center justify-end gap-2">
+      {/* Action Buttons Rendered in Top Tab Bar */}
+      {mounted && document.getElementById('calendar-header-actions') && createPortal(
+        <div className="flex items-center gap-2">
           {filteredAppointments.length > 0 && (
             <button
               onClick={handleExportExcel}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full shadow-sm transition-all active:scale-95 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
               title="Download Excel Report"
             >
               <FileSpreadsheet className="w-4 h-4" />
@@ -286,13 +286,14 @@ export default function AppointmentsSection({ onPendingCountChange }: Appointmen
           {user?.role === 'member' && (
             <button
               onClick={() => setIsCreateOpen(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl hover:shadow-lg transition-all active:scale-95 cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
               <span>Book Appointment</span>
             </button>
           )}
-        </div>
+        </div>,
+        document.getElementById('calendar-header-actions')!
       )}
 
       {/* Summary Status Cards */}
