@@ -287,27 +287,17 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="space-y-6 animate-micro-elevate">
-      <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-      </div>
-
-      {/* Page Header */}
+      {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
-            {/* <Megaphone className="w-7 h-7 text-primary dark:text-secondary" /> */}
-            Announcements Board
-          </h1>
-          <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-            Stay updated with the latest cooperative news, loan products, and schedule events.
-          </p>
+          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
 
         {/* Create Announcement Button */}
         {isAdminOrStaff && (
           <button
             onClick={handleOpenCreate}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl hover:shadow-lg transition-all active:scale-95 cursor-pointer self-end sm:self-auto"
           >
             <PlusCircle className="w-4 h-4" />
             New Announcement

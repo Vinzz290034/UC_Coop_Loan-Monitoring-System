@@ -168,25 +168,15 @@ export default function AuditTrailPage() {
 
   return (
     <div className="space-y-6 animate-micro-elevate">
-      <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-      </div>
-
-      {/* Header */}
+      {/* Top Header & Export Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
-            {/* <ScrollText className="w-7 h-7 sm:w-8 sm:h-8 text-primary dark:text-secondary flex-shrink-0" /> */}
-            Audit Trail
-          </h1>
-          <p className="font-body text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-            Immutable chronological log of all system actions and administrative operations
-          </p>
+          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 text-xs font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 cursor-pointer self-start sm:self-auto"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 text-xs font-bold hover:opacity-90 transition-all active:scale-95 disabled:opacity-50 cursor-pointer self-end sm:self-auto"
         >
           <Download className="w-4 h-4" />
           {exporting ? 'Exporting...' : 'Export Excel'}

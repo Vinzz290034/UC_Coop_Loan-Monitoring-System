@@ -25,6 +25,7 @@ import {
   ScrollText,
   MessageSquare,
   Bell,
+  Inbox,
   Settings,
   Menu,
   X,
@@ -103,12 +104,6 @@ function DashboardLayoutContent({
       allowed: true,
     },
     {
-      name: 'Calendar',
-      path: '/dashboard/calendar',
-      icon: Calendar,
-      allowed: true,
-    },
-    {
       name: 'Membership',
       path: '/dashboard/members',
       icon: Users,
@@ -145,22 +140,10 @@ function DashboardLayoutContent({
       allowed: isAdminOrStaff,
     },
     {
-      name: 'Appointments',
-      path: '/dashboard/appointments',
-      icon: CalendarClock,
-      allowed: user.role !== 'staff',
-    },
-    {
       name: 'Reports',
       path: '/dashboard/reports',
       icon: BarChart3,
       allowed: user.role === 'admin',
-    },
-    {
-      name: 'Messages',
-      path: '/dashboard/messages',
-      icon: MessageSquare,
-      allowed: true,
     },
     {
       name: 'Support Desk',
@@ -169,9 +152,15 @@ function DashboardLayoutContent({
       allowed: user.role === 'admin' || user.role === 'staff',
     },
     {
-      name: 'Notifications',
-      path: '/dashboard/notifications',
-      icon: Bell,
+      name: 'Schedule',
+      path: '/dashboard/calendar',
+      icon: CalendarClock,
+      allowed: true,
+    },
+    {
+      name: 'Inbox',
+      path: '/dashboard/messages',
+      icon: Inbox,
       allowed: true,
     },
     {
@@ -322,7 +311,11 @@ function DashboardLayoutContent({
           .filter((item) => item.allowed)
           .map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname.startsWith(item.path));
+            const isActive =
+              pathname === item.path ||
+              (item.path !== '/dashboard' && pathname.startsWith(item.path)) ||
+              (item.path === '/dashboard/messages' && pathname.startsWith('/dashboard/notifications')) ||
+              (item.path === '/dashboard/calendar' && pathname.startsWith('/dashboard/appointments'));
             return (
               <Link
                 key={item.path}
@@ -451,6 +444,10 @@ function DashboardLayoutContent({
                         billing: 'Billings',
                         import: 'Data Import',
                         support: 'Support Desk',
+                        calendar: 'Schedule',
+                        appointments: 'Schedule',
+                        messages: 'Inbox',
+                        notifications: 'Inbox',
                       };
                       return breadcrumbLabels[segment] || staticOverrides[segment] || segment;
                     })
