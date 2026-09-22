@@ -22,15 +22,19 @@ export async function migrateCheckVouchers() {
         folder_name VARCHAR(150),
         box_name VARCHAR(150),
         details JSONB DEFAULT '[]'::jsonb,
+        signatories JSONB DEFAULT '{"prepared_by":"LAMOSTE, CHINNETTE A.","checked_by":"MARILOU LARIOSA","approved_by":"MICHELLE M. PABLE"}'::jsonb,
+        status VARCHAR(50) DEFAULT 'edit',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
       ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '[]'::jsonb;
       ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS signatories JSONB DEFAULT '{"prepared_by":"LAMOSTE, CHINNETTE A.","checked_by":"MARILOU LARIOSA","approved_by":"MICHELLE M. PABLE"}'::jsonb;
+      ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'edit';
 
       CREATE INDEX IF NOT EXISTS idx_check_vouchers_voucher_date ON check_vouchers(voucher_date DESC);
       CREATE INDEX IF NOT EXISTS idx_check_vouchers_folder_name ON check_vouchers(folder_name);
+      CREATE INDEX IF NOT EXISTS idx_check_vouchers_status ON check_vouchers(status);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_check_vouchers_voucher_no_check_no ON check_vouchers(voucher_no, check_no);
     `;
     await client.query(createTableQuery);
