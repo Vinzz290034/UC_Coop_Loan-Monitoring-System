@@ -175,7 +175,6 @@ function DisbursementPageContent() {
   // View / Edit / Print State
   const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
   const [printingCvBreakdown, setPrintingCvBreakdown] = useState<any | null>(null);
-  const [cvPendingPrintConfirm, setCvPendingPrintConfirm] = useState<any | null>(null);
   const [isEditingCvModal, setIsEditingCvModal] = useState(false);
   const [isSavingCvEdit, setIsSavingCvEdit] = useState(false);
   const [isSyncingCvRf, setIsSyncingCvRf] = useState(false);
@@ -532,53 +531,40 @@ function DisbursementPageContent() {
     }
   };
 
-  // Print CV Breakdown with post-print confirmation prompt
+  // Print CV Breakdown: prints sheet and changes status to 'on process'
   const handlePrintCvBreakdown = (cv: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setPrintingCvBreakdown(cv);
 
-    const cleanup = () => {
+    const cleanup = async () => {
       window.removeEventListener('afterprint', cleanup);
       setPrintingCvBreakdown(null);
-      // Prompt user after print dialog closes to confirm if printing finished or was cancelled
+
+      // Advance voucher status to 'on process' after printing if currently 'edit'
       if (!cv.status || cv.status.toLowerCase() === 'edit') {
-        setTimeout(() => {
-          setCvPendingPrintConfirm(cv);
-        }, 250);
+        try {
+          const res = await api.post(`/accounts/check-vouchers/${cv.id}/print`);
+          if (res.data?.data) {
+            const updated = res.data.data;
+            setCheckVouchers(prev => prev.map(v => (v.id === cv.id ? { ...v, status: updated.status } : v)));
+            if (selectedCvForModal && selectedCvForModal.id === cv.id) {
+              setSelectedCvForModal((prev: any) => (prev ? { ...prev, status: updated.status } : null));
+            }
+            setCvActionFeedback({
+              type: 'success',
+              message: `Voucher #${cv.voucher_no} is now On Process.`
+            });
+            setTimeout(() => setCvActionFeedback(null), 4000);
+          }
+        } catch (err) {
+          console.error('Error updating CV status to on process after printing:', err);
+        }
       }
     };
     window.addEventListener('afterprint', cleanup);
     setTimeout(() => {
       window.print();
     }, 150);
-  };
-
-  // Confirm Print Success -> advance status to 'on process'
-  const confirmPrintSuccess = async () => {
-    if (!cvPendingPrintConfirm) return;
-    const cv = cvPendingPrintConfirm;
-    try {
-      const res = await api.post(`/accounts/check-vouchers/${cv.id}/print`);
-      if (res.data?.data) {
-        const updated = res.data.data;
-        setCheckVouchers(prev => prev.map(v => (v.id === cv.id ? { ...v, status: updated.status } : v)));
-        if (selectedCvForModal && selectedCvForModal.id === cv.id) {
-          setSelectedCvForModal((prev: any) => (prev ? { ...prev, status: updated.status } : null));
-        }
-        setCvActionFeedback({ type: 'success', message: `Voucher #${cv.voucher_no} status updated to On Process!` });
-        setTimeout(() => setCvActionFeedback(null), 4000);
-      }
-    } catch (err) {
-      console.error('Error recording CV print event:', err);
-    } finally {
-      setCvPendingPrintConfirm(null);
-    }
-  };
-
-  const cancelPrintStatus = () => {
-    setCvPendingPrintConfirm(null);
-    setCvActionFeedback({ type: 'success', message: 'Print was cancelled. Status remains Edit.' });
-    setTimeout(() => setCvActionFeedback(null), 4000);
   };
 
   // Advance to 'for release' (Manager / Admin Approval)
@@ -2051,6 +2037,8 @@ function DisbursementPageContent() {
                   </button>
                 )}
 
+
+
                 {/* Edit CV: Available only if not filed, or if admin */}
                 {isAdminOrStaff && (selectedCvForModal.status !== 'filed' || isAdmin) && (
                   <button
@@ -2445,55 +2433,7 @@ function DisbursementPageContent() {
         document.body
       )}
 
-      {/* PRINT CONFIRMATION MODAL */}
-      {cvPendingPrintConfirm && mounted && createPortal(
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-sm animate-modal-backdrop"
-          onClick={cancelPrintStatus}
-        >
-          <div
-            className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-modal-pop"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 text-primary dark:text-secondary">
-              <div className="p-2.5 rounded-2xl bg-primary/10 dark:bg-secondary/10">
-                <Printer className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-headline font-bold text-base text-neutral-900 dark:text-white">
-                  Confirm Printing Status
-                </h3>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  Check Voucher #{cvPendingPrintConfirm.voucher_no}
-                </p>
-              </div>
-            </div>
 
-            <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
-              Did you finish printing this check voucher? If you cancelled or closed the print window, you can keep it in <strong className="text-amber-600 dark:text-amber-400 font-semibold">Edit</strong> status.
-            </p>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={cancelPrintStatus}
-                className="px-4 py-2 text-xs font-bold rounded-full border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
-              >
-                No, Keep as Edit
-              </button>
-              <button
-                type="button"
-                onClick={confirmPrintSuccess}
-                className="px-5 py-2 text-xs font-bold rounded-full bg-primary text-white dark:bg-secondary dark:text-neutral-900 hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>Yes, Mark On Process</span>
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* GLOBAL PRINT STYLES FOR CV BREAKDOWN */}
       <style dangerouslySetInnerHTML={{ __html: `
