@@ -314,6 +314,11 @@ function DisbursementPageContent() {
     return p;
   };
 
+  const cleanCvNumber = (vNo: string) => {
+    if (!vNo) return '';
+    return vNo.replace(/^CV\s*#?/i, '').trim();
+  };
+
   const getCvDisbursedAmount = (cv: any): number => {
     if (!cv) return 0;
     let details: any[] = [];
@@ -2490,144 +2495,248 @@ function DisbursementPageContent() {
         document.body
       )}
 
-      {/* PRINT-ONLY CV BREAKDOWN SHEET */}
+      {/* GLOBAL PRINT STYLES FOR CV BREAKDOWN */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          @page {
+            size: portrait;
+            margin: 10mm 15mm;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
+          body > *:not(#cv-breakdown-print-section) {
+            display: none !important;
+          }
+          #cv-breakdown-print-section {
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            background: white !important;
+            color: black !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+          }
+        }
+      `}} />
+
+      {/* HIDDEN PRINT-ONLY CONTAINER: CHECK VOUCHER */}
       {printingCvBreakdown && typeof document !== 'undefined' && createPortal(
-        <div
-          id="print-cv-breakdown-portal"
-          className="print-only fixed inset-0 bg-white z-[99999] p-8 text-black"
-          style={{ fontFamily: 'Arial, sans-serif' }}
-        >
-          <style>{`
-            @media screen { #print-cv-breakdown-portal { display: none !important; } }
-            @media print {
-              body * { visibility: hidden !important; }
-              #print-cv-breakdown-portal, #print-cv-breakdown-portal * { visibility: visible !important; }
-              #print-cv-breakdown-portal { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
-            }
-          `}</style>
+        <div id="cv-breakdown-print-section" className="hidden print:block text-black bg-white font-sans" style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' }}>
+          <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '16px', boxSizing: 'border-box', padding: '28px 58px 28px 36px' }}>
 
-          <div style={{ maxWidth: '800px', margin: '0 auto', border: '1.5px solid #111827', padding: '24px' }}>
-            <div style={{ textAlign: 'center', borderBottom: '2px solid #111827', paddingBottom: '12px', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '15px', fontWeight: '800', margin: 0, textTransform: 'uppercase' }}>
-                UNIVERSITY OF CEBU - METC MULTI-PURPOSE COOPERATIVE
-              </h2>
-              <p style={{ fontSize: '11px', margin: '3px 0', color: '#4b5563' }}>Alumnos, Mambaling, Cebu City</p>
-              <h3 style={{ fontSize: '13px', fontWeight: '800', margin: '8px 0 0 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                CHECK DISBURSEMENT VOUCHER
-              </h3>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px', fontSize: '11px' }}>
-              <div>
-                <span style={{ fontWeight: 'bold', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Voucher No.</span>
-                <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{printingCvBreakdown.voucher_no}</span>
+            {/* Brand Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #064e3b', paddingBottom: '14px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
+                <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" style={{ height: '48px', width: '48px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+                <div>
+                  <h2 style={{ fontSize: '15px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#064e3b', margin: 0 }}>University of Cebu METC-MPC</h2>
+                  <p style={{ fontSize: '10px', color: '#4b5563', fontWeight: '600', margin: '3px 0 0 0' }}>Loans, Savings, and Investment Portal</p>
+                </div>
               </div>
-              <div>
-                <span style={{ fontWeight: 'bold', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Date</span>
-                <span>{printingCvBreakdown.voucher_date ? new Date(printingCvBreakdown.voucher_date).toLocaleDateString() : '—'}</span>
-              </div>
-              <div>
-                <span style={{ fontWeight: 'bold', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Check No.</span>
-                <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{printingCvBreakdown.check_no || '—'}</span>
-              </div>
-              <div>
-                <span style={{ fontWeight: 'bold', display: 'block', fontSize: '10px', textTransform: 'uppercase' }}>Bank</span>
-                <span style={{ fontWeight: 'bold' }}>{printingCvBreakdown.bank || '—'}</span>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <h1 style={{ fontSize: '15px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Check Voucher</h1>
+                <p style={{ fontSize: '18px', fontFamily: 'monospace', color: '#064e3b', fontWeight: '800', margin: '3px 0 0 0', letterSpacing: '0.03em' }}>CV #{cleanCvNumber(printingCvBreakdown.voucher_no)}</p>
               </div>
             </div>
 
-            <div style={{ border: '1px solid #d1d5db', padding: '10px', marginBottom: '16px', fontSize: '11px' }}>
-              <div style={{ marginBottom: '6px' }}>
-                <span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>Paid To: </span>
-                <span style={{ fontWeight: 'bold', fontSize: '12px' }}>{printingCvBreakdown.payee}</span>
+            {/* Info Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2.2fr 1fr 0.8fr', gap: '16px', backgroundColor: '#ecfdf5', padding: '16px 22px', borderRadius: '14px', border: '1px solid #d1fae5' }}>
+              <div>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Voucher Date</span>
+                <p style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937', margin: '3px 0 0 0' }}>
+                  {printingCvBreakdown.voucher_date ? new Date(printingCvBreakdown.voucher_date).toLocaleDateString() : '—'}
+                </p>
               </div>
               <div>
-                <span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>Particulars: </span>
-                <span>{printingCvBreakdown.particulars || 'Disbursement'}</span>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Name</span>
+                <p style={{ fontSize: '15px', fontWeight: 'bold', color: '#1f2937', margin: '3px 0 0 0' }}>
+                  {printingCvBreakdown.payee || printingCvBreakdown.payee_name || '—'}
+                </p>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Check No.</span>
+                <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#064e3b', margin: '3px 0 0 0', fontFamily: 'monospace', letterSpacing: '0.02em' }}>
+                  {printingCvBreakdown.check_no || 'PENDING'}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block', letterSpacing: '0.04em' }}>Bank</span>
+                <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#1f2937', margin: '3px 0 0 0' }}>
+                  {printingCvBreakdown.bank || '—'}
+                </p>
               </div>
             </div>
 
-            {/* Accounting Breakdown */}
-            <div style={{ marginBottom: '16px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1.5px solid #111827', textTransform: 'uppercase', fontSize: '10px' }}>
-                    <th style={{ textAlign: 'left', padding: '6px 4px' }}>Book of Account</th>
-                    <th style={{ textAlign: 'right', padding: '6px 4px', width: '120px' }}>Debit</th>
-                    <th style={{ textAlign: 'right', padding: '6px 4px', width: '120px' }}>Credit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const { rows, debitTotal, creditTotal } = getBalancedCvRows(printingCvBreakdown);
-                    return (
-                      <>
-                        {rows.map((r, i) => (
-                          <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                            <td style={{ padding: '6px 4px' }}>{r.description}</td>
-                            <td style={{ padding: '6px 4px', textAlign: 'right', fontFamily: 'monospace' }}>
-                              {r.debit !== null ? `₱${r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
-                            </td>
-                            <td style={{ padding: '6px 4px', textAlign: 'right', fontFamily: 'monospace' }}>
-                              {r.credit !== null ? `₱${r.credit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+            {/* Description */}
+            {(printingCvBreakdown.particulars || printingCvBreakdown.payee) && (
+              <div style={{ backgroundColor: '#f9fafb', padding: '10px 16px', borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '11px' }}>
+                <strong style={{ color: '#374151' }}>DESCRIPTION:</strong>{' '}
+                <span style={{ color: '#1f2937', fontStyle: 'italic' }}>
+                  {formatVoucherDescription(printingCvBreakdown.particulars, printingCvBreakdown.payee || printingCvBreakdown.payee_name)}
+                </span>
+              </div>
+            )}
+
+            {/* Transaction Details Table */}
+            {(() => {
+              const { rows, debitTotal, creditTotal } = getBalancedCvRows(printingCvBreakdown);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ border: '1px solid rgba(6, 78, 59, 0.2)', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+                    <div style={{ backgroundColor: '#064e3b', color: '#ffffff', padding: '6px 14px', fontWeight: 'bold', fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase', textAlign: 'center' }}>
+                      Transaction Details
+                    </div>
+                    <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#ecfdf5', color: '#064e3b', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid rgba(6, 78, 59, 0.15)' }}>
+                          <th style={{ padding: '8px 12px', width: '36px', textAlign: 'center', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>#</th>
+                          <th style={{ padding: '8px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>Book of Accounts</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>Debit (₱)</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>Credit (₱)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.length > 0 ? (
+                          rows.map((item, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.08)', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#fcfdfd' }}>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', fontFamily: 'monospace', color: '#6b7280', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                                {idx + 1}
+                              </td>
+                              <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#1f2937', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                                {item.description}
+                              </td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                                {item.debit !== null ? item.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                              </td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#dc2626' }}>
+                                {item.credit !== null ? item.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: '#6b7280', fontStyle: 'italic' }}>
+                              No breakdown line items recorded.
                             </td>
                           </tr>
-                        ))}
-                        <tr style={{ borderTop: '1.5px solid #111827', fontWeight: 'bold' }}>
-                          <td style={{ padding: '6px 4px', textTransform: 'uppercase' }}>Total</td>
-                          <td style={{ padding: '6px 4px', textAlign: 'right', fontFamily: 'monospace' }}>
-                            ₱{(debitTotal || getCvDisbursedAmount(printingCvBreakdown)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        )}
+                        {/* Total row */}
+                        <tr style={{ backgroundColor: '#f9fafb', fontWeight: 'bold', fontSize: '10px', borderTop: '1px solid rgba(6, 78, 59, 0.15)' }}>
+                          <td colSpan={2} style={{ padding: '8px 12px', textAlign: 'right', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                            Total:
                           </td>
-                          <td style={{ padding: '6px 4px', textAlign: 'right', fontFamily: 'monospace' }}>
-                            ₱{(creditTotal || getCvDisbursedAmount(printingCvBreakdown)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                            ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#dc2626' }}>
+                            ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                         </tr>
-                      </>
-                    );
-                  })()}
-                </tbody>
-              </table>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Below the table: Disbursed Amount with words and number */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ecfdf5', padding: '12px 18px', borderRadius: '10px', border: '1px solid #d1fae5', gap: '16px' }}>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#064e3b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px' }}>
+                        Disbursed Amount:
+                      </span>
+                      <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.4 }}>
+                        {formatDisbursedInWords(getCvDisbursedAmount(printingCvBreakdown))}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <span style={{ fontSize: '15px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
+                        ₱{getCvDisbursedAmount(printingCvBreakdown).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Signature Block matching physical document */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px', paddingTop: '22px', fontSize: '10px' }}>
+              {/* Row 1: Prepared By, Checked By, Approved By */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px' }}>
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    PREPARED BY:
+                  </span>
+                  <div style={{ height: '24px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                    {printingCvBreakdown.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                </div>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    CHECKED BY:
+                  </span>
+                  <div style={{ height: '24px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                    {printingCvBreakdown.signatories?.checked_by || 'MARILOU LARIOSA'}
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                </div>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    APPROVED BY:
+                  </span>
+                  <div style={{ height: '24px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                    {printingCvBreakdown.signatories?.approved_by || 'MICHELLE M. PABLE'}
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                </div>
+              </div>
+
+              {/* Row 2: Received By, Date */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px' }}>
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    RECEIVED BY:
+                  </span>
+                  <div style={{ height: '36px' }}></div>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                  <p style={{ color: '#4b5563', margin: '4px 0 0 0', fontSize: '9.5px', fontWeight: '500' }}>
+                    Signature over Printed Name
+                  </p>
+                </div>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    DATE:
+                  </span>
+                  <div style={{ height: '36px' }}></div>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                </div>
+
+                <div>{/* Empty cell for column alignment */}</div>
+              </div>
             </div>
 
-            {/* Amount In Words */}
-            <div style={{ border: '1px solid #15803d', backgroundColor: '#f0fdf4', padding: '10px 14px', marginBottom: '24px', fontSize: '11px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Print Footer */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderTop: '1px solid #e5e7eb', paddingTop: '10px', fontSize: '8px', color: '#9ca3af' }}>
               <div>
-                <span style={{ fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', color: '#15803d', display: 'block' }}>
-                  Amount in Words:
-                </span>
-                <span style={{ fontWeight: 'bold', textTransform: 'uppercase' }}>
-                  {formatDisbursedInWords(getCvDisbursedAmount(printingCvBreakdown))}
-                </span>
+                <div>Generated via UC-METC MPC Portal</div>
+                <div style={{ marginTop: '2px' }}>KADT Solutions</div>
               </div>
-              <div style={{ fontWeight: 'bold', fontSize: '14px', fontFamily: 'monospace', color: '#14532d' }}>
-                ₱{getCvDisbursedAmount(printingCvBreakdown).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
+              <span>Printed on: {new Date().toLocaleString()}</span>
             </div>
 
-            {/* Signatures */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', textAlign: 'center', fontSize: '10px' }}>
-              <div>
-                <span style={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: '28px' }}>Prepared By:</span>
-                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
-                  {printingCvBreakdown.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
-                </p>
-                <span style={{ color: '#4b5563' }}>Bookkeeper</span>
-              </div>
-              <div>
-                <span style={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: '28px' }}>Checked By:</span>
-                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
-                  {printingCvBreakdown.signatories?.checked_by || 'MARILOU LARIOSA'}
-                </p>
-                <span style={{ color: '#4b5563' }}>Audit / Accounting</span>
-              </div>
-              <div>
-                <span style={{ textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: '28px' }}>Approved By:</span>
-                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
-                  {printingCvBreakdown.signatories?.approved_by || 'MICHELLE M. PABLE'}
-                </p>
-                <span style={{ color: '#4b5563' }}>General Manager</span>
-              </div>
-            </div>
           </div>
         </div>,
         document.body
