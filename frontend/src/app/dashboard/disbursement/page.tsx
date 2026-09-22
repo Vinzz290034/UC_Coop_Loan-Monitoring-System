@@ -308,6 +308,12 @@ function DisbursementPageContent() {
     return `${words} ${currencyUnit} ONLY`;
   };
 
+  const formatVoucherDescription = (particulars?: string, payee?: string) => {
+    const p = (particulars || '').trim();
+    if (!p) return 'Disbursement of funds';
+    return p;
+  };
+
   const getCvDisbursedAmount = (cv: any): number => {
     if (!cv) return 0;
     let details: any[] = [];
@@ -1739,242 +1745,270 @@ function DisbursementPageContent() {
         document.body
       )}
 
-      {/* VIEW & PRINT CHECK VOUCHER SHEET MODAL */}
+      {/* VIEW CHECK VOUCHER MODAL */}
       {selectedCvForModal && mounted && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6 animate-modal-backdrop"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop"
           onClick={() => setSelectedCvForModal(null)}
         >
           <div
-            className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-modal-pop overflow-hidden"
+            className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-2xl shadow-2xl relative animate-modal-pop overflow-hidden max-h-[90vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
-            {/* Pinned Modal Header */}
-            <div className="flex items-center justify-between border-b border-outline-variant/60 p-5 sm:p-6 shrink-0 bg-surface-container-lowest dark:bg-neutral-900">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-outline-variant/30 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/40 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-emerald-700/10 text-emerald-700 dark:text-emerald-400 rounded-2xl">
-                  <Receipt className="w-6 h-6" />
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
+                  <Receipt className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2.5">
-                    <h2 className="text-xl font-headline font-black text-neutral-900 dark:text-white">
-                      Check Voucher #{selectedCvForModal.voucher_no}
-                    </h2>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">
+                      Check Voucher
+                    </h3>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-300 dark:border-emerald-800/60">
+                      CV #{selectedCvForModal.voucher_no}
+                    </span>
                     {renderStatusBadge(selectedCvForModal.status, selectedCvForModal)}
                   </div>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                    Official Cooperative Disbursement Document &amp; Accounting Breakdown
+                  <p className="text-xs text-neutral-500">
+                    Accounting line items &amp; deduction details
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={e => handlePrintCvBreakdown(selectedCvForModal, e)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs shadow-xs hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Sheet</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => setSelectedCvForModal(null)}
-                  className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 cursor-pointer"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Scrollable Modal Body */}
-            <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5 custom-scrollbar">
-              {/* WYSIWYG CHECK VOUCHER SHEET (UC-METC Standard) */}
-              <div className="border border-neutral-300 dark:border-neutral-700 rounded-2xl p-5 sm:p-6 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-white space-y-5 text-xs shadow-xs">
-                {/* Organization Header */}
-                <div className="text-center space-y-1 border-b pb-4 border-neutral-200 dark:border-neutral-800">
-                  <h3 className="font-headline font-black text-base text-neutral-900 dark:text-white uppercase tracking-wider">
-                    UNIVERSITY OF CEBU - METC MULTI-PURPOSE COOPERATIVE
-                  </h3>
-                  <p className="text-[11px] text-neutral-500">Alumnos, Mambaling, Cebu City</p>
-                  <span className="inline-block px-3 py-1 rounded-full bg-emerald-700/10 text-emerald-800 dark:text-emerald-300 font-extrabold uppercase text-[10px] tracking-widest mt-1">
-                    DISBURSEMENT CHECK VOUCHER
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar flex-1">
+              {/* Voucher Meta Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Voucher Date</span>
+                  <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
+                    {selectedCvForModal.voucher_date ? new Date(selectedCvForModal.voucher_date).toLocaleDateString() : '—'}
                   </span>
                 </div>
-
-                {/* Voucher Meta Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 rounded-xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-xs">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-500 block">Voucher No.</span>
-                    <span className="font-mono font-bold text-sm text-neutral-900 dark:text-white">
-                      {selectedCvForModal.voucher_no}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-500 block">Voucher Date</span>
-                    <span className="font-semibold text-neutral-900 dark:text-white">
-                      {selectedCvForModal.voucher_date
-                        ? new Date(selectedCvForModal.voucher_date).toLocaleDateString()
-                        : '—'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-500 block">Check No.</span>
-                    <span className="font-mono font-bold text-neutral-900 dark:text-white">
-                      {selectedCvForModal.check_no || '—'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-500 block">Draw Bank</span>
-                    <span className="font-bold text-neutral-900 dark:text-white">{selectedCvForModal.bank || '—'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-500 block">Current Status</span>
-                    <div className="mt-0.5">{renderStatusBadge(selectedCvForModal.status)}</div>
-                  </div>
-                </div>
-
-                {/* Payee & Particulars Banner */}
-                <div className="p-4 rounded-xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Paid To (Payee)</span>
-                      <span className="font-headline font-black text-sm text-neutral-900 dark:text-white">
-                        {selectedCvForModal.payee || '—'}
-                      </span>
-                    </div>
-                    <div className="text-left sm:text-right">
-                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Category</span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary dark:text-secondary font-bold text-[11px]">
-                        {selectedCvForModal.folder_name || currentTabConfig.label}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-neutral-500 block">Particulars</span>
-                    <p className="text-neutral-700 dark:text-neutral-300 font-medium">
-                      {selectedCvForModal.particulars || 'Disbursement of funds'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Accounting Breakdown Rows */}
-                <div className="space-y-2">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 block">
-                    Accounting Double-Entry Details
+                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Name</span>
+                  <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5" title={selectedCvForModal.payee || '—'}>
+                    {selectedCvForModal.payee || '—'}
                   </span>
-                  {(() => {
-                    const { rows, debitTotal, creditTotal } = getBalancedCvRows(selectedCvForModal);
-                    return (
-                      <div className="border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="bg-neutral-100 dark:bg-neutral-900 font-bold border-b border-neutral-200 dark:border-neutral-800 text-[10px] uppercase">
-                              <th className="py-2.5 px-3 text-left">Book of Account / Line Description</th>
-                              <th className="py-2.5 px-3 text-right">Debit (₱)</th>
-                              <th className="py-2.5 px-3 text-right">Credit (₱)</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                            {rows.length === 0 ? (
-                              <tr>
-                                <td className="py-2.5 px-3">{selectedCvForModal.particulars || 'Disbursement Amount'}</td>
-                                <td className="py-2.5 px-3 text-right font-mono font-semibold">
-                                  ₱{getCvDisbursedAmount(selectedCvForModal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-mono">—</td>
-                              </tr>
-                            ) : (
-                              rows.map((r, i) => (
-                                <tr key={i} className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50">
-                                  <td className="py-2 px-3 font-medium">{r.description}</td>
-                                  <td className="py-2 px-3 text-right font-mono">
-                                    {r.debit !== null ? `₱${r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
-                                  </td>
-                                  <td className="py-2 px-3 text-right font-mono">
-                                    {r.credit !== null ? `₱${r.credit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                            <tr className="bg-neutral-100/70 dark:bg-neutral-900/70 font-bold border-t border-neutral-300 dark:border-neutral-700">
-                              <td className="py-2.5 px-3 uppercase text-[10px]">Total Balance</td>
-                              <td className="py-2.5 px-3 text-right font-mono text-emerald-700 dark:text-emerald-400">
-                                ₱{(debitTotal || getCvDisbursedAmount(selectedCvForModal)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono text-emerald-700 dark:text-emerald-400">
-                                ₱{(creditTotal || getCvDisbursedAmount(selectedCvForModal)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  })()}
                 </div>
-
-                {/* Amount In Words Banner */}
-                <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">
-                      Amount Disbursed in Words:
-                    </span>
-                    <p className="font-bold text-xs uppercase tracking-wide text-neutral-900 dark:text-white">
-                      {formatDisbursedInWords(getCvDisbursedAmount(selectedCvForModal))}
-                    </p>
-                  </div>
-                  <div className="text-left sm:text-right shrink-0">
-                    <span className="font-headline font-black text-xl text-emerald-800 dark:text-emerald-300 font-mono">
-                      ₱{getCvDisbursedAmount(selectedCvForModal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
+                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Check No.</span>
+                  <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
+                    {selectedCvForModal.check_no || '—'}
+                  </span>
                 </div>
-
-                {/* Signatures Grid */}
-                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-neutral-200 dark:border-neutral-800 text-center">
-                  <div className="space-y-1">
-                    <span className="text-[9px] uppercase font-bold text-neutral-500 block">Prepared By</span>
-                    <div className="h-6" />
-                    <p className="font-bold uppercase text-neutral-900 dark:text-white text-xs border-t border-neutral-300 dark:border-neutral-700 pt-1">
-                      {selectedCvForModal.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
-                    </p>
-                    <span className="text-[9px] text-neutral-400">Bookkeeper</span>
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-[9px] uppercase font-bold text-neutral-500 block">Checked By</span>
-                    <div className="h-6" />
-                    <p className="font-bold uppercase text-neutral-900 dark:text-white text-xs border-t border-neutral-300 dark:border-neutral-700 pt-1">
-                      {selectedCvForModal.signatories?.checked_by || 'MARILOU LARIOSA'}
-                    </p>
-                    <span className="text-[9px] text-neutral-400">Audit / Accounting</span>
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-[9px] uppercase font-bold text-neutral-500 block">Approved By</span>
-                    <div className="h-6" />
-                    <p className="font-bold uppercase text-neutral-900 dark:text-white text-xs border-t border-neutral-300 dark:border-neutral-700 pt-1">
-                      {selectedCvForModal.signatories?.approved_by || 'MICHELLE M. PABLE'}
-                    </p>
-                    <span className="text-[9px] text-neutral-400">General Manager</span>
-                  </div>
+                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
+                  <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
+                    {selectedCvForModal.bank || '—'}
+                  </span>
                 </div>
               </div>
-            </div>
 
-            {/* Pinned Modal Bottom Actions */}
-            <div className="flex items-center justify-between border-t border-outline-variant/60 p-4 sm:p-5 shrink-0 bg-surface-container-lowest dark:bg-neutral-900">
-              {isRevolvingVoucher(selectedCvForModal) && (
-                <button
-                  type="button"
-                  onClick={handleSyncCvWithRf}
-                  disabled={isSyncingCvRf}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300 font-bold text-xs hover:bg-amber-500/20 active:scale-95 transition-all cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCvRf ? 'animate-spin' : ''}`} />
-                  <span>Sync with Liquidation Form</span>
-                </button>
+              {/* Description */}
+              {(selectedCvForModal.particulars || selectedCvForModal.payee) && (
+                <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-outline-variant/30 text-xs">
+                  <span className="font-bold text-neutral-500 block mb-0.5">Description:</span>
+                  <p className="text-neutral-700 dark:text-neutral-300 italic">
+                    {formatVoucherDescription(selectedCvForModal.particulars, selectedCvForModal.payee)}
+                  </p>
+                </div>
               )}
 
-              <div className="flex items-center gap-3 ml-auto flex-wrap">
+              {/* Linked Revolving Fund Banner */}
+              {isRevolvingVoucher(selectedCvForModal) && (
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-emerald-500/5 to-transparent border border-amber-400/50 dark:border-amber-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 flex items-center justify-center flex-shrink-0 shadow-2xs">
+                      <RotateCcw className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">
+                          Linked Liquidation Form
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-200/80 dark:bg-amber-900/80 text-amber-950 dark:text-amber-200">
+                          {selectedCvForModal.revolving_fund?.lf_no || extractRfNumber(selectedCvForModal) || 'Revolving Fund'}
+                        </span>
+                        {selectedCvForModal.revolving_fund?.sheet_name && (
+                          <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
+                            ({selectedCvForModal.revolving_fund.sheet_name})
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-neutral-600 dark:text-neutral-300 mt-0.5">
+                        Custodian: <span className="font-semibold text-neutral-800 dark:text-neutral-100">{selectedCvForModal.revolving_fund?.custodian_name || selectedCvForModal.payee || 'Michelle M. Pable'}</span>
+                        {selectedCvForModal.revolving_fund?.total_liquidated && (
+                          <span className="ml-2 font-mono text-emerald-700 dark:text-emerald-400">
+                            • Liquidated: ₱{parseFloat(selectedCvForModal.revolving_fund.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSyncCvWithRf}
+                    disabled={isSyncingCvRf}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 text-white shadow-2xs transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCvRf ? 'animate-spin' : ''}`} />
+                    <span>Sync with Liquidation Form</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Transaction Details Table */}
+              {(() => {
+                const { rows, debitTotal, creditTotal } = getBalancedCvRows(selectedCvForModal);
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                        Transaction Details
+                      </h5>
+                    </div>
+                    <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-neutral-100/70 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 font-bold border-b border-outline-variant/40">
+                            <th className="px-4 py-2.5 text-left w-12">#</th>
+                            <th className="px-4 py-2.5 text-left">Book of Accounts</th>
+                            <th className="px-4 py-2.5 text-right w-36">Debit</th>
+                            <th className="px-4 py-2.5 text-right w-36">Credit</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant/20">
+                          {rows.length > 0 ? (
+                            rows.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
+                                <td className="px-4 py-2.5 text-neutral-400 font-mono">{idx + 1}</td>
+                                <td className="px-4 py-2.5 font-medium text-on-surface dark:text-white">
+                                  {item.description}
+                                </td>
+                                <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100">
+                                  {item.debit !== null ? `₱${item.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                </td>
+                                <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-rose-600 dark:text-rose-400">
+                                  {item.credit !== null ? `₱${item.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={4} className="px-4 py-6 text-center text-neutral-500 italic">
+                                No transaction breakdown details available for this voucher.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                        <tfoot className="bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30 font-bold">
+                          <tr>
+                            <td colSpan={2} className="px-4 py-2.5 font-bold text-right text-neutral-600 dark:text-neutral-400 uppercase tracking-wide">
+                              Total:
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-mono font-bold text-neutral-900 dark:text-neutral-100">
+                              ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                              ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {/* Disbursed Amount Box below table */}
+                    <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block mb-1">
+                          Disbursed Amount:
+                        </span>
+                        <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide leading-relaxed">
+                          {formatDisbursedInWords(getCvDisbursedAmount(selectedCvForModal))}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="font-mono font-extrabold text-base text-emerald-700 dark:text-emerald-300">
+                          ₱{getCvDisbursedAmount(selectedCvForModal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Signatures Block matching physical document */}
+                    <div className="pt-4 border-t border-outline-variant/30 space-y-4 text-xs">
+                      {/* Row 1: Prepared By, Checked By, Approved By */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">PREPARED BY:</span>
+                          <div className="h-5"></div>
+                          <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
+                            {selectedCvForModal.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
+                          </p>
+                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">CHECKED BY:</span>
+                          <div className="h-5"></div>
+                          <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
+                            {selectedCvForModal.signatories?.checked_by || 'MARILOU LARIOSA'}
+                          </p>
+                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">APPROVED BY:</span>
+                          <div className="h-5"></div>
+                          <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
+                            {selectedCvForModal.signatories?.approved_by || 'MICHELLE M. PABLE'}
+                          </p>
+                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Received By, Date */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">RECEIVED BY:</span>
+                          <div className="h-8"></div>
+                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                          <p className="text-[9px] text-neutral-500 mt-1">Signature over Printed Name</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">DATE:</span>
+                          <div className="h-8"></div>
+                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                        </div>
+                        <div></div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 border-t border-outline-variant/30 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/40 shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectedCvForModal(null)}
+                className="px-5 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer shadow-2xs active:scale-95"
+              >
+                Close
+              </button>
+
+              <div className="flex items-center gap-2 flex-wrap">
                 {/* Manager / Admin: Approve for Release when 'on process' */}
                 {selectedCvForModal.status === 'on process' && isAdminOrManager && (
                   <button
@@ -1983,7 +2017,7 @@ function DisbursementPageContent() {
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-bold text-xs transition-all cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>Approve for Release (Manager)</span>
+                    <span>Approve for Release</span>
                   </button>
                 )}
 
@@ -2008,47 +2042,29 @@ function DisbursementPageContent() {
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold text-xs transition-all cursor-pointer"
                   >
                     <Lock className="w-3.5 h-3.5" />
-                    <span>Seal & Disburse (Admin)</span>
+                    <span>Seal &amp; Disburse</span>
                   </button>
-                )}
-
-                {/* Status Filed: Locked indicator and Admin Unlock button */}
-                {selectedCvForModal.status === 'filed' && (
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-500/25">
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Filed & Locked</span>
-                    </span>
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => handleUnlockCv(selectedCvForModal)}
-                        className="text-[11px] text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 underline cursor-pointer"
-                      >
-                        Unlock (Admin)
-                      </button>
-                    )}
-                  </div>
                 )}
 
                 {/* Edit CV: Available only if not filed, or if admin */}
                 {isAdminOrStaff && (selectedCvForModal.status !== 'filed' || isAdmin) && (
                   <button
                     type="button"
-                    onClick={() => {
-                      startEditingCv(selectedCvForModal);
-                    }}
-                    className="px-4 py-2 rounded-full border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold text-xs transition-all cursor-pointer"
+                    onClick={() => startEditingCv(selectedCvForModal)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full border border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all active:scale-95 cursor-pointer"
                   >
-                    Edit Details
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Voucher</span>
                   </button>
                 )}
+
                 <button
                   type="button"
-                  onClick={() => setSelectedCvForModal(null)}
-                  className="px-5 py-2 rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 font-bold text-xs transition-all cursor-pointer"
+                  onClick={() => handlePrintCvBreakdown(selectedCvForModal)}
+                  className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-full bg-emerald-700 hover:bg-emerald-800 text-white shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
                 >
-                  Close
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Breakdown</span>
                 </button>
               </div>
             </div>
