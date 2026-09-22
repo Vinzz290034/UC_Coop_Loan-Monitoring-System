@@ -1838,11 +1838,11 @@ export default function ImportPage() {
 
             <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-outline-variant/40">
               <Link
-                href="/dashboard/loans?tab=vouchers"
+                href="/dashboard/disbursement"
                 className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all"
               >
                 <FileText className="w-4 h-4" />
-                View in Check Voucher Registry
+                View in Disbursement Module
               </Link>
               <button
                 onClick={resetImporter}
@@ -1871,11 +1871,11 @@ export default function ImportPage() {
 
             <div className="flex flex-wrap items-center justify-center gap-3 pt-4 border-t border-outline-variant/40">
               <Link
-                href="/dashboard/loans?tab=revolving_funds"
+                href="/dashboard/disbursement?tab=revolving_fund_replenishment"
                 className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all"
               >
                 <Layers className="w-4 h-4" />
-                View in Revolving Funds Tab
+                View in Disbursement Module
               </Link>
               <button
                 onClick={resetImporter}

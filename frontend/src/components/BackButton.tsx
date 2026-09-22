@@ -11,7 +11,9 @@ interface BackButtonProps {
   href?: string;
   /** Optional custom click handler. */
   onClick?: (e: React.MouseEvent<HTMLButtonElement | HTMLAnchorElement>) => void;
-  /** Optional custom text. Defaults to "Back". */
+  /** Optional custom text via label prop. */
+  label?: React.ReactNode;
+  /** Optional custom text via children. Defaults to "Back". */
   children?: React.ReactNode;
   /** Additional CSS class names. */
   className?: string;
@@ -20,7 +22,8 @@ interface BackButtonProps {
 export default function BackButton({
   href,
   onClick,
-  children = 'Back',
+  label,
+  children,
   className,
 }: BackButtonProps) {
   const router = useRouter();
@@ -44,11 +47,13 @@ export default function BackButton({
     }
   };
 
+  const buttonText = children || label || 'Back';
+
   if (href) {
     return (
       <Link href={href} className={buttonClasses} onClick={handleClick}>
         <ArrowLeft className="w-4 h-4 flex-shrink-0" />
-        {children}
+        {buttonText}
       </Link>
     );
   }
@@ -56,7 +61,7 @@ export default function BackButton({
   return (
     <button type="button" className={buttonClasses} onClick={handleClick}>
       <ArrowLeft className="w-4 h-4 flex-shrink-0" />
-      {children}
+      {buttonText}
     </button>
   );
 }

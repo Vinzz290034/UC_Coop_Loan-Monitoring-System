@@ -17,6 +17,7 @@ import {
   deleteCheckVoucher,
   bulkDeleteCheckVouchers,
   syncCheckVoucherWithRevolvingFund,
+  printCheckVoucher,
   getAllSavingsAccounts,
   getSavingsAccount,
   postSavingsDeposit,
@@ -85,6 +86,9 @@ router.route('/check-vouchers/bulk-delete')
 
 router.route('/check-vouchers/:id/sync-revolving-fund')
   .post(restrictTo('admin', 'staff'), syncCheckVoucherWithRevolvingFund);
+
+router.route('/check-vouchers/:id/print')
+  .post(restrictTo('admin', 'staff'), printCheckVoucher);
 
 router.route('/check-vouchers/:id')
   .put(restrictTo('admin', 'staff'), updateCheckVoucher)

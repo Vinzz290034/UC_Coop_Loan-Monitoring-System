@@ -815,7 +815,7 @@ export const importCheckVouchers = async (req, res, next) => {
 // @access  Protected (Admin, Staff)
 export const getCheckVouchers = async (req, res, next) => {
   try {
-    const { search, folder, bank, page, limit, id } = req.query;
+    const { search, folder, bank, status, page, limit, id } = req.query;
 
     const conditions = [];
     const params = [];
@@ -840,6 +840,11 @@ export const getCheckVouchers = async (req, res, next) => {
       conditions.push(`bank ILIKE $${params.length}`);
     }
 
+    if (status && status !== 'all') {
+      params.push(status.toLowerCase());
+      conditions.push(`LOWER(COALESCE(status, 'edit')) = $${params.length}`);
+    }
+
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // Pagination
@@ -859,7 +864,8 @@ export const getCheckVouchers = async (req, res, next) => {
     params.push(offset);
     const result = await query(
       `SELECT id, voucher_no, voucher_date, check_no, payee, bank, particulars,
-              amount, managers_approval_date, date_released, folder_name, box_name, details, signatories, created_at,
+              amount, managers_approval_date, date_released, folder_name, box_name, details, signatories,
+              COALESCE(status, 'edit') AS status, created_at,
               (
                 SELECT JSON_BUILD_OBJECT(
                   'id', rf.id,
@@ -909,38 +915,120 @@ export const updateCheckVoucher = async (req, res, next) => {
       particulars,
       amount,
       date_released,
+      managers_approval_date,
+      folder_name,
+      status,
       details,
       signatories
     } = req.body;
 
+    const currentCvRes = await query('SELECT * FROM check_vouchers WHERE id = $1', [id]);
+    if (currentCvRes.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Check voucher not found' }
+      });
+    }
+    const currentCv = currentCvRes.rows[0];
+
+    // If current status is 'filed', only admin can modify or unlock it
+    if (currentCv.status === 'filed' && req.user?.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'This check voucher is filed and locked. Only administrators can modify it.' }
+      });
+    }
+
+    // Only admin can change status to 'filed'
+    if (status === 'filed' && req.user?.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'Only an administrator can seal and file a check voucher.' }
+      });
+    }
+
+    // Auto-set lifecycle dates
+    let resolvedApprovalDate = managers_approval_date !== undefined ? managers_approval_date : currentCv.managers_approval_date;
+    let resolvedDateReleased = date_released !== undefined ? date_released : currentCv.date_released;
+
+    if (status === 'for release' && !resolvedApprovalDate) {
+      resolvedApprovalDate = new Date().toISOString().split('T')[0];
+    }
+    if (status === 'filed' && !resolvedDateReleased) {
+      resolvedDateReleased = new Date().toISOString().split('T')[0];
+    }
+
+    const resolvedVoucherNo = voucher_no !== undefined ? voucher_no : currentCv.voucher_no;
+    const resolvedVoucherDate = voucher_date !== undefined ? (voucher_date || null) : currentCv.voucher_date;
+    const resolvedCheckNo = check_no !== undefined ? check_no : currentCv.check_no;
+    const resolvedPayee = payee !== undefined ? payee : currentCv.payee;
+    const resolvedBank = bank !== undefined ? bank : currentCv.bank;
+    const resolvedParticulars = particulars !== undefined ? particulars : currentCv.particulars;
+    const resolvedAmount = amount !== undefined ? (amount !== null && amount !== '' ? parseFloat(amount) : null) : currentCv.amount;
+    const resolvedFolderName = folder_name !== undefined ? folder_name : currentCv.folder_name;
+    const resolvedStatus = status !== undefined ? status.toLowerCase() : currentCv.status;
+    const resolvedDetails = details !== undefined ? (details ? JSON.stringify(details) : null) : currentCv.details;
+    const resolvedSignatories = signatories !== undefined ? (signatories ? JSON.stringify(signatories) : null) : currentCv.signatories;
+
     const result = await query(
       `UPDATE check_vouchers
-       SET voucher_no = COALESCE($1, voucher_no),
+       SET voucher_no = $1,
            voucher_date = $2,
            check_no = $3,
-           payee = COALESCE($4, payee),
+           payee = $4,
            bank = $5,
            particulars = $6,
-           amount = COALESCE($7, amount),
+           amount = $7,
            date_released = $8,
-           details = COALESCE($9, details),
-           signatories = COALESCE($10, signatories),
+           managers_approval_date = $9,
+           folder_name = $10,
+           status = $11,
+           details = $12,
+           signatories = $13,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $11
+       WHERE id = $14
        RETURNING *`,
       [
-        voucher_no,
-        voucher_date || null,
-        check_no !== undefined ? check_no : null,
-        payee,
-        bank !== undefined ? bank : null,
-        particulars !== undefined ? particulars : null,
-        amount !== undefined ? parseFloat(amount) : null,
-        date_released || null,
-        details ? JSON.stringify(details) : null,
-        signatories ? JSON.stringify(signatories) : null,
+        resolvedVoucherNo,
+        resolvedVoucherDate,
+        resolvedCheckNo,
+        resolvedPayee,
+        resolvedBank,
+        resolvedParticulars,
+        resolvedAmount,
+        resolvedDateReleased,
+        resolvedApprovalDate,
+        resolvedFolderName,
+        resolvedStatus,
+        resolvedDetails,
+        resolvedSignatories,
         id
       ]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Check voucher updated successfully',
+      data: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Record print event for check voucher, advancing status to 'on process' if it is currently 'edit'
+// @route   POST /api/accounts/check-vouchers/:id/print
+// @access  Protected (Admin, Staff)
+export const printCheckVoucher = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      `UPDATE check_vouchers
+       SET status = CASE WHEN LOWER(COALESCE(status, 'edit')) = 'edit' THEN 'on process' ELSE status END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING *`,
+      [id]
     );
 
     if (result.rowCount === 0) {
@@ -952,7 +1040,7 @@ export const updateCheckVoucher = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Check voucher updated successfully',
+      message: 'Check voucher print recorded',
       data: result.rows[0]
     });
   } catch (error) {
@@ -974,6 +1062,8 @@ export const createCheckVoucher = async (req, res, next) => {
       particulars,
       amount,
       date_released,
+      folder_name,
+      status,
       details,
       signatories
     } = req.body;
@@ -991,6 +1081,8 @@ export const createCheckVoucher = async (req, res, next) => {
       approved_by: 'MICHELLE M. PABLE'
     };
 
+    const initialStatus = (status || 'edit').toLowerCase();
+
     const result = await query(
       `INSERT INTO check_vouchers (
         voucher_no,
@@ -1001,9 +1093,11 @@ export const createCheckVoucher = async (req, res, next) => {
         particulars,
         amount,
         date_released,
+        folder_name,
+        status,
         details,
         signatories
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *`,
       [
         voucher_no.trim(),
@@ -1014,6 +1108,8 @@ export const createCheckVoucher = async (req, res, next) => {
         particulars || '',
         amount !== undefined ? parseFloat(amount) : 0,
         date_released || null,
+        folder_name || null,
+        initialStatus,
         details ? JSON.stringify(details) : '[]',
         JSON.stringify(signatories || defaultSignatories)
       ]
@@ -1036,17 +1132,25 @@ export const deleteCheckVoucher = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const result = await query(
-      'DELETE FROM check_vouchers WHERE id = $1 RETURNING id, voucher_no, payee',
-      [id]
-    );
-
-    if (result.rowCount === 0) {
+    const existing = await query('SELECT id, voucher_no, payee, status FROM check_vouchers WHERE id = $1', [id]);
+    if (existing.rowCount === 0) {
       return res.status(404).json({
         success: false,
         error: { message: 'Check voucher not found or already removed' }
       });
     }
+
+    if (existing.rows[0].status === 'filed') {
+      return res.status(403).json({
+        success: false,
+        error: { message: `Check voucher ${existing.rows[0].voucher_no} is filed and locked. It cannot be deleted.` }
+      });
+    }
+
+    const result = await query(
+      'DELETE FROM check_vouchers WHERE id = $1 RETURNING id, voucher_no, payee',
+      [id]
+    );
 
     res.status(200).json({
       success: true,
@@ -1066,10 +1170,10 @@ export const bulkDeleteCheckVouchers = async (req, res, next) => {
     const { ids, all } = req.body;
 
     if (all === true) {
-      const result = await query('DELETE FROM check_vouchers RETURNING id');
+      const result = await query("DELETE FROM check_vouchers WHERE status IS NULL OR status != 'filed' RETURNING id");
       return res.status(200).json({
         success: true,
-        message: `All ${result.rowCount} check vouchers removed successfully`,
+        message: `${result.rowCount} unfiled check voucher(s) removed successfully (filed/locked vouchers preserved)`,
         count: result.rowCount
       });
     }
@@ -1082,13 +1186,13 @@ export const bulkDeleteCheckVouchers = async (req, res, next) => {
     }
 
     const result = await query(
-      'DELETE FROM check_vouchers WHERE id = ANY($1::uuid[]) RETURNING id',
+      "DELETE FROM check_vouchers WHERE id = ANY($1::uuid[]) AND (status IS NULL OR status != 'filed') RETURNING id",
       [ids]
     );
 
     res.status(200).json({
       success: true,
-      message: `${result.rowCount} check voucher(s) removed successfully`,
+      message: `${result.rowCount} check voucher(s) removed successfully (filed/locked vouchers preserved)`,
       count: result.rowCount
     });
   } catch (error) {

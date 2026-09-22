@@ -31,6 +31,7 @@ import {
   LifeBuoy,
   Megaphone,
   FileUp,
+  ReceiptText,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
@@ -117,6 +118,12 @@ function DashboardLayoutContent({
       name: 'Loans',
       path: '/dashboard/loans',
       icon: Banknote,
+      allowed: true,
+    },
+    {
+      name: 'Disbursement',
+      path: '/dashboard/disbursement',
+      icon: ReceiptText,
       allowed: true,
     },
     {
