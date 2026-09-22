@@ -213,6 +213,37 @@ function DisbursementPageContent() {
   });
   const [editCvRows, setEditCvRows] = useState<{ description: string; debit: string; credit: string }[]>([]);
 
+  // Calculate live disbursed amount while editing/modifying voucher
+  const getEditCvDisbursedAmount = (): number => {
+    // 1. Look for CIB / Cash In Bank row
+    for (const r of editCvRows) {
+      const desc = (r.description || '').trim();
+      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
+        const creditVal = parseFloat(String(r.credit || '0')) || 0;
+        if (creditVal > 0) return creditVal;
+        const debitVal = parseFloat(String(r.debit || '0')) || 0;
+        if (debitVal > 0) return debitVal;
+      }
+    }
+
+    // 2. If no explicit CIB row, compute net difference or total
+    let debitTotal = 0;
+    let creditTotal = 0;
+    for (const r of editCvRows) {
+      debitTotal += parseFloat(String(r.debit || '0')) || 0;
+      creditTotal += parseFloat(String(r.credit || '0')) || 0;
+    }
+
+    if (creditTotal > 0 && debitTotal > 0 && debitTotal > creditTotal) {
+      return debitTotal - creditTotal;
+    }
+    if (debitTotal > 0) return debitTotal;
+    if (creditTotal > 0) return creditTotal;
+
+    const baseAmount = parseFloat(selectedCvForModal?.amount || 0);
+    return isNaN(baseAmount) ? 0 : baseAmount;
+  };
+
   // Load check vouchers for active tab
   const loadCheckVouchers = useCallback(async (page = 1, searchOverride?: string) => {
     try {
@@ -704,6 +735,9 @@ function DisbursementPageContent() {
           };
         });
 
+      const disbursedAmt = getEditCvDisbursedAmount();
+      const finalAmount = disbursedAmt > 0 ? disbursedAmt : (calculatedAmount > 0 ? calculatedAmount : (selectedCvForModal?.amount || 0));
+
       const payload = {
         voucher_no: editCvFormData.voucher_no.trim(),
         voucher_date: editCvFormData.voucher_date || null,
@@ -712,7 +746,7 @@ function DisbursementPageContent() {
         bank: editCvFormData.bank.trim() || null,
         particulars: editCvFormData.particulars.trim() || null,
         folder_name: editCvFormData.folder_name.trim() || null,
-        amount: calculatedAmount > 0 ? calculatedAmount : selectedCvForModal.amount,
+        amount: finalAmount,
         details: detailsArray,
         signatories: {
           prepared_by: editCvFormData.prepared_by.trim(),
@@ -2200,6 +2234,14 @@ function DisbursementPageContent() {
                 </div>
 
                 <div className="border border-outline-variant/60 rounded-2xl overflow-hidden divide-y divide-outline-variant/40">
+                  {/* Table Column Header */}
+                  <div className="grid grid-cols-12 px-3 py-2 bg-neutral-100/70 dark:bg-neutral-800/60 text-[10px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                    <div className="col-span-6">Book of Account</div>
+                    <div className="col-span-3 text-right">Debit (₱)</div>
+                    <div className="col-span-2 text-right">Credit (₱)</div>
+                    <div className="col-span-1"></div>
+                  </div>
+
                   {editCvRows.map((row, idx) => (
                     <div key={idx} className="grid grid-cols-12 px-3 py-2 items-center gap-2">
                       <div className="col-span-6">
@@ -2210,6 +2252,7 @@ function DisbursementPageContent() {
                             const val = e.target.value;
                             setEditCvRows(prev => prev.map((r, i) => (i === idx ? { ...r, description: val } : r)));
                           }}
+                          placeholder="Account description"
                           className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs"
                         />
                       </div>
@@ -2252,6 +2295,28 @@ function DisbursementPageContent() {
                   ))}
                 </div>
               </div>
+
+              {/* Disbursed Amount Banner */}
+              {(() => {
+                const disbursedAmt = getEditCvDisbursedAmount();
+                return (
+                  <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block mb-1">
+                        Disbursed Amount:
+                      </span>
+                      <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide leading-relaxed">
+                        {formatDisbursedInWords(disbursedAmt)}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className="font-mono font-extrabold text-base text-emerald-700 dark:text-emerald-300">
+                        ₱{disbursedAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Signatories */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-outline-variant/60">
