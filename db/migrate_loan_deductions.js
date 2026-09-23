@@ -14,6 +14,7 @@ export async function migrateLoanDeductions() {
       ALTER TABLE loans ADD COLUMN IF NOT EXISTS disbursement_method VARCHAR(50) DEFAULT NULL;
       ALTER TABLE loans ADD COLUMN IF NOT EXISTS disbursement_reference VARCHAR(100) DEFAULT NULL;
       ALTER TABLE loans ADD COLUMN IF NOT EXISTS disbursement_remarks TEXT DEFAULT NULL;
+      ALTER TABLE loans ADD COLUMN IF NOT EXISTS custom_schedule JSONB DEFAULT NULL;
     `);
 
     console.log('[Migration] Loan deductions and net proceeds columns verified successfully.');

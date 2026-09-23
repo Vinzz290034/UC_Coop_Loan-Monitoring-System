@@ -384,24 +384,52 @@ export const applyForLoan = async (req, res, next) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `;
-    const result = await query(insertLoan, [
-      member_id,
-      loan_product_id,
-      amount,
-      finalInterestRate,
-      finalTermMonths,
-      p.amortization_type,
-      initialStatus,
-      co_maker_name || null,
-      co_maker_phone || null,
-      finalLafNo,
-      payment_mode || 'SD',
-      totalDeductions,
-      netProceeds,
-      JSON.stringify(deductionsList),
-      custom_schedule ? JSON.stringify(custom_schedule) : null,
-      applicationDate.toISOString()
-    ]);
+    let result;
+    try {
+      result = await query(insertLoan, [
+        member_id,
+        loan_product_id,
+        amount,
+        finalInterestRate,
+        finalTermMonths,
+        p.amortization_type,
+        initialStatus,
+        co_maker_name || null,
+        co_maker_phone || null,
+        finalLafNo,
+        payment_mode || 'SD',
+        totalDeductions,
+        netProceeds,
+        JSON.stringify(deductionsList),
+        custom_schedule ? JSON.stringify(custom_schedule) : null,
+        applicationDate.toISOString()
+      ]);
+    } catch (insertErr) {
+      if (insertErr.code === '42703' && String(insertErr.message).includes('custom_schedule')) {
+        console.warn('[Auto-Migrate] custom_schedule column missing. Adding column dynamically...');
+        await query('ALTER TABLE loans ADD COLUMN IF NOT EXISTS custom_schedule JSONB DEFAULT NULL');
+        result = await query(insertLoan, [
+          member_id,
+          loan_product_id,
+          amount,
+          finalInterestRate,
+          finalTermMonths,
+          p.amortization_type,
+          initialStatus,
+          co_maker_name || null,
+          co_maker_phone || null,
+          finalLafNo,
+          payment_mode || 'SD',
+          totalDeductions,
+          netProceeds,
+          JSON.stringify(deductionsList),
+          custom_schedule ? JSON.stringify(custom_schedule) : null,
+          applicationDate.toISOString()
+        ]);
+      } else {
+        throw insertErr;
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -693,6 +721,8 @@ export const getLoans = async (req, res, next) => {
         queryText += ` AND l.status = $${paramIndex}`;
         params.push(status);
         paramIndex++;
+      } else {
+        queryText += " AND l.status != 'rejected'";
       }
 
       if (sort_by === 'laf_asc') {
@@ -750,6 +780,8 @@ export const getLoans = async (req, res, next) => {
         params.push(status);
         paramIndex++;
       }
+    } else {
+      queryText += " AND l.status != 'rejected'";
     }
 
     if (search) {
@@ -1166,33 +1198,29 @@ export const rejectLoanApplication = async (req, res, next) => {
       });
     }
 
-    const updateLoanQuery = `
-      UPDATE loans
-      SET status = 'rejected', updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING *
-    `;
-    const updatedResult = await client.query(updateLoanQuery, [id]);
-
-    // Create notification for member user
-    const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [updatedResult.rows[0].member_id]);
+    // Create notification for member user before removal
+    const memUserRes = await client.query('SELECT user_id FROM members WHERE id = $1', [loan.member_id]);
     if (memUserRes.rows.length > 0 && memUserRes.rows[0].user_id) {
       const reasonText = remarks ? ` Remarks: ${remarks}` : '';
       await client.query(
         `INSERT INTO notifications (user_id, title, message, type)
          VALUES ($1, 'Loan Application Decision', $2, 'loan_decision')`,
-        [memUserRes.rows[0].user_id, `Your loan application for ₱${parseFloat(loan.principal_amount).toLocaleString()} was declined by credit underwriting.${reasonText}`]
+        [memUserRes.rows[0].user_id, `Your loan application for ₱${parseFloat(loan.principal_amount).toLocaleString()} was rejected.${reasonText}`]
       );
     }
+
+    // Permanently remove the rejected loan application and its schedules
+    await client.query('DELETE FROM repayment_schedules WHERE loan_id = $1', [id]);
+    await client.query('DELETE FROM loans WHERE id = $1', [id]);
 
     await client.query('COMMIT');
 
     res.status(200).json({
       success: true,
-      message: 'Loan application has been officially rejected.',
+      message: 'Loan application has been officially rejected and removed from the list.',
       data: {
-        loan_id: updatedResult.rows[0].id,
-        status: updatedResult.rows[0].status,
+        loan_id: id,
+        status: 'removed',
         underwriter_remarks: remarks || 'No remarks provided.'
       }
     });

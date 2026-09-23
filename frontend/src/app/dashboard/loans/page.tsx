@@ -1995,7 +1995,8 @@ function LoansPageContent() {
       async () => {
         try {
           await api.patch(`/loans/${loanId}/reject`);
-          showDialog('Application Rejected', 'Application successfully rejected.', 'success');
+          showDialog('Application Rejected', 'Application successfully rejected and removed from list.', 'success');
+          setLoans((prev) => prev.filter((l) => String(l.id) !== String(loanId)));
           fetchLoans();
         } catch (err: any) {
           showDialog('Operation Failed', err.response?.data?.message || 'Failed to reject application.', 'error');
@@ -2616,7 +2617,6 @@ function LoansPageContent() {
                     <option value="approved">Approved</option>
                     <option value="disbursed">Active / Disbursed</option>
                     <option value="fully_paid">Fully Paid</option>
-                    <option value="rejected">Rejected</option>
                     <option value="defaulted">Defaulted</option>
                   </select>
                 </div>
@@ -2640,6 +2640,8 @@ function LoansPageContent() {
               (() => {
                 const filteredLoans = loans
                   .filter((loan) => {
+                    // Exclude rejected loans from table list
+                    if (loan.status === 'rejected') return false;
                     const q = loansSearch.toLowerCase().trim();
                     if (q) {
                       const bName = `${loan.last_name || ''} ${loan.first_name || ''}`.toLowerCase();
