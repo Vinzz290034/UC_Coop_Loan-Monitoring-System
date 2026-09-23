@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
 
 interface SearchInputProps {
@@ -8,6 +8,7 @@ interface SearchInputProps {
   onSearch: (value: string) => void;
   delay?: number;
   className?: string;
+  defaultValue?: string;
 }
 
 export default function SearchInput({
@@ -15,18 +16,28 @@ export default function SearchInput({
   onSearch,
   delay = 400,
   className = "",
+  defaultValue = "",
 }: SearchInputProps) {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(defaultValue);
+  const onSearchRef = useRef(onSearch);
+  const prevValueRef = useRef(defaultValue);
 
   useEffect(() => {
+    onSearchRef.current = onSearch;
+  }, [onSearch]);
+
+  useEffect(() => {
+    if (prevValueRef.current === value) return;
+
     const handler = setTimeout(() => {
-      onSearch(value);
+      prevValueRef.current = value;
+      onSearchRef.current(value);
     }, delay);
 
     return () => {
       clearTimeout(handler);
     };
-  }, [value, delay, onSearch]);
+  }, [value, delay]);
 
   return (
     <div className={`relative flex items-center w-full max-w-md ${className}`}>

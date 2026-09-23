@@ -2572,9 +2572,14 @@ function LoansPageContent() {
               <div className="w-full lg:w-auto flex-1 max-w-md">
                 <SearchInput
                   placeholder="Search by LAF No., borrower, product, contract ID..."
+                  defaultValue={loansSearch}
                   onSearch={(val) => {
-                    setLoansSearch(val);
-                    setLoansPage(1);
+                    setLoansSearch((prev) => {
+                      if (prev !== val) {
+                        setLoansPage(1);
+                      }
+                      return val;
+                    });
                   }}
                 />
               </div>
