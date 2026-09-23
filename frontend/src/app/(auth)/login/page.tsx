@@ -48,14 +48,14 @@ function LoginForm() {
   };
 
   return (
-    <div className="glass-card rounded-3xl p-8 md:p-10 border border-outline-variant/70 shadow-2xl bg-white/95 dark:bg-neutral-900/95 min-h-[500px] flex flex-col justify-between">
+    <div className="glass-card rounded-3xl p-8 md:p-10 border border-outline-variant/70 shadow-2xl bg-white/95 dark:bg-neutral-900/95 min-h-[100px] flex flex-col justify-between">
       <header className="mb-8 text-center">
         <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
           UC-METC MPC Portal
         </h2>
-        <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
+        {/* <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
           Please enter your credentials to access your account.
-        </p>
+        </p> */}
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -200,7 +200,7 @@ export default function LoginPage() {
             Coop Sync
           </h1>
           <p className="font-label text-xs font-extrabold text-on-surface/50 dark:text-neutral-400 uppercase tracking-widest">
-            Flowing Connection. Efficient Finance
+            Your Coop, Your Hope
           </p>
         </div>
 

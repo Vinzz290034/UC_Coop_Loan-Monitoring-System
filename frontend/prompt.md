@@ -71,3 +71,6 @@ Before completing the task, verify that:
 - The implementation is complete and production-ready.
 
 ```
+
+
+Just to clarify before you proceed: feel free to change anything, provided it does not affect the functions, logic, or the way the system operates—specifically regarding mathematical or accounting processes, or the system's core functions. Our task here is solely to modify, enhance, and improve the system's UI/UX.
