@@ -43,10 +43,10 @@ export default function AboutLoading() {
           <Skeleton className="h-6 w-28 rounded-full" />
         </div>
 
-        <div className="relative pl-2 sm:pl-4 space-y-4">
+        <div className="space-y-2 sm:space-y-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex items-start gap-4 sm:gap-6 p-3 sm:p-4">
-              <Skeleton className="w-10 sm:w-11 h-10 sm:h-11 rounded-2xl flex-shrink-0" />
+              <Skeleton className="w-8 sm:w-10 h-8 sm:h-9 rounded-lg flex-shrink-0" />
               <div className="flex-1 space-y-2 pt-1">
                 <div className="flex items-center gap-2">
                   <Skeleton className="w-6 h-6 rounded-lg flex-shrink-0" />

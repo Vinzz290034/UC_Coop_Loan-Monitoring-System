@@ -111,46 +111,38 @@ export default function AboutPage() {
           </div>
 
           {/* Vertical Acronym Spine & Values List */}
-          <div className="relative pl-2 sm:pl-4">
-            {/* Continuous vertical rail guide */}
-            <div
-              className="absolute left-7 sm:left-9 top-4 bottom-6 w-0.5 bg-gradient-to-b from-primary/30 via-primary/20 to-transparent dark:from-secondary/30 dark:via-secondary/20"
-              aria-hidden="true"
-            />
-
-            <div className="space-y-4">
-              {coreValues.map((val, idx) => {
-                const IconComponent = val.icon;
-                return (
-                  <div
-                    key={idx}
-                    className="relative flex items-start gap-4 sm:gap-6 p-3 sm:p-4 rounded-2xl transition-all duration-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 group"
-                  >
-                    {/* Vertical Letter Station */}
-                    <div className="relative flex-shrink-0 w-10 sm:w-11 h-10 sm:h-11 rounded-2xl bg-white dark:bg-neutral-950 border-2 border-primary/30 dark:border-secondary/30 group-hover:border-primary dark:group-hover:border-secondary group-hover:scale-105 shadow-xs flex items-center justify-center transition-all duration-200 z-10">
-                      <span className="font-headline font-black text-xl sm:text-2xl text-primary dark:text-secondary select-none">
-                        {val.letter}
-                      </span>
-                    </div>
-
-                    {/* Value Content */}
-                    <div className="flex-1 min-w-0 pt-0.5 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="w-6 h-6 rounded-lg bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary flex-shrink-0">
-                          <IconComponent className="w-3.5 h-3.5" />
-                        </div>
-                        <h3 className="font-headline text-sm sm:text-base font-bold text-on-surface dark:text-white tracking-wide">
-                          {val.word}
-                        </h3>
-                      </div>
-                      <p className="font-body text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                        {val.desc}
-                      </p>
-                    </div>
+          <div className="space-y-2 sm:space-y-3">
+            {coreValues.map((val, idx) => {
+              const IconComponent = val.icon;
+              return (
+                <div
+                  key={idx}
+                  className="flex items-start gap-4 sm:gap-6 p-3 sm:p-4 rounded-2xl transition-all duration-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/40 group"
+                >
+                  {/* Vertical Letter - Bold Typographic Focal Point */}
+                  <div className="flex-shrink-0 w-8 sm:w-10 text-center select-none pt-0.5">
+                    <span className="font-headline font-black text-3xl sm:text-4xl text-primary dark:text-secondary tracking-tight block transition-transform duration-200 group-hover:scale-110">
+                      {val.letter}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Value Content */}
+                  <div className="flex-1 min-w-0 space-y-1 pt-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="w-6 h-6 rounded-lg bg-primary/10 dark:bg-secondary/10 flex items-center justify-center text-primary dark:text-secondary flex-shrink-0">
+                        <IconComponent className="w-3.5 h-3.5" />
+                      </div>
+                      <h3 className="font-headline text-sm sm:text-base font-bold text-on-surface dark:text-white tracking-wide">
+                        {val.word}
+                      </h3>
+                    </div>
+                    <p className="font-body text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                      {val.desc}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 
