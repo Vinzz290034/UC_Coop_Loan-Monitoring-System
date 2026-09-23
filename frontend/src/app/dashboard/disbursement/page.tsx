@@ -203,6 +203,7 @@ function DisbursementPageContent() {
   const [isEditingCvModal, setIsEditingCvModal] = useState(false);
   const [isSavingCvEdit, setIsSavingCvEdit] = useState(false);
   const [isSyncingCvRf, setIsSyncingCvRf] = useState(false);
+  const [isApprovingCv, setIsApprovingCv] = useState(false);
 
   // Create Check Voucher Modal State
   const [isCreateCVOpen, setIsCreateCVOpen] = useState(false);
@@ -629,6 +630,7 @@ function DisbursementPageContent() {
   // Advance to 'for release' (Manager / Admin Approval)
   const handleApproveForRelease = async (cv: any) => {
     try {
+      setIsApprovingCv(true);
       const today = new Date().toISOString().split('T')[0];
       const res = await api.put(`/accounts/check-vouchers/${cv.id}`, {
         status: 'for release',
@@ -650,6 +652,8 @@ function DisbursementPageContent() {
       console.error('Failed to approve check voucher for release:', err);
       setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to approve check voucher for release.' });
       setTimeout(() => setCvActionFeedback(null), 4000);
+    } finally {
+      setIsApprovingCv(false);
     }
   };
 
@@ -724,6 +728,15 @@ function DisbursementPageContent() {
   // Start Editing CV
   const startEditingCv = (cv: any) => {
     if (!cv) return;
+    const status = (cv.status || 'edit').toLowerCase();
+    if (status !== 'edit') {
+      showAppAlert(
+        'Voucher Locked',
+        `Check vouchers in "${cv.status?.toUpperCase() || 'LOCKED'}" status cannot be edited. Please revert the voucher to "Edit" status first to make changes.`,
+        'amber'
+      );
+      return;
+    }
     const { rows } = getBalancedCvRows(cv);
     setEditCvFormData({
       id: cv.id,
@@ -2085,11 +2098,16 @@ function DisbursementPageContent() {
                 {selectedCvForModal.status === 'on process' && isAdminOrManager && (
                   <button
                     type="button"
+                    disabled={isApprovingCv}
                     onClick={() => handleApproveForRelease(selectedCvForModal)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-bold text-xs transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-bold text-xs transition-all cursor-pointer disabled:opacity-50"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Approve for Release</span>
+                    {isApprovingCv ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isApprovingCv ? 'Approving...' : 'Approve for Release'}</span>
                   </button>
                 )}
 
@@ -2131,8 +2149,8 @@ function DisbursementPageContent() {
                   </button>
                 )}
 
-                {/* Edit CV: Available only if not filed, or if admin */}
-                {isAdminOrStaff && (selectedCvForModal.status !== 'filed' || isAdmin) && (
+                {/* Edit CV: Available only in 'edit' status (locked when on process, for release, or filed) */}
+                {isAdminOrStaff && (!selectedCvForModal.status || selectedCvForModal.status.toLowerCase() === 'edit') && (
                   <button
                     type="button"
                     onClick={() => startEditingCv(selectedCvForModal)}

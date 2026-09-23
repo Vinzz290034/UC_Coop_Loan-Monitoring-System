@@ -79,23 +79,23 @@ router.route('/decline-placement/:type/:id')
 
 // 5. Purchase Check Vouchers
 router.route('/check-vouchers/import')
-  .post(restrictTo('admin', 'staff'), importCheckVouchers);
+  .post(restrictTo('admin', 'manager', 'staff'), importCheckVouchers);
 
 router.route('/check-vouchers/bulk-delete')
   .post(restrictTo('admin', 'staff'), bulkDeleteCheckVouchers);
 
 router.route('/check-vouchers/:id/sync-revolving-fund')
-  .post(restrictTo('admin', 'staff'), syncCheckVoucherWithRevolvingFund);
+  .post(restrictTo('admin', 'manager', 'staff'), syncCheckVoucherWithRevolvingFund);
 
 router.route('/check-vouchers/:id/print')
-  .post(restrictTo('admin', 'staff'), printCheckVoucher);
+  .post(restrictTo('admin', 'manager', 'staff'), printCheckVoucher);
 
 router.route('/check-vouchers/:id')
-  .put(restrictTo('admin', 'staff'), updateCheckVoucher)
+  .put(restrictTo('admin', 'manager', 'staff'), updateCheckVoucher)
   .delete(restrictTo('admin', 'staff'), deleteCheckVoucher);
 
 router.route('/check-vouchers')
-  .get(restrictTo('admin', 'staff'), getCheckVouchers)
-  .post(restrictTo('admin', 'staff'), createCheckVoucher);
+  .get(restrictTo('admin', 'manager', 'staff'), getCheckVouchers)
+  .post(restrictTo('admin', 'manager', 'staff'), createCheckVoucher);
 
 export default router;

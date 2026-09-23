@@ -947,9 +947,19 @@ export const updateCheckVoucher = async (req, res, next) => {
       });
     }
 
+    // Check vouchers in 'on process', 'for release', or 'filed' cannot be edited unless reverted to 'edit'
+    const currentStatus = (currentCv.status || 'edit').toLowerCase();
+    const isModifyingContent = details !== undefined || payee !== undefined || amount !== undefined || check_no !== undefined || particulars !== undefined || voucher_no !== undefined;
+    if (currentStatus !== 'edit' && isModifyingContent && status !== 'edit') {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Check vouchers in '${currentStatus.toUpperCase()}' status cannot be edited. Revert to 'Edit' status first to modify.` }
+      });
+    }
+
     // Auto-set lifecycle dates
-    let resolvedApprovalDate = managers_approval_date !== undefined ? managers_approval_date : currentCv.managers_approval_date;
-    let resolvedDateReleased = date_released !== undefined ? date_released : currentCv.date_released;
+    let resolvedApprovalDate = managers_approval_date !== undefined ? (managers_approval_date || null) : currentCv.managers_approval_date;
+    let resolvedDateReleased = date_released !== undefined ? (date_released || null) : currentCv.date_released;
 
     if (status === 'for release' && !resolvedApprovalDate) {
       resolvedApprovalDate = new Date().toISOString().split('T')[0];
@@ -967,8 +977,15 @@ export const updateCheckVoucher = async (req, res, next) => {
     const resolvedAmount = amount !== undefined ? (amount !== null && amount !== '' ? parseFloat(amount) : null) : currentCv.amount;
     const resolvedFolderName = folder_name !== undefined ? folder_name : currentCv.folder_name;
     const resolvedStatus = status !== undefined ? status.toLowerCase() : currentCv.status;
-    const resolvedDetails = details !== undefined ? (details ? JSON.stringify(details) : null) : currentCv.details;
-    const resolvedSignatories = signatories !== undefined ? (signatories ? JSON.stringify(signatories) : null) : currentCv.signatories;
+
+    const formatJsonParam = (val, fallback = null) => {
+      const target = val !== undefined ? val : fallback;
+      if (target === undefined || target === null) return null;
+      return typeof target === 'object' ? JSON.stringify(target) : target;
+    };
+
+    const resolvedDetails = formatJsonParam(details, currentCv.details);
+    const resolvedSignatories = formatJsonParam(signatories, currentCv.signatories);
 
     const result = await query(
       `UPDATE check_vouchers
