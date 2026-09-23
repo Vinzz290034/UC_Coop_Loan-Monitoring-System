@@ -205,9 +205,6 @@ export default function ContactPage() {
                         Messages will be   forwarded to the dedicated desk coordinator.
                       </p>
                     </div>
-                    <span className="font-headline text-[11px] text-primary dark:text-secondary font-semibold bg-primary/10 dark:bg-secondary/10 px-2.5 py-1 rounded-full shrink-0">
-                      * Required Fields
-                    </span>
                   </div>
 
                   {/* Error Banner */}
