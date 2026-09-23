@@ -172,6 +172,31 @@ function DisbursementPageContent() {
   const [isDeletingCv, setIsDeletingCv] = useState(false);
   const [cvActionFeedback, setCvActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Custom Modal Dialog (Replaces native browser alert & confirm)
+  const [modalDialog, setModalDialog] = useState<{
+    isOpen: boolean;
+    type?: 'confirm' | 'alert';
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    variant?: 'amber' | 'rose' | 'emerald' | 'primary';
+    onConfirm: () => void;
+    onCancel?: () => void;
+  } | null>(null);
+
+  const showAppAlert = (title: string, message: string, variant: 'primary' | 'rose' | 'amber' = 'primary') => {
+    setModalDialog({
+      isOpen: true,
+      type: 'alert',
+      title,
+      message,
+      confirmLabel: 'OK',
+      variant,
+      onConfirm: () => setModalDialog(null)
+    });
+  };
+
   // View / Edit / Print State
   const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
   const [printingCvBreakdown, setPrintingCvBreakdown] = useState<any | null>(null);
@@ -462,7 +487,7 @@ function DisbursementPageContent() {
         setSelectedCvForModal(matched);
         setIsEditingCvModal(false);
       } else {
-        alert(`Check Voucher ${searchTarget} not found.`);
+        showAppAlert('Voucher Not Found', `Check Voucher "${searchTarget}" was not found.`);
       }
     } catch (err) {
       console.error('Error fetching check voucher modal:', err);
@@ -472,29 +497,43 @@ function DisbursementPageContent() {
   };
 
   // Revert status from 'on process' back to 'edit'
-  const handleRevertToEdit = async (cv: any, e?: React.MouseEvent) => {
+  const handleRevertToEdit = (cv: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!confirm(`Revert Voucher #${cv.voucher_no} back to "Edit" status?`)) return;
-    try {
-      const res = await api.put(`/accounts/check-vouchers/${cv.id}`, {
-        status: 'edit'
-      });
-      const updated = res.data?.data;
-      if (updated) {
-        setCheckVouchers(prev => prev.map(v => (v.id === cv.id ? { ...v, status: 'edit' } : v)));
-        if (selectedCvForModal?.id === cv.id) {
-          setSelectedCvForModal((prev: any) => (prev ? { ...prev, status: 'edit' } : null));
+    setModalDialog({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Revert Voucher to Edit',
+      message: `Revert Voucher #${cv.voucher_no} back to "Edit" status? This will unlock the voucher for modifications.`,
+      confirmLabel: 'Revert to Edit',
+      variant: 'amber',
+      onConfirm: async () => {
+        setModalDialog(null);
+        try {
+          const res = await api.put(`/accounts/check-vouchers/${cv.id}`, {
+            status: 'edit'
+          });
+          const updated = res.data?.data;
+          if (updated) {
+            setCheckVouchers(prev => prev.map(v => (v.id === cv.id ? { ...v, status: 'edit' } : v)));
+            if (selectedCvForModal?.id === cv.id) {
+              setSelectedCvForModal((prev: any) => (prev ? { ...prev, status: 'edit' } : null));
+            }
+            setCvActionFeedback({
+              type: 'success',
+              message: `Voucher #${cv.voucher_no} reverted to Edit status.`
+            });
+            setTimeout(() => setCvActionFeedback(null), 4000);
+          }
+        } catch (err: any) {
+          console.error('Failed to revert voucher status:', err);
+          setCvActionFeedback({
+            type: 'error',
+            message: err.response?.data?.error?.message || 'Failed to revert status.'
+          });
+          setTimeout(() => setCvActionFeedback(null), 4000);
         }
-        setCvActionFeedback({
-          type: 'success',
-          message: `Voucher #${cv.voucher_no} reverted to Edit status.`
-        });
-        setTimeout(() => setCvActionFeedback(null), 4000);
       }
-    } catch (err: any) {
-      console.error('Failed to revert voucher status:', err);
-      alert(err.response?.data?.error?.message || 'Failed to revert status.');
-    }
+    });
   };
 
   // Render Status Badge
@@ -502,19 +541,6 @@ function DisbursementPageContent() {
     const s = (status || 'edit').toLowerCase();
     switch (s) {
       case 'on process':
-        if (cv && isAdminOrStaff) {
-          return (
-            <button
-              type="button"
-              onClick={e => handleRevertToEdit(cv, e)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 hover:border-blue-500/50 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-xs group"
-              title="Status: On Process. Click to revert back to Edit if printing was cancelled."
-            >
-              <Clock className="w-3 h-3 group-hover:rotate-45 transition-transform" />
-              <span>On Process</span>
-            </button>
-          );
-        }
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/25">
             <Clock className="w-3 h-3" />
@@ -562,40 +588,42 @@ function DisbursementPageContent() {
     }
   };
 
-  // Print CV Breakdown: prints sheet and changes status to 'on process'
+  // Print CV Breakdown: opens browser print dialog cleanly without altering status
   const handlePrintCvBreakdown = (cv: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setPrintingCvBreakdown(cv);
 
-    const cleanup = async () => {
+    const cleanup = () => {
       window.removeEventListener('afterprint', cleanup);
       setPrintingCvBreakdown(null);
-
-      // Advance voucher status to 'on process' after printing if currently 'edit'
-      if (!cv.status || cv.status.toLowerCase() === 'edit') {
-        try {
-          const res = await api.post(`/accounts/check-vouchers/${cv.id}/print`);
-          if (res.data?.data) {
-            const updated = res.data.data;
-            setCheckVouchers(prev => prev.map(v => (v.id === cv.id ? { ...v, status: updated.status } : v)));
-            if (selectedCvForModal && selectedCvForModal.id === cv.id) {
-              setSelectedCvForModal((prev: any) => (prev ? { ...prev, status: updated.status } : null));
-            }
-            setCvActionFeedback({
-              type: 'success',
-              message: `Voucher #${cv.voucher_no} is now On Process.`
-            });
-            setTimeout(() => setCvActionFeedback(null), 4000);
-          }
-        } catch (err) {
-          console.error('Error updating CV status to on process after printing:', err);
-        }
-      }
     };
     window.addEventListener('afterprint', cleanup);
     setTimeout(() => {
       window.print();
     }, 150);
+  };
+
+  // Advance to 'on process'
+  const handleMarkOnProcess = async (cv: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      const res = await api.put(`/accounts/check-vouchers/${cv.id}`, {
+        status: 'on process'
+      });
+      if (res.data?.data) {
+        const updated = res.data.data;
+        setCheckVouchers(prev => prev.map(v => (v.id === cv.id ? { ...v, status: updated.status } : v)));
+        if (selectedCvForModal && selectedCvForModal.id === cv.id) {
+          setSelectedCvForModal((prev: any) => (prev ? { ...prev, status: updated.status } : null));
+        }
+        setCvActionFeedback({ type: 'success', message: `Voucher #${cv.voucher_no} status updated to On Process!` });
+        setTimeout(() => setCvActionFeedback(null), 4000);
+      }
+    } catch (err: any) {
+      console.error('Failed to advance voucher status to on process:', err);
+      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to update status.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
+    }
   };
 
   // Advance to 'for release' (Manager / Admin Approval)
@@ -620,14 +648,15 @@ function DisbursementPageContent() {
       }
     } catch (err: any) {
       console.error('Failed to approve check voucher for release:', err);
-      alert(err.response?.data?.error?.message || 'Failed to approve check voucher for release.');
+      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to approve check voucher for release.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
     }
   };
 
   // Advance to 'filed' (Admin Only Release & Seal)
   const handleFileAndLockCv = async (cv: any) => {
     if (!isAdmin) {
-      alert('Only administrators can release, seal, and file check vouchers.');
+      showAppAlert('Permission Denied', 'Only administrators can release, seal, and file check vouchers.', 'amber');
       return;
     }
     try {
@@ -650,34 +679,46 @@ function DisbursementPageContent() {
       }
     } catch (err: any) {
       console.error('Failed to file check voucher:', err);
-      alert(err.response?.data?.error?.message || 'Failed to file check voucher.');
+      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to file check voucher.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
     }
   };
 
   // Admin Unlock/Revert from 'filed' to 'for release'
-  const handleUnlockCv = async (cv: any) => {
+  const handleUnlockCv = (cv: any) => {
     if (!isAdmin) return;
-    if (!confirm(`Unlock Check Voucher #${cv.voucher_no}? This will re-enable editing and deletion.`)) return;
-    try {
-      const res = await api.put(`/accounts/check-vouchers/${cv.id}`, {
-        status: 'for release'
-      });
-      const updated = res.data?.data;
-      if (updated) {
-        setCheckVouchers(prev => prev.map(v => (v.id === cv.id ? { ...v, ...updated } : v)));
-        if (selectedCvForModal?.id === cv.id) {
-          setSelectedCvForModal((prev: any) => (prev ? { ...prev, ...updated } : null));
+    setModalDialog({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Unlock Check Voucher',
+      message: `Unlock Check Voucher #${cv.voucher_no}? This will re-enable editing and deletion for administrators.`,
+      confirmLabel: 'Unlock Voucher',
+      variant: 'rose',
+      onConfirm: async () => {
+        setModalDialog(null);
+        try {
+          const res = await api.put(`/accounts/check-vouchers/${cv.id}`, {
+            status: 'for release'
+          });
+          const updated = res.data?.data;
+          if (updated) {
+            setCheckVouchers(prev => prev.map(v => (v.id === cv.id ? { ...v, ...updated } : v)));
+            if (selectedCvForModal?.id === cv.id) {
+              setSelectedCvForModal((prev: any) => (prev ? { ...prev, ...updated } : null));
+            }
+            setCvActionFeedback({
+              type: 'success',
+              message: `Check Voucher #${cv.voucher_no} unlocked by administrator.`
+            });
+            setTimeout(() => setCvActionFeedback(null), 4000);
+          }
+        } catch (err: any) {
+          console.error('Failed to unlock check voucher:', err);
+          setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to unlock check voucher.' });
+          setTimeout(() => setCvActionFeedback(null), 4000);
         }
-        setCvActionFeedback({
-          type: 'success',
-          message: `Check Voucher #${cv.voucher_no} unlocked by administrator.`
-        });
-        setTimeout(() => setCvActionFeedback(null), 4000);
       }
-    } catch (err: any) {
-      console.error('Failed to unlock check voucher:', err);
-      alert(err.response?.data?.error?.message || 'Failed to unlock check voucher.');
-    }
+    });
   };
 
   // Start Editing CV
@@ -765,7 +806,8 @@ function DisbursementPageContent() {
       setTimeout(() => setCvActionFeedback(null), 4000);
     } catch (err: any) {
       console.error('Failed to update check voucher:', err);
-      alert(err.response?.data?.error?.message || 'Failed to update check voucher.');
+      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to update check voucher.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
     } finally {
       setIsSavingCvEdit(false);
     }
@@ -788,7 +830,8 @@ function DisbursementPageContent() {
       }
     } catch (err: any) {
       console.error('Failed to sync CV with LF:', err);
-      alert(err.response?.data?.error?.message || 'Failed to sync with linked Liquidation Form.');
+      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to sync with linked Liquidation Form.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
     } finally {
       setIsSyncingCvRf(false);
     }
@@ -819,8 +862,8 @@ function DisbursementPageContent() {
   // Create Check Voucher Submission
   const handleCreateCheckVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCvVoucherNo.trim()) return alert('Please provide a Voucher Number.');
-    if (!newCvPayee.trim()) return alert('Please specify a Payee.');
+    if (!newCvVoucherNo.trim()) return showAppAlert('Missing Information', 'Please provide a Voucher Number.');
+    if (!newCvPayee.trim()) return showAppAlert('Missing Information', 'Please specify a Payee.');
 
     try {
       setIsSavingNewCv(true);
@@ -863,7 +906,8 @@ function DisbursementPageContent() {
       setTimeout(() => setCvActionFeedback(null), 4000);
     } catch (err: any) {
       console.error('Failed to create check voucher:', err);
-      alert(err.response?.data?.error?.message || 'Failed to create check voucher.');
+      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to create check voucher.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
     } finally {
       setIsSavingNewCv(false);
     }
@@ -882,7 +926,8 @@ function DisbursementPageContent() {
       setTimeout(() => setCvActionFeedback(null), 4000);
     } catch (err: any) {
       console.error('Failed to delete check voucher:', err);
-      alert(err.response?.data?.error?.message || 'Failed to delete check voucher.');
+      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to delete check voucher.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
     } finally {
       setIsDeletingCv(false);
     }
@@ -904,7 +949,8 @@ function DisbursementPageContent() {
       setTimeout(() => setCvActionFeedback(null), 4000);
     } catch (err: any) {
       console.error('Failed to bulk delete check vouchers:', err);
-      alert(err.response?.data?.error?.message || 'Failed to delete selected check vouchers.');
+      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to delete selected check vouchers.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
     } finally {
       setIsDeletingCv(false);
     }
@@ -913,7 +959,7 @@ function DisbursementPageContent() {
   // Clear All CVs in Category
   const handleClearAllCv = async () => {
     if (clearAllConfirmText.trim().toUpperCase() !== 'CLEAR') {
-      alert('Please type CLEAR to confirm deletion.');
+      showAppAlert('Confirmation Required', 'Please type CLEAR in the input box to confirm deletion.', 'rose');
       return;
     }
     try {
@@ -929,7 +975,8 @@ function DisbursementPageContent() {
       setTimeout(() => setCvActionFeedback(null), 4000);
     } catch (err: any) {
       console.error('Failed to clear check vouchers:', err);
-      alert(err.response?.data?.error?.message || 'Failed to clear check vouchers.');
+      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to clear check vouchers.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
     } finally {
       setIsDeletingCv(false);
     }
@@ -2071,7 +2118,18 @@ function DisbursementPageContent() {
                   </button>
                 )}
 
-
+                {/* Advance to On Process if currently 'edit' */}
+                {isAdminOrStaff && (!selectedCvForModal.status || selectedCvForModal.status.toLowerCase() === 'edit') && (
+                  <button
+                    type="button"
+                    onClick={() => handleMarkOnProcess(selectedCvForModal)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 font-bold text-xs transition-all cursor-pointer"
+                    title="Advance voucher status to On Process"
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Mark On Process</span>
+                  </button>
+                )}
 
                 {/* Edit CV: Available only if not filed, or if admin */}
                 {isAdminOrStaff && (selectedCvForModal.status !== 'filed' || isAdmin) && (
@@ -2498,9 +2556,87 @@ function DisbursementPageContent() {
         document.body
       )}
 
+      {/* UNIFIED CUSTOM ALERT & CONFIRM MODAL */}
+      {modalDialog && mounted && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-sm animate-modal-backdrop"
+          onClick={() => {
+            if (modalDialog.onCancel) modalDialog.onCancel();
+            setModalDialog(null);
+          }}
+        >
+          <div
+            className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-modal-pop"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-2.5 rounded-2xl ${
+                  modalDialog.variant === 'rose'
+                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                    : modalDialog.variant === 'amber'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : modalDialog.variant === 'emerald'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-primary/10 text-primary dark:text-secondary'
+                }`}
+              >
+                {modalDialog.variant === 'rose' ? (
+                  <AlertTriangle className="w-6 h-6" />
+                ) : modalDialog.variant === 'amber' ? (
+                  <RotateCcw className="w-6 h-6" />
+                ) : modalDialog.variant === 'emerald' ? (
+                  <CheckCircle2 className="w-6 h-6" />
+                ) : (
+                  <AlertCircle className="w-6 h-6" />
+                )}
+              </div>
+              <div>
+                <h3 className="font-headline font-bold text-base text-neutral-900 dark:text-white">
+                  {modalDialog.title}
+                </h3>
+              </div>
+            </div>
 
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+              {modalDialog.message}
+            </p>
 
-      {/* GLOBAL PRINT STYLES FOR CV BREAKDOWN */}
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              {modalDialog.type === 'confirm' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (modalDialog.onCancel) modalDialog.onCancel();
+                    setModalDialog(null);
+                  }}
+                  className="px-4 py-2 text-xs font-bold rounded-full border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
+                >
+                  {modalDialog.cancelLabel || 'Cancel'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  modalDialog.onConfirm();
+                }}
+                className={`px-5 py-2 text-xs font-bold rounded-full text-white active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                  modalDialog.variant === 'rose'
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : modalDialog.variant === 'amber'
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                    : modalDialog.variant === 'emerald'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-primary dark:bg-secondary dark:text-neutral-950 hover:opacity-90'
+                }`}
+              >
+                <span>{modalDialog.confirmLabel || (modalDialog.type === 'confirm' ? 'Confirm' : 'OK')}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           @page {
