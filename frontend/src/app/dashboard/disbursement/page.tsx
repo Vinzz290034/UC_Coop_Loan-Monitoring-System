@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
@@ -1390,6 +1391,11 @@ function DisbursementPageContent() {
                           <td className="py-3.5 px-4 font-bold text-neutral-900 dark:text-white whitespace-nowrap">
                             <span className="font-mono text-primary dark:text-secondary hover:underline flex items-center gap-1.5">
                               <span>{cv.voucher_no}</span>
+                              {cv.loan_id && (
+                                <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 font-sans font-bold">
+                                  LOAN
+                                </span>
+                              )}
                               {isRf && (
                                 <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-sans font-bold">
                                   {rfNum || 'RF'}
@@ -1854,6 +1860,17 @@ function DisbursementPageContent() {
                     <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-300 dark:border-emerald-800/60">
                       CV #{selectedCvForModal.voucher_no}
                     </span>
+                    {selectedCvForModal.loan_id && (
+                      <Link
+                        href={`/dashboard/loans?search=${selectedCvForModal.voucher_no}`}
+                        className="inline-flex items-center gap-1 font-sans text-xs px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 font-bold border border-blue-300 dark:border-blue-800/60 hover:underline"
+                        title="View Loan in Loan Monitoring"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Loan #{selectedCvForModal.voucher_no}
+                      </Link>
+                    )}
                     {renderStatusBadge(selectedCvForModal.status, selectedCvForModal)}
                   </div>
                   <p className="text-xs text-neutral-500">

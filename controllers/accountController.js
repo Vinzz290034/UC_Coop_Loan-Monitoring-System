@@ -863,7 +863,7 @@ export const getCheckVouchers = async (req, res, next) => {
     params.push(pageSize);
     params.push(offset);
     const result = await query(
-      `SELECT id, voucher_no, voucher_date, check_no, payee, bank, particulars,
+      `SELECT id, loan_id, voucher_no, voucher_date, check_no, payee, bank, particulars,
               amount, managers_approval_date, date_released, folder_name, box_name, details, signatories,
               COALESCE(status, 'edit') AS status, created_at,
               (
@@ -1293,13 +1293,13 @@ export const getAllSavingsAccounts = async (req, res, next) => {
   try {
     const listQuery = `
       SELECT 
-        sa.id,
-        sa.member_id,
-        sa.account_number,
-        sa.balance,
-        sa.maintaining_balance,
-        sa.interest_rate,
-        sa.status,
+        COALESCE(sa.id::text, '') as id,
+        m.id as member_id,
+        COALESCE(sa.account_number, CONCAT('SAV-', REGEXP_REPLACE(COALESCE(m.member_no, SUBSTRING(m.id::text, 1, 8)), '[^a-zA-Z0-9]', '', 'g'))) as account_number,
+        COALESCE(sa.balance, 0)::numeric as balance,
+        COALESCE(sa.maintaining_balance, 100)::numeric as maintaining_balance,
+        COALESCE(sa.interest_rate, 0.02)::numeric as interest_rate,
+        COALESCE(sa.status, 'active') as status,
         sa.created_at,
         sa.updated_at,
         m.first_name,
@@ -1307,10 +1307,14 @@ export const getAllSavingsAccounts = async (req, res, next) => {
         m.middle_name,
         m.member_no,
         m.email,
-        m.phone
-      FROM savings_accounts sa
-      JOIN members m ON m.id = sa.member_id
-      ORDER BY sa.balance DESC, m.last_name ASC
+        m.phone,
+        COALESCE(SUM(CASE WHEN st.transaction_type = 'deposit' THEN st.amount ELSE 0 END), 0)::numeric as total_deposits,
+        COALESCE(SUM(CASE WHEN st.transaction_type IN ('withdrawal', 'loan_offset') THEN st.amount ELSE 0 END), 0)::numeric as total_withdrawals
+      FROM members m
+      LEFT JOIN savings_accounts sa ON sa.member_id = m.id
+      LEFT JOIN savings_transactions st ON st.savings_account_id = sa.id
+      GROUP BY sa.id, m.id
+      ORDER BY sa.balance DESC NULLS LAST, m.last_name ASC
     `;
 
     const summaryQuery = `
@@ -1318,7 +1322,9 @@ export const getAllSavingsAccounts = async (req, res, next) => {
         COUNT(*)::int as total_accounts,
         COALESCE(SUM(balance), 0)::numeric as total_savings_pool,
         COALESCE(AVG(balance), 0)::numeric as avg_savings_balance,
-        COUNT(CASE WHEN balance > 0 THEN 1 END)::int as funded_accounts
+        COUNT(CASE WHEN balance > 0 THEN 1 END)::int as funded_accounts,
+        COALESCE((SELECT SUM(amount) FROM savings_transactions WHERE transaction_type = 'deposit'), 0)::numeric as total_deposits_all,
+        COALESCE((SELECT SUM(amount) FROM savings_transactions WHERE transaction_type IN ('withdrawal', 'loan_offset')), 0)::numeric as total_withdrawals_all
       FROM savings_accounts
       WHERE status = 'active'
     `;

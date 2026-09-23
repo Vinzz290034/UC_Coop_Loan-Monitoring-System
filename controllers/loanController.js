@@ -1,9 +1,215 @@
 import pool, { query } from '../config/db.js';
-import { calculateFlatRate, calculateDiminishingBalance } from '../services/calculationCore.js';
+import { calculateFlatRate, calculateDiminishingBalance, addMonths } from '../services/calculationCore.js';
 
-// ==========================================
-// 1. LOAN PRODUCT REGISTRY (ADMIN/MANAGEMENT)
-// ==========================================
+/**
+ * Universal Amortization Schedule Generator (Supports standard Diminishing, Flat Rate, and Custom Manual Installments)
+ */
+export const generateLoanSchedules = (loan, startDateInput) => {
+  const p = parseFloat(loan.principal_amount);
+  let rate = parseFloat(loan.interest_rate);
+  if (rate > 1) rate = rate / 100;
+  const terms = parseInt(loan.term_months, 10);
+  const startDate = startDateInput
+    ? new Date(startDateInput)
+    : (loan.disbursed_at ? new Date(loan.disbursed_at) : (loan.created_at ? new Date(loan.created_at) : new Date()));
+  const amortType = loan.amortization_type || 'diminishing_balance';
+
+  // Check if custom_schedule exists and matches terms
+  let custom = loan.custom_schedule;
+  if (typeof custom === 'string') {
+    try {
+      custom = JSON.parse(custom);
+    } catch {
+      custom = null;
+    }
+  }
+
+  if (Array.isArray(custom) && custom.length === terms && custom.some(c => c && c.payment > 0)) {
+    let remaining = p;
+    return custom.map((item, idx) => {
+      const monthNum = idx + 1;
+      const dueDate = addMonths(startDate, monthNum);
+      const totalDue = parseFloat(item.payment) || 0;
+
+      let interestDue = 0;
+      if (amortType === 'flat_rate') {
+        interestDue = Math.round((p * rate * (terms / 12) / terms) * 100) / 100;
+      } else {
+        interestDue = Math.round((remaining * rate) * 100) / 100;
+      }
+      interestDue = Math.min(interestDue, totalDue);
+      const principalDue = Math.round((totalDue - interestDue) * 100) / 100;
+      remaining = Math.max(0, remaining - principalDue);
+
+      return {
+        installment_number: monthNum,
+        due_date: dueDate,
+        principal_due: principalDue,
+        interest_due: interestDue,
+        total_due: totalDue,
+        status: 'unpaid'
+      };
+    });
+  }
+
+  if (amortType === 'flat_rate') {
+    return calculateFlatRate(p, rate, terms, startDate);
+  }
+  return calculateDiminishingBalance(p, rate, terms, startDate);
+};
+
+/**
+ * Automatically synchronize a loan application with the Check Voucher / Disbursement Registry
+ */
+export const syncLoanCheckVoucher = async (clientOrPool, loanId) => {
+  const db = clientOrPool || pool;
+  try {
+    const loanRes = await db.query(`
+      SELECT l.*, lp.name as product_name, m.first_name, m.middle_name, m.last_name
+      FROM loans l
+      LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
+      LEFT JOIN members m ON l.member_id = m.id
+      WHERE l.id = $1
+    `, [loanId]);
+
+    if (loanRes.rowCount === 0) return null;
+    const l = loanRes.rows[0];
+
+    // If rejected, remove any linked check voucher
+    if (l.status === 'rejected') {
+      await db.query('DELETE FROM check_vouchers WHERE loan_id = $1', [loanId]);
+      return null;
+    }
+
+    const payeeName = [l.first_name, l.middle_name, l.last_name].filter(Boolean).join(' ').trim().toUpperCase() || 'MEMBER BORROWER';
+    const vNo = l.laf_no || `CV-${String(l.id).slice(0, 8)}`;
+
+    // Status mapping:
+    // disbursed or fully_paid -> 'filed'
+    // approved -> 'for release'
+    // pending_approval -> 'edit'
+    let cvStatus = 'for release';
+    if (l.status === 'disbursed' || l.status === 'fully_paid') {
+      cvStatus = 'filed';
+    } else if (l.status === 'pending_approval') {
+      cvStatus = 'edit';
+    }
+
+    // Determine category / folder_name:
+    const prodName = l.product_name || 'Loan';
+    const isStl = /stl|short\s*term/i.test(prodName);
+    const folderName = isStl ? 'Short Term Loans' : 'Regular Loans';
+
+    // Amount: net proceeds or principal minus total deductions
+    let netAmt = parseFloat(l.net_proceeds);
+    if (isNaN(netAmt) || netAmt <= 0) {
+      const pAmt = parseFloat(l.principal_amount) || 0;
+      const dAmt = parseFloat(l.total_deductions) || 0;
+      netAmt = Math.max(0, pAmt - dAmt) || pAmt;
+    }
+
+    // Voucher date & released date
+    const vDate = l.disbursed_at
+      ? new Date(l.disbursed_at).toISOString().split('T')[0]
+      : (l.created_at ? new Date(l.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+    const relDate = (l.status === 'disbursed' || l.status === 'fully_paid')
+      ? (l.disbursed_at ? new Date(l.disbursed_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
+      : null;
+
+    // Breakdown details
+    let deds = [];
+    if (l.deductions_breakdown) {
+      if (typeof l.deductions_breakdown === 'string') {
+        try { deds = JSON.parse(l.deductions_breakdown); } catch { deds = []; }
+      } else if (Array.isArray(l.deductions_breakdown)) {
+        deds = l.deductions_breakdown;
+      }
+    }
+
+    const cvDetails = [
+      { book_of_account: `Loans Receivable - ${isStl ? 'STL' : 'Regular'}`, amount: parseFloat(l.principal_amount) || 0 }
+    ];
+    if (Array.isArray(deds)) {
+      for (const d of deds) {
+        if (d && d.name && parseFloat(d.amount) > 0) {
+          cvDetails.push({ book_of_account: String(d.name).trim(), amount: -parseFloat(d.amount) });
+        }
+      }
+    }
+
+    const signatories = {
+      prepared_by: 'LAMOSTE, CHINNETTE A.',
+      checked_by: 'MARILOU LARIOSA',
+      approved_by: 'MICHELLE M. PABLE'
+    };
+
+    // Check if CV already exists by loan_id or by voucher_no in Loan folders
+    const existingCv = await db.query(
+      'SELECT id, check_no FROM check_vouchers WHERE loan_id = $1 OR (voucher_no = $2 AND folder_name ILIKE $3) LIMIT 1',
+      [loanId, vNo, '%Loan%']
+    );
+
+    if (existingCv.rowCount > 0) {
+      const cvId = existingCv.rows[0].id;
+      const existingCheckNo = existingCv.rows[0].check_no || l.disbursement_reference || null;
+      await db.query(`
+        UPDATE check_vouchers
+        SET 
+          loan_id = $1,
+          voucher_no = $2,
+          voucher_date = $3,
+          check_no = COALESCE($4, check_no),
+          payee = $5,
+          bank = COALESCE(bank, 'BDO'),
+          particulars = $6,
+          amount = $7,
+          folder_name = $8,
+          status = $9,
+          date_released = $10,
+          details = $11::jsonb,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $12
+      `, [
+        loanId,
+        vNo,
+        vDate,
+        existingCheckNo,
+        payeeName,
+        prodName,
+        netAmt,
+        folderName,
+        cvStatus,
+        relDate,
+        JSON.stringify(cvDetails),
+        cvId
+      ]);
+    } else {
+      await db.query(`
+        INSERT INTO check_vouchers (
+          loan_id, voucher_no, voucher_date, check_no, payee, bank,
+          particulars, amount, folder_name, status, date_released,
+          details, signatories
+        )
+        VALUES ($1, $2, $3, $4, $5, 'BDO', $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)
+      `, [
+        loanId,
+        vNo,
+        vDate,
+        l.disbursement_reference || null,
+        payeeName,
+        prodName,
+        netAmt,
+        folderName,
+        cvStatus,
+        relDate,
+        JSON.stringify(cvDetails),
+        JSON.stringify(signatories)
+      ]);
+    }
+  } catch (err) {
+    console.error(`[syncLoanCheckVoucher] Error syncing CV for loan ${loanId}:`, err.message);
+  }
+};
 
 // @desc    Create a new loan product
 // @route   POST /api/loans/products
@@ -431,9 +637,43 @@ export const applyForLoan = async (req, res, next) => {
       }
     }
 
+    // Generate amortization repayment schedule immediately upon booking / approval
+    const loanRecord = result.rows[0];
+    if (initialStatus === 'approved' || initialStatus === 'disbursed') {
+      try {
+        const newSchedule = generateLoanSchedules(loanRecord, applicationDate);
+        const insertInstallment = `
+          INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, status)
+          VALUES ($1, $2, $3, $4, $5, $6, 'unpaid')
+          ON CONFLICT (loan_id, installment_number) DO UPDATE
+          SET due_date = EXCLUDED.due_date,
+              principal_due = EXCLUDED.principal_due,
+              interest_due = EXCLUDED.interest_due,
+              total_due = EXCLUDED.total_due
+        `;
+        for (const inst of newSchedule) {
+          await query(insertInstallment, [
+            loanRecord.id,
+            inst.installment_number,
+            inst.due_date,
+            inst.principal_due,
+            inst.interest_due,
+            inst.total_due
+          ]);
+        }
+      } catch (schedErr) {
+        console.warn('Failed to pre-generate repayment schedule on booking:', schedErr.message);
+      }
+    }
+
+    // Synchronize with Check Voucher / Disbursement Registry
+    if (initialStatus === 'approved' || initialStatus === 'disbursed') {
+      await syncLoanCheckVoucher(pool, loanRecord.id);
+    }
+
     res.status(201).json({
       success: true,
-      data: result.rows[0]
+      data: loanRecord
     });
   } catch (error) {
     next(error);
@@ -579,7 +819,8 @@ export const disburseLoan = async (req, res, next) => {
       id
     ]);
 
-    // 3. Save the amortization schedule installments to DB
+    // 3. Save the amortization schedule installments to DB (delete previous unpaid pre-generated schedules if any)
+    await client.query("DELETE FROM repayment_schedules WHERE loan_id = $1 AND status != 'paid'", [id]);
     const insertInstallment = `
       INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, status)
       VALUES ($1, $2, $3, $4, $5, $6, 'unpaid')
@@ -631,39 +872,11 @@ export const disburseLoan = async (req, res, next) => {
       );
     }
 
-    // 6. Check Voucher Integration (Auto-record check voucher if check disbursement)
-    if (disbursement_method === 'Check' || disbursement_reference) {
-      try {
-        const memData = await client.query('SELECT first_name, middle_name, last_name FROM members WHERE id = $1', [loan.member_id]);
-        const m = memData.rows[0] || {};
-        const payeeName = [m.first_name, m.middle_name, m.last_name].filter(Boolean).join(' ').trim().toUpperCase();
-        const vNo = finalLaf || `CV-${String(id).slice(0, 8)}`;
-        
-        const cvDetails = [
-          { book_of_account: 'Loans Receivable - Regular', amount: finalPrincipal }
-        ];
-        for (const d of deductionsList) {
-          cvDetails.push({ book_of_account: d.name, amount: -d.amount });
-        }
-        
-        await client.query(`
-          INSERT INTO check_vouchers (voucher_no, voucher_date, check_no, payee, bank, particulars, amount, date_released, details)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          ON CONFLICT DO NOTHING
-        `, [
-          vNo,
-          disbursementDate.toISOString().split('T')[0],
-          disbursement_reference || null,
-          payeeName,
-          req.body.bank_name || 'Coop Operating Bank',
-          `Disbursement proceeds for Loan LAF #${finalLaf || String(id).slice(0, 8)}`,
-          netProceeds,
-          disbursementDate.toISOString().split('T')[0],
-          JSON.stringify(cvDetails)
-        ]);
-      } catch (cvErr) {
-        console.warn('Check voucher auto-generation notice:', cvErr.message);
-      }
+    // 6. Check Voucher Integration (Synchronize check voucher in Disbursement module)
+    try {
+      await syncLoanCheckVoucher(client, id);
+    } catch (cvErr) {
+      console.warn('Check voucher sync notice on loan disbursement:', cvErr.message);
     }
 
     await client.query('COMMIT');
@@ -861,10 +1074,38 @@ export const getLoanById = async (req, res, next) => {
     }
 
     // Fetch schedules
-    const schedules = await query(
+    let schedules = await query(
       'SELECT * FROM repayment_schedules WHERE loan_id = $1 ORDER BY installment_number ASC',
       [id]
     );
+
+    // If no schedules exist in DB yet (e.g. booked earlier), generate and persist them!
+    if (schedules.rowCount === 0 && (loan.status === 'approved' || loan.status === 'disbursed')) {
+      try {
+        const generated = generateLoanSchedules(loan);
+        const insertInstallment = `
+          INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, status)
+          VALUES ($1, $2, $3, $4, $5, $6, 'unpaid')
+          ON CONFLICT (loan_id, installment_number) DO NOTHING
+        `;
+        for (const inst of generated) {
+          await query(insertInstallment, [
+            id,
+            inst.installment_number,
+            inst.due_date,
+            inst.principal_due,
+            inst.interest_due,
+            inst.total_due
+          ]);
+        }
+        schedules = await query(
+          'SELECT * FROM repayment_schedules WHERE loan_id = $1 ORDER BY installment_number ASC',
+          [id]
+        );
+      } catch (autoGenErr) {
+        console.warn('Auto-generation of schedules for loan', id, 'warning:', autoGenErr.message);
+      }
+    }
 
     // Fetch payments with allocated principal & interest breakdowns
     const payments = await query(
@@ -1209,7 +1450,8 @@ export const rejectLoanApplication = async (req, res, next) => {
       );
     }
 
-    // Permanently remove the rejected loan application and its schedules
+    // Permanently remove the rejected loan application, check vouchers, and schedules
+    await client.query('DELETE FROM check_vouchers WHERE loan_id = $1', [id]);
     await client.query('DELETE FROM repayment_schedules WHERE loan_id = $1', [id]);
     await client.query('DELETE FROM loans WHERE id = $1', [id]);
 
@@ -1569,6 +1811,8 @@ export const updateLoanDetails = async (req, res, next) => {
       deductions,
       net_proceeds,
       total_deductions,
+      custom_schedule,
+      application_date,
       remarks
     } = req.body;
 
@@ -1666,21 +1910,25 @@ export const updateLoanDetails = async (req, res, next) => {
           updated_at = CURRENT_TIMESTAMP
         WHERE loan_id = $1 AND status != 'paid'
       `, [id]);
-    } else if (recalculate_schedules && finalStatus === 'disbursed') {
+    } else if (recalculate_schedules && (finalStatus === 'approved' || finalStatus === 'disbursed' || finalStatus === 'pending_approval')) {
       // Check if existing payments exist
       const paymentsCheck = await client.query('SELECT COUNT(*) FROM loan_payments WHERE loan_id = $1', [id]);
       const paymentCount = parseInt(paymentsCheck.rows[0].count, 10);
 
-      // If no payments yet, safe to recreate schedules with new terms/principal/rate
+      // If no payments yet, safe to recreate schedules with new terms/principal/rate/custom_schedule
       if (paymentCount === 0) {
         await client.query('DELETE FROM repayment_schedules WHERE loan_id = $1', [id]);
-        const startDate = finalDisbursedAt ? new Date(finalDisbursedAt) : new Date();
-        let newSchedule = [];
-        if (finalAmortType === 'flat_rate') {
-          newSchedule = calculateFlatRate(finalPrincipal, finalRate, finalTerms, startDate);
-        } else {
-          newSchedule = calculateDiminishingBalance(finalPrincipal, finalRate, finalTerms, startDate);
-        }
+        const startDate = finalDisbursedAt ? new Date(finalDisbursedAt) : (finalCreatedAt ? new Date(finalCreatedAt) : new Date());
+        const tempLoan = {
+          principal_amount: finalPrincipal,
+          interest_rate: finalRate,
+          term_months: finalTerms,
+          amortization_type: finalAmortType,
+          custom_schedule: finalCustomSchedule,
+          created_at: finalCreatedAt,
+          disbursed_at: finalDisbursedAt
+        };
+        const newSchedule = generateLoanSchedules(tempLoan, startDate);
 
         const insertInstallment = `
           INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, status)
@@ -1713,6 +1961,27 @@ export const updateLoanDetails = async (req, res, next) => {
     } else if (net_proceeds !== undefined) {
       finalNetProceeds = parseFloat(net_proceeds);
       finalTotalDeductions = total_deductions !== undefined ? parseFloat(total_deductions) : finalTotalDeductions;
+    } else if (currentLoan.net_proceeds !== null && currentLoan.net_proceeds !== undefined) {
+      finalNetProceeds = Math.max(0, finalPrincipal - (parseFloat(finalTotalDeductions) || 0));
+    }
+
+    // Ensure finalDeductionsBreakdown is ALWAYS a valid JSON string for PostgreSQL JSONB
+    if (typeof finalDeductionsBreakdown !== 'string') {
+      finalDeductionsBreakdown = JSON.stringify(finalDeductionsBreakdown || []);
+    }
+
+    let finalCustomSchedule = currentLoan.custom_schedule;
+    if (custom_schedule !== undefined) {
+      finalCustomSchedule = custom_schedule ? JSON.stringify(custom_schedule) : null;
+    } else if (finalTerms !== currentLoan.term_months) {
+      finalCustomSchedule = null;
+    } else if (typeof finalCustomSchedule !== 'string' && finalCustomSchedule !== null) {
+      finalCustomSchedule = JSON.stringify(finalCustomSchedule);
+    }
+
+    let finalCreatedAt = currentLoan.created_at;
+    if (application_date) {
+      finalCreatedAt = new Date(application_date).toISOString();
     }
 
     // 11. Update loan in database
@@ -1732,9 +2001,11 @@ export const updateLoanDetails = async (req, res, next) => {
         payment_mode = $11,
         net_proceeds = $12,
         total_deductions = $13,
-        deductions_breakdown = $14,
+        deductions_breakdown = $14::jsonb,
+        custom_schedule = $15::jsonb,
+        created_at = $16,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $15
+      WHERE id = $17
       RETURNING *
     `;
 
@@ -1753,20 +2024,20 @@ export const updateLoanDetails = async (req, res, next) => {
       finalNetProceeds,
       finalTotalDeductions,
       finalDeductionsBreakdown,
+      finalCustomSchedule,
+      finalCreatedAt,
       id
     ]);
 
     // 12. Record Audit Trail
     try {
       await client.query(`
-        INSERT INTO audit_logs (user_id, action, module, entity_id, entity_type, details)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO audit_logs (user_id, action, module, details)
+        VALUES ($1, $2, $3, $4::jsonb)
       `, [
         req.user.id,
         'LOAN_MANUAL_ADJUSTMENT',
         'loans',
-        String(id),
-        'loan',
         JSON.stringify({
           previous: {
             laf_no: currentLoan.laf_no,
@@ -1787,6 +2058,13 @@ export const updateLoanDetails = async (req, res, next) => {
       ]);
     } catch (auditErr) {
       console.warn('Audit log write warning:', auditErr.message);
+    }
+
+    // Synchronize check voucher in Disbursement module with updated loan details
+    try {
+      await syncLoanCheckVoucher(client, id);
+    } catch (cvErr) {
+      console.warn('Check voucher sync notice on loan update:', cvErr.message);
     }
 
     await client.query('COMMIT');
@@ -1855,7 +2133,8 @@ export const deleteLoan = async (req, res, next) => {
       });
     }
 
-    // Delete schedules & loan
+    // Delete check vouchers, schedules & loan
+    await client.query('DELETE FROM check_vouchers WHERE loan_id = $1', [id]);
     await client.query('DELETE FROM repayment_schedules WHERE loan_id = $1', [id]);
     await client.query('DELETE FROM loans WHERE id = $1', [id]);
 

@@ -2924,7 +2924,22 @@ function LoansPageContent() {
                                        </td>
                                        <td className="px-6 py-4 font-bold">{formatCurrency(parseFloat(loan.principal_amount))}</td>
                                        <td className="px-6 py-4 font-mono">
-                                         {parseFloat(loan.interest_rate)}% ({loan.term_months}mo)
+                                         <div className="flex items-center gap-1.5">
+                                           <span>{parseFloat(loan.interest_rate)}% ({loan.term_months}mo)</span>
+                                           {isAdminOrManager && (loan.status === 'pending_approval' || (loan.status === 'approved' && !loan.disbursed_at)) && (
+                                             <button
+                                               type="button"
+                                               onClick={(e) => {
+                                                 e.stopPropagation();
+                                                 openApprovalModal(loan, loanDetails);
+                                               }}
+                                               className="p-1 text-neutral-400 hover:text-primary dark:hover:text-secondary rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                                               title="Edit term months / loan settings"
+                                             >
+                                               <Pencil className="w-3 h-3" />
+                                             </button>
+                                           )}
+                                         </div>
                                        </td>
                                        <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
                                        <td className="px-6 py-4 text-right">
@@ -3013,6 +3028,7 @@ function LoansPageContent() {
                                                   {loan.status !== 'pending_approval' && (
                                                     <>
                                                       {isAdminOrManager && (
+                                                        <>
                                                         <button
                                                           type="button"
                                                           onClick={() => openVoucherModal(loanDetails)}
@@ -3022,6 +3038,17 @@ function LoansPageContent() {
                                                           <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
                                                           Check Voucher
                                                         </button>
+
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => router.push(`/dashboard/disbursement?tab=loan&search=${encodeURIComponent(loan.laf_no || '')}`)}
+                                                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                                                          title="View or manage this loan voucher in the Disbursement module"
+                                                        >
+                                                          <Receipt className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                          Disbursement Voucher
+                                                        </button>
+                                                        </>
                                                       )}
 
                                                       <button
@@ -3046,26 +3073,27 @@ function LoansPageContent() {
                                                     </>
                                                   )}
 
-                                                  {isAdminOrManager && loan.status === 'pending_approval' && (
+                                                  {isAdminOrManager && (loan.status === 'pending_approval' || (loan.status === 'approved' && !loan.disbursed_at)) && (
                                                     <>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => handleRejectLoan(loan.id)}
-                                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-tertiary/40 bg-tertiary/10 hover:bg-tertiary/20 text-tertiary font-bold rounded-full text-xs transition-all active:scale-95 cursor-pointer"
-                                                      >
-                                                        <XCircle className="w-3.5 h-3.5" />
-                                                        Reject
-                                                      </button>
+                                                      {loan.status === 'pending_approval' && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleRejectLoan(loan.id)}
+                                                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-tertiary/40 bg-tertiary/10 hover:bg-tertiary/20 text-tertiary font-bold rounded-full text-xs transition-all active:scale-95 cursor-pointer"
+                                                        >
+                                                          <XCircle className="w-3.5 h-3.5" />
+                                                          Reject
+                                                        </button>
+                                                      )}
                                                       <button
                                                         type="button"
                                                         onClick={() => openApprovalModal(loan, loanDetails)}
-                                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
-                                                        title="Edit loan amount, terms, and configure deductions before disbursement"
+                                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary dark:text-secondary font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+                                                        title="Edit loan amount, term months, and configure deductions before disbursement"
                                                       >
-                                                        <Pencil className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                                                        Edit & Adjust
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                        Edit & Adjust Months / Terms
                                                       </button>
-
                                                     </>
                                                   )}
                                                 </div>
@@ -3080,14 +3108,6 @@ function LoansPageContent() {
                                                 </div>
                                               )}
 
-                                              {loan.status === 'approved' && (
-                                                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-3 text-emerald-700 dark:text-emerald-300">
-                                                  <CheckCircle className="w-5 h-5 shrink-0" />
-                                                  <div className="text-xs">
-                                                    <span className="font-bold">Application Approved:</span> This loan is approved and ready for disbursement. Check voucher and amortization schedules will be activated upon disbursement.
-                                                  </div>
-                                                </div>
-                                              )}
 
                                               {/* Repayment Schedules Sub-Table */}
                                               {loanDetails.schedule && loanDetails.schedule.length > 0 && (

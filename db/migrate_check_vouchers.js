@@ -31,10 +31,12 @@ export async function migrateCheckVouchers() {
       ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS details JSONB DEFAULT '[]'::jsonb;
       ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS signatories JSONB DEFAULT '{"prepared_by":"LAMOSTE, CHINNETTE A.","checked_by":"MARILOU LARIOSA","approved_by":"MICHELLE M. PABLE"}'::jsonb;
       ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'edit';
+      ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS loan_id UUID REFERENCES loans(id) ON DELETE SET NULL;
 
       CREATE INDEX IF NOT EXISTS idx_check_vouchers_voucher_date ON check_vouchers(voucher_date DESC);
       CREATE INDEX IF NOT EXISTS idx_check_vouchers_folder_name ON check_vouchers(folder_name);
       CREATE INDEX IF NOT EXISTS idx_check_vouchers_status ON check_vouchers(status);
+      CREATE INDEX IF NOT EXISTS idx_check_vouchers_loan_id ON check_vouchers(loan_id);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_check_vouchers_voucher_no_check_no ON check_vouchers(voucher_no, check_no);
     `;
     await client.query(createTableQuery);

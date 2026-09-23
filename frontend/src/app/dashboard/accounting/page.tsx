@@ -8,6 +8,7 @@ import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
 import PendingPlacementsSection from '@/components/accounting/PendingPlacementsSection';
+import SearchInput from '@/components/SearchInput';
 import {
   Coins,
   TrendingUp,
@@ -30,7 +31,14 @@ import {
   Plus,
   WalletCards,
   Lock,
-  Users
+  Users,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft,
+  Eye,
+  Filter,
+  RotateCcw
 } from 'lucide-react';
 
 export default function AccountingPage() {
@@ -54,6 +62,19 @@ export default function AccountingPage() {
   const [shareData, setShareData] = useState<any>(null);
   const [fixedDeposits, setFixedDeposits] = useState<any[]>([]);
   const [investments, setInvestments] = useState<any[]>([]);
+
+  // All Savings Accounts (Admin Overview)
+  const [allSavingsAccounts, setAllSavingsAccounts] = useState<any[]>([]);
+  const [savingsSummary, setSavingsSummary] = useState<any>(null);
+  const [loadingAllSavings, setLoadingAllSavings] = useState(false);
+  const [savingsSearch, setSavingsSearch] = useState('');
+  const [savingsStatusFilter, setSavingsStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [savingsPage, setSavingsPage] = useState(1);
+  const [savingsPageSize, setSavingsPageSize] = useState(10);
+  const [viewingPassbookMember, setViewingPassbookMember] = useState<any | null>(null);
+
+  // Modal target member ID (for depositing or withdrawing)
+  const [modalMemberId, setModalMemberId] = useState<string>('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,6 +156,7 @@ export default function AccountingPage() {
         setMembers(list);
         if (list.length > 0) {
           setSelectedMemberId(list[0].id.toString());
+          setModalMemberId(list[0].id.toString());
         }
       } catch (err) {
         console.error('Error preloading member list:', err);
@@ -147,8 +169,54 @@ export default function AccountingPage() {
   useEffect(() => {
     if (user && user.role === 'member' && user.profile?.id) {
       setSelectedMemberId(user.profile.id.toString());
+      setModalMemberId(user.profile.id.toString());
     }
   }, [user]);
+
+  // Load all savings accounts (Co-op wide for Admin/Staff)
+  const loadAllSavings = useCallback(async () => {
+    if (!isAdminOrManager) return;
+    try {
+      setLoadingAllSavings(true);
+      const res = await api.get('/accounts/savings');
+      if (res.data?.data) {
+        setAllSavingsAccounts(res.data.data.accounts || []);
+        setSavingsSummary(res.data.data.summary || null);
+      }
+    } catch (err) {
+      console.error('Error fetching all savings accounts:', err);
+    } finally {
+      setLoadingAllSavings(false);
+    }
+  }, [isAdminOrManager]);
+
+  useEffect(() => {
+    if (isAdminOrManager && activeTab === 'savings') {
+      loadAllSavings();
+    }
+  }, [isAdminOrManager, activeTab, loadAllSavings]);
+
+  const openSavingsDepositModal = (targetMember?: any) => {
+    const memId = targetMember?.member_id?.toString() || targetMember?.id?.toString() || viewingPassbookMember?.member_id?.toString() || selectedMemberId || (members[0]?.id?.toString() ?? '');
+    setModalMemberId(memId);
+    setSelectedMemberId(memId);
+    setSavingsDepositError(null);
+    setSavingsDepositAmount('');
+    setSavingsDepositRef('');
+    setSavingsDepositRemarks('');
+    setIsSavingsDepositModalOpen(true);
+  };
+
+  const openSavingsWithdrawModal = (targetMember?: any) => {
+    const memId = targetMember?.member_id?.toString() || targetMember?.id?.toString() || viewingPassbookMember?.member_id?.toString() || selectedMemberId || (members[0]?.id?.toString() ?? '');
+    setModalMemberId(memId);
+    setSelectedMemberId(memId);
+    setSavingsWithdrawError(null);
+    setSavingsWithdrawAmount('');
+    setSavingsWithdrawRef('');
+    setSavingsWithdrawRemarks('');
+    setIsSavingsWithdrawModalOpen(true);
+  };
 
   // Sync activeTab from ?tab= query param (e.g. from notification clicks)
   useEffect(() => {
@@ -201,8 +269,9 @@ export default function AccountingPage() {
   // Submission Handlers: Savings Deposit
   const handleSavingsDepositSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMemberId || !savingsDepositAmount) {
-      setSavingsDepositError('Please enter the deposit amount.');
+    const effectiveMemberId = modalMemberId || selectedMemberId;
+    if (!effectiveMemberId || !savingsDepositAmount) {
+      setSavingsDepositError('Please select a member and enter the deposit amount.');
       return;
     }
 
@@ -217,7 +286,7 @@ export default function AccountingPage() {
 
     try {
       await api.post('/accounts/savings/deposit', {
-        member_id: selectedMemberId,
+        member_id: effectiveMemberId,
         amount: numAmount,
         payment_method: savingsDepositMethod,
         reference_no: savingsDepositRef.trim() || undefined,
@@ -229,6 +298,9 @@ export default function AccountingPage() {
       setSavingsDepositRemarks('');
       setIsSavingsDepositModalOpen(false);
       await loadLedgerData();
+      if (isAdminOrManager) {
+        await loadAllSavings();
+      }
     } catch (err: any) {
       setSavingsDepositError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to process savings deposit.');
     } finally {
@@ -239,8 +311,9 @@ export default function AccountingPage() {
   // Submission Handlers: Savings Withdrawal
   const handleSavingsWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMemberId || !savingsWithdrawAmount) {
-      setSavingsWithdrawError('Please enter the withdrawal amount.');
+    const effectiveMemberId = modalMemberId || selectedMemberId;
+    if (!effectiveMemberId || !savingsWithdrawAmount) {
+      setSavingsWithdrawError('Please select a member and enter the withdrawal amount.');
       return;
     }
 
@@ -250,8 +323,9 @@ export default function AccountingPage() {
       return;
     }
 
-    const currentBal = parseFloat(savingsData?.account?.balance || 0);
-    const maintBal = parseFloat(savingsData?.account?.maintaining_balance || 100);
+    const targetAcc = allSavingsAccounts.find((a: any) => a.member_id?.toString() === effectiveMemberId);
+    const currentBal = parseFloat(targetAcc?.balance ?? savingsData?.account?.balance ?? 0);
+    const maintBal = parseFloat(targetAcc?.maintaining_balance ?? savingsData?.account?.maintaining_balance ?? 100);
 
     if (numAmount > currentBal) {
       setSavingsWithdrawError(`Insufficient balance. Current balance is ₱${currentBal.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`);
@@ -268,7 +342,7 @@ export default function AccountingPage() {
 
     try {
       await api.post('/accounts/savings/withdraw', {
-        member_id: selectedMemberId,
+        member_id: effectiveMemberId,
         amount: numAmount,
         reference_no: savingsWithdrawRef.trim() || undefined,
         remarks: savingsWithdrawRemarks.trim() || 'Counter cash withdrawal'
@@ -279,6 +353,9 @@ export default function AccountingPage() {
       setSavingsWithdrawRemarks('');
       setIsSavingsWithdrawModalOpen(false);
       await loadLedgerData();
+      if (isAdminOrManager) {
+        await loadAllSavings();
+      }
     } catch (err: any) {
       setSavingsWithdrawError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to process savings withdrawal.');
     } finally {
@@ -586,6 +663,30 @@ export default function AccountingPage() {
     }
   };
 
+  const filteredSavingsAccounts = React.useMemo(() => {
+    return allSavingsAccounts.filter((acc: any) => {
+      const q = savingsSearch.toLowerCase().trim();
+      const fullName = `${acc.last_name || ''} ${acc.first_name || ''} ${acc.middle_name || ''}`.toLowerCase();
+      const matchesSearch = !q || (
+        fullName.includes(q) ||
+        (acc.member_no && acc.member_no.toLowerCase().includes(q)) ||
+        (acc.account_number && acc.account_number.toLowerCase().includes(q)) ||
+        (acc.email && acc.email.toLowerCase().includes(q)) ||
+        (acc.phone && acc.phone.includes(q))
+      );
+
+      const matchesStatus = savingsStatusFilter === 'all' || acc.status === savingsStatusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [allSavingsAccounts, savingsSearch, savingsStatusFilter]);
+
+  const totalSavingsPages = Math.max(1, Math.ceil(filteredSavingsAccounts.length / savingsPageSize));
+  const paginatedSavingsAccounts = React.useMemo(() => {
+    const start = (savingsPage - 1) * savingsPageSize;
+    return filteredSavingsAccounts.slice(start, start + savingsPageSize);
+  }, [filteredSavingsAccounts, savingsPage, savingsPageSize]);
+
   return (
     <div className="space-y-6 animate-micro-elevate">
       <div>
@@ -595,9 +696,15 @@ export default function AccountingPage() {
       {/* Header and Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Shared Capital Ledger</h1>
+          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
+            {activeTab === 'savings' && isAdminOrManager && !viewingPassbookMember
+              ? 'Savings Accounts Ledger'
+              : 'Shared Capital Ledger'}
+          </h1>
           <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-            Monitor member share capital equity, savings accounts, and fixed term deposits.
+            {activeTab === 'savings' && isAdminOrManager && !viewingPassbookMember
+              ? 'Monitor member savings accounts, total cooperative savings pools, and passbooks.'
+              : 'Monitor member share capital equity, savings accounts, and fixed term deposits.'}
           </p>
         </div>
 
@@ -605,7 +712,7 @@ export default function AccountingPage() {
           {activeTab === 'savings' && (
             <>
               <button
-                onClick={() => setIsSavingsDepositModalOpen(true)}
+                onClick={() => openSavingsDepositModal()}
                 className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
               >
                 <PlusCircle className="w-4 h-4" />
@@ -614,7 +721,7 @@ export default function AccountingPage() {
 
               {isAdminOrManager && (
                 <button
-                  onClick={() => setIsSavingsWithdrawModalOpen(true)}
+                  onClick={() => openSavingsWithdrawModal()}
                   className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-tertiary hover:bg-tertiary/90 text-white rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
                 >
                   <TrendingDown className="w-4 h-4" />
@@ -646,8 +753,8 @@ export default function AccountingPage() {
         </div>
       </div>
 
-      {/* Member Selection for Admins/Staff */}
-      {isAdminOrManager && (
+      {/* Member Selection for Admins/Staff - only for share capital */}
+      {isAdminOrManager && activeTab === 'share_capital' && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm max-w-md">
           <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 whitespace-nowrap font-label">Auditing Member Profile:</label>
           <select
@@ -668,7 +775,10 @@ export default function AccountingPage() {
       {/* Nav Tabs Bar */}
       <div className="flex items-center gap-2 p-1.5 bg-neutral-100 dark:bg-neutral-800/60 rounded-2xl w-fit border border-outline-variant/30 overflow-x-auto max-w-full">
         <button
-          onClick={() => setActiveTab('savings')}
+          onClick={() => {
+            setActiveTab('savings');
+            setViewingPassbookMember(null);
+          }}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'savings'
               ? 'bg-white dark:bg-neutral-900 text-primary dark:text-secondary shadow-xs'
               : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
@@ -676,10 +786,18 @@ export default function AccountingPage() {
         >
           <WalletCards className="w-4 h-4" />
           <span>Savings Account (Passbook)</span>
-          {savingsData?.account?.balance !== undefined && (
-            <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
-              ₱{parseFloat(savingsData.account.balance || 0).toLocaleString()}
-            </span>
+          {isAdminOrManager ? (
+            savingsSummary?.total_accounts !== undefined ? (
+              <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
+                {savingsSummary.total_accounts} Accounts
+              </span>
+            ) : null
+          ) : (
+            savingsData?.account?.balance !== undefined && (
+              <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
+                ₱{parseFloat(savingsData.account.balance || 0).toLocaleString()}
+              </span>
+            )
           )}
         </button>
 
@@ -695,11 +813,11 @@ export default function AccountingPage() {
         </button>
       </div>
 
-      {/* Pending Office Cash Payment Queue for Admins/Staff */}
-      <PendingPlacementsSection onConfirmed={loadLedgerData} />
+      {/* Pending Office Cash Payment Queue for Admins/Staff - only for share capital */}
+      {activeTab === 'share_capital' && <PendingPlacementsSection onConfirmed={loadLedgerData} />}
 
-      {/* Member Pending Office Payment Placements Banner */}
-      {(!isAdminOrManager || selectedMemberId) && (() => {
+      {/* Member Pending Office Payment Placements Banner - only for share capital */}
+      {activeTab === 'share_capital' && (!isAdminOrManager || selectedMemberId) && (() => {
         const pendingShare = (shareData?.transactions || []).filter((tx: any) => tx.status === 'pending_payment');
         const pendingFD = (fixedDeposits || []).filter((fd: any) => fd.status === 'pending_payment');
         const allMemberPending = [
@@ -760,14 +878,296 @@ export default function AccountingPage() {
       })()}
 
       {/* MAIN LEDGER DATA VIEWS */}
-      {loading ? (
+      {activeTab === 'savings' && isAdminOrManager && !viewingPassbookMember ? (
+        <div className="space-y-6">
+          {/* Summary Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-5 bg-emerald-500/10 border border-emerald-500/30 rounded-3xl shadow-xs">
+              <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300">
+                <span className="text-[10px] uppercase font-bold tracking-wider font-label">Total Savings Pool</span>
+                <WalletCards className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h3 className="font-headline text-2xl font-extrabold text-emerald-800 dark:text-emerald-300 mt-1">
+                {formatCurrency(parseFloat(savingsSummary?.total_savings_pool || 0))}
+              </h3>
+              <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-1">
+                {savingsSummary?.funded_accounts || 0} active funded member accounts
+              </p>
+            </div>
+
+            <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
+              <div className="flex items-center justify-between text-neutral-500">
+                <span className="text-[10px] uppercase font-bold tracking-wider font-label">Total Savings Accounts</span>
+                <Users className="w-4 h-4 text-primary dark:text-secondary" />
+              </div>
+              <h3 className="font-headline text-2xl font-extrabold text-on-surface dark:text-white mt-1">
+                {savingsSummary?.total_accounts || allSavingsAccounts.length}
+              </h3>
+              <p className="text-[10px] text-neutral-400 mt-1">Total registered cooperative members</p>
+            </div>
+
+            <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
+              <div className="flex items-center justify-between text-neutral-500">
+                <span className="text-[10px] uppercase font-bold tracking-wider font-label">Cumulative Deposits</span>
+                <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h3 className="font-headline text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+                {formatCurrency(parseFloat(savingsSummary?.total_deposits_all || 0))}
+              </h3>
+              <p className="text-[10px] text-neutral-400 mt-1">Total cash & check passbook inflows</p>
+            </div>
+
+            <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
+              <div className="flex items-center justify-between text-neutral-500">
+                <span className="text-[10px] uppercase font-bold tracking-wider font-label">Cumulative Withdrawals</span>
+                <TrendingDown className="w-4 h-4 text-tertiary" />
+              </div>
+              <h3 className="font-headline text-2xl font-extrabold text-tertiary mt-1">
+                {formatCurrency(parseFloat(savingsSummary?.total_withdrawals_all || 0))}
+              </h3>
+              <p className="text-[10px] text-neutral-400 mt-1">Disbursed member cash withdrawals</p>
+            </div>
+          </div>
+
+          {/* Search, Filter & Actions Toolbar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-1 max-w-xl">
+              <SearchInput
+                placeholder="Search member name, member ID, or account number..."
+                defaultValue={savingsSearch}
+                onSearch={(val) => {
+                  setSavingsSearch(val);
+                  setSavingsPage(1);
+                }}
+                className="w-full"
+              />
+              <select
+                value={savingsStatusFilter}
+                onChange={(e) => {
+                  setSavingsStatusFilter(e.target.value as any);
+                  setSavingsPage(1);
+                }}
+                className="px-3 py-2 text-xs border border-outline-variant rounded-full bg-white dark:bg-surface-container-low text-on-surface dark:text-white outline-none focus:border-primary shadow-xs cursor-pointer"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+              {(savingsSearch || savingsStatusFilter !== 'all') && (
+                <button
+                  onClick={() => {
+                    setSavingsSearch('');
+                    setSavingsStatusFilter('all');
+                    setSavingsPage(1);
+                  }}
+                  className="px-3 py-2 text-xs font-bold text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Reset
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 self-end md:self-auto">
+              <span className="text-xs text-neutral-500 font-medium">
+                {filteredSavingsAccounts.length} {filteredSavingsAccounts.length === 1 ? 'account' : 'accounts'} found
+              </span>
+            </div>
+          </div>
+
+          {/* Accounts Overview Table */}
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
+            <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between flex-wrap gap-2">
+              <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
+                <WalletCards className="w-4 h-4 text-emerald-600" /> Member Savings Accounts & Passbooks
+              </h4>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openSavingsDepositModal()}
+                  className="px-3.5 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Quick Deposit
+                </button>
+                <button
+                  onClick={() => openSavingsWithdrawModal()}
+                  className="px-3.5 py-1.5 text-xs font-bold bg-tertiary/10 hover:bg-tertiary/20 text-tertiary rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <TrendingDown className="w-3.5 h-3.5" /> Quick Withdraw
+                </button>
+              </div>
+            </div>
+
+            {loadingAllSavings ? (
+              <div className="p-8">
+                <SkeletonTable rows={6} cols={7} />
+              </div>
+            ) : (
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
+                      <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Member Profile</th>
+                      <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Account #</th>
+                      <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Available Balance</th>
+                      <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Total Deposits</th>
+                      <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Total Withdrawals</th>
+                      <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Status</th>
+                      <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
+                    {paginatedSavingsAccounts.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-neutral-500 italic">
+                          <WalletCards className="w-8 h-8 text-neutral-400 mx-auto mb-2 opacity-50" />
+                          No member savings accounts matched your search criteria.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedSavingsAccounts.map((acc: any) => {
+                        const bal = parseFloat(acc.balance || 0);
+                        const dep = parseFloat(acc.total_deposits || 0);
+                        const wth = parseFloat(acc.total_withdrawals || 0);
+
+                        return (
+                          <tr key={acc.member_id} className="hover:bg-neutral-500/5 transition-colors">
+                            <td className="px-4 sm:px-6 py-3">
+                              <div className="font-bold text-on-surface dark:text-white text-xs">
+                                {acc.last_name}, {acc.first_name} {acc.middle_name ? `${acc.middle_name[0]}.` : ''}
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] px-2 py-0.2 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-500 font-mono font-bold">
+                                  ID: {acc.member_no || 'N/A'}
+                                </span>
+                                {acc.phone && (
+                                  <span className="text-[10px] text-neutral-400 font-mono hidden sm:inline">
+                                    • {acc.phone}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 sm:px-6 py-3">
+                              <span className="font-mono text-xs font-bold text-primary dark:text-secondary bg-primary/5 dark:bg-secondary/10 px-2 py-1 rounded-lg">
+                                {acc.account_number || 'SAV-PENDING'}
+                              </span>
+                              <div className="text-[10px] text-neutral-400 mt-0.5">
+                                Min: ₱{parseFloat(acc.maintaining_balance || 100).toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="px-4 sm:px-6 py-3">
+                              <span className={`font-headline text-sm font-extrabold ${bal > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-neutral-500'}`}>
+                                {formatCurrency(bal)}
+                              </span>
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 font-mono font-bold text-emerald-600 dark:text-emerald-400 hidden md:table-cell">
+                              {dep > 0 ? `+${formatCurrency(dep)}` : '₱0.00'}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 font-mono font-bold text-tertiary hidden lg:table-cell">
+                              {wth > 0 ? `-${formatCurrency(wth)}` : '₱0.00'}
+                            </td>
+                            <td className="px-4 sm:px-6 py-3">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                acc.status === 'active'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${acc.status === 'active' ? 'bg-emerald-500' : 'bg-neutral-400'}`} />
+                                {acc.status || 'Active'}
+                              </span>
+                            </td>
+                            <td className="px-4 sm:px-6 py-3 text-right">
+                              <div className="inline-flex items-center gap-1.5 justify-end">
+                                <button
+                                  onClick={() => {
+                                    setViewingPassbookMember(acc);
+                                    setSelectedMemberId(acc.member_id.toString());
+                                  }}
+                                  className="px-2.5 py-1 text-[11px] font-bold bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-on-surface dark:text-white rounded-lg transition-all active:scale-95 inline-flex items-center gap-1 cursor-pointer"
+                                  title="Audit detailed passbook transactions"
+                                >
+                                  <History className="w-3 h-3 text-emerald-600" />
+                                  <span>View Passbook</span>
+                                </button>
+                                <button
+                                  onClick={() => openSavingsDepositModal(acc)}
+                                  className="px-2 py-1 text-[11px] font-bold bg-emerald-600/10 hover:bg-emerald-600 text-emerald-700 dark:text-emerald-300 hover:text-white rounded-lg transition-all active:scale-95 inline-flex items-center cursor-pointer"
+                                  title="Deposit into this member's savings"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => openSavingsWithdrawModal(acc)}
+                                  className="px-2 py-1 text-[11px] font-bold bg-tertiary/10 hover:bg-tertiary text-tertiary hover:text-white rounded-lg transition-all active:scale-95 inline-flex items-center cursor-pointer"
+                                  title="Withdraw cash from this member's savings"
+                                >
+                                  <TrendingDown className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            <div className="px-6 py-3.5 border-t border-outline-variant/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-500">
+              <div className="flex items-center gap-2">
+                <span>Show</span>
+                <select
+                  value={savingsPageSize}
+                  onChange={(e) => {
+                    setSavingsPageSize(Number(e.target.value));
+                    setSavingsPage(1);
+                  }}
+                  className="px-2 py-1 border border-outline-variant rounded-lg bg-white dark:bg-surface-container-low text-on-surface dark:text-white font-medium"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span>per page</span>
+                <span className="mx-2 text-neutral-300 dark:text-neutral-700">|</span>
+                <span>
+                  Showing {filteredSavingsAccounts.length === 0 ? 0 : (savingsPage - 1) * savingsPageSize + 1} - {Math.min(savingsPage * savingsPageSize, filteredSavingsAccounts.length)} of {filteredSavingsAccounts.length} accounts
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  disabled={savingsPage <= 1}
+                  onClick={() => setSavingsPage((p) => Math.max(1, p - 1))}
+                  className="p-1.5 rounded-lg border border-outline-variant hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="px-3 py-1 font-bold text-on-surface dark:text-white font-mono">
+                  {savingsPage} / {totalSavingsPages}
+                </div>
+                <button
+                  disabled={savingsPage >= totalSavingsPages}
+                  onClick={() => setSavingsPage((p) => Math.min(totalSavingsPages, p + 1))}
+                  className="p-1.5 rounded-lg border border-outline-variant hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : loading ? (
         <SkeletonTable rows={4} cols={4} />
       ) : error ? (
         <div className="p-6 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-3xl flex items-center gap-3">
           <AlertTriangle className="w-5 h-5" />
           <p className="text-sm font-bold">{error}</p>
         </div>
-      ) : !selectedMemberId ? (
+      ) : !selectedMemberId && activeTab === 'share_capital' ? (
         <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
           <p className="text-xs text-neutral-600 dark:text-neutral-400">Please select a member profile to retrieve their account ledger files.</p>
         </div>
@@ -776,6 +1176,47 @@ export default function AccountingPage() {
           {/* TAB 0: SAVINGS ACCOUNT (PASSBOOK) */}
           {activeTab === 'savings' && savingsData && (
             <div className="space-y-6">
+              {/* Back Bar for Admin Auditing a Member */}
+              {isAdminOrManager && viewingPassbookMember && (
+                <div className="flex items-center justify-between flex-wrap gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/60 shadow-xs">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setViewingPassbookMember(null)}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-on-surface dark:text-white rounded-xl transition-all active:scale-95 cursor-pointer shadow-xs"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Back to All Savings Accounts</span>
+                    </button>
+                    <div className="h-5 w-[1px] bg-outline-variant/60 hidden sm:block" />
+                    <div>
+                      <span className="text-[10px] text-neutral-500 block uppercase tracking-wider font-label font-bold">
+                        Auditing Member Passbook
+                      </span>
+                      <span className="text-sm font-extrabold text-on-surface dark:text-white">
+                        {viewingPassbookMember.last_name}, {viewingPassbookMember.first_name}
+                        <span className="ml-2 text-xs font-mono font-bold text-neutral-400">
+                          (Member ID: {viewingPassbookMember.member_no || 'N/A'})
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openSavingsDepositModal(viewingPassbookMember)}
+                      className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Deposit
+                    </button>
+                    <button
+                      onClick={() => openSavingsWithdrawModal(viewingPassbookMember)}
+                      className="px-3.5 py-2 text-xs font-bold bg-tertiary/10 hover:bg-tertiary/20 text-tertiary rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <TrendingDown className="w-3.5 h-3.5" /> Withdraw
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* Account Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
@@ -1167,21 +1608,58 @@ export default function AccountingPage() {
             )}
 
             <form onSubmit={handleSavingsDepositSubmit} className="space-y-5">
+              {/* Member Selector (for Admins/Staff) */}
+              {isAdminOrManager && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400">
+                    Target Member Account:
+                  </label>
+                  <select
+                    value={modalMemberId || selectedMemberId}
+                    onChange={(e) => {
+                      setModalMemberId(e.target.value);
+                      setSelectedMemberId(e.target.value);
+                    }}
+                    className="w-full px-3 py-2 text-xs border border-outline-variant/65 rounded-xl bg-white dark:bg-surface-container-low text-on-surface dark:text-white focus:outline-none focus:border-primary font-medium"
+                  >
+                    {members.map((m: any) => (
+                      <option key={m.id} value={m.id}>
+                        {m.last_name}, {m.first_name} (Member ID: {m.member_no || 'N/A'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Account summary banner */}
-              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs flex items-center justify-between">
-                <div>
-                  <span className="text-emerald-700 dark:text-emerald-300 block font-medium">Account Number</span>
-                  <span className="font-bold font-mono text-on-surface dark:text-white">
-                    {savingsData?.account?.account_number || 'SAV-NEW'}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-emerald-700 dark:text-emerald-300 block font-medium">Current Balance</span>
-                  <span className="font-extrabold font-headline text-emerald-800 dark:text-emerald-300">
-                    {formatCurrency(parseFloat(savingsData?.account?.balance || 0))}
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const targetAcc = allSavingsAccounts.find((a: any) => a.member_id?.toString() === (modalMemberId || selectedMemberId));
+                const targetMem = members.find((m: any) => m.id?.toString() === (modalMemberId || selectedMemberId));
+                const accNo = targetAcc?.account_number || savingsData?.account?.account_number || 'SAV-NEW';
+                const bal = parseFloat(targetAcc?.balance ?? savingsData?.account?.balance ?? 0);
+
+                return (
+                  <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs flex items-center justify-between">
+                    <div>
+                      <span className="text-emerald-700 dark:text-emerald-300 block font-medium">Account Number</span>
+                      <span className="font-bold font-mono text-on-surface dark:text-white">
+                        {accNo}
+                      </span>
+                      {targetMem && (
+                        <span className="text-[10px] text-neutral-500 block">
+                          {targetMem.last_name}, {targetMem.first_name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-emerald-700 dark:text-emerald-300 block font-medium">Current Balance</span>
+                      <span className="font-extrabold font-headline text-emerald-800 dark:text-emerald-300">
+                        {formatCurrency(bal)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Amount Input */}
               <div className="space-y-1.5">
@@ -1315,27 +1793,64 @@ export default function AccountingPage() {
             )}
 
             <form onSubmit={handleSavingsWithdrawSubmit} className="space-y-5">
+              {/* Member Selector (for Admins/Staff) */}
+              {isAdminOrManager && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400">
+                    Target Member Account:
+                  </label>
+                  <select
+                    value={modalMemberId || selectedMemberId}
+                    onChange={(e) => {
+                      setModalMemberId(e.target.value);
+                      setSelectedMemberId(e.target.value);
+                    }}
+                    className="w-full px-3 py-2 text-xs border border-outline-variant/65 rounded-xl bg-white dark:bg-surface-container-low text-on-surface dark:text-white focus:outline-none focus:border-tertiary font-medium"
+                  >
+                    {members.map((m: any) => (
+                      <option key={m.id} value={m.id}>
+                        {m.last_name}, {m.first_name} (Member ID: {m.member_no || 'N/A'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Account summary banner */}
-              <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Available Savings Balance:</span>
-                  <span className="font-extrabold font-headline text-on-surface dark:text-white text-base">
-                    {formatCurrency(parseFloat(savingsData?.account?.balance || 0))}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30 text-[11px]">
-                  <span className="text-neutral-500">Required Maintaining Balance:</span>
-                  <span className="font-bold text-neutral-600 dark:text-neutral-400 font-mono">
-                    {formatCurrency(parseFloat(savingsData?.account?.maintaining_balance || 100))}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">Max Withdrawable Now:</span>
-                  <span className="font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
-                    {formatCurrency(Math.max(0, parseFloat(savingsData?.account?.balance || 0) - parseFloat(savingsData?.account?.maintaining_balance || 100)))}
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const targetAcc = allSavingsAccounts.find((a: any) => a.member_id?.toString() === (modalMemberId || selectedMemberId));
+                const targetMem = members.find((m: any) => m.id?.toString() === (modalMemberId || selectedMemberId));
+                const bal = parseFloat(targetAcc?.balance ?? savingsData?.account?.balance ?? 0);
+                const maint = parseFloat(targetAcc?.maintaining_balance ?? savingsData?.account?.maintaining_balance ?? 100);
+
+                return (
+                  <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl text-xs space-y-2">
+                    {targetMem && (
+                      <div className="text-[11px] font-bold text-on-surface dark:text-white pb-1 border-b border-outline-variant/30">
+                        {targetMem.last_name}, {targetMem.first_name} (ID: {targetMem.member_no || 'N/A'})
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-500">Available Savings Balance:</span>
+                      <span className="font-extrabold font-headline text-on-surface dark:text-white text-base">
+                        {formatCurrency(bal)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-outline-variant/30 text-[11px]">
+                      <span className="text-neutral-500">Required Maintaining Balance:</span>
+                      <span className="font-bold text-neutral-600 dark:text-neutral-400 font-mono">
+                        {formatCurrency(maint)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">Max Withdrawable Now:</span>
+                      <span className="font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(Math.max(0, bal - maint))}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Amount Input */}
               <div className="space-y-1.5">
