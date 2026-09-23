@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -87,7 +87,7 @@ interface Loan {
   interest_rate: string;
   term_months: number;
   amortization_type: string;
-  status: 'pending_approval' | 'disbursed' | 'fully_paid' | 'rejected' | 'defaulted';
+  status: 'pending_approval' | 'approved' | 'disbursed' | 'fully_paid' | 'rejected' | 'defaulted';
   created_at: string;
   disbursed_at?: string | null;
   maturity_date?: string | null;
@@ -157,7 +157,7 @@ function LoansPageContent() {
   const router = useRouter();
   const statusParam = searchParams.get('status');
 
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff' || (user?.role as string) === 'manager';
   const isVerified = isAdminOrManager || user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
 
   const [activeTab, setActiveTab] = useState<'loans' | 'payments' | 'products'>('loans');
@@ -1089,6 +1089,109 @@ function LoansPageContent() {
   const [applyLafNo, setApplyLafNo] = useState('');
   const [loadingLafNo, setLoadingLafNo] = useState(false);
 
+  // Physical Form Fields (Admin Desk Entry matching Paper Slip)
+  const [applyDate, setApplyDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [applyBorrowerName, setApplyBorrowerName] = useState<string>('');
+  const [applyAge, setApplyAge] = useState<number | string>('');
+  const [applyInvestmentAmount, setApplyInvestmentAmount] = useState<number | string>('');
+  const [applyServiceFee, setApplyServiceFee] = useState<string>('100');
+  const [applyInsurance, setApplyInsurance] = useState<string>('11');
+  const [applyFixedDeposit, setApplyFixedDeposit] = useState<string>('0');
+  const [applyPrevBalance, setApplyPrevBalance] = useState<string>('0');
+  const [selectedPrevLoanId, setSelectedPrevLoanId] = useState<string>('');
+  const [memberActiveLoans, setMemberActiveLoans] = useState<any[]>([]);
+  const [loadingMemberActiveLoans, setLoadingMemberActiveLoans] = useState<boolean>(false);
+  const [applyOtherCharges, setApplyOtherCharges] = useState<string>('0');
+  const [applyScheduleAmounts, setApplyScheduleAmounts] = useState<Record<number, string>>({});
+
+  // Animated Member Selector Dropdown State
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
+  const [memberDropdownSearch, setMemberDropdownSearch] = useState('');
+  const memberDropdownRef = useRef<HTMLDivElement>(null);
+  const memberSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // Close member dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (memberDropdownRef.current && !memberDropdownRef.current.contains(event.target as Node)) {
+        setIsMemberDropdownOpen(false);
+      }
+    };
+    if (isMemberDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMemberDropdownOpen]);
+
+  // Animated Previous Loan Selector Dropdown State
+  const [isPrevLoanDropdownOpen, setIsPrevLoanDropdownOpen] = useState(false);
+  const prevLoanDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close prev loan dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (prevLoanDropdownRef.current && !prevLoanDropdownRef.current.contains(event.target as Node)) {
+        setIsPrevLoanDropdownOpen(false);
+      }
+    };
+    if (isPrevLoanDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isPrevLoanDropdownOpen]);
+
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (isMemberDropdownOpen) {
+      const timer = setTimeout(() => {
+        memberSearchInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isMemberDropdownOpen]);
+
+  const filteredBorrowerMembers = useMemo(() => {
+    if (!memberDropdownSearch.trim()) return members;
+    const q = memberDropdownSearch.toLowerCase();
+    return members.filter((m: any) => {
+      const fullName = `${m.first_name || ''} ${m.middle_name || ''} ${m.last_name || ''}`.toLowerCase();
+      const reversedName = `${m.last_name || ''}, ${m.first_name || ''}`.toLowerCase();
+      const memberNo = String(m.member_no || '').toLowerCase();
+      return fullName.includes(q) || reversedName.includes(q) || memberNo.includes(q);
+    });
+  }, [members, memberDropdownSearch]);
+
+  const selectedMemberObj = useMemo(() => {
+    return members.find((m: any) => String(m.id) === String(applyMemberId));
+  }, [members, applyMemberId]);
+
+  const handleSelectMember = (newMemId: string) => {
+    setApplyMemberId(newMemId);
+    setIsMemberDropdownOpen(false);
+    setMemberDropdownSearch('');
+    if (newMemId) {
+      const catProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
+      if (catProducts.length > 0) {
+        setSelectedProduct(catProducts[0]);
+        const defAmt = isAdminOrManager ? (parseFloat(catProducts[0].min_amount) || 5000) : parseFloat(catProducts[0].min_amount);
+        setApplyAmount(defAmt);
+        const defTerm = catProducts[0].term_months >= 2 && selectedLoanCategory === LOAN_CATEGORIES.STL ? 2 : catProducts[0].term_months;
+        setApplyTermMonths(defTerm);
+      }
+      const mem = members.find((m: any) => String(m.id) === String(newMemId));
+      if (mem) {
+        setApplyBorrowerName([mem.first_name, mem.middle_name, mem.last_name].filter(Boolean).join(' '));
+      }
+    } else {
+      setSelectedProduct(null);
+      setApplyBorrowerName('');
+    }
+  };
+
   // LAF Assign/Edit Modal (Admin & Staff only)
   const [lafModalLoan, setLafModalLoan] = useState<any | null>(null);
   const [lafInputVal, setLafInputVal] = useState('');
@@ -1155,6 +1258,21 @@ function LoansPageContent() {
   const [approvedBy, setApprovedBy] = useState('MICHELLE');
   const [releasedBy, setReleasedBy] = useState('Michelle Pable');
 
+  // Voucher Breakdown Rows
+  const [voucherRows, setVoucherRows] = useState<{ description: string; debit: string; credit: string }[]>([]);
+
+  const voucherDebitTotal = useMemo(() => {
+    return voucherRows.reduce((sum, r) => sum + (parseFloat(r.debit) || 0), 0);
+  }, [voucherRows]);
+
+  const voucherCreditTotal = useMemo(() => {
+    return voucherRows.reduce((sum, r) => sum + (parseFloat(r.credit) || 0), 0);
+  }, [voucherRows]);
+
+  const voucherNetTakeHome = useMemo(() => {
+    return Math.max(0, voucherDebitTotal - voucherCreditTotal);
+  }, [voucherDebitTotal, voucherCreditTotal]);
+
   const cleanCvNumber = (vNo: string) => {
     if (!vNo) return '';
     return vNo.replace(/^CV\s*#?/i, '').trim();
@@ -1212,11 +1330,39 @@ function LoansPageContent() {
       ? `Balance Settlement / Loan Proceeds - ${loanObj.product_name} (${loanObj.purpose})`
       : `Loan Proceeds for ${loanObj.product_name || 'Loan'} (LAF #${loanObj.laf_no || String(loanObj.id).slice(0, 8)})`;
     setVoucherDescription(defaultDesc);
-
-    setBookOfAccount('Accounts Payable');
+    const initialBookOfAccount = 'Accounts Payable';
+    setBookOfAccount(initialBookOfAccount);
     setPreparedBy('LAMOSTE');
     setCheckedBy('MARILOU LARIOSA');
     setApprovedBy('MICHELLE');
+
+    let deds: any[] = [];
+    if (loanObj.deductions_breakdown) {
+      try {
+        deds = typeof loanObj.deductions_breakdown === 'string'
+          ? JSON.parse(loanObj.deductions_breakdown)
+          : loanObj.deductions_breakdown;
+      } catch {}
+    }
+    const initialRows: { description: string; debit: string; credit: string }[] = [
+      {
+        description: initialBookOfAccount,
+        debit: loanObj.principal_amount ? String(parseFloat(loanObj.principal_amount)) : '',
+        credit: ''
+      }
+    ];
+    if (Array.isArray(deds)) {
+      for (const d of deds) {
+        if (d && d.name) {
+          initialRows.push({
+            description: `Less: ${d.name}`,
+            debit: '',
+            credit: d.amount ? String(parseFloat(d.amount)) : ''
+          });
+        }
+      }
+    }
+    setVoucherRows(initialRows);
     setPrintedDate(new Date().toLocaleString('en-US', {
       month: 'numeric',
       day: 'numeric',
@@ -1662,12 +1808,38 @@ function LoansPageContent() {
     const fetchSelectedMemberSummary = async () => {
       if (!applyMemberId) {
         setSelectedMemberSummary(null);
+        setApplyBorrowerName('');
+        setApplyAge('');
+        setApplyInvestmentAmount('');
         return;
       }
+
+      // Auto-populate borrower name and age from member list
+      const mem = members.find((m: any) => String(m.id) === String(applyMemberId));
+      if (mem) {
+        const computedName = [mem.first_name, mem.middle_name, mem.last_name].filter(Boolean).join(' ');
+        if (computedName) setApplyBorrowerName(computedName);
+        if (mem?.age) {
+          setApplyAge(mem.age);
+        } else if (mem?.date_of_birth) {
+          const birth = new Date(mem.date_of_birth);
+          const diffYears = Math.floor((Date.now() - birth.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+          if (diffYears > 0) setApplyAge(diffYears);
+        }
+      }
+
       try {
         setLoadingMemberSummary(true);
         const res = await api.get(`/members/${applyMemberId}/dashboard-summary`);
         setSelectedMemberSummary(res.data.data);
+        if (res.data?.data?.full_name) {
+          setApplyBorrowerName(res.data.data.full_name);
+        } else if (res.data?.data?.first_name || res.data?.data?.last_name) {
+          setApplyBorrowerName(`${res.data.data.first_name || ''} ${res.data.data.last_name || ''}`.trim());
+        }
+        if (res.data?.data?.balances?.share_capital !== undefined) {
+          setApplyInvestmentAmount(res.data.data.balances.share_capital);
+        }
       } catch (err) {
         console.error('Error fetching selected member summary:', err);
       } finally {
@@ -1675,7 +1847,98 @@ function LoansPageContent() {
       }
     };
     fetchSelectedMemberSummary();
+  }, [applyMemberId, members]);
+
+  // Fetch active loans for the selected member to populate previous loan deduction dropdown
+  useEffect(() => {
+    const fetchMemberActiveLoans = async () => {
+      if (!applyMemberId) {
+        setMemberActiveLoans([]);
+        setSelectedPrevLoanId('');
+        setApplyPrevBalance('0');
+        return;
+      }
+      try {
+        setLoadingMemberActiveLoans(true);
+        const loansRes = await api.get('/loans', { params: { member_id: applyMemberId } });
+        const allLoans = loansRes.data?.data || [];
+        const activeLoans = allLoans.filter((l: any) => {
+          const isFinished = ['fully_paid', 'rejected', 'cancelled'].includes(l.status);
+          const rem = parseFloat(l.remaining_balance);
+          return !isFinished && (isNaN(rem) || rem > 0);
+        });
+        setMemberActiveLoans(activeLoans);
+      } catch (err) {
+        console.error('Error fetching member loans for deductions:', err);
+        setMemberActiveLoans([]);
+      } finally {
+        setLoadingMemberActiveLoans(false);
+      }
+    };
+    fetchMemberActiveLoans();
   }, [applyMemberId]);
+
+  // Handler when selecting previous active loan from dropdown
+  const handlePrevLoanSelect = (loanId: string) => {
+    setSelectedPrevLoanId(loanId);
+    if (!loanId) {
+      setApplyPrevBalance('0');
+      return;
+    }
+    const foundLoan = memberActiveLoans.find((l: any) => String(l.id) === String(loanId));
+    if (foundLoan) {
+      const balance = parseFloat(foundLoan.remaining_balance ?? foundLoan.principal_amount ?? 0);
+      setApplyPrevBalance(String(!isNaN(balance) ? balance : 0));
+    }
+  };
+
+  const selectedPrevLoanObj = useMemo(() => {
+    if (!selectedPrevLoanId) return null;
+    return memberActiveLoans.find((l: any) => String(l.id) === String(selectedPrevLoanId)) || null;
+  }, [memberActiveLoans, selectedPrevLoanId]);
+
+  // Compute total charges (deductions)
+  const totalDeductionsCalc = useMemo(() => {
+    return (
+      (parseFloat(String(applyServiceFee)) || 0) +
+      (parseFloat(String(applyInsurance)) || 0) +
+      (parseFloat(String(applyFixedDeposit)) || 0) +
+      (parseFloat(String(applyPrevBalance)) || 0) +
+      (parseFloat(String(applyOtherCharges)) || 0)
+    );
+  }, [applyServiceFee, applyInsurance, applyFixedDeposit, applyPrevBalance, applyOtherCharges]);
+
+  // Compute net proceeds
+  const netProceedsCalc = useMemo(() => {
+    return Math.max(0, (applyAmount || 0) - totalDeductionsCalc);
+  }, [applyAmount, totalDeductionsCalc]);
+
+  // Compute required monthly payment schedule preview
+  const monthlySchedulePreview = useMemo(() => {
+    const principal = applyAmount || 0;
+    const terms = applyTermMonths || 1;
+    if (principal <= 0 || terms <= 0) return [];
+    const rate = terms === 36 ? 0.15 : 0.02; // 2% monthly or 15% for 36mo
+    const monthlyPrincipal = principal / terms;
+    const schedule: { monthLabel: string; payment: number }[] = [];
+    
+    let remaining = principal;
+    for (let i = 1; i <= terms; i++) {
+      let interest = 0;
+      if (selectedProduct?.amortization_type === 'flat_rate') {
+        interest = principal * rate;
+      } else {
+        interest = remaining * rate;
+      }
+      const due = monthlyPrincipal + interest;
+      schedule.push({
+        monthLabel: i === 1 ? '1st Month' : i === 2 ? '2nd Month' : i === 3 ? '3rd Month' : `Month ${i}`,
+        payment: Math.round(due * 100) / 100
+      });
+      remaining -= monthlyPrincipal;
+    }
+    return schedule;
+  }, [applyAmount, applyTermMonths, selectedProduct]);
 
   const toggleLoanExpand = async (loanId: number | string) => {
     if (expandedLoanId === loanId) {
@@ -1799,14 +2062,29 @@ function LoansPageContent() {
     }
     setWizardStep(1);
     setSelectedProduct(null);
-    setSelectedLoanCategory(LOAN_CATEGORIES.REGULAR);
+    setSelectedLoanCategory(LOAN_CATEGORIES.STL);
     setApplyMemberId(!isAdminOrManager && user?.profile?.id ? String(user.profile.id) : '');
     setApplyAmount(0);
+    setApplyDate(new Date().toISOString().split('T')[0]);
+    setApplyBorrowerName('');
+    setApplyAge('');
+    setApplyInvestmentAmount('');
+    setApplyServiceFee('100');
+    setApplyInsurance('11');
+    setApplyFixedDeposit('0');
+    setApplyPrevBalance('0');
+    setSelectedPrevLoanId('');
+    setMemberActiveLoans([]);
+    setApplyOtherCharges('0');
+    setApplyScheduleAmounts({});
     setCoMakerName('');
     setCoMakerPhone('');
     setApplyLafNo('');
     setSuccessData(null);
     setApplyError(null);
+    setIsMemberDropdownOpen(false);
+    setIsPrevLoanDropdownOpen(false);
+    setMemberDropdownSearch('');
     setIsApplyModalOpen(true);
     if (isAdminOrManager) {
       fetchNextLafNo();
@@ -1860,14 +2138,14 @@ function LoansPageContent() {
 
   const handleApplyLoanSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!applyMemberId || !selectedProduct || !applyAmount) {
-      setApplyError('Please fill in all requested fields.');
+    if (!applyMemberId || !selectedProduct || !applyAmount || applyAmount <= 0) {
+      setApplyError('Please fill in all requested fields (Member, Product, and Loan Amount).');
       return;
     }
 
-    // Enforce co-maker details check if principal exceeds member's CBU
-    const shareCapital = selectedMemberSummary?.balances?.share_capital || 0;
-    const coMakerRequired = applyAmount > shareCapital;
+    // Enforce co-maker details check if principal exceeds member's CBU ONLY for member self-application
+    const shareCapital = parseFloat(String(applyInvestmentAmount)) || selectedMemberSummary?.balances?.share_capital || 0;
+    const coMakerRequired = !isAdminOrManager && applyAmount > shareCapital;
     if (coMakerRequired && !coMakerName.trim()) {
       setApplyError('A Co-Maker is required since the loan amount exceeds 100% of Share Capital.');
       return;
@@ -1877,14 +2155,42 @@ function LoansPageContent() {
     setApplySubmitting(true);
 
     try {
+      const selectedPrevLoan = memberActiveLoans.find((l: any) => String(l.id) === String(selectedPrevLoanId));
+      const prevLoanLabel = selectedPrevLoan 
+        ? `Previous Loan Balance (${selectedPrevLoan.laf_no ? `LAF: ${selectedPrevLoan.laf_no}` : selectedPrevLoan.product_name || 'Active Loan'})` 
+        : 'Previous Loan Balance';
+
+      const deductionsPayload = [
+        { name: 'Service Fee', amount: parseFloat(String(applyServiceFee)) || 0 },
+        { name: 'Insurance', amount: parseFloat(String(applyInsurance)) || 0 },
+        { name: 'Fixed Deposit', amount: parseFloat(String(applyFixedDeposit)) || 0 },
+        { name: prevLoanLabel, amount: parseFloat(String(applyPrevBalance)) || 0 },
+        { name: 'Others', amount: parseFloat(String(applyOtherCharges)) || 0 }
+      ].filter(d => d.amount > 0);
+
+      const customSchedulePayload = monthlySchedulePreview.map((item, idx) => {
+        const customVal = applyScheduleAmounts[idx];
+        const paymentAmount = customVal !== undefined && !isNaN(parseFloat(customVal))
+          ? parseFloat(customVal)
+          : item.payment;
+        return {
+          month_index: idx + 1,
+          month_label: item.monthLabel,
+          payment: paymentAmount
+        };
+      });
+
       const response = await api.post('/loans', {
         member_id: applyMemberId,
         loan_product_id: selectedProduct.id,
         principal_amount: applyAmount,
         term_months: applyTermMonths,
-        co_maker_name: coMakerRequired ? coMakerName : null,
-        co_maker_phone: coMakerRequired ? coMakerPhone : null,
-        laf_no: isAdminOrManager ? (applyLafNo.trim() || undefined) : undefined
+        co_maker_name: isAdminOrManager ? null : (coMakerName.trim() || null),
+        co_maker_phone: isAdminOrManager ? null : (coMakerPhone.trim() || null),
+        laf_no: isAdminOrManager ? (applyLafNo.trim() || undefined) : undefined,
+        application_date: applyDate || undefined,
+        deductions: deductionsPayload,
+        custom_schedule: customSchedulePayload
       });
 
       setSuccessData(response.data.data);
@@ -1895,6 +2201,7 @@ function LoansPageContent() {
       setCoMakerName('');
       setCoMakerPhone('');
       setApplyLafNo('');
+      setApplyScheduleAmounts({});
       fetchLoans();
       fetchMetrics();
     } catch (err: any) {
@@ -1950,6 +2257,13 @@ function LoansPageContent() {
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary">
             <CheckCircle className="w-3.5 h-3.5" />
             Active / Disbursed
+          </span>
+        );
+      case 'approved':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <CheckCircle className="w-3.5 h-3.5" />
+            Approved
           </span>
         );
       case 'pending_approval':
@@ -2299,6 +2613,7 @@ function LoansPageContent() {
                   >
                     <option value="">All Loans</option>
                     <option value="pending_approval">Pending Approval</option>
+                    <option value="approved">Approved</option>
                     <option value="disbursed">Active / Disbursed</option>
                     <option value="fully_paid">Fully Paid</option>
                     <option value="rejected">Rejected</option>
@@ -2606,19 +2921,23 @@ function LoansPageContent() {
                                        </td>
                                        <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
                                        <td className="px-6 py-4 text-right">
-                                         {loan.status === 'pending_approval' ? (
+                                         {loan.status === 'pending_approval' || loan.status === 'approved' ? (
                                            isAdminOrManager ? (
                                              <button
                                                onClick={() => toggleLoanExpand(loan.id)}
                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary dark:border-secondary/30 dark:bg-secondary/10 dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 transition-all text-[11px] font-bold cursor-pointer"
                                              >
                                                {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                               Review Application
+                                               {loan.status === 'approved' ? 'Review & Disburse' : 'Review Application'}
                                              </button>
                                            ) : (
-                                             <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500 text-[11px] font-semibold cursor-not-allowed select-none">
-                                               Unavailable
-                                             </span>
+                                             <button
+                                               onClick={() => toggleLoanExpand(loan.id)}
+                                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all text-[11px] font-bold cursor-pointer"
+                                             >
+                                               {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                               View Details
+                                             </button>
                                            )
                                          ) : (
                                            <button
@@ -2734,7 +3053,7 @@ function LoansPageContent() {
                                                         type="button"
                                                         onClick={() => openApprovalModal(loan, loanDetails)}
                                                         className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
-                                                        title="Edit loan amount, terms, and configure deductions before approval"
+                                                        title="Edit loan amount, terms, and configure deductions before disbursement"
                                                       >
                                                         <Pencil className="w-3.5 h-3.5 text-primary dark:text-secondary" />
                                                         Edit & Adjust
@@ -2750,6 +3069,15 @@ function LoansPageContent() {
                                                   <Clock className="w-5 h-5 shrink-0" />
                                                   <div className="text-xs">
                                                     <span className="font-bold">Application Pending Review:</span> Amortization schedules, disbursement vouchers, and repayment ledgers will be generated once this loan has been approved and disbursed.
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {loan.status === 'approved' && (
+                                                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-3 text-emerald-700 dark:text-emerald-300">
+                                                  <CheckCircle className="w-5 h-5 shrink-0" />
+                                                  <div className="text-xs">
+                                                    <span className="font-bold">Application Approved:</span> This loan is approved and ready for disbursement. Check voucher and amortization schedules will be activated upon disbursement.
                                                   </div>
                                                 </div>
                                               )}
@@ -3634,23 +3962,155 @@ function LoansPageContent() {
 
               {/* Step 1: Select Borrower & Product */}
               {wizardStep === 1 && (
-                <div className="space-y-6">
-                  {/* Select Member dropdown */}
-                  <div className="space-y-1.5 max-w-md">
-                    <label className="font-label text-neutral-600 dark:text-neutral-400 px-1 font-bold text-xs uppercase">Select Member Borrower *</label>
-                    <select
-                      required
-                      value={applyMemberId}
-                      onChange={(e) => setApplyMemberId(e.target.value)}
-                      className="w-full px-4 py-3 bg-white dark:bg-surface border border-outline-variant/65 rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-sm text-on-surface dark:text-white font-semibold"
+                <div className="space-y-6 min-h-[380px]">
+                  {/* Select Member Animated Dropdown */}
+                  <div ref={memberDropdownRef} className="relative space-y-1.5 max-w-md z-30">
+                    <div className="flex items-center justify-between px-1">
+                      <label className="font-label text-neutral-600 dark:text-neutral-400 font-bold text-xs uppercase">
+                        Select Member Borrower *
+                      </label>
+                      {selectedMemberObj && (
+                        <span className="text-[10px] text-primary dark:text-secondary font-mono font-semibold">
+                          ID: {selectedMemberObj.member_no || 'N/A'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Trigger Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsMemberDropdownOpen(prev => !prev)}
+                      className={`w-full px-4 py-3 bg-white dark:bg-surface border rounded-2xl flex items-center justify-between text-sm transition-all duration-200 cursor-pointer shadow-xs hover:border-primary/50 text-left ${
+                        isMemberDropdownOpen
+                          ? 'border-primary ring-2 ring-primary/20 shadow-md'
+                          : 'border-outline-variant/65'
+                      }`}
                     >
-                      <option value="">-- Choose Member Profile --</option>
-                      {members.map((m: any) => (
-                        <option key={m.id} value={m.id}>
-                          {m.last_name}, {m.first_name} (ID: {m.member_no || 'N/A'})
-                        </option>
-                      ))}
-                    </select>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                          selectedMemberObj
+                            ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                            : 'bg-neutral/10 text-neutral-400 dark:bg-neutral/20'
+                        }`}>
+                          <User className="w-4 h-4" />
+                        </div>
+                        <span className={`truncate text-sm ${
+                          selectedMemberObj
+                            ? 'text-on-surface dark:text-white font-semibold'
+                            : 'text-neutral-400 dark:text-neutral-500 font-normal'
+                        }`}>
+                          {selectedMemberObj
+                            ? `${selectedMemberObj.last_name}, ${selectedMemberObj.first_name} ${selectedMemberObj.middle_name ? selectedMemberObj.middle_name[0] + '.' : ''}`
+                            : '-- Choose Member Profile --'}
+                        </span>
+                      </div>
+                      <ChevronDown
+                        className={`w-4 h-4 text-neutral-400 transition-transform duration-300 shrink-0 ml-2 ${
+                          isMemberDropdownOpen ? 'rotate-180 text-primary dark:text-secondary' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {/* Animated Dropdown Menu Popover */}
+                    <div
+                      className={`absolute left-0 right-0 top-[calc(100%+6px)] z-50 bg-white dark:bg-surface border border-outline-variant/60 rounded-2xl shadow-2xl overflow-hidden transition-all duration-200 ease-out origin-top ${
+                        isMemberDropdownOpen
+                          ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                          : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                      }`}
+                      style={{
+                        boxShadow: '0 12px 36px -4px rgba(0, 0, 0, 0.25), 0 4px 16px -2px rgba(0, 0, 0, 0.15)'
+                      }}
+                    >
+                      {/* Search Header */}
+                      <div className="p-2.5 border-b border-outline-variant/30 bg-neutral-50/80 dark:bg-surface-container/50">
+                        <div className="relative flex items-center">
+                          <Search className="w-4 h-4 text-neutral-400 absolute left-3 pointer-events-none" />
+                          <input
+                            ref={memberSearchInputRef}
+                            type="text"
+                            placeholder="Type to search borrower name or ID..."
+                            value={memberDropdownSearch}
+                            onChange={(e) => setMemberDropdownSearch(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full pl-9 pr-8 py-2 text-xs bg-white dark:bg-surface-container-lowest border border-outline-variant/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-on-surface dark:text-white placeholder:text-neutral-400 font-medium transition-all"
+                          />
+                          {memberDropdownSearch && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMemberDropdownSearch('');
+                                memberSearchInputRef.current?.focus();
+                              }}
+                              className="absolute right-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-white p-0.5 rounded-full"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Dropdown Options List */}
+                      <div className="max-h-60 overflow-y-auto divide-y divide-outline-variant/15 p-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectMember('')}
+                          className={`w-full px-3 py-2 text-left text-xs font-semibold rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+                            !applyMemberId
+                              ? 'bg-primary/10 text-primary dark:text-secondary'
+                              : 'text-neutral-400 hover:bg-neutral/10 dark:hover:bg-neutral/20'
+                          }`}
+                        >
+                          <span className="italic">-- Clear Selection --</span>
+                          {!applyMemberId && <CheckCircle2 className="w-4 h-4 text-primary dark:text-secondary shrink-0" />}
+                        </button>
+
+                        {filteredBorrowerMembers.length === 0 ? (
+                          <div className="px-4 py-8 text-center text-xs text-neutral-400">
+                            No member profile found matching &quot;{memberDropdownSearch}&quot;
+                          </div>
+                        ) : (
+                          filteredBorrowerMembers.map((m: any) => {
+                            const isSelected = String(m.id) === String(applyMemberId);
+                            const memberFullName = `${m.last_name}, ${m.first_name}${m.middle_name ? ' ' + m.middle_name : ''}`;
+                            return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => handleSelectMember(String(m.id))}
+                                className={`w-full px-3 py-2.5 text-left text-xs rounded-xl flex items-center justify-between transition-all cursor-pointer group ${
+                                  isSelected
+                                    ? 'bg-primary/15 dark:bg-primary/25 text-primary dark:text-secondary font-bold'
+                                    : 'text-on-surface dark:text-neutral-200 hover:bg-primary/5 dark:hover:bg-white/5 font-medium'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                                    isSelected
+                                      ? 'bg-primary text-white dark:bg-secondary dark:text-neutral-900'
+                                      : 'bg-neutral/10 text-neutral-500 dark:bg-neutral/20 group-hover:bg-primary/10 group-hover:text-primary transition-colors'
+                                  }`}>
+                                    {m.first_name ? m.first_name[0] : 'M'}
+                                  </div>
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="truncate group-hover:text-primary dark:group-hover:text-secondary transition-colors">
+                                      {memberFullName}
+                                    </span>
+                                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500 font-mono">
+                                      ID: {m.member_no || 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <CheckCircle2 className="w-4 h-4 text-primary dark:text-secondary shrink-0 ml-2" />
+                                )}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {applyMemberId && (() => {
@@ -3677,8 +4137,10 @@ function LoansPageContent() {
                                     const filtered = products.filter(p => getProductCategory(p.name) === label);
                                     if (filtered.length > 0) {
                                       setSelectedProduct(filtered[0]);
-                                      setApplyAmount(parseFloat(filtered[0].min_amount));
-                                      setApplyTermMonths(filtered[0].term_months);
+                                      const defAmt = isAdminOrManager ? (parseFloat(filtered[0].min_amount) || 5000) : parseFloat(filtered[0].min_amount);
+                                      setApplyAmount(defAmt);
+                                      const defTerm = filtered[0].term_months >= 2 && label === LOAN_CATEGORIES.STL ? 2 : filtered[0].term_months;
+                                      setApplyTermMonths(defTerm);
                                     } else {
                                       setSelectedProduct(null);
                                     }
@@ -3694,18 +4156,22 @@ function LoansPageContent() {
                             })}
                           </div>
 
-                          <div className="text-[11px] font-bold text-neutral-500/90 flex items-center gap-2 mt-2.5 bg-neutral/5 dark:bg-neutral/10 p-2 px-3.5 rounded-2xl border border-outline-variant/30">
-                            <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
-                            {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
-                              <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
-                            ) : (
-                              <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
-                            )}
-                          </div>
+                          {!isAdminOrManager && (
+                            <div className="text-[11px] font-bold text-neutral-500/90 flex items-center justify-between gap-2 mt-2.5 bg-neutral/5 dark:bg-neutral/10 p-2.5 px-3.5 rounded-2xl border border-outline-variant/30">
+                              <div className="flex items-center gap-2">
+                                <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                                {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
+                                  <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
+                                ) : (
+                                  <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        {/* Lock / Re-borrowing Unlocked & Share Capital Banners */}
-                        {selectedMemberSummary && parseFloat(selectedMemberSummary?.balances?.share_capital || 0) === 0 && (
+                        {/* Lock / Re-borrowing Unlocked & Share Capital Banners (Only show restrictions for regular member self-service) */}
+                        {!isAdminOrManager && selectedMemberSummary && parseFloat(selectedMemberSummary?.balances?.share_capital || 0) === 0 && (
                           <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex items-start gap-2.5 font-semibold">
                             <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
                             <div className="space-y-1">
@@ -3716,19 +4182,19 @@ function LoansPageContent() {
                             </div>
                           </div>
                         )}
-                        {isRegularLocked && (
+                        {!isAdminOrManager && isRegularLocked && (
                           <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
                             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
                             <span>You cannot apply for a new Regular Loan because this member already has an active Regular Loan.</span>
                           </div>
                         )}
-                        {hasStl1MonthRepayment && selectedLoanCategory === LOAN_CATEGORIES.STL && (
+                        {!isAdminOrManager && hasStl1MonthRepayment && selectedLoanCategory === LOAN_CATEGORIES.STL && (
                           <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
-                            <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                             <span><strong>STL Re-borrowing Unlocked:</strong> Users can loan again on STL after 1 month term of repayment (even if the term is more than 1month and this applies if they have 3 current loans on STL). At least one of your active STLs has reached 1 month of repayment!</span>
                           </div>
                         )}
-                        {isStlLocked && (
+                        {!isAdminOrManager && isStlLocked && (
                           <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
                             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
                             <span>You cannot apply for a new Short Term Loan (STL) because this member has 3 active STLs, and none have reached 1 month of repayment yet.</span>
@@ -3785,7 +4251,7 @@ function LoansPageContent() {
                                     const remCap = Math.max(0, baseLimit - actPrincipal);
 
                                     const isExceedingCap = Boolean(selectedMemberSummary) && parseFloat(p.min_amount) > remCap;
-                                    const isDisabled = isExceedingCap || isRegularLocked || isStlLocked;
+                                    const isDisabled = !isAdminOrManager && (isExceedingCap || isRegularLocked || isStlLocked);
 
                                     return (
                                       <button
@@ -3795,8 +4261,10 @@ function LoansPageContent() {
                                         onClick={() => {
                                           if (isDisabled) return;
                                           setSelectedProduct(p);
-                                          setApplyAmount(parseFloat(p.min_amount));
-                                          setApplyTermMonths(p.term_months);
+                                          const defAmount = isAdminOrManager ? (parseFloat(p.min_amount) || 5000) : parseFloat(p.min_amount);
+                                          setApplyAmount(defAmount);
+                                          const defTerm = p.term_months >= 2 && getProductCategory(p.name) === LOAN_CATEGORIES.STL ? 2 : p.term_months;
+                                          setApplyTermMonths(defTerm);
                                         }}
                                         className={`w-full p-3.5 rounded-2xl border text-left transition-all ${isDisabled
                                           ? 'border-outline-variant/40 bg-neutral-100/60 dark:bg-neutral-900/40 opacity-60 cursor-not-allowed'
@@ -3821,7 +4289,7 @@ function LoansPageContent() {
                                                 {isCalamityDeclared ? 'Calamity Active' : 'Calamity Only'}
                                               </span>
                                             )}
-                                            {isExceedingCap && (
+                                            {isExceedingCap && !isAdminOrManager && (
                                               <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-tertiary/15 text-tertiary border border-tertiary/30">
                                                 Exceeds Limit
                                               </span>
@@ -3855,15 +4323,15 @@ function LoansPageContent() {
                                           </div>
                                         </div>
 
-                                        {isExceedingCap ? (
+                                        {!isAdminOrManager && isExceedingCap ? (
                                           <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
                                             <AlertTriangle className="w-3 h-3 inline" /> Min ₱{parseFloat(p.min_amount).toLocaleString()} exceeds remaining capacity (₱{remCap.toLocaleString()}).
                                           </p>
-                                        ) : isRegularLocked ? (
+                                        ) : !isAdminOrManager && isRegularLocked ? (
                                           <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
                                             <AlertTriangle className="w-3 h-3 inline" /> Regular Loan category locked (Max 1 active).
                                           </p>
-                                        ) : isStlLocked ? (
+                                        ) : !isAdminOrManager && isStlLocked ? (
                                           <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
                                             <AlertTriangle className="w-3 h-3 inline" /> STL category locked (3 active without 1-month repayment).
                                           </p>
@@ -3879,16 +4347,19 @@ function LoansPageContent() {
 
                         <div className="pt-2 flex justify-end">
                           <button
-                            disabled={!applyMemberId || !selectedProduct || isRegularLocked || isStlLocked}
+                            disabled={!applyMemberId || !selectedProduct || (!isAdminOrManager && (isRegularLocked || isStlLocked))}
                             onClick={() => {
                               if (selectedProduct) {
-                                setApplyTermMonths(selectedProduct.term_months);
+                                const defTerm = selectedProduct.term_months >= 2 && getProductCategory(selectedProduct.name) === LOAN_CATEGORIES.STL ? 2 : selectedProduct.term_months;
+                                setApplyTermMonths(defTerm);
                                 const activePrincipal = parseFloat(selectedMemberSummary?.loans?.active_principal || selectedMemberSummary?.loans?.outstanding_balance || 0);
                                 const shareCap = selectedMemberSummary?.balances?.share_capital || 0;
                                 const histCount = selectedMemberSummary?.loans?.historical_count || 0;
                                 const mult = histCount === 0 ? 0.8 : histCount === 1 ? 2.0 : 3.0;
                                 const remainingCap = Math.max(0, (mult * shareCap) - activePrincipal);
-                                const initAmt = Math.min(parseFloat(selectedProduct.max_amount), remainingCap);
+                                const initAmt = isAdminOrManager
+                                  ? (applyAmount > 0 ? applyAmount : (parseFloat(selectedProduct.min_amount) || 5000))
+                                  : Math.min(parseFloat(selectedProduct.max_amount), remainingCap);
                                 setApplyAmount(initAmt);
                               }
                               setWizardStep(2);
@@ -3906,7 +4377,7 @@ function LoansPageContent() {
 
               {/* Step 2: Amount & Term Details */}
               {wizardStep === 2 && selectedProduct && (() => {
-                const shareCapital = selectedMemberSummary?.balances?.share_capital || 0;
+                const shareCapital = parseFloat(String(applyInvestmentAmount)) || selectedMemberSummary?.balances?.share_capital || 0;
                 const historicalCount = selectedMemberSummary?.loans?.historical_count || 0;
 
                 let borrowLimit = 0;
@@ -3930,17 +4401,555 @@ function LoansPageContent() {
                 const activePrincipal = parseFloat(selectedMemberSummary?.loans?.active_principal || selectedMemberSummary?.loans?.outstanding_balance || 0);
                 const remainingCapacity = Math.max(0, borrowLimit - activePrincipal);
 
-                // Adjust slider cap based on remaining capacity
+                // Slider cap for self-service regular member
                 const maxProductCap = parseFloat(selectedProduct.max_amount) || remainingCapacity;
                 const maxSliderCap = Math.min(maxProductCap, remainingCapacity);
-
                 const rawMinProduct = parseFloat(selectedProduct.min_amount) || 1000;
                 const minSliderCap = Math.min(rawMinProduct, maxSliderCap);
 
-                const currentAmountValue = Math.max(minSliderCap, Math.min(applyAmount || maxSliderCap, maxSliderCap));
+                const currentAmountValue = applyAmount || 0;
+                const coMakerRequired = !isAdminOrManager && currentAmountValue > shareCapital;
+                const submitDisabled = applySubmitting || (!isAdminOrManager && coMakerRequired && !coMakerName.trim()) || currentAmountValue <= 0;
 
-                const coMakerRequired = currentAmountValue > shareCapital;
-                const submitDisabled = applySubmitting || (coMakerRequired && !coMakerName.trim());
+                if (isAdminOrManager) {
+                  return (
+                    <div className="space-y-5 animate-micro-elevate">
+                      {/* Physical Slip Title / Policy override banner */}
+                      <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 rounded-2xl bg-primary/10 dark:bg-secondary/15 flex items-center justify-center text-primary dark:text-secondary flex-shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-sm text-on-surface dark:text-white">Admin Desk Application Slip Entry</h4>
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                              Selected Product: <strong className="text-primary dark:text-secondary">{selectedProduct.name}</strong> ({selectedProduct.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing Balance'})
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                            Manual Override Active
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Section 1: Slip Header: Date & LAF No. */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-neutral-600 dark:text-neutral-300 flex items-center gap-1.5">
+                            <Calendar className="w-4 h-4 text-primary dark:text-secondary" />
+                            <span>Application Date *</span>
+                          </label>
+                          <input
+                            type="date"
+                            value={applyDate}
+                            onChange={(e) => setApplyDate(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-sm font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-neutral-600 dark:text-neutral-300 flex items-center gap-1.5">
+                              <FileText className="w-4 h-4 text-primary dark:text-secondary" />
+                              <span>LAF No. (Loan Application Form #)</span>
+                            </label>
+                            <span className="text-[9px] font-bold text-neutral-400">e.g. 26-407</span>
+                          </div>
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              value={applyLafNo}
+                              onChange={(e) => setApplyLafNo(e.target.value)}
+                              placeholder="e.g. 26-407"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-sm font-mono font-bold text-primary dark:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                            <button
+                              type="button"
+                              onClick={fetchNextLafNo}
+                              disabled={loadingLafNo}
+                              className="absolute right-2 px-2.5 py-1 text-[11px] font-bold text-neutral-500 hover:text-primary dark:hover:text-secondary bg-neutral-100 dark:bg-neutral-800 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                              title="Refresh to next sequential LAF No."
+                            >
+                              {loadingLafNo ? '...' : 'Auto-Suggest'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 2: Borrower's Part (Name, Age, Investment Amount) */}
+                      <div className="p-4 rounded-2xl border border-outline-variant/60 bg-surface-container-low space-y-3">
+                        <div className="flex items-center justify-between border-b border-outline-variant/30 pb-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-primary dark:text-secondary flex items-center gap-1.5">
+                            <User className="w-4 h-4" /> Borrower&apos;s Part
+                          </span>
+                          <span className="text-[11px] text-neutral-500">
+                            From Physical Application Sheet
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400">Borrower Name</label>
+                            <input
+                              type="text"
+                              value={
+                                applyBorrowerName ||
+                                (() => {
+                                  const mem = members.find((m: any) => String(m.id) === String(applyMemberId));
+                                  if (mem) {
+                                    return [mem.first_name, mem.middle_name, mem.last_name].filter(Boolean).join(' ');
+                                  }
+                                  if (selectedMemberSummary?.full_name) return selectedMemberSummary.full_name;
+                                  if (selectedMemberSummary?.first_name || selectedMemberSummary?.last_name) {
+                                    return `${selectedMemberSummary.first_name || ''} ${selectedMemberSummary.last_name || ''}`.trim();
+                                  }
+                                  return '';
+                                })()
+                              }
+                              onChange={(e) => setApplyBorrowerName(e.target.value)}
+                              placeholder="Borrower Full Name"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-bold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400">Age</label>
+                            <input
+                              type="number"
+                              value={applyAge}
+                              onChange={(e) => setApplyAge(e.target.value)}
+                              placeholder="e.g. 38"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-bold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400">Investment Amount (CBU)</label>
+                              {selectedMemberSummary?.balances?.share_capital !== undefined && (
+                                <span className="text-[9px] text-neutral-400">DB: ₱{parseFloat(selectedMemberSummary.balances.share_capital).toLocaleString()}</span>
+                              )}
+                            </div>
+                            <input
+                              type="number"
+                              step="any"
+                              value={applyInvestmentAmount}
+                              onChange={(e) => setApplyInvestmentAmount(e.target.value)}
+                              placeholder="e.g. 22000"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-bold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 3: Loan Amount & Term Specification (ANY AMOUNT) */}
+                      <div className="p-4 rounded-2xl border-2 border-primary/30 dark:border-secondary/30 bg-primary/5 dark:bg-secondary/5 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-black uppercase tracking-wider text-primary dark:text-secondary flex items-center gap-1.5">
+                            <DollarSign className="w-4 h-4" /> Loan Amount & Term Selection
+                          </label>
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary">
+                            Any Amount Allowed
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="relative flex items-center">
+                            <span className="absolute left-4 font-headline text-2xl font-black text-primary dark:text-secondary">₱</span>
+                            <input
+                              type="number"
+                              step="any"
+                              min="1"
+                              value={applyAmount || ''}
+                              onChange={(e) => setApplyAmount(parseFloat(e.target.value) || 0)}
+                              placeholder="0.00"
+                              className="w-full pl-10 pr-4 py-3 text-2xl font-black font-headline text-primary dark:text-secondary bg-white dark:bg-surface-container-high/80 rounded-2xl border-2 border-primary/30 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                          <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                            Enter any principal amount requested on the application sheet without software limit restrictions.
+                          </p>
+                        </div>
+
+                        {/* Quick Presets for Short Term Loan Types (Utility, Emergency, Cash Express, Occasion) */}
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Quick Presets / STL Types:</span>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {[
+                              { label: 'Utility', amount: 3000 },
+                              { label: 'Emergency', amount: 5000 },
+                              { label: 'Cash Express', amount: 7000 },
+                              { label: 'Occasion', amount: 10000 },
+                            ].map((preset) => {
+                              const isSelected = applyAmount === preset.amount;
+                              return (
+                                <button
+                                  key={preset.label}
+                                  type="button"
+                                  onClick={() => setApplyAmount(preset.amount)}
+                                  className={`py-2 px-3 rounded-xl border text-center transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-primary text-white dark:bg-secondary dark:text-neutral-950 border-primary dark:border-secondary font-bold shadow-xs'
+                                      : 'bg-white dark:bg-surface-container-high/60 border-outline-variant hover:border-primary/40 text-neutral-700 dark:text-neutral-200'
+                                  }`}
+                                >
+                                  <div className="text-[10px] uppercase font-bold tracking-tight">{preset.label}</div>
+                                  <div className="text-xs font-extrabold">{formatCurrency(preset.amount)}</div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Term Selection */}
+                        <div className="space-y-1.5 pt-1">
+                          <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center justify-between">
+                            <span>Loan Term Duration:</span>
+                            <span className="font-extrabold text-primary dark:text-secondary">{applyTermMonths} {applyTermMonths === 1 ? 'Month' : 'Months'}</span>
+                          </label>
+                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                            {[1, 2, 3].map((m) => (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => setApplyTermMonths(m)}
+                                className={`py-2 px-3 rounded-xl border text-center transition-all cursor-pointer font-bold text-xs ${
+                                  applyTermMonths === m
+                                    ? 'bg-primary text-white dark:bg-secondary dark:text-neutral-950 border-primary dark:border-secondary shadow-xs'
+                                    : 'bg-white dark:bg-surface-container-high/60 border-outline-variant hover:border-primary/40 text-neutral-700 dark:text-neutral-200'
+                                }`}
+                              >
+                                {m} {m === 1 ? 'Month' : 'Months'}
+                              </button>
+                            ))}
+                            {selectedProduct.term_months > 3 && (
+                              <div className="flex items-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={selectedProduct.term_months}
+                                  value={applyTermMonths}
+                                  onChange={(e) => setApplyTermMonths(parseInt(e.target.value, 10) || 1)}
+                                  placeholder="Months"
+                                  className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-bold text-center text-on-surface dark:text-white"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 4: For Staff Only - Less Charges (Deductions) & Net Proceeds */}
+                      <div className="p-4 rounded-2xl border border-outline-variant/60 bg-surface-container-low space-y-3.5">
+                        <div className="flex items-center justify-between border-b border-outline-variant/30 pb-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                            <ReceiptText className="w-4 h-4" /> For Staff Only: Less Charges (Deductions)
+                          </span>
+                          <span className="text-[10px] font-bold text-neutral-500">
+                            Auto-Calculates Net Proceeds
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">Service Fee</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={applyServiceFee}
+                              onChange={(e) => setApplyServiceFee(e.target.value)}
+                              placeholder="100"
+                              className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">Insurance</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={applyInsurance}
+                              onChange={(e) => setApplyInsurance(e.target.value)}
+                              placeholder="11"
+                              className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">Fixed Deposit</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={applyFixedDeposit}
+                              onChange={(e) => setApplyFixedDeposit(e.target.value)}
+                              placeholder="0"
+                              className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">Others</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={applyOtherCharges}
+                              onChange={(e) => setApplyOtherCharges(e.target.value)}
+                              placeholder="0"
+                              className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Previous Active Loan Balance Deduction */}
+                        <div className="p-3 bg-white dark:bg-surface-container-high/40 rounded-xl border border-outline-variant/60 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5 uppercase tracking-wider">
+                              <ReceiptText className="w-3.5 h-3.5 text-primary" />
+                              Previous Loan Balance Deduction
+                            </label>
+                            {selectedPrevLoanId && (() => {
+                              const found = memberActiveLoans.find((l: any) => String(l.id) === String(selectedPrevLoanId));
+                              return found ? (
+                                <span className="text-[10px] text-primary dark:text-secondary font-semibold">
+                                  Current Balance: ₱{Number(found.remaining_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="sm:col-span-2 space-y-1 relative" ref={prevLoanDropdownRef}>
+                              <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">
+                                Select Active Loan to Deduct
+                              </label>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (applyMemberId && !loadingMemberActiveLoans && memberActiveLoans.length > 0) {
+                                    setIsPrevLoanDropdownOpen((prev) => !prev);
+                                  }
+                                }}
+                                disabled={!applyMemberId || loadingMemberActiveLoans || memberActiveLoans.length === 0}
+                                className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer bg-white dark:bg-surface-container-high/60 ${
+                                  isPrevLoanDropdownOpen
+                                    ? 'border-primary ring-2 ring-primary/20 shadow-sm'
+                                    : 'border-outline-variant hover:border-primary/40'
+                                } ${(!applyMemberId || loadingMemberActiveLoans || memberActiveLoans.length === 0) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <CreditCard className={`w-3.5 h-3.5 shrink-0 ${selectedPrevLoanObj ? 'text-primary dark:text-secondary' : 'text-neutral-400'}`} />
+                                  <span className={`truncate ${selectedPrevLoanObj ? 'text-on-surface dark:text-white font-semibold' : 'text-neutral-500 font-normal'}`}>
+                                    {!applyMemberId
+                                      ? 'Select a member above first...'
+                                      : loadingMemberActiveLoans
+                                      ? "Loading member's active loans..."
+                                      : memberActiveLoans.length === 0
+                                      ? 'No active loans found for this member'
+                                      : selectedPrevLoanObj
+                                      ? `${selectedPrevLoanObj.laf_no ? `[${selectedPrevLoanObj.laf_no}] ` : ''}${selectedPrevLoanObj.product_name || 'Loan'} — Bal: ₱${Number(selectedPrevLoanObj.remaining_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                      : '-- None / No previous loan deduction --'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {loadingMemberActiveLoans && <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />}
+                                  <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-200 ${isPrevLoanDropdownOpen ? 'rotate-180 text-primary dark:text-secondary' : ''}`} />
+                                </div>
+                              </button>
+
+                              {/* Animated Dropdown Menu Popover */}
+                              <div
+                                className={`absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-white dark:bg-surface-container-high border border-outline-variant/70 rounded-2xl shadow-2xl overflow-hidden transition-all duration-200 ease-out origin-top ${
+                                  isPrevLoanDropdownOpen
+                                    ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                                    : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                                }`}
+                                style={{
+                                  boxShadow: '0 12px 36px -4px rgba(0, 0, 0, 0.3), 0 4px 16px -2px rgba(0, 0, 0, 0.2)'
+                                }}
+                              >
+                                <div className="max-h-56 overflow-y-auto divide-y divide-outline-variant/20 p-1">
+                                  {/* None Option */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handlePrevLoanSelect('');
+                                      setIsPrevLoanDropdownOpen(false);
+                                    }}
+                                    className={`w-full px-3 py-2 text-left text-xs rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+                                      !selectedPrevLoanId
+                                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                        : 'hover:bg-neutral-100 dark:hover:bg-surface-container-highest text-neutral-600 dark:text-neutral-300'
+                                    }`}
+                                  >
+                                    <span className="italic">-- None / No previous loan deduction --</span>
+                                    {!selectedPrevLoanId && <CheckCircle2 className="w-4 h-4 text-primary dark:text-secondary shrink-0" />}
+                                  </button>
+
+                                  {/* Active Loans */}
+                                  {memberActiveLoans.map((l: any) => {
+                                    const isSelected = String(l.id) === String(selectedPrevLoanId);
+                                    return (
+                                      <button
+                                        key={l.id}
+                                        type="button"
+                                        onClick={() => {
+                                          handlePrevLoanSelect(String(l.id));
+                                          setIsPrevLoanDropdownOpen(false);
+                                        }}
+                                        className={`w-full px-3 py-2 text-left rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
+                                          isSelected
+                                            ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                            : 'hover:bg-neutral-100 dark:hover:bg-surface-container-highest text-neutral-800 dark:text-neutral-200'
+                                        }`}
+                                      >
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            {l.laf_no && (
+                                              <span className="px-1.5 py-0.5 rounded-md bg-neutral-200 dark:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-700 dark:text-neutral-300">
+                                                {l.laf_no}
+                                              </span>
+                                            )}
+                                            <span className="text-xs font-semibold truncate">{l.product_name || 'Loan'}</span>
+                                          </div>
+                                          <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                                            Status: <span className="capitalize">{l.status}</span>
+                                          </div>
+                                        </div>
+                                        <div className="text-right shrink-0 flex items-center gap-2">
+                                          <div>
+                                            <span className="text-[9px] block text-neutral-400 uppercase font-medium">Bal</span>
+                                            <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                              ₱{Number(l.remaining_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
+                                          </div>
+                                          {isSelected && <CheckCircle2 className="w-4 h-4 text-primary dark:text-secondary shrink-0" />}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">
+                                Prev. Loan Balance (₱)
+                              </label>
+                              <input
+                                type="number"
+                                step="any"
+                                value={applyPrevBalance}
+                                onChange={(e) => setApplyPrevBalance(e.target.value)}
+                                placeholder="0"
+                                className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-bold text-primary dark:text-secondary focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Summary of Charges & Net Proceeds */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex justify-between items-center">
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 block">Total Charges</span>
+                              <span className="text-xs text-neutral-500">Less from principal</span>
+                            </div>
+                            <span className="text-base font-black font-headline text-amber-800 dark:text-amber-300">
+                              {formatCurrency(totalDeductionsCalc)}
+                            </span>
+                          </div>
+
+                          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex justify-between items-center">
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">Net Loan Proceeds</span>
+                              <span className="text-xs text-neutral-500">Actual amount to disburse</span>
+                            </div>
+                            <span className="text-xl font-black font-headline text-emerald-700 dark:text-emerald-300">
+                              {formatCurrency(netProceedsCalc)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 5: Required Payment Schedule (Editable) */}
+                      <div className="p-4 rounded-2xl border border-outline-variant/60 bg-surface-container-low space-y-3">
+                        <div className="flex items-center justify-between border-b border-outline-variant/30 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-primary dark:text-secondary flex items-center gap-1.5">
+                              <Calendar className="w-4 h-4" /> Required Payment Schedule
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary">
+                              Editable
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold text-neutral-500">
+                              {selectedProduct.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing Balance (2% / mo)'}
+                            </span>
+                            {Object.keys(applyScheduleAmounts).length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setApplyScheduleAmounts({})}
+                                className="text-[10px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
+                              >
+                                Reset to Auto
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                          {monthlySchedulePreview.map((item: { monthLabel: string; payment: number }, idx: number) => {
+                            const currentVal = applyScheduleAmounts[idx] !== undefined ? applyScheduleAmounts[idx] : item.payment;
+                            return (
+                              <div key={idx} className="bg-white dark:bg-surface-container-high/60 border border-outline-variant/50 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-neutral-700 dark:text-neutral-300">{item.monthLabel}:</span>
+                                  <span className="text-[9px] text-neutral-400 font-mono">
+                                    Auto: ₱{item.payment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                                <div className="relative flex items-center">
+                                  <span className="absolute left-3 text-xs font-bold text-neutral-400">₱</span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={currentVal}
+                                    onChange={(e) => setApplyScheduleAmounts(prev => ({ ...prev, [idx]: e.target.value }))}
+                                    placeholder="0.00"
+                                    className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-outline-variant bg-white dark:bg-surface-container-high/80 text-xs font-bold font-mono text-primary dark:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Footer Navigation & Submit */}
+                      <div className="flex gap-4 pt-3 border-t border-outline-variant/30">
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep(1)}
+                          className="flex-1 py-3 bg-neutral/10 hover:bg-neutral/15 dark:bg-neutral/20 dark:hover:bg-neutral/25 text-on-surface dark:text-white rounded-2xl font-bold transition-colors cursor-pointer text-center text-sm"
+                        >
+                          Back to Products
+                        </button>
+                        <button
+                          type="button"
+                          disabled={submitDisabled}
+                          onClick={() => handleApplyLoanSubmit()}
+                          className="flex-1 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer text-center text-sm shadow-md"
+                        >
+                          {applySubmitting ? 'Booking Application...' : 'Book Loan Application'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div className="space-y-6 animate-micro-elevate">
@@ -3959,42 +4968,6 @@ function LoansPageContent() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* Left: Slider & Repayment summary */}
                       <div className="space-y-5">
-                        {/* LAF NO. Field (Staff & Admin only) */}
-                        {isAdminOrManager && (
-                          <div className="p-4 rounded-2xl border border-outline-variant/65 bg-surface-container-low space-y-2">
-                            <div className="flex items-center justify-between">
-                              <label className="text-xs font-bold text-on-surface dark:text-white flex items-center gap-1.5">
-                                <FileText className="w-4 h-4 text-primary dark:text-secondary" />
-                                <span>Loan Application Form (LAF) No. *</span>
-                              </label>
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20">
-                                Auto-Suggested
-                              </span>
-                            </div>
-                            <div className="relative flex items-center">
-                              <input
-                                type="text"
-                                value={applyLafNo}
-                                onChange={(e) => setApplyLafNo(e.target.value)}
-                                placeholder="e.g. 26-388"
-                                className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-sm font-mono font-bold text-primary dark:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                              />
-                              <button
-                                type="button"
-                                onClick={fetchNextLafNo}
-                                disabled={loadingLafNo}
-                                className="absolute right-2 px-2.5 py-1 text-[11px] font-bold text-neutral-500 hover:text-primary dark:hover:text-secondary bg-neutral-100 dark:bg-neutral-800 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-                                title="Refresh to next sequential LAF No."
-                              >
-                                {loadingLafNo ? '...' : 'Refresh'}
-                              </button>
-                            </div>
-                            <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
-                              Sequential application form number for sorting & tracking physical documents (e.g. 26-01, 26-388).
-                            </p>
-                          </div>
-                        )}
-
                         <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
                           <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Loan Principal Amount</span>
                           <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
@@ -4069,7 +5042,6 @@ function LoansPageContent() {
                                   if (selectedProduct.amortization_type === 'flat_rate') {
                                     return (currentAmountValue + (currentAmountValue * rate * applyTermMonths)) / applyTermMonths;
                                   } else {
-                                    // Diminishing straight-line principal Month 1 payment
                                     return (currentAmountValue / applyTermMonths) + (currentAmountValue * rate);
                                   }
                                 })()
@@ -4168,7 +5140,7 @@ function LoansPageContent() {
                     </div>
                   )}
                   <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                    A new loan application has been registered under ID <strong className="text-on-surface dark:text-white font-bold font-mono">#{String(successData?.id || 'N/A').slice(0, 8)}</strong> with status <strong className="text-amber-500 font-bold">Pending Approval</strong>.
+                    A new loan application has been registered under ID <strong className="text-on-surface dark:text-white font-bold font-mono">#{String(successData?.id || 'N/A').slice(0, 8)}</strong> with status <strong className={`${successData?.status === 'approved' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'} font-bold`}>{successData?.status === 'approved' ? 'Approved' : 'Pending Approval'}</strong>.
                   </p>
                   <div className="pt-4">
                     <button
@@ -4498,6 +5470,99 @@ function LoansPageContent() {
                 />
               </div>
 
+              {/* Transaction Breakdown Rows Editor */}
+              <div className="space-y-2 pt-2 border-t border-outline-variant/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-neutral-700 dark:text-neutral-300 text-[11px] uppercase tracking-wider block">
+                      Transaction Breakdown Rows
+                    </span>
+                    <span className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                      Add, edit, or remove debit/credit entries for this voucher
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setVoucherRows(prev => [...prev, { description: '', debit: '', credit: '' }])}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 dark:bg-secondary/15 hover:bg-primary/20 text-primary dark:text-secondary rounded-xl font-bold text-xs transition-all active:scale-95 cursor-pointer shadow-2xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Row
+                  </button>
+                </div>
+
+                <div className="border border-outline-variant/60 rounded-2xl overflow-hidden divide-y divide-outline-variant/40 bg-white dark:bg-surface-container-low shadow-2xs">
+                  {/* Table Column Header */}
+                  <div className="grid grid-cols-12 px-3 py-2 bg-neutral-100/70 dark:bg-neutral-800/60 text-[10px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                    <div className="col-span-1 text-center">#</div>
+                    <div className="col-span-5">Book of Account / Item</div>
+                    <div className="col-span-3 text-right">Debit (₱)</div>
+                    <div className="col-span-2 text-right">Credit (₱)</div>
+                    <div className="col-span-1 text-center">Action</div>
+                  </div>
+
+                  {voucherRows.map((row, idx) => (
+                    <div key={idx} className="grid grid-cols-12 px-3 py-2 items-center gap-2 text-xs">
+                      <div className="col-span-1 text-center font-mono text-neutral-400 font-bold">{idx + 1}</div>
+                      <div className="col-span-5">
+                        <input
+                          type="text"
+                          value={row.description}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setVoucherRows(prev => prev.map((r, i) => (i === idx ? { ...r, description: val } : r)));
+                            if (idx === 0) setBookOfAccount(val);
+                          }}
+                          placeholder="e.g. Accounts Payable / Deduction"
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-on-surface dark:text-white font-medium focus:ring-1 focus:ring-primary outline-none"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          step="any"
+                          value={row.debit}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setVoucherRows(prev => prev.map((r, i) => (i === idx ? { ...r, debit: val } : r)));
+                          }}
+                          placeholder="0.00"
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs text-on-surface dark:text-white focus:ring-1 focus:ring-primary outline-none"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          step="any"
+                          value={row.credit}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setVoucherRows(prev => prev.map((r, i) => (i === idx ? { ...r, credit: val } : r)));
+                          }}
+                          placeholder="0.00"
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-primary outline-none"
+                        />
+                      </div>
+                      <div className="col-span-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setVoucherRows(prev => prev.filter((_, i) => i !== idx))}
+                          className="p-1 text-neutral-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-md transition-colors cursor-pointer"
+                          title="Remove row"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {voucherRows.length === 0 && (
+                    <div className="py-4 text-center text-xs text-neutral-400 italic">
+                      No rows added yet. Click &quot;Add Row&quot; above to insert a line item.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-outline-variant/30">
                 <div className="space-y-1">
                   <label className="font-semibold text-neutral-600 dark:text-neutral-400 text-[11px]">Prepared By</label>
@@ -4587,90 +5652,57 @@ function LoansPageContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(() => {
-                      let deds: any[] = [];
-                      if (printLoan.deductions_breakdown) {
-                        try {
-                          deds = typeof printLoan.deductions_breakdown === 'string'
-                            ? JSON.parse(printLoan.deductions_breakdown)
-                            : printLoan.deductions_breakdown;
-                        } catch {}
-                      }
-                      const principalVal = parseFloat(printLoan.principal_amount || 0);
-                      const totalDed = Array.isArray(deds) ? deds.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0) : 0;
-
-                      return (
-                        <>
-                          <tr className="border-b border-[#064e3b]/10 bg-white">
-                            <td className="py-2 px-3 text-center font-mono text-neutral-500 border-r border-[#064e3b]/10">1</td>
-                            <td className="py-2 px-3 font-bold text-neutral-800 border-r border-[#064e3b]/10">{bookOfAccount || 'Loans Receivable - Regular'}</td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-neutral-900 border-r border-[#064e3b]/10">
-                              {principalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono text-neutral-400">—</td>
-                          </tr>
-                          {Array.isArray(deds) && deds.map((d: any, idx: number) => (
-                            <tr key={`ded-${idx}`} className="border-b border-[#064e3b]/10 bg-neutral-50/60">
-                              <td className="py-2 px-3 text-center font-mono text-neutral-500 border-r border-[#064e3b]/10">{idx + 2}</td>
-                              <td className="py-2 px-3 text-neutral-700 border-r border-[#064e3b]/10 italic">Less: {d.name}</td>
-                              <td className="py-2 px-3 text-right font-mono text-neutral-400 border-r border-[#064e3b]/10">—</td>
-                              <td className="py-2 px-3 text-right font-mono text-[#dc2626] font-semibold">
-                                {parseFloat(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </td>
-                            </tr>
-                          ))}
-                          <tr className="bg-[#f9fafb] font-bold text-[10.5px]">
-                            <td colSpan={2} className="py-2 px-3 text-right text-neutral-700 uppercase tracking-wider border-r border-[#064e3b]/10">
-                              Total:
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono text-neutral-900 border-r border-[#064e3b]/10">
-                              ₱{principalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono text-[#dc2626]">
-                              ₱{totalDed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                          </tr>
-                        </>
-                      );
-                    })()}
+                    {voucherRows.length > 0 ? (
+                      voucherRows.map((r, idx) => (
+                        <tr key={idx} className="border-b border-[#064e3b]/10 bg-white">
+                          <td className="py-2 px-3 text-center font-mono text-neutral-500 border-r border-[#064e3b]/10">{idx + 1}</td>
+                          <td className="py-2 px-3 font-bold text-neutral-800 border-r border-[#064e3b]/10">
+                            {r.description || '—'}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-neutral-900 border-r border-[#064e3b]/10">
+                            {parseFloat(r.debit) > 0 ? parseFloat(r.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono text-[#dc2626] font-semibold">
+                            {parseFloat(r.credit) > 0 ? parseFloat(r.credit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="py-4 text-center text-neutral-400 italic">No transaction details</td>
+                      </tr>
+                    )}
+                    <tr className="bg-[#f9fafb] font-bold text-[10.5px]">
+                      <td colSpan={2} className="py-2 px-3 text-right text-neutral-700 uppercase tracking-wider border-r border-[#064e3b]/10">
+                        Total:
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono text-neutral-900 border-r border-[#064e3b]/10">
+                        ₱{voucherDebitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono text-[#dc2626]">
+                        ₱{voucherCreditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
 
               {/* Disbursed Amount Box */}
-              {(() => {
-                let deds: any[] = [];
-                if (printLoan.deductions_breakdown) {
-                  try {
-                    deds = typeof printLoan.deductions_breakdown === 'string'
-                      ? JSON.parse(printLoan.deductions_breakdown)
-                      : printLoan.deductions_breakdown;
-                  } catch {}
-                }
-                const principalVal = parseFloat(printLoan.principal_amount || 0);
-                const totalDed = Array.isArray(deds) ? deds.reduce((sum: number, d: any) => sum + (parseFloat(d.amount) || 0), 0) : 0;
-                const netVal = printLoan.net_proceeds !== undefined && printLoan.net_proceeds !== null
-                  ? parseFloat(printLoan.net_proceeds)
-                  : Math.max(0, principalVal - totalDed);
-
-                return (
-                  <div className="flex justify-between items-center bg-[#ecfdf5] p-3 px-4 rounded-xl border border-[#d1fae5] gap-4">
-                    <div className="flex-1">
-                      <span className="text-[9px] font-bold text-[#064e3b] uppercase tracking-wider block mb-1">
-                        Disbursed Amount (Net Take-Home):
-                      </span>
-                      <p className="text-[11px] font-bold text-neutral-900 uppercase tracking-wide leading-snug m-0">
-                        {formatDisbursedInWords(netVal)}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <span className="text-base font-mono font-extrabold text-[#064e3b]">
-                        ₱{netVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
+              <div className="flex justify-between items-center bg-[#ecfdf5] p-3 px-4 rounded-xl border border-[#d1fae5] gap-4">
+                <div className="flex-1">
+                  <span className="text-[9px] font-bold text-[#064e3b] uppercase tracking-wider block mb-1">
+                    Disbursed Amount (Net Take-Home):
+                  </span>
+                  <p className="text-[11px] font-bold text-neutral-900 uppercase tracking-wide leading-snug m-0">
+                    {formatDisbursedInWords(voucherNetTakeHome)}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <span className="text-base font-mono font-extrabold text-[#064e3b]">
+                    ₱{voucherNetTakeHome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
 
               {/* Signatures Block */}
               <div className="pt-3 space-y-5 text-xs">
@@ -5169,30 +6201,41 @@ function LoansPageContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.08)', backgroundColor: '#ffffff' }}>
-                        <td style={{ padding: '8px 12px', textAlign: 'center', fontFamily: 'monospace', color: '#6b7280', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
-                          1
-                        </td>
-                        <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#1f2937', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
-                          {bookOfAccount || 'Accounts Payable'}
-                        </td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
-                          {parseFloat(printLoan.principal_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af' }}>
-                          —
-                        </td>
-                      </tr>
+                      {voucherRows.length > 0 ? (
+                        voucherRows.map((r, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.08)', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#fcfdfd' }}>
+                            <td style={{ padding: '8px 12px', textAlign: 'center', fontFamily: 'monospace', color: '#6b7280', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                              {idx + 1}
+                            </td>
+                            <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#1f2937', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                              {r.description || '—'}
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                              {parseFloat(r.debit) > 0 ? parseFloat(r.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#dc2626', fontWeight: 'bold' }}>
+                              {parseFloat(r.credit) > 0 ? parseFloat(r.credit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.08)', backgroundColor: '#ffffff' }}>
+                          <td style={{ padding: '8px 12px', textAlign: 'center', fontFamily: 'monospace', color: '#6b7280', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>1</td>
+                          <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#1f2937', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>Accounts Payable</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>—</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af' }}>—</td>
+                        </tr>
+                      )}
                       {/* Total row */}
                       <tr style={{ backgroundColor: '#f9fafb', fontWeight: 'bold', fontSize: '10px', borderTop: '1px solid rgba(6, 78, 59, 0.15)' }}>
                         <td colSpan={2} style={{ padding: '8px 12px', textAlign: 'right', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
                           Total:
                         </td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
-                          ₱{parseFloat(printLoan.principal_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₱{voucherDebitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#dc2626' }}>
-                          ₱0.00
+                          ₱{voucherCreditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     </tbody>
@@ -5206,12 +6249,12 @@ function LoansPageContent() {
                       Disbursed Amount:
                     </span>
                     <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.4 }}>
-                      {formatDisbursedInWords(parseFloat(printLoan.principal_amount || 0))}
+                      {formatDisbursedInWords(voucherNetTakeHome)}
                     </p>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <span style={{ fontSize: '15px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
-                      ₱{parseFloat(printLoan.principal_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₱{voucherNetTakeHome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>

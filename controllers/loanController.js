@@ -158,7 +158,9 @@ export const applyForLoan = async (req, res, next) => {
       });
     }
 
-    // Verify member exists, completed profile, and has admin approval
+    const isStaffOrAdmin = req.user.role === 'admin' || req.user.role === 'staff' || req.user.role === 'manager';
+
+    // Verify member exists, completed profile, and has admin approval (only enforced for member self-application)
     const member = await query('SELECT status, profile_completed FROM members WHERE id = $1', [member_id]);
     if (member.rowCount === 0) {
       return res.status(404).json({
@@ -166,7 +168,7 @@ export const applyForLoan = async (req, res, next) => {
         error: { message: 'Member not found.' }
       });
     }
-    if (!member.rows[0].profile_completed || member.rows[0].status !== 'approved') {
+    if (!isStaffOrAdmin && (!member.rows[0].profile_completed || member.rows[0].status !== 'approved')) {
       return res.status(403).json({
         success: false,
         error: { message: 'You cannot apply for a loan until your profile verification has been completed and approved by an administrator.' }
@@ -208,42 +210,44 @@ export const applyForLoan = async (req, res, next) => {
       }
     }
 
-    const isRegularProduct = p.name.toLowerCase().includes('regular loan');
-    if (isRegularProduct && regularCount >= 1) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'This member cannot apply for a new Regular Loan because they already have an active Regular Loan.' }
-      });
-    }
-    if (!isRegularProduct && stlCount >= 3) {
-      // Check if at least one of the active STLs has completed 1 month of repayment term
-      // (active for >= 30 days OR has at least 1 paid/partially-paid repayment schedule)
-      const stlRepaymentCheck = await query(
-        `SELECT EXISTS (
-          SELECT 1
-          FROM loans l
-          JOIN loan_products lp ON l.loan_product_id = lp.id
-          WHERE l.member_id = $1 
-            AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
-            AND (LOWER(lp.name) LIKE '%short term loan%' OR LOWER(lp.name) LIKE '%stl%')
-            AND (
-              COALESCE(l.disbursed_at, l.created_at) <= NOW() - INTERVAL '30 days'
-              OR EXISTS (
-                SELECT 1 FROM repayment_schedules rs 
-                WHERE rs.loan_id = l.id AND (rs.status = 'paid' OR rs.status = 'partially_paid' OR rs.principal_paid > 0)
-              )
-            )
-        ) as eligible`,
-        [member_id]
-      );
-
-      const hasStlWith1MonthRepayment = stlRepaymentCheck.rows[0]?.eligible || false;
-
-      if (!hasStlWith1MonthRepayment) {
+    if (!isStaffOrAdmin) {
+      const isRegularProduct = p.name.toLowerCase().includes('regular loan');
+      if (isRegularProduct && regularCount >= 1) {
         return res.status(400).json({
           success: false,
-          error: { message: 'This member cannot apply for a new Short Term Loan (STL) because they have 3 active STLs and none have completed 1 month of repayment yet.' }
+          error: { message: 'This member cannot apply for a new Regular Loan because they already have an active Regular Loan.' }
         });
+      }
+      if (!isRegularProduct && stlCount >= 3) {
+        // Check if at least one of the active STLs has completed 1 month of repayment term
+        // (active for >= 30 days OR has at least 1 paid/partially-paid repayment schedule)
+        const stlRepaymentCheck = await query(
+          `SELECT EXISTS (
+            SELECT 1
+            FROM loans l
+            JOIN loan_products lp ON l.loan_product_id = lp.id
+            WHERE l.member_id = $1 
+              AND l.status IN ('pending_approval', 'approved', 'disbursed', 'defaulted')
+              AND (LOWER(lp.name) LIKE '%short term loan%' OR LOWER(lp.name) LIKE '%stl%')
+              AND (
+                COALESCE(l.disbursed_at, l.created_at) <= NOW() - INTERVAL '30 days'
+                OR EXISTS (
+                  SELECT 1 FROM repayment_schedules rs 
+                  WHERE rs.loan_id = l.id AND (rs.status = 'paid' OR rs.status = 'partially_paid' OR rs.principal_paid > 0)
+                )
+              )
+          ) as eligible`,
+          [member_id]
+        );
+
+        const hasStlWith1MonthRepayment = stlRepaymentCheck.rows[0]?.eligible || false;
+
+        if (!hasStlWith1MonthRepayment) {
+          return res.status(400).json({
+            success: false,
+            error: { message: 'This member cannot apply for a new Short Term Loan (STL) because they have 3 active STLs and none have completed 1 month of repayment yet.' }
+          });
+        }
       }
     }
 
@@ -286,33 +290,36 @@ export const applyForLoan = async (req, res, next) => {
       tierName = '3rd Loan & Onwards (Maximum Tier)';
     }
 
-    // Amount validation with dynamic lower-bound adjustment based on remaining capacity
+    // Amount validation: Only enforced as hard block for member self-application;
+    // admin/staff desk entry allows entering any requested amount from the physical form
     const remainingCapacity = Math.max(0, borrowLimit - totalExistingPrincipal);
     const minAllowed = Math.min(parseFloat(p.min_amount), remainingCapacity);
     const maxAllowed = Math.min(parseFloat(p.max_amount), remainingCapacity);
 
-    if (amount < minAllowed || amount > maxAllowed) {
-      return res.status(400).json({
-        success: false,
-        error: { 
-          message: `Requested loan amount must be between ₱${minAllowed.toLocaleString()} and ₱${maxAllowed.toLocaleString()} for product "${p.name}".`
-        }
-      });
-    }
+    if (!isStaffOrAdmin) {
+      if (amount < minAllowed || amount > maxAllowed) {
+        return res.status(400).json({
+          success: false,
+          error: { 
+            message: `Requested loan amount must be between ₱${minAllowed.toLocaleString()} and ₱${maxAllowed.toLocaleString()} for product "${p.name}".`
+          }
+        });
+      }
 
-    if ((amount + totalExistingPrincipal) > borrowLimit) {
-      return res.status(400).json({
-        success: false,
-        error: { 
-          message: `Your requested loan amount of ₱${amount.toLocaleString()} (plus your existing active loans total of ₱${totalExistingPrincipal.toLocaleString()}) exceeds your borrowing limit of ₱${borrowLimit.toLocaleString()} based on the Progressive Loan Policy.`
-        }
-      });
+      if ((amount + totalExistingPrincipal) > borrowLimit) {
+        return res.status(400).json({
+          success: false,
+          error: { 
+            message: `Your requested loan amount of ₱${amount.toLocaleString()} (plus your existing active loans total of ₱${totalExistingPrincipal.toLocaleString()}) exceeds your borrowing limit of ₱${borrowLimit.toLocaleString()} based on the Progressive Loan Policy.`
+          }
+        });
+      }
     }
 
     // 4. Co-maker verification
-    // Co-maker is required if the loan amount exceeds 100% of Share Capital
-    const { co_maker_name, co_maker_phone } = req.body;
-    if (amount > shareCapital) {
+    // Co-maker is required if the loan amount exceeds 100% of Share Capital for regular member portal requests
+    const { co_maker_name, co_maker_phone, deductions, application_date, custom_schedule } = req.body;
+    if (!isStaffOrAdmin && amount > shareCapital) {
       if (!co_maker_name) {
         return res.status(400).json({
           success: false,
@@ -326,7 +333,7 @@ export const applyForLoan = async (req, res, next) => {
     let finalTermMonths = p.term_months;
     if (term_months !== undefined && term_months !== null) {
       const parsedTerm = parseInt(term_months, 10);
-      if (isNaN(parsedTerm) || parsedTerm <= 0 || parsedTerm > p.term_months) {
+      if (isNaN(parsedTerm) || parsedTerm <= 0 || (!isStaffOrAdmin && parsedTerm > p.term_months)) {
         return res.status(400).json({
           success: false,
           error: { message: `Selected term must be between 1 and ${p.term_months} months for product "${p.name}".` }
@@ -336,7 +343,7 @@ export const applyForLoan = async (req, res, next) => {
     }
 
     // Dynamic interest rate: 15% if 36 months, otherwise 2% (0.02)
-    const finalInterestRate = finalTermMonths === 36 ? 0.1500 : 0.0200;
+    const finalInterestRate = finalTermMonths === 36 ? 0.1500 : parseFloat(p.interest_rate);
 
     // Validate or auto-generate LAF No. (Only staff and admin can specify LAF No.)
     let finalLafNo = null;
@@ -355,13 +362,26 @@ export const applyForLoan = async (req, res, next) => {
       }
     }
 
+    // Deductions & net proceeds calculation
+    const deductionsList = Array.isArray(deductions)
+      ? deductions
+          .filter(d => d && d.name && !isNaN(parseFloat(d.amount)) && parseFloat(d.amount) > 0)
+          .map(d => ({ name: String(d.name).trim(), amount: parseFloat(d.amount) }))
+      : [];
+    const totalDeductions = deductionsList.reduce((sum, d) => sum + d.amount, 0);
+    const netProceeds = Math.max(0, amount - totalDeductions);
+    const applicationDate = application_date ? new Date(application_date) : new Date();
+
+    const initialStatus = isStaffOrAdmin ? 'approved' : 'pending_approval';
+
     const insertLoan = `
       INSERT INTO loans (
         member_id, loan_product_id, principal_amount, interest_rate, 
         term_months, amortization_type, status, co_maker_name, co_maker_phone,
-        laf_no, payment_mode
+        laf_no, payment_mode, total_deductions, net_proceeds, deductions_breakdown,
+        custom_schedule, created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *
     `;
     const result = await query(insertLoan, [
@@ -371,10 +391,16 @@ export const applyForLoan = async (req, res, next) => {
       finalInterestRate,
       finalTermMonths,
       p.amortization_type,
+      initialStatus,
       co_maker_name || null,
       co_maker_phone || null,
       finalLafNo,
-      payment_mode || 'SD'
+      payment_mode || 'SD',
+      totalDeductions,
+      netProceeds,
+      JSON.stringify(deductionsList),
+      custom_schedule ? JSON.stringify(custom_schedule) : null,
+      applicationDate.toISOString()
     ]);
 
     res.status(201).json({
@@ -407,7 +433,7 @@ export const disburseLoan = async (req, res, next) => {
     }
 
     const loan = loanCheck.rows[0];
-    if (loan.status !== 'pending_approval') {
+    if (loan.status !== 'pending_approval' && loan.status !== 'approved') {
       await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
@@ -1132,11 +1158,11 @@ export const rejectLoanApplication = async (req, res, next) => {
 
     const loan = loanCheck.rows[0];
 
-    if (loan.status !== 'pending_approval') {
+    if (loan.status !== 'pending_approval' && loan.status !== 'approved') {
       await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
-        error: { message: `Only pending applications can be rejected. Current status: ${loan.status}` }
+        error: { message: `Only pending or approved applications can be rejected. Current status: ${loan.status}` }
       });
     }
 
