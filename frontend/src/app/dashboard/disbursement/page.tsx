@@ -126,6 +126,131 @@ export const DISBURSEMENT_TABS: TabConfig[] = [
 
 export const CATEGORY_TABS: TabConfig[] = DISBURSEMENT_TABS.filter(t => t.id !== 'summary');
 
+export const DRAW_BANK_OPTIONS: { value: string; label: string }[] = [
+  { value: 'BDO', label: 'BDO' },
+  { value: 'Metro Bank', label: 'Metro Bank' }
+];
+
+interface SelectOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+interface AnimatedSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  className?: string;
+  buttonClassName?: string;
+  menuClassName?: string;
+  align?: 'left' | 'right';
+  disabled?: boolean;
+}
+
+function AnimatedSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Select an option...',
+  className = '',
+  buttonClassName = '',
+  menuClassName = '',
+  align = 'left',
+  disabled = false,
+}: AnimatedSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const selectedOption = options.find(o => o.value === value);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative ${isOpen ? 'z-50' : 'z-10'} ${className}`}
+      data-dropdown-container
+    >
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen(prev => !prev)}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs transition-all duration-150 cursor-pointer outline-none ${
+          isOpen
+            ? 'border-primary ring-2 ring-primary/20 bg-surface-container-lowest dark:bg-neutral-800 border-primary text-neutral-900 dark:text-white'
+            : 'bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 hover:border-outline-variant text-neutral-900 dark:text-white'
+        } ${buttonClassName} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        <span className={`truncate ${selectedOption ? '' : 'text-neutral-400 font-normal'}`}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 flex-shrink-0 text-neutral-400 transition-transform duration-200 ease-out ${
+            isOpen ? 'rotate-180 text-primary dark:text-secondary' : ''
+          }`}
+        />
+      </button>
+
+      <div
+        className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} min-w-full w-max max-w-xs mt-1.5 max-h-60 overflow-y-auto rounded-xl bg-white dark:bg-neutral-800 border border-outline-variant/60 shadow-xl py-1 custom-scrollbar transition-all duration-200 ease-out origin-top ${
+          isOpen
+            ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 scale-95 -translate-y-1 pointer-events-none'
+        } ${menuClassName}`}
+      >
+        {options.map(opt => {
+          const isSelected = opt.value === value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setIsOpen(false);
+              }}
+              className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-xs font-semibold text-left transition-colors cursor-pointer ${
+                isSelected
+                  ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-secondary font-bold'
+                  : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700/60'
+              }`}
+            >
+              <div className="flex flex-col truncate">
+                <span className="truncate">{opt.label}</span>
+                {opt.description && (
+                  <span className="text-[10px] text-neutral-400 font-normal truncate">{opt.description}</span>
+                )}
+              </div>
+              {isSelected && (
+                <Check className="w-3.5 h-3.5 flex-shrink-0 text-primary dark:text-secondary" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function DisbursementPageContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
@@ -1263,39 +1388,38 @@ function DisbursementPageContent() {
                 {/* Bank Filter */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">Bank:</span>
-                  <select
+                  <AnimatedSelect
                     value={cvBankFilter}
-                    onChange={e => setCvBankFilter(e.target.value)}
-                    className="px-3 py-2 text-xs font-medium rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 focus:outline-none focus:border-primary text-neutral-900 dark:text-white cursor-pointer"
-                  >
-                    <option value="all">All Banks</option>
-                    <option value="BDO">BDO</option>
-                    <option value="LBP">Land Bank (LBP)</option>
-                    <option value="DBP">DBP</option>
-                    {bankOptions
-                      .filter(b => !['BDO', 'LBP', 'DBP'].includes(b.toUpperCase()))
-                      .map(b => (
-                        <option key={b} value={b}>
-                          {b}
-                        </option>
-                      ))}
-                  </select>
+                    onChange={setCvBankFilter}
+                    options={[
+                      { value: 'all', label: 'All Banks' },
+                      { value: 'BDO', label: 'BDO' },
+                      { value: 'Metro Bank', label: 'Metro Bank' },
+                      ...bankOptions
+                        .filter(b => !['BDO', 'METRO BANK', 'METROBANK'].includes(b.toUpperCase()))
+                        .map(b => ({ value: b, label: b }))
+                    ]}
+                    className="w-36"
+                    buttonClassName="font-medium text-xs py-1.5"
+                  />
                 </div>
 
                 {/* Status Filter */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">Status:</span>
-                  <select
+                  <AnimatedSelect
                     value={cvStatusFilter}
-                    onChange={e => setCvStatusFilter(e.target.value)}
-                    className="px-3 py-2 text-xs font-medium rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 focus:outline-none focus:border-primary text-neutral-900 dark:text-white cursor-pointer"
-                  >
-                    <option value="all">All Statuses</option>
-                    <option value="edit">Edit</option>
-                    <option value="on process">On Process</option>
-                    <option value="for release">For Release</option>
-                    <option value="filed">Filed</option>
-                  </select>
+                    onChange={setCvStatusFilter}
+                    options={[
+                      { value: 'all', label: 'All Statuses' },
+                      { value: 'edit', label: 'Edit' },
+                      { value: 'on process', label: 'On Process' },
+                      { value: 'for release', label: 'For Release' },
+                      { value: 'filed', label: 'Filed' },
+                    ]}
+                    className="w-36"
+                    buttonClassName="font-medium text-xs py-1.5"
+                  />
                 </div>
 
                 {/* Reload Button */}
@@ -1619,11 +1743,9 @@ function DisbursementPageContent() {
                     <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                       Disbursement Category *
                     </label>
-                    <select
-                      required
+                    <AnimatedSelect
                       value={newCvCategory}
-                      onChange={e => {
-                        const selected = e.target.value;
+                      onChange={selected => {
                         setNewCvCategory(selected);
                         const matched = CATEGORY_TABS.find(t => t.defaultCategory === selected);
                         if (matched) {
@@ -1635,14 +1757,13 @@ function DisbursementPageContent() {
                           });
                         }
                       }}
-                      className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-bold text-primary dark:text-secondary cursor-pointer"
-                    >
-                      {CATEGORY_TABS.map(cat => (
-                        <option key={cat.id} value={cat.defaultCategory}>
-                          {cat.label}
-                        </option>
-                      ))}
-                    </select>
+                      options={CATEGORY_TABS.map(cat => ({
+                        value: cat.defaultCategory,
+                        label: cat.label,
+                      }))}
+                      buttonClassName="font-bold text-primary dark:text-secondary"
+                      menuClassName="min-w-[220px]"
+                    />
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
@@ -1672,10 +1793,9 @@ function DisbursementPageContent() {
                     <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                       Draw Bank
                     </label>
-                    <select
+                    <AnimatedSelect
                       value={newCvBankName}
-                      onChange={e => {
-                        const bName = e.target.value;
+                      onChange={bName => {
                         setNewCvBankName(bName);
                         setNewCvRows(prev => {
                           const bankRowIdx = prev.findIndex(r => /cib\b|cash\s*in\s*bank/i.test(r.description || ''));
@@ -1685,15 +1805,10 @@ function DisbursementPageContent() {
                           return prev;
                         });
                       }}
-                      className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-bold cursor-pointer"
-                    >
-                      <option value="BDO">BDO</option>
-                      <option value="LBP">LBP (Land Bank)</option>
-                      <option value="BPI">BPI</option>
-                      <option value="MBTC">Metrobank</option>
-                      <option value="PNB">PNB</option>
-                      <option value="OTHER">Other Bank</option>
-                    </select>
+                      options={DRAW_BANK_OPTIONS}
+                      buttonClassName="font-bold"
+                      align="right"
+                    />
                   </div>
                 </div>
 
@@ -2344,16 +2459,19 @@ function DisbursementPageContent() {
                   <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                     Bank
                   </label>
-                  <select
+                  <AnimatedSelect
                     value={editCvFormData.bank}
-                    onChange={e => setEditCvFormData({ ...editCvFormData, bank: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-medium"
-                  >
-                    <option value="BDO">BDO</option>
-                    <option value="LBP">Land Bank (LBP)</option>
-                    <option value="DBP">DBP</option>
-                    <option value="CASH">Cash on Hand</option>
-                  </select>
+                    onChange={val => setEditCvFormData({ ...editCvFormData, bank: val })}
+                    options={
+                      DRAW_BANK_OPTIONS.some(o => o.value === editCvFormData.bank)
+                        ? DRAW_BANK_OPTIONS
+                        : editCvFormData.bank
+                        ? [...DRAW_BANK_OPTIONS, { value: editCvFormData.bank, label: `${editCvFormData.bank} (Current)` }]
+                        : DRAW_BANK_OPTIONS
+                    }
+                    buttonClassName="font-medium"
+                    align="right"
+                  />
                 </div>
               </div>
 
@@ -2373,22 +2491,19 @@ function DisbursementPageContent() {
                   <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                     Disbursement Category
                   </label>
-                  <select
+                  <AnimatedSelect
                     value={editCvFormData.folder_name}
-                    onChange={e => setEditCvFormData({ ...editCvFormData, folder_name: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-medium"
-                  >
-                    {CATEGORY_TABS.map(tab => (
-                      <option key={tab.id} value={tab.defaultCategory}>
-                        {tab.label}
-                      </option>
-                    ))}
-                    {editCvFormData.folder_name && !CATEGORY_TABS.some(t => t.defaultCategory === editCvFormData.folder_name) && (
-                      <option value={editCvFormData.folder_name}>
-                        {editCvFormData.folder_name} (Legacy/Custom)
-                      </option>
-                    )}
-                  </select>
+                    onChange={val => setEditCvFormData({ ...editCvFormData, folder_name: val })}
+                    options={[
+                      ...CATEGORY_TABS.map(tab => ({ value: tab.defaultCategory, label: tab.label })),
+                      ...(editCvFormData.folder_name && !CATEGORY_TABS.some(t => t.defaultCategory === editCvFormData.folder_name)
+                        ? [{ value: editCvFormData.folder_name, label: `${editCvFormData.folder_name} (Legacy/Custom)` }]
+                        : [])
+                    ]}
+                    buttonClassName="font-medium"
+                    menuClassName="min-w-[220px]"
+                    align="right"
+                  />
                 </div>
               </div>
 
