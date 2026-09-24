@@ -5331,10 +5331,22 @@ function LoansPageContent() {
                   <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
                     A new loan application has been registered under ID <strong className="text-on-surface dark:text-white font-bold font-mono">#{String(successData?.id || 'N/A').slice(0, 8)}</strong> with status <strong className={`${successData?.status === 'approved' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'} font-bold`}>{successData?.status === 'approved' ? 'Approved' : 'Pending Approval'}</strong>.
                   </p>
-                  <div className="pt-4">
+                  <div className="pt-4 flex flex-col sm:flex-row items-center gap-3">
                     <button
-                      onClick={() => setIsApplyModalOpen(false)}
-                      className="w-full py-3.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer text-sm shadow"
+                      type="button"
+                      onClick={() => openApplyModal()}
+                      className="w-full sm:flex-1 py-3.5 px-4 bg-primary/10 dark:bg-secondary/15 hover:bg-primary/20 dark:hover:bg-secondary/25 text-primary dark:text-secondary border border-primary/25 dark:border-secondary/30 rounded-2xl font-bold transition-all active:scale-95 cursor-pointer text-sm flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Make another one?</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsApplyModalOpen(false);
+                        fetchLoans();
+                      }}
+                      className="w-full sm:flex-1 py-3.5 px-4 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer text-sm shadow active:scale-95"
                     >
                       Close Window & Refresh
                     </button>
