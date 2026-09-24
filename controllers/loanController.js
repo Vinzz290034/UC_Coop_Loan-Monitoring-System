@@ -1897,7 +1897,46 @@ export const updateLoanDetails = async (req, res, next) => {
     const finalCoMakerPhone = co_maker_phone !== undefined ? (co_maker_phone ? String(co_maker_phone).trim() : null) : currentLoan.co_maker_phone;
     const finalPaymentMode = payment_mode !== undefined ? (payment_mode ? String(payment_mode).trim() : null) : currentLoan.payment_mode;
 
-    // 10. Handle 'mark_fully_paid' or setting status to 'fully_paid'
+    // 10. Process deductions & net proceeds
+    let finalDeductionsBreakdown = currentLoan.deductions_breakdown;
+    let finalTotalDeductions = currentLoan.total_deductions;
+    let finalNetProceeds = currentLoan.net_proceeds;
+
+    if (Array.isArray(deductions)) {
+      const validDeds = deductions
+        .filter(d => d && d.name && !isNaN(parseFloat(d.amount)) && parseFloat(d.amount) > 0)
+        .map(d => ({ name: String(d.name).trim(), amount: parseFloat(d.amount) }));
+      finalDeductionsBreakdown = JSON.stringify(validDeds);
+      finalTotalDeductions = validDeds.reduce((sum, d) => sum + d.amount, 0);
+      finalNetProceeds = Math.max(0, finalPrincipal - finalTotalDeductions);
+    } else if (net_proceeds !== undefined) {
+      finalNetProceeds = parseFloat(net_proceeds);
+      finalTotalDeductions = total_deductions !== undefined ? parseFloat(total_deductions) : finalTotalDeductions;
+    } else if (currentLoan.net_proceeds !== null && currentLoan.net_proceeds !== undefined) {
+      finalNetProceeds = Math.max(0, finalPrincipal - (parseFloat(finalTotalDeductions) || 0));
+    }
+
+    // Ensure finalDeductionsBreakdown is ALWAYS a valid JSON string for PostgreSQL JSONB
+    if (typeof finalDeductionsBreakdown !== 'string') {
+      finalDeductionsBreakdown = JSON.stringify(finalDeductionsBreakdown || []);
+    }
+
+    // 11. Process custom schedule & application date
+    let finalCustomSchedule = currentLoan.custom_schedule;
+    if (custom_schedule !== undefined) {
+      finalCustomSchedule = custom_schedule ? JSON.stringify(custom_schedule) : null;
+    } else if (finalTerms !== currentLoan.term_months) {
+      finalCustomSchedule = null;
+    } else if (typeof finalCustomSchedule !== 'string' && finalCustomSchedule !== null) {
+      finalCustomSchedule = JSON.stringify(finalCustomSchedule);
+    }
+
+    let finalCreatedAt = currentLoan.created_at;
+    if (application_date) {
+      finalCreatedAt = new Date(application_date).toISOString();
+    }
+
+    // 12. Handle 'mark_fully_paid' or setting status to 'fully_paid'
     if (mark_fully_paid || finalStatus === 'fully_paid') {
       finalStatus = 'fully_paid';
       // Mark all existing repayment schedules as paid so balance drops to 0 across the entire system
@@ -1945,43 +1984,6 @@ export const updateLoanDetails = async (req, res, next) => {
           ]);
         }
       }
-    }
-
-    let finalDeductionsBreakdown = currentLoan.deductions_breakdown;
-    let finalTotalDeductions = currentLoan.total_deductions;
-    let finalNetProceeds = currentLoan.net_proceeds;
-
-    if (Array.isArray(deductions)) {
-      const validDeds = deductions
-        .filter(d => d && d.name && !isNaN(parseFloat(d.amount)) && parseFloat(d.amount) > 0)
-        .map(d => ({ name: String(d.name).trim(), amount: parseFloat(d.amount) }));
-      finalDeductionsBreakdown = JSON.stringify(validDeds);
-      finalTotalDeductions = validDeds.reduce((sum, d) => sum + d.amount, 0);
-      finalNetProceeds = Math.max(0, finalPrincipal - finalTotalDeductions);
-    } else if (net_proceeds !== undefined) {
-      finalNetProceeds = parseFloat(net_proceeds);
-      finalTotalDeductions = total_deductions !== undefined ? parseFloat(total_deductions) : finalTotalDeductions;
-    } else if (currentLoan.net_proceeds !== null && currentLoan.net_proceeds !== undefined) {
-      finalNetProceeds = Math.max(0, finalPrincipal - (parseFloat(finalTotalDeductions) || 0));
-    }
-
-    // Ensure finalDeductionsBreakdown is ALWAYS a valid JSON string for PostgreSQL JSONB
-    if (typeof finalDeductionsBreakdown !== 'string') {
-      finalDeductionsBreakdown = JSON.stringify(finalDeductionsBreakdown || []);
-    }
-
-    let finalCustomSchedule = currentLoan.custom_schedule;
-    if (custom_schedule !== undefined) {
-      finalCustomSchedule = custom_schedule ? JSON.stringify(custom_schedule) : null;
-    } else if (finalTerms !== currentLoan.term_months) {
-      finalCustomSchedule = null;
-    } else if (typeof finalCustomSchedule !== 'string' && finalCustomSchedule !== null) {
-      finalCustomSchedule = JSON.stringify(finalCustomSchedule);
-    }
-
-    let finalCreatedAt = currentLoan.created_at;
-    if (application_date) {
-      finalCreatedAt = new Date(application_date).toISOString();
     }
 
     // 11. Update loan in database
