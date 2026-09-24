@@ -1252,7 +1252,6 @@ function LoansPageContent() {
   const [checkNo, setCheckNo] = useState('');
   const [payeeName, setPayeeName] = useState('');
   const [voucherDescription, setVoucherDescription] = useState('');
-  const [bookOfAccount, setBookOfAccount] = useState('Accounts Payable');
   const [preparedBy, setPreparedBy] = useState('LAMOSTE');
   const [checkedBy, setCheckedBy] = useState('MARILOU LARIOSA');
   const [approvedBy, setApprovedBy] = useState('MICHELLE');
@@ -1331,7 +1330,6 @@ function LoansPageContent() {
       : `Loan Proceeds for ${loanObj.product_name || 'Loan'} (LAF #${loanObj.laf_no || String(loanObj.id).slice(0, 8)})`;
     setVoucherDescription(defaultDesc);
     const initialBookOfAccount = 'Accounts Payable';
-    setBookOfAccount(initialBookOfAccount);
     setPreparedBy('LAMOSTE');
     setCheckedBy('MARILOU LARIOSA');
     setApprovedBy('MICHELLE');
@@ -5463,27 +5461,15 @@ function LoansPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-semibold text-neutral-600 dark:text-neutral-400 text-[11px]">Payee Name</label>
-                  <input
-                    type="text"
-                    value={payeeName}
-                    onChange={(e) => setPayeeName(e.target.value)}
-                    placeholder="Full Member Name"
-                    className="w-full px-3 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl font-bold uppercase text-on-surface dark:text-white focus:ring-1 focus:ring-primary outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-semibold text-neutral-600 dark:text-neutral-400 text-[11px]">Book of Accounts</label>
-                  <input
-                    type="text"
-                    value={bookOfAccount}
-                    onChange={(e) => setBookOfAccount(e.target.value)}
-                    placeholder="e.g. Accounts Payable"
-                    className="w-full px-3 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl font-semibold text-on-surface dark:text-white focus:ring-1 focus:ring-primary outline-none"
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="font-semibold text-neutral-600 dark:text-neutral-400 text-[11px]">Payee Name</label>
+                <input
+                  type="text"
+                  value={payeeName}
+                  onChange={(e) => setPayeeName(e.target.value)}
+                  placeholder="Full Member Name"
+                  className="w-full px-3 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl font-bold uppercase text-on-surface dark:text-white focus:ring-1 focus:ring-primary outline-none"
+                />
               </div>
 
               <div className="space-y-1">
@@ -5537,7 +5523,6 @@ function LoansPageContent() {
                           onChange={e => {
                             const val = e.target.value;
                             setVoucherRows(prev => prev.map((r, i) => (i === idx ? { ...r, description: val } : r)));
-                            if (idx === 0) setBookOfAccount(val);
                           }}
                           placeholder="e.g. Accounts Payable / Deduction"
                           className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-on-surface dark:text-white font-medium focus:ring-1 focus:ring-primary outline-none"
