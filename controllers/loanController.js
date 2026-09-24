@@ -922,7 +922,10 @@ export const getLoans = async (req, res, next) => {
           lp.name as product_name,
           COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
           COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
-          COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due
+          COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
+          COALESCE((SELECT SUM(GREATEST(0, rs.principal_due - rs.principal_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_principal,
+          COALESCE((SELECT SUM(GREATEST(0, rs.interest_due - rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_interest,
+          COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines
         FROM loans l 
         JOIN loan_products lp ON l.loan_product_id = lp.id 
         WHERE l.member_id = $1
@@ -970,7 +973,10 @@ export const getLoans = async (req, res, next) => {
         m.phone,
         COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
         COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
-        COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due
+        COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
+        COALESCE((SELECT SUM(GREATEST(0, rs.principal_due - rs.principal_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_principal,
+        COALESCE((SELECT SUM(GREATEST(0, rs.interest_due - rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_interest,
+        COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines
       FROM loans l
       LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
       LEFT JOIN members m ON l.member_id = m.id
@@ -1045,7 +1051,13 @@ export const getLoanById = async (req, res, next) => {
     const { id } = req.params;
 
     const loanResult = await query(
-      `SELECT l.*, lp.name as product_name, m.first_name, m.last_name, m.member_no, m.phone
+      `SELECT l.*, lp.name as product_name, m.first_name, m.last_name, m.member_no, m.phone,
+         COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
+         COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
+         COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
+         COALESCE((SELECT SUM(GREATEST(0, rs.principal_due - rs.principal_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_principal,
+         COALESCE((SELECT SUM(GREATEST(0, rs.interest_due - rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_interest,
+         COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines
        FROM loans l
        LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
        LEFT JOIN members m ON l.member_id = m.id
@@ -2081,7 +2093,10 @@ export const updateLoanDetails = async (req, res, next) => {
         m.member_no,
         COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
         COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
-        COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due
+        COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
+        COALESCE((SELECT SUM(GREATEST(0, rs.principal_due - rs.principal_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_principal,
+        COALESCE((SELECT SUM(GREATEST(0, rs.interest_due - rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_interest,
+        COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines
       FROM loans l
       LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
       LEFT JOIN members m ON l.member_id = m.id

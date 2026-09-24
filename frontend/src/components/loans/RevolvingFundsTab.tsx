@@ -29,7 +29,8 @@ import {
   ChevronUp,
   PieChart,
   Sparkles,
-  Edit3
+  Edit3,
+  Copy
 } from 'lucide-react';
 
 interface LiquidationItem {
@@ -255,6 +256,247 @@ export default function RevolvingFundsTab({
   const [openAccountIdx, setOpenAccountIdx] = useState<number | null>(null);
   const [accountSearch, setAccountSearch] = useState('');
 
+  // Book of Accounts state with localStorage and backend synchronization
+  const [accountOptions, setAccountOptions] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('rf_custom_accounts');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return Array.from(new Set([...ACCOUNT_OPTIONS, ...parsed])).sort((a, b) => a.localeCompare(b));
+          }
+        }
+      } catch {
+        // ignore fallback
+      }
+    }
+    return [...ACCOUNT_OPTIONS].sort((a, b) => a.localeCompare(b));
+  });
+
+  const [accountCategoryMap, setAccountCategoryMap] = useState<Record<string, string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('rf_account_categories');
+        if (saved) return JSON.parse(saved);
+      } catch {
+        // ignore fallback
+      }
+    }
+    return {};
+  });
+
+  const fetchAccounts = useCallback(async () => {
+    try {
+      const res = await api.get('/revolving-funds/accounts');
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        const serverNames: string[] = [];
+        const serverCatMap: Record<string, string> = {};
+
+        for (const item of res.data.data) {
+          const name = typeof item === 'string' ? item : item.name;
+          const cat = typeof item === 'string' ? '' : item.category;
+          if (name) {
+            serverNames.push(name);
+            if (cat) serverCatMap[name.toLowerCase()] = cat;
+          }
+        }
+
+        setAccountOptions(prev => {
+          const merged = Array.from(new Set([...ACCOUNT_OPTIONS, ...prev, ...serverNames])).sort((a, b) => a.localeCompare(b));
+          try {
+            localStorage.setItem('rf_custom_accounts', JSON.stringify(merged));
+          } catch {
+            // ignore
+          }
+          return merged;
+        });
+
+        setAccountCategoryMap(prev => {
+          const merged = { ...prev, ...serverCatMap };
+          try {
+            localStorage.setItem('rf_account_categories', JSON.stringify(merged));
+          } catch {
+            // ignore
+          }
+          return merged;
+        });
+      }
+    } catch {
+      // Quietly keep local options if server endpoint fails
+    }
+  }, []);
+
+  const handleSelectOrAddAccount = async (acctName: string, rowIdx: number, chosenCategory?: string) => {
+    const trimmed = acctName.trim();
+    if (!trimmed) return;
+
+    // Use chosen category, cached account category, or auto-guessed category
+    const catToUse = chosenCategory || accountCategoryMap[trimmed.toLowerCase()] || getCategoryForAccount(trimmed);
+
+    // Update form item row
+    setFormData(prev => {
+      const updated = [...prev.items];
+      if (updated[rowIdx]) {
+        updated[rowIdx] = {
+          ...updated[rowIdx],
+          account_name: trimmed,
+          category: catToUse
+        };
+      }
+      return { ...prev, items: updated };
+    });
+
+    // Update category map in state & localStorage
+    if (chosenCategory || !accountCategoryMap[trimmed.toLowerCase()]) {
+      setAccountCategoryMap(prev => {
+        const nextMap = { ...prev, [trimmed.toLowerCase()]: catToUse };
+        try {
+          localStorage.setItem('rf_account_categories', JSON.stringify(nextMap));
+        } catch (e) {
+          console.error(e);
+        }
+        return nextMap;
+      });
+    }
+
+    // Check if it already exists in the dropdown options
+    const exists = accountOptions.some(a => a.toLowerCase() === trimmed.toLowerCase());
+    if (!exists) {
+      const newOptions = Array.from(new Set([...accountOptions, trimmed])).sort((a, b) => a.localeCompare(b));
+      setAccountOptions(newOptions);
+      try {
+        localStorage.setItem('rf_custom_accounts', JSON.stringify(newOptions));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Persist name and category to backend
+    try {
+      await api.post('/revolving-funds/accounts', { name: trimmed, category: catToUse });
+    } catch (err) {
+      console.error('Failed to save account to backend:', err);
+    }
+
+    setOpenAccountIdx(null);
+    setAccountSearch('');
+  };
+
+  const handleDeleteAccountOption = async (e: React.MouseEvent, acctName: string) => {
+    e.stopPropagation();
+    const filtered = accountOptions.filter(a => a !== acctName);
+    setAccountOptions(filtered);
+    try {
+      localStorage.setItem('rf_custom_accounts', JSON.stringify(filtered));
+    } catch (err) {
+      console.error(err);
+    }
+
+    setAccountCategoryMap(prev => {
+      const nextMap = { ...prev };
+      delete nextMap[acctName.toLowerCase()];
+      try {
+        localStorage.setItem('rf_account_categories', JSON.stringify(nextMap));
+      } catch (e) {
+        console.error(e);
+      }
+      return nextMap;
+    });
+
+    try {
+      await api.delete(`/revolving-funds/accounts/${encodeURIComponent(acctName)}`);
+    } catch (err) {
+      console.error('Failed to remove custom account:', err);
+    }
+  };
+
+  // Multi-row voucher helpers
+  const handleAddNextVoucher = () => {
+    let highestNum = 0;
+    for (const it of formData.items) {
+      if (!it.particulars) continue;
+      const m = it.particulars.match(/(?:RF\s*Voucher|Voucher|RF)?\s*#?\s*(\d+)$/i);
+      if (m && m[1]) {
+        const n = parseInt(m[1], 10);
+        if (n > highestNum) highestNum = n;
+      }
+    }
+
+    const lastItem = formData.items[formData.items.length - 1];
+    let nextParticulars = '';
+    if (highestNum > 0) {
+      nextParticulars = `RF Voucher ${highestNum + 1}`;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          item_date_raw: lastItem?.item_date_raw || '',
+          item_date: lastItem?.item_date || null,
+          particulars: nextParticulars,
+          amount: 0,
+          account_name: '',
+          category: 'Operation',
+          remarks: ''
+        }
+      ]
+    }));
+  };
+
+  const handleAddLineToSameVoucher = (rowIdx?: number) => {
+    const targetIdx = typeof rowIdx === 'number' ? rowIdx : formData.items.length - 1;
+    const targetItem = formData.items[targetIdx];
+    const voucherParticulars = targetItem?.particulars || '';
+    const voucherDate = targetItem?.item_date_raw || (targetItem?.item_date ? String(targetItem.item_date).split('T')[0] : '');
+
+    const newItem: LiquidationItem = {
+      item_date_raw: voucherDate,
+      item_date: targetItem?.item_date || null,
+      particulars: voucherParticulars,
+      amount: 0,
+      account_name: '',
+      category: targetItem?.category || 'Operation',
+      remarks: ''
+    };
+
+    setFormData(prev => {
+      const updated = [...prev.items];
+      if (typeof rowIdx === 'number' && rowIdx < updated.length - 1) {
+        updated.splice(rowIdx + 1, 0, newItem);
+      } else {
+        updated.push(newItem);
+      }
+      return { ...prev, items: updated };
+    });
+  };
+
+  const handleAutoFillContinuationVouchers = () => {
+    setFormData(prev => {
+      let currentVoucher = '';
+      let currentDate = '';
+      const updated = prev.items.map(it => {
+        const isBlank = !it.particulars || /^item\s*#\d+$/i.test(it.particulars.trim());
+        if (!isBlank) {
+          currentVoucher = it.particulars;
+          currentDate = it.item_date_raw || (it.item_date ? String(it.item_date).split('T')[0] : '');
+          return it;
+        }
+        if (currentVoucher) {
+          return {
+            ...it,
+            particulars: currentVoucher,
+            item_date_raw: it.item_date_raw || currentDate
+          };
+        }
+        return it;
+      });
+      return { ...prev, items: updated };
+    });
+  };
+
   // Load Liquidations
   const loadLiquidations = useCallback(async (pageNum = page) => {
     try {
@@ -290,7 +532,10 @@ export default function RevolvingFundsTab({
     }
   }, [page, limit, statusFilter, search]);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    fetchAccounts();
+  }, [fetchAccounts]);
 
   useEffect(() => {
     loadLiquidations(1);
@@ -1623,9 +1868,8 @@ export default function RevolvingFundsTab({
                     <table className="w-full text-xs min-w-[860px]">
                       <thead className="sticky top-0 z-10">
                         <tr className="bg-neutral-100 dark:bg-neutral-800 border-b border-outline-variant/40 text-neutral-600 dark:text-neutral-300 font-bold uppercase tracking-wide text-[10px]">
-                          <th className="px-3 py-2.5 text-left w-8">#</th>
+                          <th className="px-3 py-2.5 text-left w-44">Particulars / Voucher #</th>
                           <th className="px-3 py-2.5 text-left w-32">Date</th>
-                          <th className="px-3 py-2.5 text-left w-40">Particulars / Voucher #</th>
                           <th className="px-3 py-2.5 text-right w-28">Amount (₱)</th>
                           <th className="px-3 py-2.5 text-left">Account</th>
                           <th className="px-3 py-2.5 text-left w-32">Category</th>
@@ -1648,7 +1892,50 @@ export default function RevolvingFundsTab({
                               : 'hover:bg-emerald-50/20 dark:hover:bg-emerald-950/10'
                             }`}
                           >
-                            <td className="px-3 py-1.5 text-neutral-400 font-mono text-[11px] text-center">{idx + 1}</td>
+                            {/* Particulars / Voucher # (now 1st column) */}
+                            <td className="px-2 py-1">
+                              <div className="relative flex items-center">
+                                <input
+                                  type="text"
+                                  value={(!item.particulars || /^item\s*#\d+$/i.test(item.particulars.trim())) ? '' : item.particulars}
+                                  onChange={e => {
+                                    const updated = [...formData.items];
+                                    updated[idx] = { ...updated[idx], particulars: e.target.value };
+                                    setFormData(prev => ({ ...prev, items: updated }));
+                                  }}
+                                  disabled={item.is_cancelled}
+                                  placeholder={
+                                    idx > 0 && formData.items[idx - 1]?.particulars && !/^item\s*#\d+$/i.test(formData.items[idx - 1]?.particulars.trim())
+                                      ? `e.g. ${formData.items[idx - 1].particulars}`
+                                      : 'RF Voucher'
+                                  }
+                                  className="w-full px-2 py-1 pr-14 text-[11px] font-mono bg-white dark:bg-neutral-800 border border-outline-variant/40 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-50"
+                                />
+                                {(!item.particulars || /^item\s*#\d+$/i.test(item.particulars.trim())) &&
+                                  idx > 0 &&
+                                  formData.items[idx - 1]?.particulars &&
+                                  !/^item\s*#\d+$/i.test(formData.items[idx - 1]?.particulars.trim()) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const prevVoucher = formData.items[idx - 1].particulars;
+                                        const prevDate = formData.items[idx - 1].item_date_raw || (formData.items[idx - 1].item_date ? String(formData.items[idx - 1].item_date).split('T')[0] : '');
+                                        const updated = [...formData.items];
+                                        updated[idx] = {
+                                          ...updated[idx],
+                                          particulars: prevVoucher,
+                                          item_date_raw: updated[idx].item_date_raw || prevDate
+                                        };
+                                        setFormData(prev => ({ ...prev, items: updated }));
+                                      }}
+                                      className="absolute right-1 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 hover:bg-emerald-100 rounded border border-emerald-300 dark:border-emerald-800 transition-all cursor-pointer shadow-2xs whitespace-nowrap"
+                                      title={`Copy "${formData.items[idx - 1].particulars}" to this row`}
+                                    >
+                                      ↳ Same #{formData.items[idx - 1].particulars.replace(/^(?:RF\s*Voucher|Voucher)\s*/i, '')}
+                                    </button>
+                                  )}
+                              </div>
+                            </td>
 
                             {/* Date */}
                             <td className="px-2 py-1">
@@ -1661,22 +1948,6 @@ export default function RevolvingFundsTab({
                                   setFormData(prev => ({ ...prev, items: updated }));
                                 }}
                                 disabled={item.is_cancelled}
-                                className="w-full px-2 py-1 text-[11px] font-mono bg-white dark:bg-neutral-800 border border-outline-variant/40 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-50"
-                              />
-                            </td>
-
-                            {/* Particulars */}
-                            <td className="px-2 py-1">
-                              <input
-                                type="text"
-                                value={(!item.particulars || /^item\s*#\d+$/i.test(item.particulars.trim())) ? '' : item.particulars}
-                                onChange={e => {
-                                  const updated = [...formData.items];
-                                  updated[idx] = { ...updated[idx], particulars: e.target.value };
-                                  setFormData(prev => ({ ...prev, items: updated }));
-                                }}
-                                disabled={item.is_cancelled}
-                                placeholder="RF Voucher"
                                 className="w-full px-2 py-1 text-[11px] font-mono bg-white dark:bg-neutral-800 border border-outline-variant/40 rounded-lg focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-50"
                               />
                             </td>
@@ -1698,7 +1969,7 @@ export default function RevolvingFundsTab({
                               />
                             </td>
 
-                            {/* Account — custom animated dropdown */}
+                            {/* Account — custom animated dropdown with custom account typing & saving */}
                             <td className={`px-2 py-1 ${openAccountIdx === idx ? 'relative z-40' : ''}`}>
                               <div className="relative" data-dropdown-container>
                                 <button
@@ -1721,7 +1992,7 @@ export default function RevolvingFundsTab({
                                       : 'border-outline-variant/40 hover:border-emerald-300'
                                     }`}
                                 >
-                                  <span className={item.account_name ? 'text-on-surface dark:text-white font-medium' : 'text-neutral-400'}>
+                                  <span className={item.account_name ? 'text-on-surface dark:text-white font-medium truncate' : 'text-neutral-400'}>
                                     {item.account_name || 'Select account…'}
                                   </span>
                                   <ChevronDown className={`w-3 h-3 flex-shrink-0 text-neutral-400 transition-transform duration-200
@@ -1738,15 +2009,24 @@ export default function RevolvingFundsTab({
                                     ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
                                     : `opacity-0 scale-y-95 ${openUpward ? 'translate-y-1' : '-translate-y-1'} pointer-events-none`
                                   }`}>
-                                  {/* Quick search inside dropdown */}
+                                  {/* Quick search and custom input inside dropdown */}
                                   <div className="p-2 border-b border-outline-variant/20 sticky top-0 bg-white dark:bg-neutral-800 z-10">
                                     <div className="relative">
                                       <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
                                       <input
                                         type="text"
-                                        placeholder="Search 48 accounts..."
+                                        placeholder={`Search or type account (${accountOptions.length})...`}
                                         value={accountSearch}
                                         onChange={e => setAccountSearch(e.target.value)}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            const trimmed = accountSearch.trim();
+                                            if (trimmed) {
+                                              handleSelectOrAddAccount(trimmed, idx);
+                                            }
+                                          }
+                                        }}
                                         className="w-full pl-8 pr-2.5 py-1 text-[11px] bg-neutral-100 dark:bg-neutral-700/50 border border-outline-variant/30 rounded-lg outline-none focus:ring-1 focus:ring-emerald-500 text-on-surface dark:text-neutral-100 placeholder-neutral-400"
                                         onClick={e => e.stopPropagation()}
                                       />
@@ -1756,46 +2036,105 @@ export default function RevolvingFundsTab({
                                   {/* Accounts list */}
                                   <div className="max-h-60 overflow-y-auto py-1 divide-y divide-outline-variant/10">
                                     {(() => {
-                                      const filtered = ACCOUNT_OPTIONS.filter(acct =>
-                                        acct.toLowerCase().includes(accountSearch.toLowerCase().trim())
+                                      const trimmedSearch = accountSearch.trim();
+                                      const filtered = accountOptions.filter(acct =>
+                                        acct.toLowerCase().includes(trimmedSearch.toLowerCase())
                                       );
-                                      if (filtered.length === 0) {
-                                        return (
-                                          <div className="px-3 py-4 text-center text-[11px] text-neutral-400 italic">
-                                            No matching accounts found
-                                          </div>
-                                        );
-                                      }
-                                      return filtered.map(acct => {
-                                        const autoCat = getCategoryForAccount(acct);
-                                        return (
-                                          <button
-                                            key={acct}
-                                            type="button"
-                                            onClick={() => {
-                                              const updated = [...formData.items];
-                                              updated[idx] = { ...updated[idx], account_name: acct, category: autoCat };
-                                              setFormData(prev => ({ ...prev, items: updated }));
-                                              setOpenAccountIdx(null);
-                                            }}
-                                            className={`w-full px-3 py-1.5 text-left text-[11px] flex items-center justify-between gap-3
-                                              transition-colors duration-100 cursor-pointer
-                                              ${item.account_name === acct
-                                                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-semibold'
-                                                : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700/60'
-                                              }`}
-                                          >
-                                            <span className="truncate">{acct}</span>
-                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0
-                                              ${autoCat === 'Service' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                                                : autoCat === 'Merchandise' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
-                                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                                              }`}>
-                                              {autoCat}
-                                            </span>
-                                          </button>
-                                        );
-                                      });
+                                      const exactMatch = accountOptions.some(a => a.toLowerCase() === trimmedSearch.toLowerCase());
+
+                                      return (
+                                        <>
+                                          {trimmedSearch && !exactMatch && (
+                                            <div className="p-2.5 bg-emerald-50/90 dark:bg-emerald-950/40 border-b border-outline-variant/30 space-y-2">
+                                              <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-1.5 truncate">
+                                                  <Plus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                                  <span className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200 truncate">
+                                                    Add <span className="underline">&quot;{trimmedSearch}&quot;</span>
+                                                  </span>
+                                                </div>
+                                                <span className="text-[9px] font-bold uppercase text-neutral-500 tracking-wider shrink-0">
+                                                  Choose Category:
+                                                </span>
+                                              </div>
+
+                                              <div className="grid grid-cols-2 gap-1.5">
+                                                {CATEGORY_OPTIONS.map(cat => (
+                                                  <button
+                                                    key={cat.value}
+                                                    type="button"
+                                                    onClick={() => handleSelectOrAddAccount(trimmedSearch, idx, cat.value)}
+                                                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center justify-start gap-1.5 shadow-2xs hover:scale-[1.02] active:scale-95 bg-white dark:bg-neutral-800 border-outline-variant/60 ${
+                                                      cat.value === 'Operation'
+                                                        ? 'hover:border-blue-400 hover:bg-blue-50/70 dark:hover:bg-blue-950/40 text-blue-700 dark:text-blue-300'
+                                                        : cat.value === 'Service'
+                                                        ? 'hover:border-purple-400 hover:bg-purple-50/70 dark:hover:bg-purple-950/40 text-purple-700 dark:text-purple-300'
+                                                        : cat.value === 'Merchandise'
+                                                        ? 'hover:border-amber-400 hover:bg-amber-50/70 dark:hover:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                                                        : 'hover:border-rose-400 hover:bg-rose-50/70 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-300'
+                                                    }`}
+                                                    title={`Save and select as ${cat.value}`}
+                                                  >
+                                                    <span className={`w-2 h-2 rounded-full ${cat.dotCls} shrink-0`} />
+                                                    <span className="truncate">{cat.value}</span>
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {filtered.length === 0 && !trimmedSearch && (
+                                            <div className="px-3 py-4 text-center text-[11px] text-neutral-400 italic">
+                                              No accounts found
+                                            </div>
+                                          )}
+
+                                          {filtered.length === 0 && trimmedSearch && exactMatch && (
+                                            <div className="px-3 py-4 text-center text-[11px] text-neutral-400 italic">
+                                              No other matching accounts
+                                            </div>
+                                          )}
+
+                                          {filtered.map(acct => {
+                                            const autoCat = accountCategoryMap[acct.toLowerCase()] || getCategoryForAccount(acct);
+                                            const isCustom = !ACCOUNT_OPTIONS.includes(acct);
+                                            return (
+                                              <div
+                                                key={acct}
+                                                onClick={() => handleSelectOrAddAccount(acct, idx, autoCat)}
+                                                className={`w-full px-3 py-1.5 text-left text-[11px] flex items-center justify-between gap-2
+                                                  transition-colors duration-100 cursor-pointer group
+                                                  ${item.account_name === acct
+                                                    ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 font-semibold'
+                                                    : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700/60'
+                                                  }`}
+                                              >
+                                                <span className="truncate flex-1">{acct}</span>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full
+                                                    ${autoCat === 'Service' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                                                      : autoCat === 'Merchandise' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+                                                      : autoCat === 'CDF' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                                                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                                                    }`}>
+                                                    {autoCat}
+                                                  </span>
+                                                  {isCustom && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => handleDeleteAccountOption(e, acct)}
+                                                      className="opacity-0 group-hover:opacity-100 p-0.5 text-neutral-400 hover:text-rose-600 transition-opacity cursor-pointer"
+                                                      title="Remove from custom accounts"
+                                                    >
+                                                      <X className="w-3 h-3" />
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </>
+                                      );
                                     })()}
                                   </div>
                                 </div>
@@ -1887,9 +2226,17 @@ export default function RevolvingFundsTab({
                               />
                             </td>
 
-                            {/* Cancel / Remove */}
+                             {/* Cancel / Remove */}
                             <td className="px-2 py-1 text-center whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddLineToSameVoucher(idx)}
+                                  className="p-1 rounded-md text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all cursor-pointer"
+                                  title={`Add another line to this voucher (${item.particulars || 'same voucher'})`}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
                                 {item.id && (
                                   <button
                                     type="button"
@@ -1939,31 +2286,46 @@ export default function RevolvingFundsTab({
                   </div>
                 </div>
 
-                {/* Add Row Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const lastItem = formData.items[formData.items.length - 1];
-                    // Auto-increment RF Voucher number if present, otherwise leave blank
-                    const lastVoucherNum = lastItem?.particulars?.match(/RF Voucher (\d+)/i);
-                    const nextParticulars = lastVoucherNum ? `RF Voucher ${parseInt(lastVoucherNum[1]) + 1}` : '';
-                    setFormData(prev => ({
-                      ...prev,
-                      items: [...prev.items, {
-                        item_date_raw: lastItem?.item_date_raw || '',
-                        particulars: nextParticulars,
-                        amount: 0,
-                        account_name: '',
-                        category: 'Operation',
-                        remarks: ''
-                      }]
-                    }));
-                  }}
-                  className="mt-2.5 inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800/60 rounded-xl transition-all cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Row
-                </button>
+                {/* Add Row Controls */}
+                <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleAddNextVoucher}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800/60 rounded-xl transition-all cursor-pointer shadow-2xs"
+                      title="Add a new row with the next incremental voucher number"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Next Voucher
+                    </button>
+
+                    {formData.items.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleAddLineToSameVoucher()}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-neutral-700 dark:text-neutral-200 bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-outline-variant/60 rounded-xl transition-all cursor-pointer shadow-2xs"
+                        title="Add another line / breakdown to the same voucher"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>
+                          Add Line to Same Voucher {formData.items[formData.items.length - 1]?.particulars ? `(${formData.items[formData.items.length - 1].particulars})` : ''}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+
+                  {formData.items.some((it, i) => (!it.particulars || /^item\s*#\d+$/i.test(it.particulars.trim())) && i > 0 && Boolean(formData.items[i - 1]?.particulars && !/^item\s*#\d+$/i.test(formData.items[i - 1]?.particulars.trim()))) && (
+                    <button
+                      type="button"
+                      onClick={handleAutoFillContinuationVouchers}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 rounded-xl border border-amber-300 dark:border-amber-800/70 transition-all shadow-2xs cursor-pointer"
+                      title="Automatically fill voucher numbers for blank continuation rows"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                      <span>Auto-fill #{' '}on blank rows</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2159,9 +2521,8 @@ export default function RevolvingFundsTab({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', marginBottom: '14px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f3f4f6', borderTop: '1.5px solid #111827', borderBottom: '1.5px solid #111827' }}>
-                <th style={{ padding: '6px 6px', textAlign: 'center', width: '28px', borderRight: '1px solid #d1d5db' }}>#</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left', width: '80px', borderRight: '1px solid #d1d5db' }}>Date</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left', width: '135px', borderRight: '1px solid #d1d5db' }}>Particulars / Voucher #</th>
+                <th style={{ padding: '6px 8px', textAlign: 'left', width: '140px', borderRight: '1px solid #d1d5db' }}>Particulars / Voucher #</th>
+                <th style={{ padding: '6px 8px', textAlign: 'left', width: '85px', borderRight: '1px solid #d1d5db' }}>Date</th>
                 <th style={{ padding: '6px 8px', textAlign: 'right', width: '95px', borderRight: '1px solid #d1d5db' }}>Amount (₱)</th>
                 <th style={{ padding: '6px 8px', textAlign: 'left', borderRight: '1px solid #d1d5db' }}>Account</th>
                 <th style={{ padding: '6px 8px', textAlign: 'center', width: '85px', borderRight: '1px solid #d1d5db' }}>Category</th>
@@ -2178,15 +2539,12 @@ export default function RevolvingFundsTab({
                     color: item.is_cancelled ? '#9ca3af' : 'inherit'
                   }}
                 >
-                  <td style={{ padding: '5px 6px', textAlign: 'center', borderRight: '1px solid #e5e7eb', color: '#6b7280', fontSize: '9px' }}>
-                    {idx + 1}
-                  </td>
-                  <td style={{ padding: '5px 8px', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace' }}>
-                    {item.item_date_raw ? String(item.item_date_raw).split('T')[0] : (item.item_date ? new Date(item.item_date).toLocaleDateString() : '—')}
-                  </td>
                   <td style={{ padding: '5px 8px', borderRight: '1px solid #e5e7eb', fontWeight: item.is_cancelled ? 'normal' : '600' }}>
                     {(!item.particulars || /^item\s*#\d+$/i.test(item.particulars.trim())) ? '—' : item.particulars}
                     {item.is_cancelled && ' (CANCELLED)'}
+                  </td>
+                  <td style={{ padding: '5px 8px', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace' }}>
+                    {item.item_date_raw ? String(item.item_date_raw).split('T')[0] : (item.item_date ? new Date(item.item_date).toLocaleDateString() : '—')}
                   </td>
                   <td style={{ padding: '5px 8px', textAlign: 'right', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace', fontWeight: 'bold' }}>
                     {item.amount > 0 ? Number(item.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}

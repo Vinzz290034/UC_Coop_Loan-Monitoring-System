@@ -871,3 +871,93 @@ async function recalculateLfTotal(liquidationId) {
     WHERE id = $4
   `, [total, p_start, p_end, liquidationId]);
 }
+
+// @desc    Get all Revolving Fund accounts (predefined + custom + existing in items)
+// @route   GET /api/revolving-funds/accounts
+// @access  Protected (Admin, Staff)
+export const getRevolvingFundAccounts = async (req, res, next) => {
+  try {
+    const customRes = await query('SELECT name, category FROM rf_custom_accounts ORDER BY name ASC');
+    const itemsRes = await query(`
+      SELECT DISTINCT account_name, category 
+      FROM rf_liquidation_items 
+      WHERE account_name IS NOT NULL AND TRIM(account_name) != ''
+      ORDER BY account_name ASC
+    `);
+
+    // Combine unique account names
+    const accountMap = new Map();
+
+    // 1. Add DB items
+    for (const row of itemsRes.rows) {
+      if (row.account_name && row.account_name.trim()) {
+        const clean = row.account_name.trim();
+        accountMap.set(clean.toLowerCase(), { name: clean, category: row.category || 'Operation' });
+      }
+    }
+
+    // 2. Add custom accounts table (overrides or adds)
+    for (const row of customRes.rows) {
+      if (row.name && row.name.trim()) {
+        const clean = row.name.trim();
+        accountMap.set(clean.toLowerCase(), { name: clean, category: row.category || 'Operation' });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: Array.from(accountMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Save/add custom revolving fund account
+// @route   POST /api/revolving-funds/accounts
+// @access  Protected (Admin, Staff)
+export const saveRevolvingFundAccount = async (req, res, next) => {
+  try {
+    const { name, category = 'Operation' } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Account name is required' });
+    }
+
+    const cleanName = name.trim();
+    const cleanCat = (category || 'Operation').trim();
+
+    await query(`
+      INSERT INTO rf_custom_accounts (name, category)
+      VALUES ($1, $2)
+      ON CONFLICT (name) DO UPDATE SET category = EXCLUDED.category
+    `, [cleanName, cleanCat]);
+
+    res.status(200).json({
+      success: true,
+      data: { name: cleanName, category: cleanCat }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete custom revolving fund account
+// @route   DELETE /api/revolving-funds/accounts/:name
+// @access  Protected (Admin, Staff)
+export const deleteRevolvingFundAccount = async (req, res, next) => {
+  try {
+    const { name } = req.params;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Account name is required' });
+    }
+
+    await query('DELETE FROM rf_custom_accounts WHERE LOWER(name) = LOWER($1)', [decodeURIComponent(name).trim()]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Account removed successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -48,6 +48,7 @@ import {
 
 // Tab configuration matching the user spreadsheet structure
 export type DisbursementTab =
+  | 'summary'
   | 'loan'
   | 'stl_replenishment'
   | 'revolving_fund_replenishment'
@@ -59,12 +60,19 @@ export type DisbursementTab =
 interface TabConfig {
   id: DisbursementTab;
   label: string;
-  folderFilter: string; // Used for DB query
+  folderFilter: string; // Used for DB query (empty string means all check vouchers)
   defaultCategory: string; // Used when creating new CV
   description: string;
 }
 
 export const DISBURSEMENT_TABS: TabConfig[] = [
+  {
+    id: 'summary',
+    label: 'Summary',
+    folderFilter: '',
+    defaultCategory: 'Loan',
+    description: 'Master summary registry of all check vouchers in order across all categories'
+  },
   {
     id: 'loan',
     label: 'Loan',
@@ -116,6 +124,8 @@ export const DISBURSEMENT_TABS: TabConfig[] = [
   }
 ];
 
+export const CATEGORY_TABS: TabConfig[] = DISBURSEMENT_TABS.filter(t => t.id !== 'summary');
+
 function DisbursementPageContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
@@ -125,8 +135,9 @@ function DisbursementPageContent() {
   const isAdminOrManager = user?.role === 'admin';
   const isAdminOrStaff = user?.role === 'admin' || user?.role === 'staff';
 
-  // Active Tab state
-  const [activeTab, setActiveTab] = useState<DisbursementTab>('loan');
+  // Active Tab state (defaults to master summary tab)
+  const [activeTab, setActiveTab] = useState<DisbursementTab>('summary');
+  const [cvSortOrder, setCvSortOrder] = useState<'voucher_desc' | 'voucher_asc'>('voucher_desc');
   const [rfSubView, setRfSubView] = useState<'vouchers' | 'liquidations'>('vouchers');
 
   // SSR hydration safety
@@ -279,8 +290,12 @@ function DisbursementPageContent() {
       const params: Record<string, string | number> = {
         page,
         limit: cvLimit,
-        folder: currentTabConfig.folderFilter
+        sort_by: cvSortOrder
       };
+
+      if (currentTabConfig.folderFilter) {
+        params.folder = currentTabConfig.folderFilter;
+      }
 
       if (searchTerm.trim()) params.search = searchTerm.trim();
       if (cvBankFilter !== 'all') params.bank = cvBankFilter;
@@ -298,14 +313,14 @@ function DisbursementPageContent() {
     } finally {
       setCvLoading(false);
     }
-  }, [cvSearch, cvLimit, currentTabConfig.folderFilter, cvBankFilter, cvStatusFilter]);
+  }, [cvSearch, cvLimit, currentTabConfig.folderFilter, cvBankFilter, cvStatusFilter, cvSortOrder]);
 
-  // Refetch whenever active tab, bank filter, status filter, or page changes
+  // Refetch whenever active tab, bank filter, status filter, sort order, or page changes
   useEffect(() => {
     setCvPage(1);
     setSelectedCvIds([]);
     loadCheckVouchers(1);
-  }, [activeTab, cvBankFilter, cvStatusFilter]);
+  }, [activeTab, cvBankFilter, cvStatusFilter, cvSortOrder]);
 
   // Debounced search
   useEffect(() => {
@@ -862,12 +877,12 @@ function DisbursementPageContent() {
     setNewCvBankName('BDO');
     setNewCvCheckNo('');
     setNewCvParticulars('');
-    setNewCvCategory(currentTabConfig.defaultCategory);
+    setNewCvCategory('Loan');
     setNewCvPreparedBy('LAMOSTE, CHINNETTE A.');
     setNewCvCheckedBy('MARILOU LARIOSA');
     setNewCvApprovedBy('MICHELLE M. PABLE');
     setNewCvRows([
-      { description: currentTabConfig.label, debit: '', credit: '' },
+      { description: 'Loan', debit: '', credit: '' },
       { description: 'CIB - BDO', debit: '', credit: '' }
     ]);
     setIsCreateCVOpen(true);
@@ -878,6 +893,7 @@ function DisbursementPageContent() {
     e.preventDefault();
     if (!newCvVoucherNo.trim()) return showAppAlert('Missing Information', 'Please provide a Voucher Number.');
     if (!newCvPayee.trim()) return showAppAlert('Missing Information', 'Please specify a Payee.');
+    if (!newCvCategory.trim()) return showAppAlert('Missing Information', 'Please select a disbursement category.');
 
     try {
       setIsSavingNewCv(true);
@@ -895,6 +911,7 @@ function DisbursementPageContent() {
           };
         });
 
+      const matchedCat = CATEGORY_TABS.find(t => t.defaultCategory === newCvCategory);
       const payload = {
         voucher_no: newCvVoucherNo.trim(),
         voucher_date: newCvDate || null,
@@ -902,8 +919,8 @@ function DisbursementPageContent() {
         check_no: newCvCheckNo.trim() || null,
         payee: newCvPayee.trim(),
         bank: newCvBankName.trim() || null,
-        particulars: newCvParticulars.trim() || `${currentTabConfig.label} disbursement`,
-        folder_name: newCvCategory || currentTabConfig.defaultCategory,
+        particulars: newCvParticulars.trim() || `${matchedCat?.label || 'Disbursement'}`,
+        folder_name: newCvCategory || 'Loan',
         amount: calculatedAmount,
         details: detailsArray,
         signatories: {
@@ -1029,7 +1046,7 @@ function DisbursementPageContent() {
             </p>
           </div>
 
-          {isAdminOrStaff && (
+          {isAdminOrStaff && activeTab === 'summary' && (
             <div className="flex items-center gap-3 flex-wrap">
               <button
                 type="button"
@@ -1075,12 +1092,16 @@ function DisbursementPageContent() {
         <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
           <div className="space-y-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Total {currentTabConfig.label} Disbursed
+              {currentTabConfig.id === 'summary' ? 'Total Vouchers Disbursed' : `Total ${currentTabConfig.label} Disbursed`}
             </span>
             <p className="text-xl sm:text-2xl font-headline font-black text-primary dark:text-secondary">
               ₱{tabStats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-            <p className="text-[10px] text-neutral-500">Across {tabStats.count} recorded check vouchers</p>
+            <p className="text-[10px] text-neutral-500">
+              {currentTabConfig.id === 'summary'
+                ? `Across ${tabStats.count} total check vouchers in system`
+                : `Across ${tabStats.count} recorded check vouchers`}
+            </p>
           </div>
           <div className="p-3 bg-primary/10 dark:bg-secondary/10 rounded-2xl text-primary dark:text-secondary">
             <DollarSign className="w-5 h-5" />
@@ -1095,7 +1116,9 @@ function DisbursementPageContent() {
             <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
               {tabStats.count}
             </p>
-            <p className="text-[10px] text-neutral-500">In current category registry</p>
+            <p className="text-[10px] text-neutral-500">
+              {currentTabConfig.id === 'summary' ? 'All check vouchers in master registry' : 'In current category registry'}
+            </p>
           </div>
           <div className="p-3 bg-emerald-700/10 dark:bg-emerald-400/10 rounded-2xl text-emerald-700 dark:text-emerald-400">
             <FileCheck className="w-5 h-5" />
@@ -1217,7 +1240,11 @@ function DisbursementPageContent() {
                   type="text"
                   value={cvSearch}
                   onChange={e => setCvSearch(e.target.value)}
-                  placeholder={`Search ${currentTabConfig.label} by voucher #, check #, payee, or particulars...`}
+                  placeholder={
+                    currentTabConfig.id === 'summary'
+                      ? 'Search all check vouchers by voucher #, check #, payee, or particulars...'
+                      : `Search ${currentTabConfig.label} by voucher #, check #, payee, or particulars...`
+                  }
                   className="w-full pl-10 pr-10 py-2.5 text-xs font-medium rounded-2xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-neutral-900 dark:text-white placeholder:text-neutral-400"
                 />
                 {cvSearch && (
@@ -1293,7 +1320,7 @@ function DisbursementPageContent() {
                 )}
 
                 {/* Clear Category */}
-                {checkVouchers.length > 0 && isAdminOrStaff && (
+                {checkVouchers.length > 0 && isAdminOrStaff && activeTab !== 'summary' && (
                   <button
                     onClick={() => setIsClearAllCvModalOpen(true)}
                     className="px-3 py-2 text-xs font-bold rounded-xl border border-rose-300 dark:border-rose-900/50 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
@@ -1322,7 +1349,19 @@ function DisbursementPageContent() {
                         />
                       </th>
                     )}
-                    <th className="py-3.5 px-4 font-bold">Voucher No.</th>
+                    <th 
+                      onClick={() => setCvSortOrder(prev => prev === 'voucher_desc' ? 'voucher_asc' : 'voucher_desc')}
+                      className="py-3.5 px-4 font-bold cursor-pointer select-none hover:text-primary dark:hover:text-secondary transition-colors group"
+                      title="Click to sort by voucher number (ascending / descending)"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Voucher No.</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-primary dark:text-secondary shrink-0" />
+                        <span className="text-[9px] font-mono text-neutral-400 font-semibold uppercase">
+                          {cvSortOrder === 'voucher_desc' ? 'Desc' : 'Asc'}
+                        </span>
+                      </div>
+                    </th>
                     <th className="py-3.5 px-4 font-bold">Date</th>
                     <th className="py-3.5 px-4 font-bold">Check No.</th>
                     <th className="py-3.5 px-4 font-bold">Payee / Entity</th>
@@ -1389,7 +1428,7 @@ function DisbursementPageContent() {
                             </td>
                           )}
                           <td className="py-3.5 px-4 font-bold text-neutral-900 dark:text-white whitespace-nowrap">
-                            <span className="font-mono text-primary dark:text-secondary hover:underline flex items-center gap-1.5">
+                            <span className="font-mono text-primary dark:text-secondary hover:underline flex items-center gap-1.5 flex-wrap">
                               <span>{cv.voucher_no}</span>
                               {cv.loan_id && (
                                 <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 font-sans font-bold">
@@ -1399,6 +1438,11 @@ function DisbursementPageContent() {
                               {isRf && (
                                 <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-sans font-bold">
                                   {rfNum || 'RF'}
+                                </span>
+                              )}
+                              {activeTab === 'summary' && cv.folder_name && !cv.loan_id && !isRf && (
+                                <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-neutral-500/10 text-neutral-700 dark:text-neutral-300 border border-outline-variant font-sans font-medium">
+                                  {cv.folder_name}
                                 </span>
                               )}
                             </span>
@@ -1552,10 +1596,10 @@ function DisbursementPageContent() {
               <div>
                 <h2 className="text-xl font-headline font-black text-neutral-900 dark:text-white flex items-center gap-2">
                   <Plus className="w-5 h-5 text-primary dark:text-secondary" />
-                  Issue New Check Voucher ({currentTabConfig.label})
+                  Issue New Check Voucher
                 </h2>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  Record official cooperative disbursement check with balanced double-entry breakdown.
+                  Select a category and record an official cooperative disbursement check with balanced double-entry breakdown.
                 </p>
               </div>
               <button
@@ -1569,8 +1613,37 @@ function DisbursementPageContent() {
 
             <form onSubmit={handleCreateCheckVoucher} className="flex flex-col flex-1 overflow-hidden">
               <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5 text-xs custom-scrollbar">
-                {/* Top Row: Voucher No, Date, Check No, Bank */}
+                {/* Top Row: Category, Voucher No, Date, Draw Bank */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
+                      Disbursement Category *
+                    </label>
+                    <select
+                      required
+                      value={newCvCategory}
+                      onChange={e => {
+                        const selected = e.target.value;
+                        setNewCvCategory(selected);
+                        const matched = CATEGORY_TABS.find(t => t.defaultCategory === selected);
+                        if (matched) {
+                          setNewCvRows(prev => {
+                            if (prev.length > 0 && (!prev[0].description || CATEGORY_TABS.some(t => t.label === prev[0].description || t.defaultCategory === prev[0].description))) {
+                              return prev.map((r, i) => i === 0 ? { ...r, description: matched.label } : r);
+                            }
+                            return prev;
+                          });
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-bold text-primary dark:text-secondary cursor-pointer"
+                    >
+                      {CATEGORY_TABS.map(cat => (
+                        <option key={cat.id} value={cat.defaultCategory}>
+                          {cat.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                       Voucher No. *
@@ -1597,23 +1670,22 @@ function DisbursementPageContent() {
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
-                      Date Released
-                    </label>
-                    <input
-                      type="date"
-                      value={newCvReleasedDate}
-                      onChange={e => setNewCvReleasedDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                       Draw Bank
                     </label>
                     <select
                       value={newCvBankName}
-                      onChange={e => setNewCvBankName(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-bold"
+                      onChange={e => {
+                        const bName = e.target.value;
+                        setNewCvBankName(bName);
+                        setNewCvRows(prev => {
+                          const bankRowIdx = prev.findIndex(r => /cib\b|cash\s*in\s*bank/i.test(r.description || ''));
+                          if (bankRowIdx >= 0) {
+                            return prev.map((r, i) => i === bankRowIdx ? { ...r, description: `CIB - ${bName}` } : r);
+                          }
+                          return prev;
+                        });
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-bold cursor-pointer"
                     >
                       <option value="BDO">BDO</option>
                       <option value="LBP">LBP (Land Bank)</option>
@@ -1625,9 +1697,9 @@ function DisbursementPageContent() {
                   </div>
                 </div>
 
-                {/* Second Row: Payee, Check No, Folder/Category */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="sm:col-span-2">
+                {/* Second Row: Payee, Check No, Date Released */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                  <div className="sm:col-span-6">
                     <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                       Paid To (Payee Name) *
                     </label>
@@ -1640,7 +1712,7 @@ function DisbursementPageContent() {
                       className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-medium"
                     />
                   </div>
-                  <div>
+                  <div className="sm:col-span-3">
                     <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                       Check Number
                     </label>
@@ -1650,6 +1722,17 @@ function DisbursementPageContent() {
                       value={newCvCheckNo}
                       onChange={e => setNewCvCheckNo(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-mono font-bold"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
+                      Date Released
+                    </label>
+                    <input
+                      type="date"
+                      value={newCvReleasedDate}
+                      onChange={e => setNewCvReleasedDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60"
                     />
                   </div>
                 </div>
@@ -2288,14 +2371,24 @@ function DisbursementPageContent() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
-                    Category
+                    Disbursement Category
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={editCvFormData.folder_name}
                     onChange={e => setEditCvFormData({ ...editCvFormData, folder_name: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60"
-                  />
+                    className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-medium"
+                  >
+                    {CATEGORY_TABS.map(tab => (
+                      <option key={tab.id} value={tab.defaultCategory}>
+                        {tab.label}
+                      </option>
+                    ))}
+                    {editCvFormData.folder_name && !CATEGORY_TABS.some(t => t.defaultCategory === editCvFormData.folder_name) && (
+                      <option value={editCvFormData.folder_name}>
+                        {editCvFormData.folder_name} (Legacy/Custom)
+                      </option>
+                    )}
+                  </select>
                 </div>
               </div>
 

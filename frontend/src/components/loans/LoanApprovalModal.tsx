@@ -155,7 +155,7 @@ export default function LoanApprovalModal({
     const fixedDepItem = deds.find((d) => d.name?.toLowerCase().includes('fixed deposit'));
     setApplyFixedDeposit(fixedDepItem ? String(fixedDepItem.amount) : '0');
 
-    const othersItem = deds.find((d) => d.name?.toLowerCase() === 'others');
+    const othersItem = deds.find((d) => d.name?.toLowerCase().includes('other'));
     setApplyOtherCharges(othersItem ? String(othersItem.amount) : '0');
 
     const prevBalItem = deds.find((d) => d.name?.toLowerCase().includes('previous loan balance'));
@@ -206,13 +206,36 @@ export default function LoanApprovalModal({
     setSelectedPrevLoanId(prevId);
     if (!prevId) {
       setApplyPrevBalance('0');
+      setApplyOtherCharges('0');
       return;
     }
     const found = memberActiveLoans.find((l) => String(l.id) === String(prevId));
     if (found) {
       setApplyPrevBalance(String(found.remaining_balance || 0));
+      const fines = parseFloat(found.total_fines || 0);
+      const interest = parseFloat(found.remaining_interest || 0);
+      if (fines > 0) {
+        setApplyOtherCharges(String(fines));
+      } else if (interest > 0) {
+        setApplyOtherCharges(String(interest));
+      } else {
+        setApplyOtherCharges('0');
+      }
     }
   };
+
+  const selectedPrevLoanObj = useMemo(() => {
+    if (!selectedPrevLoanId) return null;
+    return memberActiveLoans.find((l) => String(l.id) === String(selectedPrevLoanId)) || null;
+  }, [memberActiveLoans, selectedPrevLoanId]);
+
+  const prevLoanFines = useMemo(() => {
+    return parseFloat(selectedPrevLoanObj?.total_fines || 0);
+  }, [selectedPrevLoanObj]);
+
+  const prevLoanInterest = useMemo(() => {
+    return parseFloat(selectedPrevLoanObj?.remaining_interest || 0);
+  }, [selectedPrevLoanObj]);
 
   // Calculations
   const totalDeductionsCalc = useMemo(() => {
@@ -281,10 +304,6 @@ export default function LoanApprovalModal({
     }).format(val || 0);
   };
 
-  const selectedPrevLoanObj = memberActiveLoans.find(
-    (l) => String(l.id) === String(selectedPrevLoanId)
-  );
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -302,12 +321,28 @@ export default function LoanApprovalModal({
       ? `Previous Loan Balance (${selectedPrevLoanObj.laf_no ? `LAF: ${selectedPrevLoanObj.laf_no}` : selectedPrevLoanObj.product_name || 'Active Loan'})`
       : 'Previous Loan Balance';
 
+    let othersLabel = 'Others';
+    if (selectedPrevLoanObj) {
+      const finesVal = parseFloat(selectedPrevLoanObj.total_fines || 0);
+      const intVal = parseFloat(selectedPrevLoanObj.remaining_interest || 0);
+      const curOther = parseFloat(String(applyOtherCharges)) || 0;
+      if (curOther > 0) {
+        if (finesVal > 0 && Math.abs(curOther - finesVal) < 0.01) {
+          othersLabel = 'Others (Fines)';
+        } else if (intVal > 0 && Math.abs(curOther - intVal) < 0.01) {
+          othersLabel = 'Others (Interest)';
+        } else if (finesVal > 0 && intVal > 0 && Math.abs(curOther - (finesVal + intVal)) < 0.01) {
+          othersLabel = 'Others (Fines + Interest)';
+        }
+      }
+    }
+
     const deductionsPayload = [
       { name: 'Service Fee', amount: parseFloat(String(applyServiceFee)) || 0 },
       { name: 'Insurance', amount: parseFloat(String(applyInsurance)) || 0 },
       { name: 'Fixed Deposit', amount: parseFloat(String(applyFixedDeposit)) || 0 },
       { name: prevLoanLabel, amount: parseFloat(String(applyPrevBalance)) || 0 },
-      { name: 'Others', amount: parseFloat(String(applyOtherCharges)) || 0 },
+      { name: othersLabel, amount: parseFloat(String(applyOtherCharges)) || 0 },
     ].filter((d) => d.amount > 0);
 
     const customSchedulePayload = monthlySchedulePreview.map((item, idx) => {
@@ -651,9 +686,22 @@ export default function LoanApprovalModal({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">
-                  Others
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">
+                    Others
+                    {parseFloat(String(applyOtherCharges)) > 0 && selectedPrevLoanObj && (
+                      <span className="ml-1 text-[9px] font-semibold text-primary dark:text-secondary">
+                        {prevLoanFines > 0 && Math.abs(parseFloat(String(applyOtherCharges)) - prevLoanFines) < 0.01
+                          ? '(Fines)'
+                          : prevLoanInterest > 0 && Math.abs(parseFloat(String(applyOtherCharges)) - prevLoanInterest) < 0.01
+                          ? '(Interest)'
+                          : prevLoanFines > 0 && prevLoanInterest > 0 && Math.abs(parseFloat(String(applyOtherCharges)) - (prevLoanFines + prevLoanInterest)) < 0.01
+                          ? '(Fines+Int)'
+                          : ''}
+                      </span>
+                    )}
+                  </label>
+                </div>
                 <input
                   type="number"
                   step="any"
@@ -662,6 +710,52 @@ export default function LoanApprovalModal({
                   placeholder="0"
                   className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
                 />
+                {selectedPrevLoanObj && (prevLoanFines > 0 || prevLoanInterest > 0) && (
+                  <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                    {prevLoanFines > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setApplyOtherCharges(String(prevLoanFines))}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border transition-all cursor-pointer ${
+                          Math.abs(parseFloat(String(applyOtherCharges)) - prevLoanFines) < 0.01
+                            ? 'bg-primary text-white border-primary shadow-xs'
+                            : 'bg-neutral-100 dark:bg-surface-container-high text-neutral-600 dark:text-neutral-300 border-outline-variant hover:border-primary/50'
+                        }`}
+                        title="Set Others to Previous Loan Fines"
+                      >
+                        Fines: ₱{Number(prevLoanFines).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </button>
+                    )}
+                    {prevLoanInterest > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setApplyOtherCharges(String(prevLoanInterest))}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border transition-all cursor-pointer ${
+                          Math.abs(parseFloat(String(applyOtherCharges)) - prevLoanInterest) < 0.01
+                            ? 'bg-primary text-white border-primary shadow-xs'
+                            : 'bg-neutral-100 dark:bg-surface-container-high text-neutral-600 dark:text-neutral-300 border-outline-variant hover:border-primary/50'
+                        }`}
+                        title="Set Others to Previous Loan Interest"
+                      >
+                        Int: ₱{Number(prevLoanInterest).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </button>
+                    )}
+                    {prevLoanFines > 0 && prevLoanInterest > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setApplyOtherCharges(String(prevLoanFines + prevLoanInterest))}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border transition-all cursor-pointer ${
+                          Math.abs(parseFloat(String(applyOtherCharges)) - (prevLoanFines + prevLoanInterest)) < 0.01
+                            ? 'bg-primary text-white border-primary shadow-xs'
+                            : 'bg-neutral-100 dark:bg-surface-container-high text-neutral-600 dark:text-neutral-300 border-outline-variant hover:border-primary/50'
+                        }`}
+                        title="Set Others to Both Fines and Interest"
+                      >
+                        Both: ₱{Number(prevLoanFines + prevLoanInterest).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -784,6 +878,15 @@ export default function LoanApprovalModal({
                                 <span className="text-xs font-semibold truncate">
                                   {l.product_name || 'Loan'}
                                 </span>
+                              </div>
+                              <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                <span>Status: <span className="capitalize">{l.status}</span></span>
+                                {parseFloat(l.remaining_interest || 0) > 0 && (
+                                  <span className="text-amber-600 dark:text-amber-400 font-semibold">• Int: ₱{Number(l.remaining_interest).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                )}
+                                {parseFloat(l.total_fines || 0) > 0 && (
+                                  <span className="text-rose-600 dark:text-rose-400 font-semibold">• Fines: ₱{Number(l.total_fines).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                )}
                               </div>
                             </div>
                             <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 shrink-0">

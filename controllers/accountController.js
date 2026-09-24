@@ -815,7 +815,7 @@ export const importCheckVouchers = async (req, res, next) => {
 // @access  Protected (Admin, Staff)
 export const getCheckVouchers = async (req, res, next) => {
   try {
-    const { search, folder, bank, status, page, limit, id, loan_id } = req.query;
+    const { search, folder, bank, status, page, limit, id, loan_id, sort_by } = req.query;
 
     const conditions = [];
     const params = [];
@@ -864,7 +864,45 @@ export const getCheckVouchers = async (req, res, next) => {
     );
     const totalCount = parseInt(countResult.rows[0]?.total || '0', 10);
 
-    // Paginated data — oldest first (ascending by voucher_date, then voucher_no)
+    // Dynamic order clause (defaults to natural numeric voucher_no order)
+    let orderClause = `
+      ORDER BY 
+        CASE 
+          WHEN voucher_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(voucher_no, '-', 1) AS INTEGER)
+          ELSE 999999
+        END DESC,
+        CASE 
+          WHEN voucher_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(voucher_no, '-', 2) AS INTEGER)
+          WHEN voucher_no ~ '^[0-9]+$' THEN CAST(voucher_no AS INTEGER)
+          ELSE -1
+        END DESC,
+        voucher_date DESC NULLS LAST,
+        voucher_no DESC,
+        created_at DESC
+    `;
+
+    if (sort_by === 'voucher_asc') {
+      orderClause = `
+        ORDER BY 
+          CASE 
+            WHEN voucher_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(voucher_no, '-', 1) AS INTEGER)
+            ELSE 999999
+          END ASC,
+          CASE 
+            WHEN voucher_no ~ '^[0-9]+-[0-9]+$' THEN CAST(SPLIT_PART(voucher_no, '-', 2) AS INTEGER)
+            WHEN voucher_no ~ '^[0-9]+$' THEN CAST(voucher_no AS INTEGER)
+            ELSE 999999
+          END ASC,
+          voucher_date ASC NULLS LAST,
+          voucher_no ASC,
+          created_at ASC
+      `;
+    } else if (sort_by === 'date_desc') {
+      orderClause = 'ORDER BY voucher_date DESC NULLS LAST, voucher_no DESC, created_at DESC';
+    } else if (sort_by === 'date_asc') {
+      orderClause = 'ORDER BY voucher_date ASC NULLS LAST, voucher_no ASC, created_at ASC';
+    }
+
     params.push(pageSize);
     params.push(offset);
     const result = await query(
@@ -885,7 +923,7 @@ export const getCheckVouchers = async (req, res, next) => {
               ) AS revolving_fund
        FROM check_vouchers
        ${whereClause}
-       ORDER BY voucher_date DESC NULLS LAST, voucher_no DESC, created_at DESC
+       ${orderClause}
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );

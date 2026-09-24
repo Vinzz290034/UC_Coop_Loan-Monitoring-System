@@ -2018,6 +2018,7 @@ function LoansPageContent() {
         setMemberActiveLoans([]);
         setSelectedPrevLoanId('');
         setApplyPrevBalance('0');
+        setApplyOtherCharges('0');
         return;
       }
       try {
@@ -2030,6 +2031,28 @@ function LoansPageContent() {
           return !isFinished && (isNaN(rem) || rem > 0);
         });
         setMemberActiveLoans(activeLoans);
+
+        // Auto-select latest active loan if available
+        if (activeLoans.length > 0) {
+          const firstLoan = activeLoans[0];
+          setSelectedPrevLoanId(String(firstLoan.id));
+          const balance = parseFloat(firstLoan.remaining_balance ?? firstLoan.principal_amount ?? 0);
+          setApplyPrevBalance(String(!isNaN(balance) ? balance : 0));
+
+          const fines = parseFloat(firstLoan.total_fines || 0);
+          const interest = parseFloat(firstLoan.remaining_interest || 0);
+          if (fines > 0) {
+            setApplyOtherCharges(String(fines));
+          } else if (interest > 0) {
+            setApplyOtherCharges(String(interest));
+          } else {
+            setApplyOtherCharges('0');
+          }
+        } else {
+          setSelectedPrevLoanId('');
+          setApplyPrevBalance('0');
+          setApplyOtherCharges('0');
+        }
       } catch (err) {
         console.error('Error fetching member loans for deductions:', err);
         setMemberActiveLoans([]);
@@ -2045,12 +2068,23 @@ function LoansPageContent() {
     setSelectedPrevLoanId(loanId);
     if (!loanId) {
       setApplyPrevBalance('0');
+      setApplyOtherCharges('0');
       return;
     }
     const foundLoan = memberActiveLoans.find((l: any) => String(l.id) === String(loanId));
     if (foundLoan) {
       const balance = parseFloat(foundLoan.remaining_balance ?? foundLoan.principal_amount ?? 0);
       setApplyPrevBalance(String(!isNaN(balance) ? balance : 0));
+
+      const fines = parseFloat(foundLoan.total_fines || 0);
+      const interest = parseFloat(foundLoan.remaining_interest || 0);
+      if (fines > 0) {
+        setApplyOtherCharges(String(fines));
+      } else if (interest > 0) {
+        setApplyOtherCharges(String(interest));
+      } else {
+        setApplyOtherCharges('0');
+      }
     }
   };
 
@@ -2058,6 +2092,14 @@ function LoansPageContent() {
     if (!selectedPrevLoanId) return null;
     return memberActiveLoans.find((l: any) => String(l.id) === String(selectedPrevLoanId)) || null;
   }, [memberActiveLoans, selectedPrevLoanId]);
+
+  const prevLoanFines = useMemo(() => {
+    return parseFloat(selectedPrevLoanObj?.total_fines || 0);
+  }, [selectedPrevLoanObj]);
+
+  const prevLoanInterest = useMemo(() => {
+    return parseFloat(selectedPrevLoanObj?.remaining_interest || 0);
+  }, [selectedPrevLoanObj]);
 
   // Compute total charges (deductions)
   const totalDeductionsCalc = useMemo(() => {
@@ -2323,12 +2365,28 @@ function LoansPageContent() {
         ? `Previous Loan Balance (${selectedPrevLoan.laf_no ? `LAF: ${selectedPrevLoan.laf_no}` : selectedPrevLoan.product_name || 'Active Loan'})` 
         : 'Previous Loan Balance';
 
+      let othersLabel = 'Others';
+      if (selectedPrevLoan) {
+        const finesVal = parseFloat(selectedPrevLoan.total_fines || 0);
+        const intVal = parseFloat(selectedPrevLoan.remaining_interest || 0);
+        const curOther = parseFloat(String(applyOtherCharges)) || 0;
+        if (curOther > 0) {
+          if (finesVal > 0 && Math.abs(curOther - finesVal) < 0.01) {
+            othersLabel = 'Others (Fines)';
+          } else if (intVal > 0 && Math.abs(curOther - intVal) < 0.01) {
+            othersLabel = 'Others (Interest)';
+          } else if (finesVal > 0 && intVal > 0 && Math.abs(curOther - (finesVal + intVal)) < 0.01) {
+            othersLabel = 'Others (Fines + Interest)';
+          }
+        }
+      }
+
       const deductionsPayload = [
         { name: 'Service Fee', amount: parseFloat(String(applyServiceFee)) || 0 },
         { name: 'Insurance', amount: parseFloat(String(applyInsurance)) || 0 },
         { name: 'Fixed Deposit', amount: parseFloat(String(applyFixedDeposit)) || 0 },
         { name: prevLoanLabel, amount: parseFloat(String(applyPrevBalance)) || 0 },
-        { name: 'Others', amount: parseFloat(String(applyOtherCharges)) || 0 }
+        { name: othersLabel, amount: parseFloat(String(applyOtherCharges)) || 0 }
       ].filter(d => d.amount > 0);
 
       const customSchedulePayload = monthlySchedulePreview.map((item, idx) => {
@@ -4879,7 +4937,22 @@ function LoansPageContent() {
                           </div>
 
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">Others</label>
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">
+                                Others
+                                {parseFloat(String(applyOtherCharges)) > 0 && selectedPrevLoanObj && (
+                                  <span className="ml-1 text-[9px] font-semibold text-primary dark:text-secondary">
+                                    {prevLoanFines > 0 && Math.abs(parseFloat(String(applyOtherCharges)) - prevLoanFines) < 0.01
+                                      ? '(Fines)'
+                                      : prevLoanInterest > 0 && Math.abs(parseFloat(String(applyOtherCharges)) - prevLoanInterest) < 0.01
+                                      ? '(Interest)'
+                                      : prevLoanFines > 0 && prevLoanInterest > 0 && Math.abs(parseFloat(String(applyOtherCharges)) - (prevLoanFines + prevLoanInterest)) < 0.01
+                                      ? '(Fines+Int)'
+                                      : ''}
+                                  </span>
+                                )}
+                              </label>
+                            </div>
                             <input
                               type="number"
                               step="any"
@@ -4888,6 +4961,52 @@ function LoansPageContent() {
                               placeholder="0"
                               className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
                             />
+                            {selectedPrevLoanObj && (prevLoanFines > 0 || prevLoanInterest > 0) && (
+                              <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                                {prevLoanFines > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setApplyOtherCharges(String(prevLoanFines))}
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border transition-all cursor-pointer ${
+                                      Math.abs(parseFloat(String(applyOtherCharges)) - prevLoanFines) < 0.01
+                                        ? 'bg-primary text-white border-primary shadow-xs'
+                                        : 'bg-neutral-100 dark:bg-surface-container-high text-neutral-600 dark:text-neutral-300 border-outline-variant hover:border-primary/50'
+                                    }`}
+                                    title="Set Others to Previous Loan Fines"
+                                  >
+                                    Fines: ₱{Number(prevLoanFines).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </button>
+                                )}
+                                {prevLoanInterest > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setApplyOtherCharges(String(prevLoanInterest))}
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border transition-all cursor-pointer ${
+                                      Math.abs(parseFloat(String(applyOtherCharges)) - prevLoanInterest) < 0.01
+                                        ? 'bg-primary text-white border-primary shadow-xs'
+                                        : 'bg-neutral-100 dark:bg-surface-container-high text-neutral-600 dark:text-neutral-300 border-outline-variant hover:border-primary/50'
+                                    }`}
+                                    title="Set Others to Previous Loan Interest"
+                                  >
+                                    Int: ₱{Number(prevLoanInterest).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </button>
+                                )}
+                                {prevLoanFines > 0 && prevLoanInterest > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setApplyOtherCharges(String(prevLoanFines + prevLoanInterest))}
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border transition-all cursor-pointer ${
+                                      Math.abs(parseFloat(String(applyOtherCharges)) - (prevLoanFines + prevLoanInterest)) < 0.01
+                                        ? 'bg-primary text-white border-primary shadow-xs'
+                                        : 'bg-neutral-100 dark:bg-surface-container-high text-neutral-600 dark:text-neutral-300 border-outline-variant hover:border-primary/50'
+                                    }`}
+                                    title="Set Others to Both Fines and Interest"
+                                  >
+                                    Both: ₱{Number(prevLoanFines + prevLoanInterest).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -5003,8 +5122,14 @@ function LoansPageContent() {
                                             )}
                                             <span className="text-xs font-semibold truncate">{l.product_name || 'Loan'}</span>
                                           </div>
-                                          <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5">
-                                            Status: <span className="capitalize">{l.status}</span>
+                                          <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                            <span>Status: <span className="capitalize">{l.status}</span></span>
+                                            {parseFloat(l.remaining_interest || 0) > 0 && (
+                                              <span className="text-amber-600 dark:text-amber-400 font-semibold">• Int: ₱{Number(l.remaining_interest).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            )}
+                                            {parseFloat(l.total_fines || 0) > 0 && (
+                                              <span className="text-rose-600 dark:text-rose-400 font-semibold">• Fines: ₱{Number(l.total_fines).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            )}
                                           </div>
                                         </div>
                                         <div className="text-right shrink-0 flex items-center gap-2">

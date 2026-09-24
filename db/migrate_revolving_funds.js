@@ -44,6 +44,14 @@ export async function migrateRevolvingFunds() {
       CREATE INDEX IF NOT EXISTS idx_rf_liquidations_cv_id ON revolving_fund_liquidations(check_voucher_id);
       CREATE INDEX IF NOT EXISTS idx_rf_items_liquidation_id ON rf_liquidation_items(liquidation_id);
       CREATE INDEX IF NOT EXISTS idx_rf_items_account_name ON rf_liquidation_items(account_name);
+
+      CREATE TABLE IF NOT EXISTS rf_custom_accounts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(150) UNIQUE NOT NULL,
+        category VARCHAR(100) DEFAULT 'Operation',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_rf_custom_accounts_name ON rf_custom_accounts(name);
     `;
     await client.query(createTablesQuery);
 

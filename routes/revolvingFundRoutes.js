@@ -10,7 +10,10 @@ import {
   syncVoucherAmounts,
   addLiquidationItem,
   updateLiquidationItem,
-  deleteLiquidationItem
+  deleteLiquidationItem,
+  getRevolvingFundAccounts,
+  saveRevolvingFundAccount,
+  deleteRevolvingFundAccount
 } from '../controllers/revolvingFundController.js';
 
 const router = express.Router();
@@ -21,6 +24,13 @@ router.use(restrictTo('admin', 'staff'));
 router.route('/')
   .get(getLiquidations)
   .post(createLiquidation);
+
+router.route('/accounts')
+  .get(getRevolvingFundAccounts)
+  .post(saveRevolvingFundAccount);
+
+router.route('/accounts/:name')
+  .delete(deleteRevolvingFundAccount);
 
 router.route('/:id')
   .get(getLiquidationById)
