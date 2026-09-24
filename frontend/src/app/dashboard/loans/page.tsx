@@ -1268,9 +1268,26 @@ function LoansPageContent() {
     return voucherRows.reduce((sum, r) => sum + (parseFloat(r.credit) || 0), 0);
   }, [voucherRows]);
 
-  const voucherNetTakeHome = useMemo(() => {
-    return Math.max(0, voucherDebitTotal - voucherCreditTotal);
-  }, [voucherDebitTotal, voucherCreditTotal]);
+  const voucherDisbursedAmount = useMemo(() => {
+    let cibAmount = 0;
+    for (const r of voucherRows) {
+      const desc = (r.description || '').trim();
+      if (/\bcib|cash\s*in\s*bank|\b(metrobank|mbtc|bdo)\b/i.test(desc)) {
+        const c = parseFloat(r.credit) || 0;
+        const d = parseFloat(r.debit) || 0;
+        cibAmount += (c > 0 ? c : d);
+      }
+    }
+
+    if (cibAmount > 0) {
+      return cibAmount;
+    }
+
+    const netDiff = Math.max(0, voucherDebitTotal - voucherCreditTotal);
+    return netDiff > 0 ? netDiff : (voucherDebitTotal || voucherCreditTotal || 0);
+  }, [voucherRows, voucherDebitTotal, voucherCreditTotal]);
+
+  const voucherNetTakeHome = voucherDisbursedAmount;
 
   const cleanCvNumber = (vNo: string) => {
     if (!vNo) return '';
@@ -5703,15 +5720,15 @@ function LoansPageContent() {
               <div className="flex justify-between items-center bg-[#ecfdf5] p-3 px-4 rounded-xl border border-[#d1fae5] gap-4">
                 <div className="flex-1">
                   <span className="text-[9px] font-bold text-[#064e3b] uppercase tracking-wider block mb-1">
-                    Disbursed Amount (Net Take-Home):
+                    Disbursed Amount:
                   </span>
                   <p className="text-[11px] font-bold text-neutral-900 uppercase tracking-wide leading-snug m-0">
-                    {formatDisbursedInWords(voucherNetTakeHome)}
+                    {formatDisbursedInWords(voucherDisbursedAmount)}
                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className="text-base font-mono font-extrabold text-[#064e3b]">
-                    ₱{voucherNetTakeHome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₱{voucherDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>
@@ -6261,12 +6278,12 @@ function LoansPageContent() {
                       Disbursed Amount:
                     </span>
                     <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.4 }}>
-                      {formatDisbursedInWords(voucherNetTakeHome)}
+                      {formatDisbursedInWords(voucherDisbursedAmount)}
                     </p>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <span style={{ fontSize: '15px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
-                      ₱{voucherNetTakeHome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₱{voucherDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
