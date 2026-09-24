@@ -8,6 +8,7 @@ Just don't forget the following guidelines:
 - Make use of the folder and file structure that is already made
 - make sure to use all the codes that is already made
 - make sure that it will work on both mobile and desktop screen (Be concise with the responsiveness [Desktop, Tablet, Mobile])
+- apply skeletal loading to all the pages.
 - Create an implementation plan with proceed button before making changes.
 
 
@@ -71,3 +72,6 @@ Before completing the task, verify that:
 - The implementation is complete and production-ready.
 
 ```
+
+
+Just to clarify before you proceed: feel free to change anything, provided it does not affect the functions, logic, or the way the system operates—specifically regarding mathematical or accounting processes, or the system's core functions. Our task here is solely to modify, enhance, and improve the system's UI/UX.
