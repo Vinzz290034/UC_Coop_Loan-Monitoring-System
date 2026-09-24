@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import RevolvingFundsTab from '@/components/loans/RevolvingFundsTab';
+import StlLiquidationsTab from '@/components/loans/StlLiquidationsTab';
 import {
   FileText,
   Search,
@@ -264,6 +265,7 @@ function DisbursementPageContent() {
   const [activeTab, setActiveTab] = useState<DisbursementTab>('summary');
   const [cvSortOrder, setCvSortOrder] = useState<'voucher_desc' | 'voucher_asc'>('voucher_desc');
   const [rfSubView, setRfSubView] = useState<'vouchers' | 'liquidations'>('vouchers');
+  const [stlSubView, setStlSubView] = useState<'vouchers' | 'liquidations'>('vouchers');
 
   // SSR hydration safety
   const [mounted, setMounted] = useState(false);
@@ -278,6 +280,9 @@ function DisbursementPageContent() {
       setActiveTab(tabParam as DisbursementTab);
     } else if (tabParam === 'revolving_funds' || tabParam === 'revolving') {
       setActiveTab('revolving_fund_replenishment');
+    } else if (tabParam === 'stl_liquidations' || tabParam === 'stl_liquidation') {
+      setActiveTab('stl_replenishment');
+      setStlSubView('liquidations');
     }
   }, [searchParams]);
 
@@ -1338,6 +1343,39 @@ function DisbursementPageContent() {
         </div>
       )}
 
+      {/* Sub-view toggle for STL Replenishment */}
+      {activeTab === 'stl_replenishment' && (
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            Short Term Loan revolving replenishment, liquidation forms, and disbursed LAF vouchers
+          </p>
+          <div className="inline-flex items-center p-1 rounded-2xl bg-surface-container-low dark:bg-surface-container-high border border-outline-variant/60">
+            <button
+              type="button"
+              onClick={() => setStlSubView('vouchers')}
+              className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                stlSubView === 'vouchers'
+                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-xs'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+              }`}
+            >
+              Check Vouchers
+            </button>
+            <button
+              type="button"
+              onClick={() => setStlSubView('liquidations')}
+              className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                stlSubView === 'liquidations'
+                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-xs'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+              }`}
+            >
+              Liquidation Forms & Items
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TAB CONTENT: IF REVOLVING FUND LIQUIDATION SUBVIEW */}
       {activeTab === 'revolving_fund_replenishment' && rfSubView === 'liquidations' ? (
         <div className="p-6 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs">
@@ -1350,6 +1388,13 @@ function DisbursementPageContent() {
               setRfTargetSearch('');
               setRfTargetId('');
             }}
+          />
+        </div>
+      ) : activeTab === 'stl_replenishment' && stlSubView === 'liquidations' ? (
+        <div className="p-6 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs">
+          <StlLiquidationsTab
+            isAdminOrManager={isAdminOrManager}
+            onViewCheckVoucher={openCheckVoucherModalByIdOrNo}
           />
         </div>
       ) : (
@@ -2880,41 +2925,40 @@ function DisbursementPageContent() {
         </div>,
         document.body
       )}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          @page {
-            size: portrait;
-            margin: 10mm 15mm;
-          }
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-          html, body {
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-          }
-          body > *:not(#cv-breakdown-print-section) {
-            display: none !important;
-          }
-          #cv-breakdown-print-section {
-            display: block !important;
-            width: 100% !important;
-            height: auto !important;
-            background: white !important;
-            color: black !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            box-sizing: border-box !important;
-          }
-        }
-      `}} />
-
       {/* HIDDEN PRINT-ONLY CONTAINER: CHECK VOUCHER */}
       {printingCvBreakdown && typeof document !== 'undefined' && createPortal(
         <div id="cv-breakdown-print-section" className="hidden print:block text-black bg-white font-sans" style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' }}>
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              @page {
+                size: portrait;
+                margin: 10mm 15mm;
+              }
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+              }
+              html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+              }
+              body > *:not(#cv-breakdown-print-section):not(#coop-printable-lf-sheet):not(#stl-printable-lf-sheet) {
+                display: none !important;
+              }
+              #cv-breakdown-print-section {
+                display: block !important;
+                width: 100% !important;
+                height: auto !important;
+                background: white !important;
+                color: black !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-sizing: border-box !important;
+              }
+            }
+          `}} />
           <div className="w-full mx-auto" style={{ display: 'flex', flexDirection: 'column', gap: '16px', boxSizing: 'border-box', padding: '28px 58px 28px 36px' }}>
 
             {/* Brand Header */}

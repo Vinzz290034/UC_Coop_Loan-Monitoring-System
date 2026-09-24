@@ -2418,6 +2418,9 @@ export default function RevolvingFundsTab({
                 size: portrait;
                 margin: 0;
               }
+              body > *:not(#coop-printable-lf-sheet) {
+                display: none !important;
+              }
               #coop-printable-lf-sheet {
                 display: block !important;
                 position: static !important;
@@ -2693,8 +2696,11 @@ export default function RevolvingFundsTab({
           </div>
 
           {/* Print Footer */}
-          <div className="no-print-break" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e5e7eb', paddingTop: '8px', marginTop: '16px', fontSize: '8px', color: '#9ca3af' }}>
-            <div>Generated via UC-METC MPC Portal • Revolving Fund Liquidation System</div>
+          <div className="no-print-break" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderTop: '1px solid #e5e7eb', paddingTop: '8px', marginTop: '16px', fontSize: '8px', color: '#9ca3af' }}>
+            <div>
+              <div>Generated via UC-METC MPC Portal • Revolving Fund Liquidation System</div>
+              <div style={{ marginTop: '2px' }}>KADT Solutions</div>
+            </div>
             <div>Printed on: {new Date().toLocaleString()}</div>
           </div>
           </div>

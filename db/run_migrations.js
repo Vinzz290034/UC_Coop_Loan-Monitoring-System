@@ -23,6 +23,7 @@ import { migrateFixPonterosLoans } from './migrate_fix_ponteros_loans.js';
 import { migrateFixVelosLoans } from './migrate_fix_velos_loans.js';
 import { migrateLoanDeductions } from './migrate_loan_deductions.js';
 import { migrateRevolvingFunds } from './migrate_revolving_funds.js';
+import { migrateStlLiquidations } from './migrate_stl_liquidations.js';
 import { migrateSavingsAccounts } from './migrate_savings_accounts.js';
 
 export async function runMigrations() {
@@ -52,6 +53,7 @@ export async function runMigrations() {
     await migrateFixVelosLoans();
     await migrateLoanDeductions();
     await migrateRevolvingFunds();
+    await migrateStlLiquidations();
     await migrateSavingsAccounts();
     console.log('[System Startup] All database migrations completed successfully.');
   } catch (error) {

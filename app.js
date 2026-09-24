@@ -24,6 +24,7 @@ import supportRoutes from './routes/supportRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
 import importRoutes from './routes/importRoutes.js';
 import revolvingFundRoutes from './routes/revolvingFundRoutes.js';
+import stlLiquidationRoutes from './routes/stlLiquidationRoutes.js';
 
 dotenv.config();
 
@@ -123,6 +124,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/revolving-funds', revolvingFundRoutes);
+app.use('/api/stl-liquidations', stlLiquidationRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
