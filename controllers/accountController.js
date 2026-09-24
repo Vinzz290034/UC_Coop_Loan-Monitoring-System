@@ -815,7 +815,7 @@ export const importCheckVouchers = async (req, res, next) => {
 // @access  Protected (Admin, Staff)
 export const getCheckVouchers = async (req, res, next) => {
   try {
-    const { search, folder, bank, status, page, limit, id } = req.query;
+    const { search, folder, bank, status, page, limit, id, loan_id } = req.query;
 
     const conditions = [];
     const params = [];
@@ -823,6 +823,11 @@ export const getCheckVouchers = async (req, res, next) => {
     if (id) {
       params.push(id);
       conditions.push(`id = $${params.length}`);
+    }
+
+    if (loan_id) {
+      params.push(loan_id);
+      conditions.push(`loan_id = $${params.length}`);
     }
 
     if (search) {
@@ -907,6 +912,7 @@ export const updateCheckVoucher = async (req, res, next) => {
   try {
     const { id } = req.params;
     const {
+      loan_id,
       voucher_no,
       voucher_date,
       check_no,
@@ -950,7 +956,8 @@ export const updateCheckVoucher = async (req, res, next) => {
     // Check vouchers in 'on process', 'for release', or 'filed' cannot be edited unless reverted to 'edit'
     const currentStatus = (currentCv.status || 'edit').toLowerCase();
     const isModifyingContent = details !== undefined || payee !== undefined || amount !== undefined || check_no !== undefined || particulars !== undefined || voucher_no !== undefined;
-    if (currentStatus !== 'edit' && isModifyingContent && status !== 'edit') {
+    const isLoanOrAdmin = req.user?.role === 'admin' || req.user?.role === 'manager' || currentCv.loan_id || loan_id;
+    if (currentStatus !== 'edit' && isModifyingContent && status !== 'edit' && !isLoanOrAdmin) {
       return res.status(400).json({
         success: false,
         error: { message: `Check vouchers in '${currentStatus.toUpperCase()}' status cannot be edited. Revert to 'Edit' status first to modify.` }
@@ -968,6 +975,7 @@ export const updateCheckVoucher = async (req, res, next) => {
       resolvedDateReleased = new Date().toISOString().split('T')[0];
     }
 
+    const resolvedLoanId = loan_id !== undefined ? loan_id : currentCv.loan_id;
     const resolvedVoucherNo = voucher_no !== undefined ? voucher_no : currentCv.voucher_no;
     const resolvedVoucherDate = voucher_date !== undefined ? (voucher_date || null) : currentCv.voucher_date;
     const resolvedCheckNo = check_no !== undefined ? check_no : currentCv.check_no;
@@ -1002,8 +1010,9 @@ export const updateCheckVoucher = async (req, res, next) => {
            status = $11,
            details = $12,
            signatories = $13,
+           loan_id = $14,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $14
+       WHERE id = $15
        RETURNING *`,
       [
         resolvedVoucherNo,
@@ -1019,6 +1028,7 @@ export const updateCheckVoucher = async (req, res, next) => {
         resolvedStatus,
         resolvedDetails,
         resolvedSignatories,
+        resolvedLoanId,
         id
       ]
     );
@@ -1071,6 +1081,7 @@ export const printCheckVoucher = async (req, res, next) => {
 export const createCheckVoucher = async (req, res, next) => {
   try {
     const {
+      loan_id,
       voucher_no,
       voucher_date,
       check_no,
@@ -1102,6 +1113,7 @@ export const createCheckVoucher = async (req, res, next) => {
 
     const result = await query(
       `INSERT INTO check_vouchers (
+        loan_id,
         voucher_no,
         voucher_date,
         check_no,
@@ -1114,9 +1126,10 @@ export const createCheckVoucher = async (req, res, next) => {
         status,
         details,
         signatories
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *`,
       [
+        loan_id || null,
         voucher_no.trim(),
         voucher_date || new Date().toISOString().split('T')[0],
         check_no || '',

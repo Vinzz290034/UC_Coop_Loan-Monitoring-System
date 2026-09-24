@@ -1256,6 +1256,9 @@ function LoansPageContent() {
   const [checkedBy, setCheckedBy] = useState('MARILOU LARIOSA');
   const [approvedBy, setApprovedBy] = useState('MICHELLE');
   const [releasedBy, setReleasedBy] = useState('Michelle Pable');
+  const [voucherId, setVoucherId] = useState<string | null>(null);
+  const [isSavingVoucherModal, setIsSavingVoucherModal] = useState(false);
+  const [voucherModalFeedback, setVoucherModalFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Voucher Breakdown Rows
   const [voucherRows, setVoucherRows] = useState<{ description: string; debit: string; credit: string }[]>([]);
@@ -1319,6 +1322,8 @@ function LoansPageContent() {
     setPrintLoan(loanObj);
     setPrintMode('voucher');
     setIsPrintModalOpen(true);
+    setVoucherId(null);
+    setVoucherModalFeedback(null);
 
     const yearSuffix = new Date().getFullYear().toString().slice(-2);
     const cleanLaf = (loanObj.laf_no || '').replace(/^LAF\s*#?/i, '').trim();
@@ -1387,6 +1392,148 @@ function LoansPageContent() {
       second: '2-digit',
       hour12: true
     }));
+
+    // Asynchronously check if a saved check voucher exists for this loan
+    (async () => {
+      try {
+        const searchTarget = cleanLaf || defaultVoucherNo;
+        const res = await api.get('/accounts/check-vouchers', {
+          params: { search: searchTarget, limit: 10 }
+        });
+        const match = res.data?.data?.find((v: any) =>
+          v.loan_id === loanObj.id ||
+          (v.voucher_no && (v.voucher_no === defaultVoucherNo || v.voucher_no === cleanLaf || v.voucher_no === `CV-${cleanLaf}`))
+        );
+        if (match) {
+          setVoucherId(match.id);
+          if (match.voucher_no) setVoucherNo(match.voucher_no);
+          if (match.check_no) setCheckNo(match.check_no);
+          if (match.bank) setBankName(match.bank);
+          if (match.payee) setPayeeName(match.payee);
+          if (match.particulars) setVoucherDescription(match.particulars);
+          if (match.voucher_date) {
+            const vd = new Date(match.voucher_date);
+            if (!isNaN(vd.getTime())) {
+              setVoucherDate(`${vd.getFullYear()}-${pad(vd.getMonth() + 1)}-${pad(vd.getDate())}`);
+            }
+          }
+          if (match.signatories) {
+            const sigs = typeof match.signatories === 'string' ? JSON.parse(match.signatories) : match.signatories;
+            if (sigs.prepared_by) setPreparedBy(sigs.prepared_by);
+            if (sigs.checked_by) setCheckedBy(sigs.checked_by);
+            if (sigs.approved_by) setApprovedBy(sigs.approved_by);
+          }
+          if (match.details) {
+            const dets = typeof match.details === 'string' ? JSON.parse(match.details) : match.details;
+            if (Array.isArray(dets) && dets.length > 0) {
+              const loadedRows = dets.map((item: any) => {
+                const amt = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+                return {
+                  description: item.book_of_account || item.description || '',
+                  debit: amt > 0 ? String(amt) : '',
+                  credit: amt < 0 ? String(Math.abs(amt)) : ''
+                };
+              });
+              setVoucherRows(loadedRows);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not query check voucher for loan:', err);
+      }
+    })();
+  };
+
+  const handleSaveVoucherModal = async () => {
+    if (!voucherNo.trim()) {
+      setVoucherModalFeedback({ type: 'error', message: 'Voucher number is required.' });
+      return;
+    }
+    if (!payeeName.trim()) {
+      setVoucherModalFeedback({ type: 'error', message: 'Payee name is required.' });
+      return;
+    }
+
+    try {
+      setIsSavingVoucherModal(true);
+      setVoucherModalFeedback(null);
+
+      const detailsToSave: { book_of_account: string; amount: number }[] = [];
+      for (const r of voucherRows) {
+        const desc = (r.description || '').trim();
+        const d = parseFloat(r.debit) || 0;
+        const c = parseFloat(r.credit) || 0;
+        if (d > 0) {
+          detailsToSave.push({ book_of_account: desc || 'Disbursed Item', amount: d });
+        } else if (c > 0) {
+          detailsToSave.push({ book_of_account: desc || 'Deduction', amount: -c });
+        } else if (desc) {
+          detailsToSave.push({ book_of_account: desc, amount: 0 });
+        }
+      }
+
+      const prodName = printLoan?.product_name || 'Loan';
+      const isStl = /stl|short\s*term/i.test(prodName);
+      const folderName = isStl ? 'Short Term Loans' : 'Regular Loans';
+
+      const payload: any = {
+        loan_id: printLoan?.id || null,
+        voucher_no: voucherNo.trim(),
+        voucher_date: voucherDate || null,
+        check_no: checkNo.trim(),
+        payee: payeeName.trim(),
+        bank: bankName.trim() || 'BDO',
+        particulars: voucherDescription.trim(),
+        amount: voucherDisbursedAmount,
+        folder_name: folderName,
+        status: printLoan?.status === 'disbursed' || printLoan?.status === 'fully_paid' ? 'filed' : 'for release',
+        details: detailsToSave,
+        signatories: {
+          prepared_by: preparedBy.trim() || 'LAMOSTE',
+          checked_by: checkedBy.trim() || 'MARILOU LARIOSA',
+          approved_by: approvedBy.trim() || 'MICHELLE'
+        }
+      };
+
+      let savedVoucher: any = null;
+      if (voucherId) {
+        const res = await api.put(`/accounts/check-vouchers/${voucherId}`, payload);
+        savedVoucher = res.data?.data;
+      } else {
+        const res = await api.post('/accounts/check-vouchers', payload);
+        savedVoucher = res.data?.data;
+        if (savedVoucher?.id) {
+          setVoucherId(savedVoucher.id);
+        }
+      }
+
+      if (savedVoucher) {
+        setCheckVouchers((prev: any[]) => {
+          const idx = prev.findIndex(v => v.id === savedVoucher.id);
+          if (idx >= 0) {
+            return prev.map(v => v.id === savedVoucher.id ? { ...v, ...savedVoucher } : v);
+          }
+          return [savedVoucher, ...prev];
+        });
+      }
+
+      if (printLoan?.id) {
+        setLoans(prev => prev.map(l => l.id === printLoan.id ? { ...l, check_no: checkNo.trim(), bank: bankName.trim() } : l));
+      }
+
+      setVoucherModalFeedback({
+        type: 'success',
+        message: 'Check voucher saved successfully!'
+      });
+    } catch (err: any) {
+      console.error('Failed to save check voucher:', err);
+      setVoucherModalFeedback({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to save check voucher.'
+      });
+    } finally {
+      setIsSavingVoucherModal(false);
+    }
   };
 
   const openPrintAmortizationModal = (loanObj: any) => {
@@ -5783,21 +5930,54 @@ function LoansPageContent() {
             </div>
 
             {/* Modal Actions */}
-            <div className="pt-2 flex items-center justify-end gap-3 border-t border-outline-variant/30">
-              <button
-                type="button"
-                onClick={closePrintModal}
-                className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Printer className="w-4 h-4" /> Print Document
-              </button>
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-outline-variant/30">
+              <div className="w-full sm:w-auto">
+                {voucherModalFeedback && (
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl ${
+                    voucherModalFeedback.type === 'success'
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                  }`}>
+                    {voucherModalFeedback.type === 'success' && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {voucherModalFeedback.message}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2.5 ml-auto">
+                <button
+                  type="button"
+                  onClick={closePrintModal}
+                  className="px-5 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveVoucherModal}
+                  disabled={isSavingVoucherModal}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Save check voucher edits to database"
+                >
+                  {isSavingVoucherModal ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" /> Print Document
+                </button>
+              </div>
             </div>
           </div>
         </div>
