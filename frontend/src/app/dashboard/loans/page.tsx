@@ -95,6 +95,8 @@ interface Loan {
   maturity_date?: string | null;
   laf_no?: string;
   payment_mode?: string;
+  member_no?: string;
+  co_maker_name?: string | null;
 }
 
 const LOAN_CATEGORIES = {
@@ -1259,6 +1261,7 @@ function LoansPageContent() {
   const [printMode, setPrintMode] = useState<'voucher' | 'schedule' | 'receipt' | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [downloadingPaymentId, setDownloadingPaymentId] = useState<string | number | null>(null);
+  const [includeGuarantor, setIncludeGuarantor] = useState(true);
 
   // Voucher Template State Fields (Matching UC-METC Standard Format)
   const [voucherNo, setVoucherNo] = useState('');
@@ -1559,7 +1562,9 @@ function LoansPageContent() {
     setPrintLoan(loanObj);
     setPrintMode('schedule');
     setIsPrintModalOpen(true);
+    const hasCoMaker = Boolean(loanObj.co_maker_name && loanObj.co_maker_name.trim());
     setCoMakerName(loanObj.co_maker_name || '');
+    setIncludeGuarantor(hasCoMaker);
   };
 
   const openReceiptModal = (loanObj: any, paymentObj: any) => {
@@ -6161,15 +6166,48 @@ function LoansPageContent() {
 
             {/* Content Form */}
             <div className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-neutral-600 dark:text-neutral-400">Guarantor / Co-Maker Name</label>
-                <input
-                  type="text"
-                  value={coMakerName}
-                  onChange={(e) => setCoMakerName(e.target.value)}
-                  placeholder="e.g. Michelle Pable"
-                  className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
-                />
+              <div className="p-3.5 bg-neutral-50 dark:bg-surface-container rounded-2xl border border-outline-variant/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="font-bold text-neutral-800 dark:text-neutral-200 block text-xs">
+                      Guarantor / Co-Maker Signature Block
+                    </label>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                      Toggle whether the co-maker signature line appears on the printed amortization schedule.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                    <input
+                      type="checkbox"
+                      checked={includeGuarantor}
+                      onChange={(e) => setIncludeGuarantor(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5 bg-neutral-300 peer-focus:outline-none rounded-full peer dark:bg-neutral-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-neutral-600 peer-checked:bg-primary"></div>
+                    <span className="ml-2 text-[11px] font-bold text-neutral-700 dark:text-neutral-300 w-14">
+                      {includeGuarantor ? 'Visible' : 'Hidden'}
+                    </span>
+                  </label>
+                </div>
+
+                {includeGuarantor ? (
+                  <div className="space-y-1 pt-1 border-t border-outline-variant/30">
+                    <label className="font-semibold text-neutral-600 dark:text-neutral-400 text-[11px]">
+                      Guarantor / Co-Maker Name
+                    </label>
+                    <input
+                      type="text"
+                      value={coMakerName}
+                      onChange={(e) => setCoMakerName(e.target.value)}
+                      placeholder="e.g. Michelle Pable (or leave as Guarantor)"
+                      className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
+                    />
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-neutral-100/70 dark:bg-neutral-800/40 rounded-xl text-[11px] text-neutral-500 italic">
+                    Guarantor signature box will be omitted from the printed schedule.
+                  </div>
+                )}
               </div>
 
               <div className="bg-neutral-50 dark:bg-neutral-900/40 p-4 rounded-2xl border border-outline-variant/60 space-y-3">
@@ -6712,8 +6750,7 @@ function LoansPageContent() {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#111827', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap' }}>Official Loan Amortization</h1>
-                  <p style={{ fontSize: '9px', fontFamily: 'monospace', color: '#6b7280', margin: '2px 0 0 0' }}>Contract #{printLoan.id}</p>
+                  <h1 style={{ fontSize: '13px', fontWeight: '800', color: '#064e3b', textTransform: 'uppercase', margin: 0, whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>Amortization Schedule</h1>
                 </div>
               </div>
 
@@ -6722,7 +6759,7 @@ function LoansPageContent() {
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Borrower Member</span>
                   <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{printLoan.last_name}, {printLoan.first_name}</p>
-                  <p style={{ fontSize: '9px', color: '#6b7280', fontFamily: 'monospace', margin: '2px 0 0 0' }}>ID: #{printLoan.member_id || printLoan.borrower_id}</p>
+                  <p style={{ fontSize: '9px', color: '#6b7280', fontFamily: 'monospace', margin: '2px 0 0 0' }}>Member ID: {printLoan.member_no || (printLoan.member_id ? `#${String(printLoan.member_id).slice(0, 8)}` : 'N/A')}</p>
                 </div>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Loan Product</span>
@@ -6804,17 +6841,19 @@ function LoansPageContent() {
               </div>
 
               {/* Signatures */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '32px', paddingTop: '32px', fontSize: '9px', textAlign: 'center' }}>
-                <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
+              <div style={{ display: 'flex', justifyContent: includeGuarantor ? 'space-between' : 'flex-start', gap: '32px', paddingTop: '32px', fontSize: '9px', textAlign: 'center' }}>
+                <div style={{ flex: includeGuarantor ? 1 : '0 0 45%', maxWidth: includeGuarantor ? 'none' : '320px', backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
                   <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{printLoan.last_name}, {printLoan.first_name}</p>
                   <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
                   <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Signature of Borrower</p>
                 </div>
-                <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{coMakerName || 'N/A (Guarantor)'}</p>
-                  <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
-                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Signature of Co-Maker</p>
-                </div>
+                {includeGuarantor && (
+                  <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
+                    <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{coMakerName || 'N/A (Guarantor)'}</p>
+                    <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
+                    <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Signature of Co-Maker</p>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

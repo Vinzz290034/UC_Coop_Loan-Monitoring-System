@@ -920,6 +920,10 @@ export const getLoans = async (req, res, next) => {
         SELECT 
           l.*, 
           lp.name as product_name,
+          m.first_name,
+          m.last_name,
+          m.member_no,
+          m.phone,
           COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
           COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
           COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
@@ -928,6 +932,7 @@ export const getLoans = async (req, res, next) => {
           COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines
         FROM loans l 
         JOIN loan_products lp ON l.loan_product_id = lp.id 
+        LEFT JOIN members m ON l.member_id = m.id
         WHERE l.member_id = $1
       `;
       const params = [ownMemberId];
