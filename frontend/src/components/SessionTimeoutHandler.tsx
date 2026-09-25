@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Clock, AlertTriangle, LogOut, RotateCw } from 'lucide-react';
 
-const DEFAULT_TIMEOUT_MINUTES = 5;
+const DEFAULT_TIMEOUT_MINUTES = 30;
 const WARNING_SECONDS = 60; // Show warning 60 seconds before timeout
 
 export default function SessionTimeoutHandler() {
@@ -25,7 +25,7 @@ export default function SessionTimeoutHandler() {
     ? `session_timeout_minutes_${user.id}`
     : 'session_timeout_minutes';
 
-  // Read configured timeout duration from localStorage (default: 5 minutes, 0 = disabled)
+  // Read configured timeout duration from localStorage (default: 30 minutes, 0 = disabled)
   const getTimeoutDurationMs = useCallback((): number => {
     if (typeof window === 'undefined') return DEFAULT_TIMEOUT_MINUTES * 60 * 1000;
     const stored = localStorage.getItem(timeoutKey);
@@ -93,8 +93,22 @@ export default function SessionTimeoutHandler() {
       }
     }
 
-    // Event listeners to detect user interaction
-    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    // Event listeners to detect user interaction (using capture: true to catch inner container scroll/inputs)
+    const activityEvents = [
+      'mousemove',
+      'mousedown',
+      'mouseup',
+      'keydown',
+      'keyup',
+      'touchstart',
+      'touchend',
+      'scroll',
+      'wheel',
+      'click',
+      'input',
+      'change',
+      'focus'
+    ];
     const handleUserActivity = () => {
       // Don't auto-reset activity while warning modal is active so user is forced to click or acknowledge
       if (!showWarning) {
@@ -103,8 +117,15 @@ export default function SessionTimeoutHandler() {
     };
 
     activityEvents.forEach(evt => {
-      window.addEventListener(evt, handleUserActivity, { passive: true });
+      window.addEventListener(evt, handleUserActivity, { capture: true, passive: true });
     });
+
+    const handleCustomActivity = () => {
+      if (!showWarning) {
+        recordActivity();
+      }
+    };
+    window.addEventListener('session-activity', handleCustomActivity);
 
     // Sync activity across tabs
     const handleStorageChange = (e: StorageEvent) => {
@@ -147,6 +168,21 @@ export default function SessionTimeoutHandler() {
         return;
       }
 
+      // Check if user is actively in a critical editing modal (e.g. Check Voucher, Loan Application)
+      const isActivelyEditing =
+        typeof document !== 'undefined' &&
+        document.querySelector('[data-editing-session="true"]');
+
+      if (isActivelyEditing) {
+        // Automatically extend activity timestamp so editing forms are never interrupted or lost
+        lastActivityRef.current = currentNow;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('session_last_activity', currentNow.toString());
+        }
+        if (showWarning) setShowWarning(false);
+        return;
+      }
+
       // Read latest cross-tab activity if available
       let lastAct = lastActivityRef.current;
       if (typeof window !== 'undefined') {
@@ -178,8 +214,9 @@ export default function SessionTimeoutHandler() {
 
     return () => {
       activityEvents.forEach(evt => {
-        window.removeEventListener(evt, handleUserActivity);
+        window.removeEventListener(evt, handleUserActivity, { capture: true } as any);
       });
+      window.removeEventListener('session-activity', handleCustomActivity);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('test-session-timeout', handleTestEvent);
       clearInterval(interval);

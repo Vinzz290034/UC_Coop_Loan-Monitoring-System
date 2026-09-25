@@ -102,14 +102,15 @@ interface Loan {
 const LOAN_CATEGORIES = {
   REGULAR: 'Regular Loan',
   STL: 'Short Term Loan or STL',
+  SPECIAL: 'Special Loan',
 };
 
 const getProductCategory = (name: string) => {
   if (!name) return LOAN_CATEGORIES.REGULAR;
   const lowercaseName = name.toLowerCase();
-  // Calamity Loan is strictly a Regular Loan
-  if (lowercaseName.includes('calamity')) {
-    return LOAN_CATEGORIES.REGULAR;
+  // Calamity Loan is strictly a Special Loan
+  if (lowercaseName.includes('calamity') || lowercaseName.includes('special loan')) {
+    return LOAN_CATEGORIES.SPECIAL;
   }
   if (
     lowercaseName.includes('short term') ||
@@ -117,7 +118,7 @@ const getProductCategory = (name: string) => {
     lowercaseName.includes('utility') ||
     lowercaseName.includes('emergency') ||
     lowercaseName.includes('express') ||
-    lowercaseName.includes('special')
+    lowercaseName.includes('special occasion')
   ) {
     return LOAN_CATEGORIES.STL;
   }
@@ -132,6 +133,10 @@ const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
   'Regular Loan - Project Loan': {
     desc: 'Project or entrepreneurial funding for business expansions or asset acquisitions.',
     helper: '₱76,000 to ₱300,000. Maximum term: 2 years (24 months).'
+  },
+  'Special Loan - Calamity Loan': {
+    desc: 'Emergency financial assistance released during officially declared State of Calamity.',
+    helper: '₱10,000 to ₱50,000. Maximum term: 1-2 years (24 months).'
   },
   'Regular Loan - Calamity Loan': {
     desc: 'Emergency financial assistance released during officially declared State of Calamity.',
@@ -1492,8 +1497,9 @@ function LoansPageContent() {
       }
 
       const prodName = printLoan?.product_name || 'Loan';
-      const isStl = /stl|short\s*term/i.test(prodName);
-      const folderName = isStl ? 'Short Term Loans' : 'Regular Loans';
+      const isSpecial = /special|calamity/i.test(prodName);
+      const isStl = !isSpecial && /stl|short\s*term/i.test(prodName);
+      const folderName = isSpecial ? 'Special Loans' : (isStl ? 'Short Term Loans' : 'Regular Loans');
 
       const payload: any = {
         loan_id: printLoan?.id || null,
@@ -3284,7 +3290,7 @@ function LoansPageContent() {
                                                         title="Print official loan amortization schedule"
                                                       >
                                                         <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                                                        Print Ammortization
+                                                        Print Amortization
                                                       </button>
 
                                                       <button
@@ -3357,21 +3363,34 @@ function LoansPageContent() {
                                                       <tbody className="divide-y divide-outline-variant/35 font-mono">
                                                         {(() => {
                                                           let runningBalance = parseFloat(loanDetails.principal_amount);
-                                                          return loanDetails.schedule?.map((sch: any) => {
-                                                            const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
+                                                          let totalPrincipalDue = 0;
+                                                          let totalInterestDue = 0;
+                                                          let totalDueSum = 0;
+                                                          let totalPrincipalPaid = 0;
+                                                          let totalInterestPaid = 0;
+                                                          const rows = loanDetails.schedule?.map((sch: any) => {
+                                                            const pDue = parseFloat(sch.principal_due) || 0;
+                                                            const iDue = parseFloat(sch.interest_due) || 0;
+                                                            const schTotalDue = pDue + iDue;
+                                                            totalPrincipalDue += pDue;
+                                                            totalInterestDue += iDue;
+                                                            totalDueSum += schTotalDue;
+                                                            totalPrincipalPaid += parseFloat(sch.principal_paid) || 0;
+                                                            totalInterestPaid += parseFloat(sch.interest_paid) || 0;
+
                                                             if (loanDetails.amortization_type === 'diminishing_balance') {
                                                               runningBalance = Math.round((runningBalance - schTotalDue) * 100) / 100;
                                                             } else {
-                                                              runningBalance = Math.round((runningBalance - parseFloat(sch.principal_due)) * 100) / 100;
+                                                              runningBalance = Math.round((runningBalance - pDue) * 100) / 100;
                                                             }
                                                             const displayBalance = Math.max(0, runningBalance);
 
                                                             return (
                                                               <tr key={sch.id} className="hover:bg-neutral/5">
                                                                 <td className="px-4 py-2 font-bold">{sch.installment_number}</td>
-                                                                <td className="px-4 py-2">{formatCurrency(parseFloat(sch.principal_due))}</td>
-                                                                <td className="px-4 py-2">{formatCurrency(parseFloat(sch.interest_due))}</td>
-                                                                <td className="px-4 py-2 font-bold">{formatCurrency(parseFloat(sch.principal_due) + parseFloat(sch.interest_due))}</td>
+                                                                <td className="px-4 py-2">{formatCurrency(pDue)}</td>
+                                                                <td className="px-4 py-2">{formatCurrency(iDue)}</td>
+                                                                <td className="px-4 py-2 font-bold">{formatCurrency(schTotalDue)}</td>
                                                                 <td className="px-4 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
                                                                 <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
                                                                 <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
@@ -3388,6 +3407,23 @@ function LoansPageContent() {
                                                               </tr>
                                                             );
                                                           });
+
+                                                          return (
+                                                            <>
+                                                              {rows}
+                                                              <tr className="bg-primary/5 font-bold border-t-2 border-primary/20">
+                                                                <td className="px-4 py-2 font-sans">TOTAL</td>
+                                                                <td className="px-4 py-2">{formatCurrency(totalPrincipalDue)}</td>
+                                                                <td className="px-4 py-2">{formatCurrency(totalInterestDue)}</td>
+                                                                <td className="px-4 py-2 text-primary">{formatCurrency(totalDueSum)}</td>
+                                                                <td className="px-4 py-2 text-neutral-400 font-sans">—</td>
+                                                                <td className="px-4 py-2 text-primary">{formatCurrency(totalPrincipalPaid)}</td>
+                                                                <td className="px-4 py-2 text-primary">{formatCurrency(totalInterestPaid)}</td>
+                                                                <td className="px-4 py-2 text-neutral-400 font-sans">—</td>
+                                                                <td className="px-4 py-2 text-neutral-400 font-sans">—</td>
+                                                              </tr>
+                                                            </>
+                                                          );
                                                         })()}
                                                       </tbody>
                                                     </table>
@@ -4010,7 +4046,7 @@ function LoansPageContent() {
                     <div className="flex items-start justify-between">
                       <div>
                         <h4 className="font-headline font-bold text-base text-on-surface dark:text-white">{prod.name}</h4>
-                        <p className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-0.5 capitalize">{prod.amortization_type?.replace('_', ' ')} Formula</p>
+                        <p className="text-[10px] text-neutral-600 dark:text-neutral-400 mt-0.5 capitalize">{prod.amortization_type === 'flat_rate' ? 'Straight (Flat Rate)' : 'Diminishing Balance'} Formula</p>
                       </div>
                       {isAdminOrManager ? (
                         <button
@@ -4036,8 +4072,8 @@ function LoansPageContent() {
                     <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/40 pt-4 text-xs font-body">
                       <div>
                         <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold">Interest Rate</span>
-                        <p className="font-headline text-base font-extrabold text-primary dark:text-secondary mt-0.5 flex items-center gap-0.5">
-                          <Percent className="w-4 h-4" /> {parseFloat(prod.interest_rate)}% p.a.
+                        <p className="font-headline text-base font-extrabold text-primary dark:text-secondary mt-0.5">
+                          {(parseFloat(prod.interest_rate) <= 1 ? parseFloat(prod.interest_rate) * 100 : parseFloat(prod.interest_rate)).toFixed(0)}% p.a.
                         </p>
                       </div>
                       <div>
@@ -4371,16 +4407,18 @@ function LoansPageContent() {
                   {applyMemberId && (() => {
                     const activeRegularCount = selectedMemberSummary?.loans?.active_regular_count || 0;
                     const activeStlCount = selectedMemberSummary?.loans?.active_stl_count || 0;
+                    const activeSpecialCount = selectedMemberSummary?.loans?.active_special_count || 0;
                     const hasStl1MonthRepayment = selectedMemberSummary?.loans?.has_stl_with_1month_repayment || false;
                     const isRegularLocked = selectedLoanCategory === LOAN_CATEGORIES.REGULAR && activeRegularCount >= 1;
                     const isStlLocked = selectedLoanCategory === LOAN_CATEGORIES.STL && activeStlCount >= 3 && !hasStl1MonthRepayment;
+                    const isSpecialLocked = selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && !isCalamityDeclared;
 
                     return (
                       <div className="space-y-4">
                         {/* Product Category pills */}
                         <div className="space-y-2">
                           <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Select Loan Category:</span>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                             {Object.entries(LOAN_CATEGORIES).map(([key, label]) => {
                               const isActive = selectedLoanCategory === label;
                               return (
@@ -4389,7 +4427,19 @@ function LoansPageContent() {
                                   type="button"
                                   onClick={() => {
                                     setSelectedLoanCategory(label);
-                                    const filtered = products.filter(p => getProductCategory(p.name) === label);
+                                    let filtered = products.filter(p => getProductCategory(p.name) === label);
+                                    if (label === LOAN_CATEGORIES.SPECIAL && isCalamityDeclared && !filtered.some(p => p.name.toLowerCase().includes('calamity'))) {
+                                      filtered = [{
+                                        id: 999999,
+                                        name: 'Special Loan - Calamity Loan',
+                                        interest_rate: '0.0800',
+                                        term_months: 24,
+                                        amortization_type: 'flat_rate',
+                                        min_amount: '10000.00',
+                                        max_amount: '50000.00',
+                                        is_active: true
+                                      }];
+                                    }
                                     if (filtered.length > 0) {
                                       setSelectedProduct(filtered[0]);
                                       const defAmt = isAdminOrManager ? (parseFloat(filtered[0].min_amount) || 5000) : parseFloat(filtered[0].min_amount);
@@ -4417,8 +4467,10 @@ function LoansPageContent() {
                                 <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
                                 {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
                                   <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
-                                ) : (
+                                ) : selectedLoanCategory === LOAN_CATEGORIES.STL ? (
                                   <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
+                                ) : (
+                                  <span>Coop Policy: <strong className="text-primary dark:text-secondary font-extrabold">Special Loan (Calamity Loan)</strong> is available during officially declared State of Calamity.</span>
                                 )}
                               </div>
                             </div>
@@ -4455,19 +4507,25 @@ function LoansPageContent() {
                             <span>You cannot apply for a new Short Term Loan (STL) because this member has 3 active STLs, and none have reached 1 month of repayment yet.</span>
                           </div>
                         )}
+                        {!isAdminOrManager && selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && !isCalamityDeclared && (
+                          <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                            <span>Special Loan (Calamity Loan) is currently locked because no active State of Calamity is declared in the system.</span>
+                          </div>
+                        )}
 
                         {/* Available products under the category */}
                         {(() => {
                           let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
 
-                          // If State of Calamity is declared, guarantee Calamity Loan product exists under Regular Loan category
-                          if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && isCalamityDeclared && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
+                          // If State of Calamity is declared, guarantee Calamity Loan product exists under Special Loan category
+                          if (selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && isCalamityDeclared && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
                             const calamityFallback: LoanProduct = {
                               id: 999999,
-                              name: 'Regular Loan - Calamity Loan',
-                              interest_rate: '0.0500',
+                              name: 'Special Loan - Calamity Loan',
+                              interest_rate: '0.0800',
                               term_months: 24,
-                              amortization_type: 'diminishing_balance',
+                              amortization_type: 'flat_rate',
                               min_amount: '10000.00',
                               max_amount: '50000.00',
                               is_active: true
@@ -4506,7 +4564,7 @@ function LoansPageContent() {
                                     const remCap = Math.max(0, baseLimit - actPrincipal);
 
                                     const isExceedingCap = Boolean(selectedMemberSummary) && parseFloat(p.min_amount) > remCap;
-                                    const isDisabled = !isAdminOrManager && (isExceedingCap || isRegularLocked || isStlLocked);
+                                    const isDisabled = !isAdminOrManager && (isExceedingCap || isRegularLocked || isStlLocked || isSpecialLocked);
 
                                     return (
                                       <button
@@ -4534,7 +4592,8 @@ function LoansPageContent() {
                                               {p.name
                                                 .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
                                                 .replace(/Short Term Loan\s*-\s*/gi, '')
-                                                .replace(/Regular Loan\s*-\s*/gi, '')}
+                                                .replace(/Regular Loan\s*-\s*/gi, '')
+                                                .replace(/Special Loan\s*-\s*/gi, '')}
                                             </span>
                                             {isCalamityProduct && (
                                               <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${isCalamityDeclared
@@ -4551,7 +4610,7 @@ function LoansPageContent() {
                                             )}
                                           </div>
                                           <span className="text-[9px] font-black bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap tracking-wider">
-                                            {p.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing'}
+                                            {p.amortization_type === 'flat_rate' ? 'Straight' : 'Diminishing'}
                                           </span>
                                         </div>
 
@@ -4589,6 +4648,10 @@ function LoansPageContent() {
                                         ) : !isAdminOrManager && isStlLocked ? (
                                           <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
                                             <AlertTriangle className="w-3 h-3 inline" /> STL category locked (3 active without 1-month repayment).
+                                          </p>
+                                        ) : !isAdminOrManager && isSpecialLocked ? (
+                                          <p className="text-[9px] text-amber-600 font-bold mt-2 flex items-center justify-center gap-1">
+                                            <AlertTriangle className="w-3 h-3 inline" /> Requires active State of Calamity.
                                           </p>
                                         ) : null}
                                       </button>
@@ -6746,7 +6809,7 @@ function LoansPageContent() {
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Loan Product</span>
                   <p style={{ fontWeight: 'bold', color: '#064e3b', margin: '2px 0 0 0' }}>{printLoan.product_name}</p>
-                  <p style={{ fontSize: '9px', color: '#6b7280', textTransform: 'capitalize', margin: '2px 0 0 0' }}>{printLoan.amortization_type?.replace('_', ' ')}</p>
+                  <p style={{ fontSize: '9px', color: '#6b7280', textTransform: 'capitalize', margin: '2px 0 0 0' }}>{printLoan.amortization_type === 'flat_rate' ? 'Straight' : 'Diminishing Balance'}</p>
                 </div>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Principal Amount</span>
@@ -6783,21 +6846,29 @@ function LoansPageContent() {
                   <tbody style={{ fontFamily: 'monospace', fontSize: '9px' }}>
                     {(() => {
                       let printBalance = parseFloat(printLoan.principal_amount);
-                      return printLoan.schedule?.map((sch: any) => {
-                        const schTotal = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
+                      let totalPrincipalDue = 0;
+                      let totalInterestDue = 0;
+                      let totalDueSum = 0;
+                      const rows = printLoan.schedule?.map((sch: any) => {
+                        const pDue = parseFloat(sch.principal_due) || 0;
+                        const iDue = parseFloat(sch.interest_due) || 0;
+                        const schTotal = pDue + iDue;
+                        totalPrincipalDue += pDue;
+                        totalInterestDue += iDue;
+                        totalDueSum += schTotal;
                         if (printLoan.amortization_type === 'diminishing_balance') {
                           printBalance = Math.max(0, Math.round((printBalance - schTotal) * 100) / 100);
                         } else {
-                          printBalance = Math.max(0, Math.round((printBalance - parseFloat(sch.principal_due)) * 100) / 100);
+                          printBalance = Math.max(0, Math.round((printBalance - pDue) * 100) / 100);
                         }
                         return (
                           <tr key={sch.id} style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
                             <td style={{ padding: '6px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.05)', fontFamily: 'sans-serif', color: '#4b5563', fontWeight: 'bold' }}>{sch.installment_number}</td>
                             <td style={{ padding: '6px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.05)', color: '#1f2937' }}>
-                              {parseFloat(sch.principal_due).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              {pDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td style={{ padding: '6px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.05)', color: '#1f2937' }}>
-                              {parseFloat(sch.interest_due).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              {iDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 'bold', color: '#064e3b', borderRight: '1px solid rgba(6, 78, 59, 0.05)' }}>
                               {schTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -6812,6 +6883,27 @@ function LoansPageContent() {
                           </tr>
                         );
                       });
+
+                      return (
+                        <>
+                          {rows}
+                          <tr key="amortization-total-row" style={{ backgroundColor: '#ecfdf5', borderTop: '2px solid #064e3b', fontWeight: 'bold', color: '#064e3b', fontSize: '9px' }}>
+                            <td style={{ padding: '7px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.1)', fontFamily: 'sans-serif', letterSpacing: '0.05em' }}>TOTAL</td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>
+                              {totalPrincipalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>
+                              {totalInterestDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.1)', color: '#047857' }}>
+                              {totalDueSum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.1)', color: '#9ca3af', fontFamily: 'sans-serif' }}>—</td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', borderRight: '1px solid rgba(6, 78, 59, 0.1)', color: '#9ca3af', fontFamily: 'sans-serif' }}>—</td>
+                            <td style={{ padding: '7px 12px', textAlign: 'center', color: '#9ca3af', fontFamily: 'sans-serif' }}>—</td>
+                          </tr>
+                        </>
+                      );
                     })()}
                   </tbody>
                 </table>

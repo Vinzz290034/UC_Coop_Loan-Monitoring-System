@@ -97,8 +97,9 @@ export const syncLoanCheckVoucher = async (clientOrPool, loanId) => {
 
     // Determine category / folder_name:
     const prodName = l.product_name || 'Loan';
-    const isStl = /stl|short\s*term/i.test(prodName);
-    const folderName = isStl ? 'Short Term Loans' : 'Regular Loans';
+    const isSpecial = /special|calamity/i.test(prodName);
+    const isStl = !isSpecial && /stl|short\s*term/i.test(prodName);
+    const folderName = isSpecial ? 'Special Loans' : (isStl ? 'Short Term Loans' : 'Regular Loans');
 
     // Amount: net proceeds or principal minus total deductions
     let netAmt = parseFloat(l.net_proceeds);
@@ -127,7 +128,7 @@ export const syncLoanCheckVoucher = async (clientOrPool, loanId) => {
     }
 
     const cvDetails = [
-      { book_of_account: `Loans Receivable - ${isStl ? 'STL' : 'Regular'}`, amount: parseFloat(l.principal_amount) || 0 }
+      { book_of_account: `Loans Receivable - ${isSpecial ? 'Special' : (isStl ? 'STL' : 'Regular')}`, amount: parseFloat(l.principal_amount) || 0 }
     ];
     if (Array.isArray(deds)) {
       for (const d of deds) {
@@ -404,12 +405,15 @@ export const applyForLoan = async (req, res, next) => {
 
     let regularCount = 0;
     let stlCount = 0;
+    let specialCount = 0;
     let totalExistingPrincipal = 0.0;
 
     for (const loan of activeLoans.rows) {
       const pName = loan.product_name.toLowerCase();
       totalExistingPrincipal += parseFloat(loan.principal_amount);
-      if (pName.includes('regular loan')) {
+      if (pName.includes('special loan') || pName.includes('calamity')) {
+        specialCount++;
+      } else if (pName.includes('regular loan')) {
         regularCount++;
       } else if (pName.includes('short term loan') || pName.includes('stl')) {
         stlCount++;
@@ -417,14 +421,23 @@ export const applyForLoan = async (req, res, next) => {
     }
 
     if (!isStaffOrAdmin) {
-      const isRegularProduct = p.name.toLowerCase().includes('regular loan');
+      const isSpecialProduct = p.name.toLowerCase().includes('special loan') || p.name.toLowerCase().includes('calamity');
+      const isRegularProduct = !isSpecialProduct && p.name.toLowerCase().includes('regular loan');
+      const isStlProduct = !isSpecialProduct && (p.name.toLowerCase().includes('short term loan') || p.name.toLowerCase().includes('stl'));
+
       if (isRegularProduct && regularCount >= 1) {
         return res.status(400).json({
           success: false,
           error: { message: 'This member cannot apply for a new Regular Loan because they already have an active Regular Loan.' }
         });
       }
-      if (!isRegularProduct && stlCount >= 3) {
+      if (isSpecialProduct && specialCount >= 1) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'This member cannot apply for a new Special Loan because they already have an active Special Loan.' }
+        });
+      }
+      if (isStlProduct && stlCount >= 3) {
         // Check if at least one of the active STLs has completed 1 month of repayment term
         // (active for >= 30 days OR has at least 1 paid/partially-paid repayment schedule)
         const stlRepaymentCheck = await query(

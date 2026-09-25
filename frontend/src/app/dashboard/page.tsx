@@ -155,13 +155,14 @@ const getLoanStatusBadge = (status: string) => {
 const LOAN_CATEGORIES = {
   REGULAR: 'Regular Loan',
   STL: 'Short Term Loan or STL',
+  SPECIAL: 'Special Loan',
 };
 
 const getProductCategory = (productName: string) => {
   if (!productName) return LOAN_CATEGORIES.REGULAR;
   const name = productName.toLowerCase();
-  if (name.includes('calamity')) {
-    return LOAN_CATEGORIES.REGULAR;
+  if (name.includes('calamity') || name.includes('special loan')) {
+    return LOAN_CATEGORIES.SPECIAL;
   }
   if (
     name.includes('short term') ||
@@ -169,7 +170,7 @@ const getProductCategory = (productName: string) => {
     name.includes('utility') ||
     name.includes('emergency') ||
     name.includes('express') ||
-    name.includes('special')
+    name.includes('special occasion')
   ) {
     return LOAN_CATEGORIES.STL;
   }
@@ -184,6 +185,10 @@ const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
   'Regular Loan - Project Loan': {
     desc: 'Project or entrepreneurial funding for business expansions or asset acquisitions.',
     helper: '₱76,000 to ₱300,000. Maximum term: 2 years (24 months).'
+  },
+  'Special Loan - Calamity Loan': {
+    desc: 'Emergency financial assistance released during officially declared State of Calamity.',
+    helper: '₱10,000 to ₱50,000. Maximum term: 1-2 years (24 months).'
   },
   'Regular Loan - Calamity Loan': {
     desc: 'Emergency financial assistance released during officially declared State of Calamity.',
@@ -1956,20 +1961,22 @@ export default function OverviewPage() {
                     {wizardStep === 1 && (() => {
                       const activeRegularCount = memberMetrics?.loans?.active_regular_count || 0;
                       const activeStlCount = memberMetrics?.loans?.active_stl_count || 0;
+                      const activeSpecialCount = memberMetrics?.loans?.active_special_count || 0;
                       const hasStl1MonthRepayment = memberMetrics?.loans?.has_stl_with_1month_repayment || false;
                       const isRegularLocked = selectedLoanCategory === LOAN_CATEGORIES.REGULAR && activeRegularCount >= 1;
                       const isStlLocked = selectedLoanCategory === LOAN_CATEGORIES.STL && activeStlCount >= 3 && !hasStl1MonthRepayment;
+                      const isSpecialLocked = selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && !isCalamityDeclared;
 
                       let categoryProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
 
-                      // If State of Calamity is declared, guarantee Calamity Loan product exists under Regular Loan category
-                      if (selectedLoanCategory === LOAN_CATEGORIES.REGULAR && isCalamityDeclared && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
+                      // If State of Calamity is declared, guarantee Calamity Loan product exists under Special Loan category
+                      if (selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && isCalamityDeclared && !categoryProducts.some(p => p.name.toLowerCase().includes('calamity'))) {
                         const calamityFallback: any = {
                           id: 999999,
-                          name: 'Regular Loan - Calamity Loan',
-                          interest_rate: '0.0500',
+                          name: 'Special Loan - Calamity Loan',
+                          interest_rate: '0.0800',
                           term_months: 24,
-                          amortization_type: 'diminishing_balance',
+                          amortization_type: 'flat_rate',
                           min_amount: '10000.00',
                           max_amount: '50000.00',
                           is_active: true
@@ -1986,7 +1993,7 @@ export default function OverviewPage() {
                         <div className="space-y-4">
                           <div className="space-y-2">
                             <span className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase font-label">Select Loan Category:</span>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                               {Object.entries(LOAN_CATEGORIES).map(([key, label]) => {
                                 const isActive = selectedLoanCategory === label;
                                 return (
@@ -1995,7 +2002,19 @@ export default function OverviewPage() {
                                     type="button"
                                     onClick={() => {
                                       setSelectedLoanCategory(label);
-                                      const filtered = products.filter(p => getProductCategory(p.name) === label);
+                                      let filtered = products.filter(p => getProductCategory(p.name) === label);
+                                      if (label === LOAN_CATEGORIES.SPECIAL && isCalamityDeclared && !filtered.some(p => p.name.toLowerCase().includes('calamity'))) {
+                                        filtered = [{
+                                          id: 999999,
+                                          name: 'Special Loan - Calamity Loan',
+                                          interest_rate: '0.0800',
+                                          term_months: 24,
+                                          amortization_type: 'flat_rate',
+                                          min_amount: '10000.00',
+                                          max_amount: '50000.00',
+                                          is_active: true
+                                        }];
+                                      }
                                       if (filtered.length > 0) {
                                         setSelectedProduct(filtered[0]);
                                         setLoanAmount(parseFloat(filtered[0].min_amount));
@@ -2019,8 +2038,10 @@ export default function OverviewPage() {
                               <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
                               {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
                                 <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
-                              ) : (
+                              ) : selectedLoanCategory === LOAN_CATEGORIES.STL ? (
                                 <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
+                              ) : (
+                                <span>Coop Policy: <strong className="text-primary dark:text-secondary font-extrabold">Special Loan (Calamity Loan)</strong> is available during officially declared State of Calamity.</span>
                               )}
                             </div>
                           </div>
@@ -2059,6 +2080,12 @@ export default function OverviewPage() {
                                 <span>You cannot apply for a new Short Term Loan (STL) because you have 3 active STLs, and none have reached 1 month of repayment yet.</span>
                               </div>
                             )}
+                            {selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && !isCalamityDeclared && (
+                              <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
+                                <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                                <span>Special Loan (Calamity Loan) is currently locked because no active State of Calamity is declared in the system.</span>
+                              </div>
+                            )}
 
                             {categoryProducts.length === 0 ? (
                               <div className="text-center py-8 text-xs text-neutral-500 italic bg-neutral-50 dark:bg-neutral-900/40 rounded-2xl border border-dashed border-outline-variant/60">
@@ -2080,7 +2107,7 @@ export default function OverviewPage() {
                                   const remCap = Math.max(0, baseLimit - actPrincipal);
 
                                   const isExceedingCap = Boolean(memberMetrics) && parseFloat(p.min_amount) > remCap;
-                                  const isDisabled = isRegularLocked || isStlLocked || isExceedingCap;
+                                  const isDisabled = isRegularLocked || isStlLocked || isSpecialLocked || isExceedingCap;
 
                                   return (
                                     <button
@@ -2106,7 +2133,8 @@ export default function OverviewPage() {
                                             {p.name
                                               .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
                                               .replace(/Short Term Loan\s*-\s*/gi, '')
-                                              .replace(/Regular Loan\s*-\s*/gi, '')}
+                                              .replace(/Regular Loan\s*-\s*/gi, '')
+                                              .replace(/Special Loan\s*-\s*/gi, '')}
                                           </span>
                                           {isCalamityProduct && (
                                             <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${isCalamityDeclared
@@ -2118,7 +2146,7 @@ export default function OverviewPage() {
                                           )}
                                         </div>
                                         <span className="text-[9px] font-black bg-neutral/10 dark:bg-neutral/20 text-neutral-600 dark:text-neutral-300 px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap tracking-wider">
-                                          {p.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing'}
+                                          {p.amortization_type === 'flat_rate' ? 'Straight' : 'Diminishing'}
                                         </span>
                                       </div>
 
@@ -2149,11 +2177,11 @@ export default function OverviewPage() {
                                         <p className="text-[9px] text-tertiary font-bold mt-2 flex items-center justify-center gap-1">
                                           <AlertTriangle className="w-3 h-3 inline" /> Min ₱{parseFloat(p.min_amount).toLocaleString()} exceeds remaining capacity (₱{remCap.toLocaleString()}).
                                         </p>
-                                      ) : isCalamityProduct && !isCalamityDeclared && (
+                                      ) : isSpecialLocked ? (
                                         <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-2 flex items-center justify-center gap-1">
-                                          <AlertTriangle className="w-3 h-3 inline" /> Available only when State of Calamity is declared.
+                                          <AlertTriangle className="w-3 h-3 inline" /> Requires active State of Calamity.
                                         </p>
-                                      )}
+                                      ) : null}
                                     </button>
                                   );
                                 })}
@@ -2162,7 +2190,7 @@ export default function OverviewPage() {
                           </div>
 
                           <button
-                            disabled={!selectedProduct || isRegularLocked || isStlLocked}
+                            disabled={!selectedProduct || isRegularLocked || isStlLocked || isSpecialLocked}
                             onClick={() => {
                               if (selectedProduct) {
                                 const shareCapital = memberMetrics?.balances?.share_capital || 0;
