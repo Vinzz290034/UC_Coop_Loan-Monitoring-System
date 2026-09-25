@@ -339,6 +339,7 @@ function DisbursementPageContent() {
   const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
   const [printingCvBreakdown, setPrintingCvBreakdown] = useState<any | null>(null);
   const [isEditingCvModal, setIsEditingCvModal] = useState(false);
+  const [initialCvEditSnapshot, setInitialCvEditSnapshot] = useState<string>('');
   const [isSavingCvEdit, setIsSavingCvEdit] = useState(false);
   const [isSyncingCvRf, setIsSyncingCvRf] = useState(false);
   const [isApprovingCv, setIsApprovingCv] = useState(false);
@@ -881,7 +882,7 @@ function DisbursementPageContent() {
       return;
     }
     const { rows } = getBalancedCvRows(cv);
-    setEditCvFormData({
+    const initialForm = {
       id: cv.id,
       voucher_no: cv.voucher_no || '',
       voucher_date: cv.voucher_date ? cv.voucher_date.split('T')[0] : '',
@@ -893,25 +894,59 @@ function DisbursementPageContent() {
       prepared_by: cv.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.',
       checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
       approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE'
-    });
+    };
+    setEditCvFormData(initialForm);
 
+    let initialRowsList = [];
     if (rows.length > 0) {
-      setEditCvRows(
-        rows.map(r => ({
-          description: r.description,
-          debit: r.debit !== null ? String(r.debit) : '',
-          credit: r.credit !== null ? String(r.credit) : ''
-        }))
-      );
+      initialRowsList = rows.map(r => ({
+        description: r.description,
+        debit: r.debit !== null ? String(r.debit) : '',
+        credit: r.credit !== null ? String(r.credit) : ''
+      }));
     } else {
       const amt = parseFloat(cv.amount || 0);
-      setEditCvRows([
+      initialRowsList = [
         { description: cv.particulars || 'Disbursement Item', debit: amt > 0 ? String(amt) : '', credit: '' },
         { description: `CIB - ${cv.bank || 'BDO'}`, debit: '', credit: amt > 0 ? String(amt) : '' }
-      ]);
+      ];
     }
+    setEditCvRows(initialRowsList);
+    setInitialCvEditSnapshot(JSON.stringify({ formData: initialForm, rows: initialRowsList }));
     setIsEditingCvModal(true);
   };
+
+  // Track if check voucher edit has dirty/unsaved changes
+  const isCvEditDirty = useMemo(() => {
+    if (!isEditingCvModal || !initialCvEditSnapshot) return false;
+    const current = JSON.stringify({ formData: editCvFormData, rows: editCvRows });
+    return current !== initialCvEditSnapshot;
+  }, [isEditingCvModal, initialCvEditSnapshot, editCvFormData, editCvRows]);
+
+  // Safe close with unsaved changes confirmation
+  const handleCloseEditCvModal = useCallback(() => {
+    if (isCvEditDirty) {
+      const confirmDiscard = window.confirm(
+        'You have unsaved changes in this check voucher. Are you sure you want to close and discard your changes?'
+      );
+      if (!confirmDiscard) return;
+    }
+    setIsEditingCvModal(false);
+  }, [isCvEditDirty]);
+
+  // Keep session alive while Check Voucher edit or create modal is open so the user is never timed out
+  useEffect(() => {
+    if (!isEditingCvModal && !isCreateCVOpen) return;
+    const touch = () => {
+      const now = Date.now();
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('session_last_activity', now.toString());
+      }
+    };
+    touch();
+    const interval = setInterval(touch, 15000);
+    return () => clearInterval(interval);
+  }, [isEditingCvModal, isCreateCVOpen]);
 
   // Save Edited CV
   const handleSaveCvEdit = async () => {
@@ -1769,8 +1804,12 @@ function DisbursementPageContent() {
       {/* CREATE CHECK VOUCHER MODAL */}
       {isCreateCVOpen && mounted && createPortal(
         <div
+          data-editing-session="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6 animate-modal-backdrop"
-          onClick={() => setIsCreateCVOpen(false)}
+          onClick={e => {
+            // Prevent accidental closure when clicking backdrop
+            e.stopPropagation();
+          }}
         >
           <div
             className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-modal-pop overflow-hidden"
@@ -2469,8 +2508,12 @@ function DisbursementPageContent() {
       {/* EDIT CHECK VOUCHER MODAL */}
       {isEditingCvModal && mounted && createPortal(
         <div
+          data-editing-session="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6 animate-modal-backdrop"
-          onClick={() => setIsEditingCvModal(false)}
+          onClick={e => {
+            // Prevent accidental closure when clicking backdrop during voucher edits
+            e.stopPropagation();
+          }}
         >
           <div
             className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-modal-pop overflow-hidden"
@@ -2488,8 +2531,9 @@ function DisbursementPageContent() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsEditingCvModal(false)}
+                onClick={handleCloseEditCvModal}
                 className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 cursor-pointer"
+                title="Close"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2730,7 +2774,7 @@ function DisbursementPageContent() {
             <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-outline-variant/60 shrink-0 bg-surface-container-lowest dark:bg-neutral-900">
               <button
                 type="button"
-                onClick={() => setIsEditingCvModal(false)}
+                onClick={handleCloseEditCvModal}
                 className="px-5 py-2 rounded-full border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-bold text-xs transition-all cursor-pointer"
               >
                 Cancel

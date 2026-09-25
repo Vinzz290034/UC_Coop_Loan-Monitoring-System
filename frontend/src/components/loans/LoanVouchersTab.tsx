@@ -179,6 +179,7 @@ export default function LoanVouchersTab({
   const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
   const [printingCvBreakdown, setPrintingCvBreakdown] = useState<any | null>(null);
   const [isEditingCvModal, setIsEditingCvModal] = useState(false);
+  const [initialCvEditSnapshot, setInitialCvEditSnapshot] = useState<string>('');
   const [isSavingCvEdit, setIsSavingCvEdit] = useState(false);
   const [cvToDelete, setCvToDelete] = useState<any | null>(null);
   const [selectedCvIds, setSelectedCvIds] = useState<string[]>([]);
@@ -464,7 +465,7 @@ export default function LoanVouchersTab({
       credit: r.amount < 0 ? String(Math.abs(r.amount)) : ''
     }));
 
-    setEditCvFormData({
+    const initialForm = {
       id: cv.id,
       voucher_no: cv.voucher_no || '',
       voucher_date: cv.voucher_date ? String(cv.voucher_date).split('T')[0] : '',
@@ -475,10 +476,45 @@ export default function LoanVouchersTab({
       prepared_by: cv.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.',
       checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
       approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE'
-    });
-    setEditCvRows(formattedRows.length > 0 ? formattedRows : [{ description: 'Regular Loan Principal', debit: '', credit: '' }]);
+    };
+    setEditCvFormData(initialForm);
+    const initialRowsList = formattedRows.length > 0 ? formattedRows : [{ description: 'Regular Loan Principal', debit: '', credit: '' }];
+    setEditCvRows(initialRowsList);
+    setInitialCvEditSnapshot(JSON.stringify({ formData: initialForm, rows: initialRowsList }));
     setIsEditingCvModal(true);
   };
+
+  // Track if check voucher edit has dirty/unsaved changes
+  const isCvEditDirty = useMemo(() => {
+    if (!isEditingCvModal || !initialCvEditSnapshot) return false;
+    const current = JSON.stringify({ formData: editCvFormData, rows: editCvRows });
+    return current !== initialCvEditSnapshot;
+  }, [isEditingCvModal, initialCvEditSnapshot, editCvFormData, editCvRows]);
+
+  // Safe close with unsaved changes confirmation
+  const handleCloseEditCvModal = useCallback(() => {
+    if (isCvEditDirty) {
+      const confirmDiscard = window.confirm(
+        'You have unsaved changes in this check voucher. Are you sure you want to close and discard your changes?'
+      );
+      if (!confirmDiscard) return;
+    }
+    setIsEditingCvModal(false);
+  }, [isCvEditDirty]);
+
+  // Keep session alive while Check Voucher edit modal is open
+  useEffect(() => {
+    if (!isEditingCvModal) return;
+    const touch = () => {
+      const now = Date.now();
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('session_last_activity', now.toString());
+      }
+    };
+    touch();
+    const interval = setInterval(touch, 15000);
+    return () => clearInterval(interval);
+  }, [isEditingCvModal]);
 
   const handleSaveCvEdit = async () => {
     if (!editCvFormData.id) return;
@@ -1197,8 +1233,12 @@ export default function LoanVouchersTab({
       {/* EDIT MODAL */}
       {isEditingCvModal && mounted && createPortal(
         <div
+          data-editing-session="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6 animate-modal-backdrop"
-          onClick={() => setIsEditingCvModal(false)}
+          onClick={e => {
+            // Prevent accidental closure when clicking backdrop during voucher edits
+            e.stopPropagation();
+          }}
         >
           <div
             className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-modal-pop"
@@ -1215,8 +1255,10 @@ export default function LoanVouchersTab({
                 </p>
               </div>
               <button
-                onClick={() => setIsEditingCvModal(false)}
+                type="button"
+                onClick={handleCloseEditCvModal}
                 className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 cursor-pointer"
+                title="Close"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1347,7 +1389,7 @@ export default function LoanVouchersTab({
             <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-outline-variant/60 bg-neutral-50/50 dark:bg-neutral-800/50">
               <button
                 type="button"
-                onClick={() => setIsEditingCvModal(false)}
+                onClick={handleCloseEditCvModal}
                 className="px-4 py-2 rounded-xl border border-outline-variant/60 font-bold text-xs cursor-pointer"
               >
                 Cancel

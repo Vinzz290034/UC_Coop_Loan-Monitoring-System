@@ -35,10 +35,10 @@ import {
 } from 'lucide-react';
 
 const TIMEOUT_OPTIONS = [
-  { value: 5, label: '5 minutes (Default)', desc: 'Recommended security timeout' },
+  { value: 5, label: '5 minutes', desc: 'Short security timeout' },
   { value: 10, label: '10 minutes', desc: 'Standard working session' },
   { value: 15, label: '15 minutes', desc: 'Extended working session' },
-  { value: 30, label: '30 minutes', desc: 'Long working session' },
+  { value: 30, label: '30 minutes (Default)', desc: 'Recommended security timeout' },
   { value: 60, label: '60 minutes', desc: '1 hour uninterrupted session' },
   { value: 0, label: 'Disabled (Never)', desc: 'Session will never automatically expire' }
 ];
@@ -52,8 +52,8 @@ export default function SettingsPage() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [inAppNotifications, setInAppNotifications] = useState(true);
 
-  // Session Timeout state
-  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(5);
+  // Session Timeout state (default: 30 minutes)
+  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(30);
   const [isTimeoutDropdownOpen, setIsTimeoutDropdownOpen] = useState(false);
   const timeoutDropdownRef = useRef<HTMLDivElement>(null);
 
