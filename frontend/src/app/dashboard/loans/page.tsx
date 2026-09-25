@@ -2297,7 +2297,7 @@ function LoansPageContent() {
     }
     setWizardStep(1);
     setSelectedProduct(null);
-    setSelectedLoanCategory(LOAN_CATEGORIES.STL);
+    setSelectedLoanCategory(LOAN_CATEGORIES.REGULAR);
     setApplyMemberId(!isAdminOrManager && user?.profile?.id ? String(user.profile.id) : '');
     setApplyAmount(0);
     setApplyDate(new Date().toISOString().split('T')[0]);
