@@ -363,12 +363,12 @@ function CalendarPageContent() {
       </div>
 
       {/* Top Combined Module Tab Switcher & Month Navigation Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-outline-variant/60 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-outline-variant/50 gap-3">
         <div className="flex overflow-x-auto custom-scrollbar">
           <button
             type="button"
             onClick={() => handleTabChange('calendar')}
-            className={`px-6 py-3.5 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            className={`px-6 py-3 font-headline text-sm font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'calendar'
                 ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
                 : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
@@ -381,7 +381,7 @@ function CalendarPageContent() {
           <button
             type="button"
             onClick={() => handleTabChange('appointments')}
-            className={`px-6 py-3.5 font-headline text-xs font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            className={`px-6 py-3 font-headline text-sm font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'appointments'
                 ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
                 : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
@@ -390,7 +390,11 @@ function CalendarPageContent() {
             <Clock className="w-4 h-4" />
             <span>Appointments & Schedules</span>
             {pendingAppointmentsCount > 0 && (
-              <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+              <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                activeTab === 'appointments'
+                  ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+              }`}>
                 {pendingAppointmentsCount}
               </span>
             )}

@@ -353,37 +353,68 @@ export default function SupportPage() {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-outline-variant/40 pb-3">
+      {/* Navigation Tabs - Standardized underline tab design matching Loans page */}
+      <div className="flex border-b border-outline-variant/50 overflow-x-auto">
         <button
+          type="button"
           onClick={() => setActiveTab('tickets')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'tickets'
-            ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-sm'
-            : 'bg-white dark:bg-surface-container-low text-neutral-600 dark:text-neutral-400 border border-outline-variant/50 hover:bg-neutral/5'
-            }`}
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'tickets'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+          }`}
         >
           <MessageSquareText className="w-4 h-4" />
-          {isAdminOrManager ? 'Support Tickets Queue' : 'My Tickets'} ({tickets.length})
+          <span>{isAdminOrManager ? 'Support Tickets Queue' : 'My Tickets'}</span>
+          {tickets.length > 0 && (
+            <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+              activeTab === 'tickets'
+                ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+            }`}>
+              {tickets.length}
+            </span>
+          )}
         </button>
+
         <button
+          type="button"
           onClick={() => setActiveTab('faqs')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'faqs'
-            ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-sm'
-            : 'bg-white dark:bg-surface-container-low text-neutral-600 dark:text-neutral-400 border border-outline-variant/50 hover:bg-neutral/5'
-            }`}
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'faqs'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+          }`}
         >
           <HelpCircle className="w-4 h-4" />
-          FAQs ({faqsAndGuides.filter(i => i.type === 'faq').length})
+          <span>FAQs</span>
+          <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+            activeTab === 'faqs'
+              ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+          }`}>
+            {faqsAndGuides.filter(i => i.type === 'faq').length}
+          </span>
         </button>
+
         <button
+          type="button"
           onClick={() => setActiveTab('guides')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer ${activeTab === 'guides'
-            ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-sm'
-            : 'bg-white dark:bg-surface-container-low text-neutral-600 dark:text-neutral-400 border border-outline-variant/50 hover:bg-neutral/5'
-            }`}
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'guides'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+          }`}
         >
           <BookOpen className="w-4 h-4" />
-          User Guides ({faqsAndGuides.filter(i => i.type === 'guide').length})
+          <span>User Guides</span>
+          <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold ${
+            activeTab === 'guides'
+              ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+          }`}>
+            {faqsAndGuides.filter(i => i.type === 'guide').length}
+          </span>
         </button>
       </div>
 

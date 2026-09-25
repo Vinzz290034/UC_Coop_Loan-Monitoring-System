@@ -776,29 +776,39 @@ export default function AccountingPage() {
         </div>
       )}
 
-      {/* Nav Tabs Bar */}
-      <div className="flex items-center gap-2 p-1.5 bg-neutral-100 dark:bg-neutral-800/60 rounded-2xl w-fit border border-outline-variant/30 overflow-x-auto max-w-full">
+      {/* Nav Tabs Bar - Standardized underline tab design matching Loans page */}
+      <div className="flex border-b border-outline-variant/50 overflow-x-auto">
         <button
+          type="button"
           onClick={() => {
             setActiveTab('savings');
             setViewingPassbookMember(null);
           }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'savings'
-              ? 'bg-white dark:bg-neutral-900 text-primary dark:text-secondary shadow-xs'
-              : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-            }`}
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'savings'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+          }`}
         >
           <WalletCards className="w-4 h-4" />
           <span>Savings Account (Passbook)</span>
           {isAdminOrManager ? (
             savingsSummary?.total_accounts !== undefined ? (
-              <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
+              <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold font-mono ${
+                activeTab === 'savings'
+                  ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+              }`}>
                 {savingsSummary.total_accounts} Accounts
               </span>
             ) : null
           ) : (
             savingsData?.account?.balance !== undefined && (
-              <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold font-mono">
+              <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold font-mono ${
+                activeTab === 'savings'
+                  ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+              }`}>
                 ₱{parseFloat(savingsData.account.balance || 0).toLocaleString()}
               </span>
             )
@@ -806,11 +816,13 @@ export default function AccountingPage() {
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('share_capital')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${activeTab === 'share_capital'
-              ? 'bg-white dark:bg-neutral-900 text-primary dark:text-secondary shadow-xs'
-              : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-            }`}
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'share_capital'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+          }`}
         >
           <Coins className="w-4 h-4" />
           <span>Share Capital Ledger</span>

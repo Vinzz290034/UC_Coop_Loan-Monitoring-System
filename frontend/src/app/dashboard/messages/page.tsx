@@ -51,48 +51,58 @@ function MessagesPageContent() {
 
   return (
     <div className="space-y-6 animate-micro-elevate">
-      {/* Top Header & Tab Switcher */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
+      </div>
 
-        {/* Tab Switcher */}
-        <div className="flex items-center bg-neutral-100 dark:bg-surface-container-low p-1.5 rounded-2xl border border-outline-variant/60 shadow-xs self-start sm:self-auto">
-          <button
-            onClick={() => handleTabChange('messages')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+      {/* Tabs - Standardized underline tab design matching Loans page */}
+      <div className="flex border-b border-outline-variant/50 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => handleTabChange('messages')}
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'messages'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>Direct Messages</span>
+          {unreadMessagesCount > 0 && (
+            <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
               activeTab === 'messages'
-                ? 'bg-white dark:bg-surface-container-high text-primary dark:text-secondary shadow-sm'
-                : 'text-neutral-500 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white hover:bg-neutral/5'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>Direct Messages</span>
-            {unreadMessagesCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-tertiary/15 text-tertiary border border-tertiary/20">
-                {unreadMessagesCount}
-              </span>
-            )}
-          </button>
+                ? 'bg-tertiary/15 text-tertiary'
+                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+            }`}>
+              {unreadMessagesCount}
+            </span>
+          )}
+        </button>
 
-          <button
-            onClick={() => handleTabChange('notifications')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+        <button
+          type="button"
+          onClick={() => handleTabChange('notifications')}
+          className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${
+            activeTab === 'notifications'
+              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+          }`}
+        >
+          <Bell className="w-4 h-4" />
+          <span>Notifications & Alerts</span>
+          {unreadNotificationsCount > 0 && (
+            <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
               activeTab === 'notifications'
-                ? 'bg-white dark:bg-surface-container-high text-primary dark:text-secondary shadow-sm'
-                : 'text-neutral-500 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white hover:bg-neutral/5'
-            }`}
-          >
-            <Bell className="w-4 h-4" />
-            <span>Notifications & Alerts</span>
-            {unreadNotificationsCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/15 text-primary dark:bg-secondary/20 dark:text-secondary border border-primary/20 dark:border-secondary/30">
-                {unreadNotificationsCount}
-              </span>
-            )}
-          </button>
-        </div>
+                ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+            }`}>
+              {unreadNotificationsCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Render Active View */}

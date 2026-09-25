@@ -1630,29 +1630,37 @@ export default function OverviewPage() {
 
             {/* Updates & Merchandise Tabs */}
             <div className="space-y-4">
-              {/* Tab Switcher */}
-              <div className="flex items-center gap-1 p-1 bg-neutral-100/80 dark:bg-neutral-900/60 rounded-2xl border border-outline-variant/40 w-fit">
+              {/* Tab Switcher - Standardized underline tab design matching Loans page */}
+              <div className="flex border-b border-outline-variant/50 overflow-x-auto">
                 <button
+                  type="button"
                   onClick={() => setOverviewTab('updates')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    overviewTab === 'updates'
-                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-sm'
-                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-                  }`}
+                  className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${overviewTab === 'updates'
+                      ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                      : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                    }`}
                 >
-                  <Megaphone className="w-3.5 h-3.5" />
-                  Updates
+                  <Megaphone className="w-4 h-4" />
+                  <span>Updates</span>
+                  {overviewAnnouncements.length > 0 && (
+                    <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold ${overviewTab === 'updates'
+                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                        : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                      }`}>
+                      {overviewAnnouncements.length}
+                    </span>
+                  )}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setOverviewTab('merchandise')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    overviewTab === 'merchandise'
-                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-sm'
-                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-                  }`}
+                  className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${overviewTab === 'merchandise'
+                      ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                      : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                    }`}
                 >
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  Merchandise Products
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>Merchandise Products</span>
                 </button>
               </div>
 
@@ -1666,11 +1674,10 @@ export default function OverviewPage() {
                         <button
                           key={level}
                           onClick={() => setAnnouncementsPriorityFilter(level)}
-                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer capitalize ${
-                            announcementsPriorityFilter === level
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer capitalize ${announcementsPriorityFilter === level
                               ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
                               : 'border-outline-variant/50 text-neutral-500 hover:border-neutral-400'
-                          }`}
+                            }`}
                         >
                           {level}
                         </button>
@@ -1776,142 +1783,142 @@ export default function OverviewPage() {
             </div>
 
             {/* Member Equity & Investment Goal Milestone Card (existing) */}
-        <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary">
-                <Award className="w-3.5 h-3.5" />
-                <span>Co-op Equity & Investment Milestone</span>
-              </div>
-              <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white pt-1">
-                Member Investment Goal & Dividend Tracker
-              </h3>
-              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-                Track your target capital placements. Reaching your goal notifies the Coop Office for call/email payout options.
-              </p>
-            </div>
-
-            {balances.total_assets > 0 && (
-              <button
-                onClick={() => {
-                  setActiveModal('investment');
-                  setWizardStep(1);
-                  setSuccessData(null);
-                  setModalError(null);
-                }}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer self-start sm:self-auto"
-              >
-                <Coins className="w-4 h-4" />
-                <span>Add Capital Placement +</span>
-              </button>
-            )}
-          </div>
-
-          {/* Progress Bar & Target Math */}
-          {(() => {
-            const currentEquity = balances.share_capital || 0;
-            const milestoneTarget = memberMetrics?.investment_goal ?? 0;
-            const progressPercent = milestoneTarget > 0 ? Math.min(100, Math.round((currentEquity / milestoneTarget) * 100)) : 0;
-            const estAnnualDividend = currentEquity * 0.065;
-            const isGoalReached = milestoneTarget > 0 && progressPercent >= 100;
-
-            return (
-              <div className="space-y-5">
-                {/* Progress labels */}
-                <div className="flex justify-between items-end text-xs font-bold">
-                  <div className="space-y-0.5">
-                    <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Accumulated Equity Capital</span>
-                    <div className="font-headline text-lg font-extrabold text-primary dark:text-secondary">
-                      {formatCurrency(currentEquity)}
-                    </div>
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary">
+                    <Award className="w-3.5 h-3.5" />
+                    <span>Co-op Equity & Investment Milestone</span>
                   </div>
-                  <div className="text-right space-y-0.5">
-                    <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Target Milestone Goal</span>
-                    <div className="flex items-center justify-end gap-1.5 min-h-[28px]">
-                      <div className="font-headline text-base font-bold text-on-surface dark:text-white">
-                        {formatCurrency(milestoneTarget)}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewGoalAmount(milestoneTarget ? milestoneTarget.toString() : '5000');
-                          setIsEditGoalModalOpen(true);
-                        }}
-                        className="p-1 text-primary dark:text-secondary hover:bg-primary/10 rounded-lg transition-all cursor-pointer active:scale-95"
-                        title="Update Milestone Target Goal"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                  <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white pt-1">
+                    Member Investment Goal & Dividend Tracker
+                  </h3>
+                  <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+                    Track your target capital placements. Reaching your goal notifies the Coop Office for call/email payout options.
+                  </p>
                 </div>
 
-                {/* Visual Progress Bar */}
-                <div className="relative w-full h-3.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden p-0.5 border border-outline-variant/30">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all duration-1000 ease-out shadow-xs"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-
-                {/* Call/Email Notification Banner when goal is reached or in progress */}
-                {isGoalReached ? (
-                  <div className="p-4 bg-primary/10 border border-primary/30 rounded-2xl flex items-start gap-3 text-xs text-primary dark:text-secondary font-semibold">
-                    <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-primary dark:text-secondary" />
-                    <div>
-                      <strong className="block text-sm font-bold">🎉 Milestone Goal Reached!</strong>
-                      Our Cooperative Officers have been notified. A staff member will reach out via <span className="underline font-extrabold font-mono">Phone Call</span> or <span className="underline font-extrabold font-mono">Email</span> regarding your total investment payout or rollover options.
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-3.5 bg-neutral-50 dark:bg-surface-container-high/40 border border-outline-variant/50 rounded-2xl flex items-center justify-between flex-wrap gap-3 text-xs text-neutral-600 dark:text-neutral-300">
-                    <div className="flex items-center gap-2">
-                      <PhoneCall className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
-                      <Mail className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
-                      <span><strong>Officer Contact Protocol:</strong> Once your investment hits 100%, a staff will call or email you.</span>
-                    </div>
-                    <span className="font-mono text-[11px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/15 px-2.5 py-1 rounded-full">
-                      {100 - progressPercent}% remaining to goal
-                    </span>
-                  </div>
+                {balances.total_assets > 0 && (
+                  <button
+                    onClick={() => {
+                      setActiveModal('investment');
+                      setWizardStep(1);
+                      setSuccessData(null);
+                      setModalError(null);
+                    }}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs hover:opacity-95 transition-all shadow-md active:scale-95 cursor-pointer self-start sm:self-auto"
+                  >
+                    <Coins className="w-4 h-4" />
+                    <span>Add Capital Placement +</span>
+                  </button>
                 )}
-
-                {/* Dynamic Milestone & Annual General Assembly Dividend Highlights */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
-                      <Target className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Milestone Status</span>
-                      <span className="text-xs font-extrabold text-on-surface dark:text-white">{progressPercent}% Completed</span>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
-                      <TrendingUp className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Est. Annual Dividend</span>
-                      <span className="text-xs font-extrabold text-primary dark:text-secondary">{formatCurrency(estAnnualDividend)} / yr</span>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
-                      <CalendarDays className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-neutral-500 block">Dividend Payout</span>
-                      <span className="text-xs font-extrabold text-on-surface dark:text-white">Annual General Assembly</span>
-                    </div>
-                  </div>
-                </div>
               </div>
-            );
-          })()}
-        </div>
+
+              {/* Progress Bar & Target Math */}
+              {(() => {
+                const currentEquity = balances.share_capital || 0;
+                const milestoneTarget = memberMetrics?.investment_goal ?? 0;
+                const progressPercent = milestoneTarget > 0 ? Math.min(100, Math.round((currentEquity / milestoneTarget) * 100)) : 0;
+                const estAnnualDividend = currentEquity * 0.065;
+                const isGoalReached = milestoneTarget > 0 && progressPercent >= 100;
+
+                return (
+                  <div className="space-y-5">
+                    {/* Progress labels */}
+                    <div className="flex justify-between items-end text-xs font-bold">
+                      <div className="space-y-0.5">
+                        <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Accumulated Equity Capital</span>
+                        <div className="font-headline text-lg font-extrabold text-primary dark:text-secondary">
+                          {formatCurrency(currentEquity)}
+                        </div>
+                      </div>
+                      <div className="text-right space-y-0.5">
+                        <span className="text-neutral-500 uppercase tracking-wider text-[10px]">Target Milestone Goal</span>
+                        <div className="flex items-center justify-end gap-1.5 min-h-[28px]">
+                          <div className="font-headline text-base font-bold text-on-surface dark:text-white">
+                            {formatCurrency(milestoneTarget)}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewGoalAmount(milestoneTarget ? milestoneTarget.toString() : '5000');
+                              setIsEditGoalModalOpen(true);
+                            }}
+                            className="p-1 text-primary dark:text-secondary hover:bg-primary/10 rounded-lg transition-all cursor-pointer active:scale-95"
+                            title="Update Milestone Target Goal"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Visual Progress Bar */}
+                    <div className="relative w-full h-3.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden p-0.5 border border-outline-variant/30">
+                      <div
+                        className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all duration-1000 ease-out shadow-xs"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+
+                    {/* Call/Email Notification Banner when goal is reached or in progress */}
+                    {isGoalReached ? (
+                      <div className="p-4 bg-primary/10 border border-primary/30 rounded-2xl flex items-start gap-3 text-xs text-primary dark:text-secondary font-semibold">
+                        <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5 text-primary dark:text-secondary" />
+                        <div>
+                          <strong className="block text-sm font-bold">🎉 Milestone Goal Reached!</strong>
+                          Our Cooperative Officers have been notified. A staff member will reach out via <span className="underline font-extrabold font-mono">Phone Call</span> or <span className="underline font-extrabold font-mono">Email</span> regarding your total investment payout or rollover options.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 bg-neutral-50 dark:bg-surface-container-high/40 border border-outline-variant/50 rounded-2xl flex items-center justify-between flex-wrap gap-3 text-xs text-neutral-600 dark:text-neutral-300">
+                        <div className="flex items-center gap-2">
+                          <PhoneCall className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                          <Mail className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
+                          <span><strong>Officer Contact Protocol:</strong> Once your investment hits 100%, a staff will call or email you.</span>
+                        </div>
+                        <span className="font-mono text-[11px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/15 px-2.5 py-1 rounded-full">
+                          {100 - progressPercent}% remaining to goal
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Dynamic Milestone & Annual General Assembly Dividend Highlights */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                      <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                          <Target className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-neutral-500 block">Milestone Status</span>
+                          <span className="text-xs font-extrabold text-on-surface dark:text-white">{progressPercent}% Completed</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                          <TrendingUp className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-neutral-500 block">Est. Annual Dividend</span>
+                          <span className="text-xs font-extrabold text-primary dark:text-secondary">{formatCurrency(estAnnualDividend)} / yr</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                          <CalendarDays className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-neutral-500 block">Dividend Payout</span>
+                          <span className="text-xs font-extrabold text-on-surface dark:text-white">Annual General Assembly</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
 
           {/* ---- RIGHT COLUMN (Loan Products Sidebar) ---- */}
@@ -1926,9 +1933,6 @@ export default function OverviewPage() {
                     <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">
                       Loan Products
                     </h3>
-                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                      Available credit products & terms
-                    </p>
                   </div>
                 </div>
                 <button
@@ -1950,33 +1954,30 @@ export default function OverviewPage() {
                 <button
                   type="button"
                   onClick={() => setSidebarLoanCategory('all')}
-                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${
-                    sidebarLoanCategory === 'all'
+                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${sidebarLoanCategory === 'all'
                       ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
                       : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
-                  }`}
+                    }`}
                 >
                   All ({overviewLoanProducts.length > 0 ? overviewLoanProducts.filter((p: any) => p.is_active !== false && p.is_active !== 'false').length : DEFAULT_LOAN_PRODUCTS.length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setSidebarLoanCategory('regular')}
-                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${
-                    sidebarLoanCategory === 'regular'
+                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${sidebarLoanCategory === 'regular'
                       ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
                       : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
-                  }`}
+                    }`}
                 >
                   Regular
                 </button>
                 <button
                   type="button"
                   onClick={() => setSidebarLoanCategory('stl')}
-                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${
-                    sidebarLoanCategory === 'stl'
+                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${sidebarLoanCategory === 'stl'
                       ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
                       : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
-                  }`}
+                    }`}
                 >
                   STL
                 </button>
@@ -2015,13 +2016,12 @@ export default function OverviewPage() {
                         {/* Header: Title + Rate */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="space-y-1 flex-1">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${
-                              isSTL
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${isSTL
                                 ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
                                 : isSpecial
                                   ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
                                   : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
-                            }`}>
+                              }`}>
                               {isSTL ? 'Short Term Loan' : isSpecial ? 'Special Loan' : 'Regular Facility'}
                             </span>
                             <h4 className="font-headline font-bold text-xs sm:text-sm text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors leading-snug">
@@ -3378,33 +3378,30 @@ export default function OverviewPage() {
                   <button
                     type="button"
                     onClick={() => setCatalogCategory('all')}
-                    className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${
-                      catalogCategory === 'all'
+                    className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${catalogCategory === 'all'
                         ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
                         : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-                    }`}
+                      }`}
                   >
                     All ({overviewLoanProducts.length > 0 ? overviewLoanProducts.filter((p: any) => p.is_active !== false && p.is_active !== 'false').length : DEFAULT_LOAN_PRODUCTS.length})
                   </button>
                   <button
                     type="button"
                     onClick={() => setCatalogCategory('regular')}
-                    className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${
-                      catalogCategory === 'regular'
+                    className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${catalogCategory === 'regular'
                         ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
                         : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-                    }`}
+                      }`}
                   >
                     Regular
                   </button>
                   <button
                     type="button"
                     onClick={() => setCatalogCategory('stl')}
-                    className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${
-                      catalogCategory === 'stl'
+                    className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${catalogCategory === 'stl'
                         ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
                         : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
-                    }`}
+                      }`}
                   >
                     STL
                   </button>
@@ -3459,13 +3456,12 @@ export default function OverviewPage() {
                           {/* Top: Badges & Name */}
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
-                                isSTL
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${isSTL
                                   ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
                                   : isSpecial
                                     ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
                                     : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
-                              }`}>
+                                }`}>
                                 {isSTL ? 'Short Term Loan' : isSpecial ? 'Special Loan' : 'Regular Facility'}
                               </span>
                               <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-mono flex items-center gap-0.5 shadow-2xs">

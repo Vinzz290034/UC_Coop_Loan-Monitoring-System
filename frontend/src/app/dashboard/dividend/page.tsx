@@ -231,24 +231,29 @@ export default function DividendPage() {
         </div>
       )}
 
-      {/* Year Tabs */}
-      <div className="flex items-center gap-2 border-b border-outline-variant/50 overflow-x-auto pb-2 custom-scrollbar">
+      {/* Year Tabs - Standardized underline tab design matching Loans page */}
+      <div className="flex border-b border-outline-variant/50 overflow-x-auto">
         {availableYears.map((yr) => (
           <button
             key={yr}
+            type="button"
             onClick={() => setSelectedYear(yr)}
-            className={`px-5 py-2.5 rounded-2xl font-headline text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${selectedYear === yr
-                ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md shadow-primary/20'
-                : 'bg-white dark:bg-surface-container-low border border-outline-variant/50 text-neutral-600 dark:text-neutral-400 hover:text-on-surface hover:border-neutral-400'
-              }`}
+            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+              selectedYear === yr
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+            }`}
           >
-            <Calendar className="w-3.5 h-3.5" />
+            <Calendar className="w-4 h-4" />
             <span>{yr}</span>
             {yr === currentCalendarYear && (
-              <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase ml-1 ${selectedYear === yr
-                  ? 'bg-white/20 text-white dark:bg-neutral-950/20 dark:text-neutral-950'
-                  : 'bg-primary/10 text-primary dark:bg-secondary/20 dark:text-secondary'
-                }`}>
+              <span
+                className={`ml-1 px-2 py-0.5 text-[10px] rounded-full uppercase font-extrabold ${
+                  selectedYear === yr
+                    ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                }`}
+              >
                 Current
               </span>
             )}
