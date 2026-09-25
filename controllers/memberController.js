@@ -678,6 +678,8 @@ export const getMemberDashboardSummary = async (req, res, next) => {
           WHERE l.member_id = $1 
             AND l.status IN ('pending_approval', 'approved', 'disbursed', 'active', 'defaulted')
             AND LOWER(lp.name) LIKE '%regular loan%'
+            AND LOWER(lp.name) NOT LIKE '%calamity%'
+            AND LOWER(lp.name) NOT LIKE '%special loan%'
         ), 0) as active_regular_loans_count,
         COALESCE((
           SELECT COUNT(*) 
@@ -685,7 +687,16 @@ export const getMemberDashboardSummary = async (req, res, next) => {
           JOIN loan_products lp ON l.loan_product_id = lp.id
           WHERE l.member_id = $1 
             AND l.status IN ('pending_approval', 'approved', 'disbursed', 'active', 'defaulted')
+            AND (LOWER(lp.name) LIKE '%special loan%' OR LOWER(lp.name) LIKE '%calamity%')
+        ), 0) as active_special_loans_count,
+        COALESCE((
+          SELECT COUNT(*) 
+          FROM loans l
+          JOIN loan_products lp ON l.loan_product_id = lp.id
+          WHERE l.member_id = $1 
+            AND l.status IN ('pending_approval', 'approved', 'disbursed', 'active', 'defaulted')
             AND (LOWER(lp.name) LIKE '%short term loan%' OR LOWER(lp.name) LIKE '%stl%')
+            AND LOWER(lp.name) NOT LIKE '%special loan%'
         ), 0) as active_stl_loans_count,
         COALESCE((
           SELECT EXISTS (
@@ -759,6 +770,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         loans: {
           active_count: parseInt(metrics.active_loans_count, 10),
           active_regular_count: parseInt(metrics.active_regular_loans_count, 10),
+          active_special_count: parseInt(metrics.active_special_loans_count, 10),
           active_stl_count: parseInt(metrics.active_stl_loans_count, 10),
           has_stl_with_1month_repayment: metrics.has_stl_with_1month_repayment === true || metrics.has_stl_with_1month_repayment === 't',
           active_principal: parseFloat(metrics.active_loans_principal_total),
