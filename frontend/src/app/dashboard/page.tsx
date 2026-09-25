@@ -1128,6 +1128,34 @@ export default function OverviewPage() {
     return activeList;
   }, [overviewLoanProducts, sidebarLoanCategory, DEFAULT_LOAN_PRODUCTS]);
 
+  // State for View All Loan Products Pop-up Catalog Modal
+  const [isProductsCatalogModalOpen, setIsProductsCatalogModalOpen] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogCategory, setCatalogCategory] = useState<'all' | 'regular' | 'stl'>('all');
+
+  // Filtered loan products for the full catalog pop-up modal
+  const filteredCatalogProducts = useMemo(() => {
+    const activeList = (overviewLoanProducts.length > 0 ? overviewLoanProducts : DEFAULT_LOAN_PRODUCTS)
+      .filter((p: any) => p.is_active !== false && p.is_active !== 'false');
+
+    return activeList.filter((p: any) => {
+      const name = (p.name || '').toLowerCase();
+      // Category filter
+      if (catalogCategory === 'regular' && (name.includes('stl') || name.includes('short term'))) {
+        return false;
+      }
+      if (catalogCategory === 'stl' && !name.includes('stl') && !name.includes('short term')) {
+        return false;
+      }
+      // Search filter
+      if (catalogSearch.trim()) {
+        const q = catalogSearch.toLowerCase();
+        return name.includes(q) || (p.amortization_type || '').toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [overviewLoanProducts, catalogCategory, catalogSearch, DEFAULT_LOAN_PRODUCTS]);
+
 
   const fetchDashboardData = async (isRefresh = false) => {
     if (!user) return;
@@ -1504,75 +1532,76 @@ export default function OverviewPage() {
         </div>
 
 
-        {/* Quick Transactions Section */}
-        <div className="space-y-4">
-          <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
-          <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-2' : 'md:grid-cols-2'} gap-6`}>
-
-            {/* Apply for Loan */}
-            <button
-              onClick={openLoanModal}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40 relative overflow-hidden"
-            >
-              <div className="space-y-1">
-                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
-                  Apply for a Loan
-                  {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
-                </h4>
-                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                  Submit a new credit application request.
-                </p>
-                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                  {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
-                </span>
-              </div>
-              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
-                <PlusCircle className="w-6 h-6" />
-              </div>
-            </button>
-
-            {/* Initiate Investment */}
-            {balances.total_assets === 0 && (
-              <button
-                onClick={() => {
-                  if (!isVerified) {
-                    setActiveModal('unverified_loan');
-                    return;
-                  }
-                  setActiveModal('investment');
-                  setWizardStep(1);
-                  setSuccessData(null);
-                  setModalError(null);
-                }}
-                className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
-              >
-                <div className="space-y-1">
-                  <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
-                    Initiate Investment
-                    {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
-                  </h4>
-                  <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                    Add capital placement to your share equity.
-                  </p>
-                  <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                    {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
-                  </span>
-                </div>
-                <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
-                  <Coins className="w-6 h-6" />
-                </div>
-              </button>
-            )}
-
-            {/* Book Appointment moved to Schedule page */}
-
-          </div>
-        </div>
-
         {/* ======== TWO-COLUMN LAYOUT: Main Content + Loan Products Sidebar ======== */}
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
           {/* ---- LEFT COLUMN (Main Content ~65-70%) ---- */}
-          <div className="flex-1 min-w-0 space-y-6">
+          <div className="flex-1 min-w-0 space-y-8">
+
+            {/* Quick Transactions Section */}
+            <div className="space-y-4">
+              <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
+              <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-2' : 'md:grid-cols-2'} gap-6`}>
+
+                {/* Apply for Loan */}
+                <button
+                  onClick={openLoanModal}
+                  className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40 relative overflow-hidden"
+                >
+                  <div className="space-y-1">
+                    <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
+                      Apply for a Loan
+                      {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                    </h4>
+                    <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                      Submit a new credit application request.
+                    </p>
+                    <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                      {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
+                    </span>
+                  </div>
+                  <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                    <PlusCircle className="w-6 h-6" />
+                  </div>
+                </button>
+
+                {/* Initiate Investment */}
+                {balances.total_assets === 0 && (
+                  <button
+                    onClick={() => {
+                      if (!isVerified) {
+                        setActiveModal('unverified_loan');
+                        return;
+                      }
+                      setActiveModal('investment');
+                      setWizardStep(1);
+                      setSuccessData(null);
+                      setModalError(null);
+                    }}
+                    className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+                  >
+                    <div className="space-y-1">
+                      <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
+                        Initiate Investment
+                        {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                      </h4>
+                      <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                        Add capital placement to your share equity.
+                      </p>
+                      <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                        {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                      <Coins className="w-6 h-6" />
+                    </div>
+                  </button>
+                )}
+
+                {/* Book Appointment moved to Schedule page */}
+
+              </div>
+            </div>
+
             {/* Updates & Merchandise Tabs */}
             <div className="space-y-4">
               {/* Tab Switcher */}
@@ -1876,12 +1905,18 @@ export default function OverviewPage() {
                     </p>
                   </div>
                 </div>
-                <Link
-                  href="/dashboard/loans"
-                  className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-0.5"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCatalogCategory(sidebarLoanCategory);
+                    setCatalogSearch('');
+                    setIsProductsCatalogModalOpen(true);
+                  }}
+                  className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-0.5 cursor-pointer focus:outline-none"
+                  aria-label="View all loan products in catalog modal"
                 >
                   View All <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
+                </button>
               </div>
 
               {/* Category Filter Tabs */}
@@ -3659,6 +3694,226 @@ export default function OverviewPage() {
         </div>,
         document.body
       )}
+
+      {/* ======================================================== */}
+      {/* VIEW ALL LOAN PRODUCTS DIRECTORY MODAL                   */}
+      {/* ======================================================== */}
+      {isProductsCatalogModalOpen && mounted && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="loan-catalog-modal-title"
+          className="fixed inset-0 bg-neutral-950/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 z-[110] animate-modal-backdrop"
+        >
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-modal-pop">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-outline-variant/40 flex items-center justify-between bg-surface-container-low dark:bg-surface-container-high/40">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary shadow-xs">
+                  <Banknote className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 id="loan-catalog-modal-title" className="font-headline font-bold text-lg text-on-surface dark:text-white">
+                    Loan Products Directory
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Comprehensive catalog of credit facilities, interest rates, and borrowing terms
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsProductsCatalogModalOpen(false)}
+                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-neutral-200/60 dark:hover:bg-neutral-800 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none"
+                aria-label="Close loan products catalog modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="p-4 sm:px-6 border-b border-outline-variant/30 bg-neutral-50/50 dark:bg-neutral-900/30 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Search Bar */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="text"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Search products by title, type, or term..."
+                  className="w-full pl-10 pr-9 py-2 text-xs rounded-xl bg-white dark:bg-surface-container-high border border-outline-variant/60 focus:border-primary dark:focus:border-secondary focus:ring-1 focus:ring-primary dark:focus:ring-secondary text-on-surface dark:text-white outline-none transition-all placeholder:text-neutral-400"
+                />
+                {catalogSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setCatalogSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Category Segmented Tabs */}
+              <div className="flex items-center gap-1 p-1 bg-neutral-200/60 dark:bg-neutral-800/80 rounded-xl border border-outline-variant/40 text-xs font-bold shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setCatalogCategory('all')}
+                  className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${
+                    catalogCategory === 'all'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                  }`}
+                >
+                  All ({overviewLoanProducts.length > 0 ? overviewLoanProducts.filter((p: any) => p.is_active !== false && p.is_active !== 'false').length : DEFAULT_LOAN_PRODUCTS.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogCategory('regular')}
+                  className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${
+                    catalogCategory === 'regular'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                  }`}
+                >
+                  Regular
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogCategory('stl')}
+                  className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${
+                    catalogCategory === 'stl'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                  }`}
+                >
+                  STL
+                </button>
+              </div>
+            </div>
+
+            {/* Catalog Body (Grid of Cards) */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 custom-scrollbar">
+              {filteredCatalogProducts.length === 0 ? (
+                <div className="py-12 text-center space-y-3 bg-neutral-50/50 dark:bg-neutral-900/20 rounded-2xl border border-dashed border-outline-variant/50 p-6">
+                  <div className="w-12 h-12 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-400 flex items-center justify-center mx-auto">
+                    <Search className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-headline font-bold text-sm text-on-surface dark:text-white">
+                    No loan products found
+                  </h4>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto">
+                    We could not find any active loan products matching &quot;{catalogSearch}&quot; in the {catalogCategory.toUpperCase()} category.
+                  </p>
+                  {(catalogSearch || catalogCategory !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCatalogSearch('');
+                        setCatalogCategory('all');
+                      }}
+                      className="px-4 py-1.5 rounded-xl bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary text-xs font-bold hover:bg-primary/20 transition-colors cursor-pointer"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredCatalogProducts.map((prod: any) => {
+                    const parsedRate = parseFloat(prod.interest_rate) || 0;
+                    const displayRate = (parsedRate <= 1 ? parsedRate * 100 : parsedRate).toFixed(0);
+                    const minNum = parseFloat(prod.min_amount) || 0;
+                    const maxNum = parseFloat(prod.max_amount) || 0;
+                    const amountLabel = minNum === maxNum
+                      ? `₱${minNum.toLocaleString()} (Fixed)`
+                      : `₱${minNum.toLocaleString()} - ₱${maxNum.toLocaleString()}`;
+                    const isSTL = (prod.name || '').toLowerCase().includes('stl') || (prod.name || '').toLowerCase().includes('short term');
+
+                    return (
+                      <div
+                        key={prod.id}
+                        className="p-5 rounded-2xl bg-neutral-50/80 dark:bg-neutral-900/60 border border-outline-variant/50 hover:border-primary/50 dark:hover:border-secondary/50 hover:shadow-md transition-all flex flex-col justify-between space-y-4 group"
+                      >
+                        {/* Top: Badges & Name */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                              isSTL
+                                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
+                                : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
+                            }`}>
+                              {isSTL ? 'Short Term Loan' : 'Regular Facility'}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-mono flex items-center gap-0.5 shadow-2xs">
+                              <Percent className="w-3.5 h-3.5" />
+                              {displayRate}% Interest
+                            </span>
+                          </div>
+
+                          <h4 className="font-headline font-bold text-sm sm:text-base text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors leading-snug">
+                            {prod.name}
+                          </h4>
+                        </div>
+
+                        {/* Specs Grid */}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="bg-white/80 dark:bg-surface-container-high/50 p-2.5 rounded-xl border border-outline-variant/30">
+                            <span className="text-[10px] uppercase font-bold text-neutral-400 block tracking-wider">Loan Term</span>
+                            <span className="font-semibold text-on-surface dark:text-white">
+                              {prod.term_months} {prod.term_months === 1 ? 'Month' : 'Months'}
+                            </span>
+                          </div>
+                          <div className="bg-white/80 dark:bg-surface-container-high/50 p-2.5 rounded-xl border border-outline-variant/30">
+                            <span className="text-[10px] uppercase font-bold text-neutral-400 block tracking-wider">Borrow Limit</span>
+                            <span className="font-semibold font-mono text-on-surface dark:text-white text-xs truncate block" title={amountLabel}>
+                              {amountLabel}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Bottom: Formula info & Apply button */}
+                        <div className="pt-2 border-t border-outline-variant/40 flex items-center justify-between gap-3">
+                          <span className="text-[11px] text-neutral-500 dark:text-neutral-400 font-medium">
+                            Formula: <strong className="text-neutral-700 dark:text-neutral-200">{prod.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing'}</strong>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsProductsCatalogModalOpen(false);
+                              openLoanModalWithProduct(prod);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white hover:bg-primary/90 dark:bg-secondary dark:text-neutral-950 dark:hover:bg-secondary/90 font-bold text-xs shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer"
+                          >
+                            <span>Apply for this Loan</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-outline-variant/40 bg-surface-container-low dark:bg-surface-container-high/30 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
+              <span>
+                Showing {filteredCatalogProducts.length} of {overviewLoanProducts.length > 0 ? overviewLoanProducts.filter((p: any) => p.is_active !== false && p.is_active !== 'false').length : DEFAULT_LOAN_PRODUCTS.length} credit facilities
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsProductsCatalogModalOpen(false)}
+                className="px-5 py-2 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-bold text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* EXPANDED MEMBER FINANCIAL OVERVIEW MODAL */}
       {isExpandedMembersModalOpen && (
         <div
