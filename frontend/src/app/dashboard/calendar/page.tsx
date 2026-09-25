@@ -25,6 +25,7 @@ import {
   CalendarClock,
   Sparkles,
   CalendarCheck,
+  PlusCircle,
 } from 'lucide-react';
 
 interface CalendarEvent {
@@ -400,6 +401,19 @@ function CalendarPageContent() {
         <div id="calendar-header-actions" className="flex items-center gap-2 self-end sm:self-center mb-2 sm:mb-0">
           {activeTab === 'calendar' && (
             <>
+              {user?.role === 'member' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleTabChange('appointments');
+                    router.replace('/dashboard/calendar?tab=appointments&book=true');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl hover:shadow-lg transition-all active:scale-95 cursor-pointer shadow-xs"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Book Appointment</span>
+                </button>
+              )}
               <button
                 onClick={resetToToday}
                 className="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-outline-variant/60 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-800 dark:text-neutral-200 transition-colors cursor-pointer"
@@ -432,7 +446,10 @@ function CalendarPageContent() {
 
       {/* TAB 1: APPOINTMENTS SECTION */}
       {activeTab === 'appointments' && (
-        <AppointmentsSection onPendingCountChange={setPendingAppointmentsCount} />
+        <AppointmentsSection
+          onPendingCountChange={setPendingAppointmentsCount}
+          initialOpenCreate={searchParams.get('book') === 'true'}
+        />
       )}
 
       {/* TAB 2: CALENDAR SECTION */}

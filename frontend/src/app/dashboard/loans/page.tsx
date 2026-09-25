@@ -2553,9 +2553,11 @@ function LoansPageContent() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Credit Portfolio Ledger</h1>
-            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-              Manage credit products, loan instantiation, approvals, and repayment bookings.
-            </p>
+            {isAdminOrManager && (
+              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+                Manage credit products, loan instantiation, approvals, and repayment bookings.
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -2590,14 +2592,14 @@ function LoansPageContent() {
 
         {/* Dynamic Dashboard KPI Cards */}
         {metricsLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 items-stretch">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdminOrManager ? 'xl:grid-cols-4' : 'lg:grid-cols-3'} gap-4 sm:gap-5 items-stretch`}>
             <SkeletonCard />
             <SkeletonCard />
             <SkeletonCard />
-            <SkeletonCard />
+            {isAdminOrManager && <SkeletonCard />}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 items-stretch">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdminOrManager ? 'xl:grid-cols-4' : 'lg:grid-cols-3'} gap-4 sm:gap-5 items-stretch`}>
             {isAdminOrManager ? (
               <>
                 {/* Card 1: Active Portfolio */}
@@ -2701,28 +2703,6 @@ function LoansPageContent() {
                   </div>
                 </div>
 
-                {/* Member Card 3: Policy Tier */}
-                {(() => {
-                  const historicalCount = memberMetrics?.loans?.historical_count || 0;
-                  const tierName = historicalCount === 0 ? '1st Loan (New)' : historicalCount === 1 ? '2nd Loan (Track Record)' : '3rd Loan+ (Max Tier)';
-                  const desc = historicalCount === 0 ? 'Fully collateralized' : historicalCount === 1 ? 'Co-maker for excess' : '3.0x Share Capital cap';
-                  return (
-                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
-                      <div className="w-12 h-12 rounded-2xl bg-tertiary/10 text-tertiary flex items-center justify-center flex-shrink-0">
-                        <User className="w-6 h-6" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Borrower Policy Tier</span>
-                        <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
-                          {tierName}
-                        </span>
-                        <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
-                          {desc} ({historicalCount} past approvals)
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
 
                 {/* Member Card 4: Borrowing Limit */}
                 {(() => {
@@ -2809,15 +2789,17 @@ function LoansPageContent() {
               )}
             </button>
           )}
-          <button
-            onClick={() => setActiveTab('products')}
-            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${activeTab === 'products'
-              ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-              : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-              }`}
-          >
-            Loan Products Registry
-          </button>
+          {isAdminOrManager && (
+            <button
+              onClick={() => setActiveTab('products')}
+              className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${activeTab === 'products'
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                }`}
+            >
+              Loan Products Registry
+            </button>
+          )}
         </div>
 
         {/* TABS CONTAINER */}

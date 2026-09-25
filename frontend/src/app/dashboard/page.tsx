@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
-import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
+import axios from 'axios';
+import { Skeleton, SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
 import KpiCard from '@/components/charts/KpiCard';
 import ChartContainer from '@/components/charts/ChartContainer';
 import LoanStatusChart from '@/components/charts/LoanStatusChart';
@@ -56,7 +57,14 @@ import {
   Maximize2,
   Download,
   ArrowUpDown,
-  FileText
+  FileText,
+  Megaphone,
+  Search,
+  ShoppingBag,
+  Inbox,
+  Filter,
+  ChevronRight,
+  Calculator,
 } from 'lucide-react';
 import ProfileCompletionModal from '@/components/onboarding/ProfileCompletionModal';
 import IncompleteProfileBanner from '@/components/onboarding/IncompleteProfileBanner';
@@ -918,11 +926,101 @@ export default function OverviewPage() {
     }
   };
 
-  // Appointment Form States
+  // Appointment Form States (still declared for state compatibility; modal moved to Calendar page)
   const [appointmentPurpose, setAppointmentPurpose] = useState<string>('Discuss a Loan Application');
   const [appointmentReason, setAppointmentReason] = useState<string>('');
   const [appointmentDate, setAppointmentDate] = useState<string>('');
   const [appointmentSlot, setAppointmentSlot] = useState<'morning' | 'afternoon'>('morning');
+
+  // --- OVERVIEW PAGE: Updates & Merchandise Tabs ---
+  const [overviewTab, setOverviewTab] = useState<'updates' | 'merchandise'>('updates');
+
+  // Announcements data for "Updates" tab (embedded from Announcements page)
+  interface OverviewAnnouncement {
+    id: string;
+    title: string;
+    content: string;
+    image_url?: string;
+    priority: 'low' | 'normal' | 'high' | 'urgent';
+    is_active: boolean;
+    created_by?: string;
+    author_username?: string;
+    related_loan_product_name?: string;
+    calendar_event_title?: string;
+    created_at: string;
+    updated_at: string;
+  }
+
+  const [overviewAnnouncements, setOverviewAnnouncements] = useState<OverviewAnnouncement[]>([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(true);
+  const [announcementsPriorityFilter, setAnnouncementsPriorityFilter] = useState<string>('all');
+  const [announcementsSearch, setAnnouncementsSearch] = useState('');
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
+
+  // Helper to convert relative upload paths to full backend URLs (for announcement images)
+  const getAnnouncementImageUrl = (url?: string) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:')) return url;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || '';
+    return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  // Fetch announcements for the "Updates" tab
+  const fetchOverviewAnnouncements = useCallback(async () => {
+    try {
+      setAnnouncementsLoading(true);
+      const res = await api.get('/announcements');
+      if (res.data && res.data.success) {
+        setOverviewAnnouncements(res.data.data || []);
+      }
+    } catch (err: unknown) {
+      console.error('Error fetching announcements for overview:', err);
+    } finally {
+      setAnnouncementsLoading(false);
+    }
+  }, []);
+
+  // Priority badge helper for announcements
+  const getAnnouncementPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'urgent': return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700';
+      case 'high': return 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700';
+      case 'normal': return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700';
+      case 'low': return 'bg-neutral-100 text-neutral-600 border-neutral-200 dark:bg-neutral-800 dark:text-neutral-400 dark:border-neutral-600';
+      default: return 'bg-neutral-100 text-neutral-600 border-neutral-200';
+    }
+  };
+
+  // Filtered announcements for display
+  const filteredOverviewAnnouncements = useMemo(() => {
+    return overviewAnnouncements
+      .filter(a => a.is_active)
+      .filter(a => announcementsPriorityFilter === 'all' || a.priority === announcementsPriorityFilter)
+      .filter(a => {
+        if (!announcementsSearch.trim()) return true;
+        const q = announcementsSearch.toLowerCase();
+        return a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q);
+      });
+  }, [overviewAnnouncements, announcementsPriorityFilter, announcementsSearch]);
+
+  // Loan Products data for right sidebar
+  const [overviewLoanProducts, setOverviewLoanProducts] = useState<any[]>([]);
+  const [loanProductsLoading, setLoanProductsLoading] = useState(true);
+
+  const fetchOverviewLoanProducts = useCallback(async () => {
+    try {
+      setLoanProductsLoading(true);
+      const res = await api.get('/loan-products');
+      if (res.data && res.data.success) {
+        setOverviewLoanProducts(res.data.data || []);
+      }
+    } catch (err: unknown) {
+      console.error('Error fetching loan products for overview:', err);
+    } finally {
+      setLoanProductsLoading(false);
+    }
+  }, []);
+
 
   const fetchDashboardData = async (isRefresh = false) => {
     if (!user) return;
@@ -989,6 +1087,11 @@ export default function OverviewPage() {
 
   useEffect(() => {
     fetchDashboardData();
+    // Fetch announcements + loan products for member overview page tabs and sidebar
+    if (user?.role === 'member') {
+      fetchOverviewAnnouncements();
+      fetchOverviewLoanProducts();
+    }
   }, [user]);
 
   const formatCurrency = (val: number) => {
@@ -1101,6 +1204,34 @@ export default function OverviewPage() {
         setSelectedProduct(activeProducts[0]);
         setLoanAmount(parseFloat(activeProducts[0].min_amount));
         setSelectedLoanCategory(getProductCategory(activeProducts[0].name));
+      }
+    } catch (err: any) {
+      setModalError('Failed to fetch available loan products. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openLoanModalWithProduct = async (prod: any) => {
+    if (!isVerified) {
+      setActiveModal('unverified_loan');
+      return;
+    }
+    try {
+      setModalError(null);
+      setSubmitting(true);
+      setActiveModal('loan');
+      setWizardStep(1);
+      setSuccessData(null);
+      setCoMakerName('');
+      setCoMakerPhone('');
+      setSelectedProduct(prod);
+      setLoanAmount(parseFloat(prod.min_amount) || 5000);
+      setSelectedLoanCategory(getProductCategory(prod.name));
+      if (products.length === 0) {
+        const res = await api.get('/loans/products');
+        const activeProducts = res.data.data.filter((p: any) => p.is_active);
+        setProducts(activeProducts);
       }
     } catch (err: any) {
       setModalError('Failed to fetch available loan products. Please try again.');
@@ -1259,44 +1390,14 @@ export default function OverviewPage() {
           <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
             {isReturning ? 'Welcome back' : 'Welcome'}, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
           </h1>
-          <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-            Cooperative Member Ledger Account Summary
-          </p>
+
         </div>
 
-        {/* Account Balances Section */}
-        <div className="space-y-4">
-          <h2 className="font-headline text-lg font-bold text-on-surface dark:text-white">Account Balances</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 items-stretch">
-            <KpiCard
-              label="Share Capital"
-              value={formatCurrency(balances.share_capital)}
-              icon={Building}
-              href="/dashboard/accounting"
-              description="Cumulative equity contributions"
-            />
-            <KpiCard
-              label="Loan Balance"
-              value={formatCurrency(loans.outstanding_balance)}
-              icon={Banknote}
-              variant="primary"
-              href="/dashboard/loans"
-              description="Total active credit balance due"
-            />
-            <KpiCard
-              label="Active Credit Lines"
-              value={`${loans.active_count} ${loans.active_count === 1 ? 'Active Loan' : 'Active Loans'}`}
-              icon={FileCheck}
-              href="/dashboard/loans"
-              description="Disbursed accounts in good standing"
-            />
-          </div>
-        </div>
 
         {/* Quick Transactions Section */}
         <div className="space-y-4">
           <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
-          <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
+          <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-2' : 'md:grid-cols-2'} gap-6`}>
 
             {/* Apply for Loan */}
             <button
@@ -1353,36 +1454,163 @@ export default function OverviewPage() {
               </button>
             )}
 
-            {/* Book Appointment */}
-            <button
-              onClick={() => {
-                setActiveModal('appointment');
-                setWizardStep(1);
-                setSuccessData(null);
-                setModalError(null);
-              }}
-              className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
-            >
-              <div className="space-y-1">
-                <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors">
-                  Book Appointment
-                </h4>
-                <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                  Schedule an office consultation or cash transaction.
-                </p>
-                <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                  Proceed &rarr;
-                </span>
-              </div>
-              <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
-                <CalendarCheck className="w-6 h-6" />
-              </div>
-            </button>
+            {/* Book Appointment moved to Schedule page */}
 
           </div>
         </div>
 
-        {/* Member Equity & Investment Goal Milestone Card */}
+        {/* ======== TWO-COLUMN LAYOUT: Main Content + Loan Products Sidebar ======== */}
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+          {/* ---- LEFT COLUMN (Main Content ~65-70%) ---- */}
+          <div className="flex-1 min-w-0 space-y-6">
+            {/* Updates & Merchandise Tabs */}
+            <div className="space-y-4">
+              {/* Tab Switcher */}
+              <div className="flex items-center gap-1 p-1 bg-neutral-100/80 dark:bg-neutral-900/60 rounded-2xl border border-outline-variant/40 w-fit">
+                <button
+                  onClick={() => setOverviewTab('updates')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    overviewTab === 'updates'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-sm'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                  }`}
+                >
+                  <Megaphone className="w-3.5 h-3.5" />
+                  Updates
+                </button>
+                <button
+                  onClick={() => setOverviewTab('merchandise')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    overviewTab === 'merchandise'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-sm'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                  }`}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  Merchandise Products
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              {overviewTab === 'updates' && (
+                <div className="space-y-4">
+                  {/* Priority Filter & Search */}
+                  <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {['all', 'urgent', 'high', 'normal', 'low'].map((level) => (
+                        <button
+                          key={level}
+                          onClick={() => setAnnouncementsPriorityFilter(level)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer capitalize ${
+                            announcementsPriorityFilter === level
+                              ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
+                              : 'border-outline-variant/50 text-neutral-500 hover:border-neutral-400'
+                          }`}
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="relative w-full sm:w-56">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+                      <input
+                        type="text"
+                        value={announcementsSearch}
+                        onChange={(e) => setAnnouncementsSearch(e.target.value)}
+                        placeholder="Search updates..."
+                        className="w-full pl-9 pr-3 py-2 text-xs border border-outline-variant/60 rounded-xl bg-transparent focus:outline-none focus:border-primary dark:focus:border-secondary text-on-surface dark:text-white placeholder-neutral-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Announcements Feed */}
+                  {announcementsLoading ? (
+                    <SkeletonTable rows={3} cols={2} />
+                  ) : filteredOverviewAnnouncements.length === 0 ? (
+                    <div className="text-center py-12 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
+                      <Inbox className="w-10 h-10 text-neutral-300 dark:text-neutral-600 mx-auto mb-2" />
+                      <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">
+                        No updates found.
+                      </h3>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                        Check back later for news from cooperative administration.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredOverviewAnnouncements.map((ann) => (
+                        <div
+                          key={ann.id}
+                          className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl p-5 shadow-sm hover:shadow-md transition-all space-y-3"
+                        >
+                          {/* Priority + Date */}
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${getAnnouncementPriorityBadge(ann.priority)}`}>
+                              {ann.priority}
+                            </span>
+                            <span className="text-[11px] text-neutral-500 dark:text-neutral-400 font-mono flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {new Date(ann.created_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          </div>
+
+                          {/* Title & Content */}
+                          <div className="space-y-1.5">
+                            <h4 className="font-headline text-sm sm:text-base font-bold text-on-surface dark:text-white">
+                              {ann.title}
+                            </h4>
+                            <p className="font-body text-xs text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap leading-relaxed line-clamp-4">
+                              {ann.content}
+                            </p>
+                          </div>
+
+                          {/* Attached Image */}
+                          {ann.image_url && (
+                            <div className="pt-1">
+                              <div
+                                onClick={() => setLightboxImage({ url: getAnnouncementImageUrl(ann.image_url), title: ann.title })}
+                                className="relative group rounded-2xl overflow-hidden border border-outline-variant/40 bg-neutral-900/5 dark:bg-neutral-950/40 p-1 flex items-center justify-center cursor-pointer transition-all hover:border-primary/50"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={getAnnouncementImageUrl(ann.image_url)}
+                                  alt={ann.title}
+                                  className="w-full h-auto max-h-60 object-contain rounded-xl transition-transform duration-300 group-hover:scale-[1.01]"
+                                />
+                                <div className="absolute inset-0 bg-neutral-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                                  <span className="bg-neutral-900/80 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md backdrop-blur-xs">
+                                    <Maximize2 className="w-3.5 h-3.5" />
+                                    View Full Screen
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {overviewTab === 'merchandise' && (
+                <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
+                  <ShoppingBag className="w-12 h-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
+                  <h3 className="font-headline font-bold text-on-surface dark:text-white text-base">
+                    Merchandise Products
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">
+                    Coming soon — Cooperative merchandise products will appear here.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Member Equity & Investment Goal Milestone Card (existing) */}
         <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-6 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
@@ -1518,6 +1746,107 @@ export default function OverviewPage() {
               </div>
             );
           })()}
+        </div>
+          </div>
+
+          {/* ---- RIGHT COLUMN (Loan Products Sidebar) ---- */}
+          <div className="w-full lg:w-80 xl:w-96 shrink-0 space-y-6">
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 sm:p-6 shadow-sm space-y-5 lg:sticky lg:top-20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                    <Banknote className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">
+                      Loan Products
+                    </h3>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                      Available credit products & terms
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href="/dashboard/loans"
+                  className="text-xs font-bold text-primary dark:text-secondary hover:underline flex items-center gap-0.5"
+                >
+                  View All <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              {/* Loan Products List */}
+              {loanProductsLoading ? (
+                <div className="space-y-3">
+                  <div className="h-20 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
+                  <div className="h-20 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
+                  <div className="h-20 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
+                </div>
+              ) : overviewLoanProducts.length === 0 ? (
+                <div className="text-center py-8 text-neutral-400 text-xs">
+                  No active loan products available.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {overviewLoanProducts.filter((p: any) => p.is_active).map((prod: any) => (
+                    <div
+                      key={prod.id}
+                      className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 hover:border-primary/40 dark:hover:border-secondary/40 transition-all space-y-2 group"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-headline font-bold text-xs sm:text-sm text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors">
+                          {prod.name}
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-mono flex items-center gap-0.5 shrink-0">
+                          <Percent className="w-2.5 h-2.5" />
+                          {parseFloat(prod.interest_rate)}%
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-600 dark:text-neutral-400 font-body">
+                        <div>
+                          <span className="text-[9px] uppercase tracking-wider font-bold text-neutral-400 block">Max Term</span>
+                          <span className="font-medium">{prod.term_months} Months</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[9px] uppercase tracking-wider font-bold text-neutral-400 block">Amount Range</span>
+                          <span className="font-medium font-mono text-[10px]">
+                            ₱{Number(prod.min_amount).toLocaleString()} - ₱{Number(prod.max_amount).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="pt-1 flex items-center justify-between border-t border-outline-variant/30">
+                        <span className="text-[10px] text-neutral-400 capitalize">
+                          {prod.amortization_type?.replace('_', ' ')}
+                        </span>
+                        <button
+                          onClick={() => openLoanModalWithProduct(prod)}
+                          className="text-[11px] font-bold text-primary dark:text-secondary hover:underline inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          Apply <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Quick Loan Calculator Link / Promo */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/5 to-secondary/10 dark:from-primary/10 dark:to-secondary/5 border border-primary/20 dark:border-secondary/20 space-y-2">
+                <div className="flex items-center gap-2 text-primary dark:text-secondary">
+                  <Calculator className="w-4 h-4" />
+                  <span className="text-xs font-bold font-headline">Need an Estimate?</span>
+                </div>
+                <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                  Calculate monthly amortizations and compare loan options anytime.
+                </p>
+                <Link
+                  href="/dashboard/loans"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-primary dark:text-secondary hover:underline pt-1"
+                >
+                  Go to Loan Calculator <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ======================================================== */}

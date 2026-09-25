@@ -265,6 +265,13 @@ function DisbursementPageContent() {
     setMounted(true);
   }, []);
 
+  // Members do not have access to Disbursement — redirect to Overview
+  useEffect(() => {
+    if (user && !isAdminOrStaff) {
+      router.replace('/dashboard');
+    }
+  }, [user, isAdminOrStaff, router]);
+
   // Sync tab with URL query parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -1172,6 +1179,28 @@ function DisbursementPageContent() {
   const toggleSelectRow = (id: string) => {
     setSelectedCvIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
+
+  if (user && !isAdminOrStaff) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-4 p-6">
+        <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+          <Lock className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold font-headline text-on-surface dark:text-white">
+          Access Restricted
+        </h2>
+        <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 max-w-md">
+          The Disbursement Module is accessible to cooperative administrative and accounting officers only.
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-white text-xs font-bold hover:shadow-md transition-all cursor-pointer"
+        >
+          Return to Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

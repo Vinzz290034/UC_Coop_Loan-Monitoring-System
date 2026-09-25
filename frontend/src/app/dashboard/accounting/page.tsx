@@ -699,13 +699,17 @@ export default function AccountingPage() {
           <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
             {activeTab === 'savings' && isAdminOrManager && !viewingPassbookMember
               ? 'Savings Accounts Ledger'
-              : 'Shared Capital Ledger'}
+              : isAdminOrManager
+                ? 'Shared Capital Ledger'
+                : 'Investment'}
           </h1>
-          <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-            {activeTab === 'savings' && isAdminOrManager && !viewingPassbookMember
-              ? 'Monitor member savings accounts, total cooperative savings pools, and passbooks.'
-              : 'Monitor member share capital equity, savings accounts, and fixed term deposits.'}
-          </p>
+          {isAdminOrManager && (
+            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
+              {activeTab === 'savings' && !viewingPassbookMember
+                ? 'Monitor member savings accounts, total cooperative savings pools, and passbooks.'
+                : 'Monitor member share capital equity, savings accounts, and fixed term deposits.'}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">

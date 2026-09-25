@@ -40,16 +40,25 @@ interface Appointment {
 
 interface AppointmentsSectionProps {
   onPendingCountChange?: (count: number) => void;
+  initialOpenCreate?: boolean;
 }
 
-export default function AppointmentsSection({ onPendingCountChange }: AppointmentsSectionProps) {
+export default function AppointmentsSection({ onPendingCountChange, initialOpenCreate }: AppointmentsSectionProps) {
   const { user } = useAuth();
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
-  }, []);
+    if (initialOpenCreate) {
+      setIsCreateOpen(true);
+    } else if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('book') === 'true') {
+        setIsCreateOpen(true);
+      }
+    }
+  }, [initialOpenCreate]);
 
   // Data state
   const [appointments, setAppointments] = useState<Appointment[]>([]);

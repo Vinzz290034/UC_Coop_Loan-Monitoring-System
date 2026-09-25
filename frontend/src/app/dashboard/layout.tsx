@@ -33,6 +33,7 @@ import {
   Megaphone,
   FileUp,
   ReceiptText,
+  TrendingUp,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
@@ -119,12 +120,20 @@ function DashboardLayoutContent({
       name: 'Disbursement',
       path: '/dashboard/disbursement',
       icon: ReceiptText,
+      // Members no longer see Disbursement — admin/staff only
+      allowed: isAdminOrStaff,
+    },
+    {
+      // Members see "Investment"; admin/staff see "Shared Capital"
+      name: isAdminOrStaff ? 'Shared Capital' : 'Investment',
+      path: '/dashboard/accounting',
+      icon: WalletCards,
       allowed: true,
     },
     {
-      name: 'Shared Capital',
-      path: '/dashboard/accounting',
-      icon: WalletCards,
+      name: 'Dividend',
+      path: '/dashboard/dividend',
+      icon: TrendingUp,
       allowed: true,
     },
     {
@@ -167,7 +176,8 @@ function DashboardLayoutContent({
       name: 'Announcements',
       path: '/dashboard/announcements',
       icon: Megaphone,
-      allowed: true,
+      // Members access announcements via "Updates" tab on Overview page
+      allowed: isAdminOrStaff,
     },
     {
       name: 'Users',
