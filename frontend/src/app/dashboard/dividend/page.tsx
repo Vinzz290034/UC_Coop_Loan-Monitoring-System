@@ -189,9 +189,6 @@ export default function DividendPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
-            <span className="p-2.5 rounded-2xl bg-primary/10 text-primary dark:text-secondary dark:bg-secondary/15">
-              <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7" />
-            </span>
             Dividend
           </h1>
           {isAdminOrStaff && (
@@ -240,20 +237,18 @@ export default function DividendPage() {
           <button
             key={yr}
             onClick={() => setSelectedYear(yr)}
-            className={`px-5 py-2.5 rounded-2xl font-headline text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-              selectedYear === yr
+            className={`px-5 py-2.5 rounded-2xl font-headline text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${selectedYear === yr
                 ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-md shadow-primary/20'
                 : 'bg-white dark:bg-surface-container-low border border-outline-variant/50 text-neutral-600 dark:text-neutral-400 hover:text-on-surface hover:border-neutral-400'
-            }`}
+              }`}
           >
             <Calendar className="w-3.5 h-3.5" />
             <span>{yr}</span>
             {yr === currentCalendarYear && (
-              <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase ml-1 ${
-                selectedYear === yr
+              <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase ml-1 ${selectedYear === yr
                   ? 'bg-white/20 text-white dark:bg-neutral-950/20 dark:text-neutral-950'
                   : 'bg-primary/10 text-primary dark:bg-secondary/20 dark:text-secondary'
-              }`}>
+                }`}>
                 Current
               </span>
             )}

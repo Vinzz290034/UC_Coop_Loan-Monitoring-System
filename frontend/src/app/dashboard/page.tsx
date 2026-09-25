@@ -1008,23 +1008,125 @@ export default function OverviewPage() {
       });
   }, [overviewAnnouncements, announcementsPriorityFilter, announcementsSearch]);
 
+  // Default cooperative loan products fallback catalog (7 standard products from seeds.sql)
+  const DEFAULT_LOAN_PRODUCTS = useMemo(() => [
+    {
+      id: 1,
+      name: 'Regular Loan - Salary Deduction',
+      interest_rate: '0.1200',
+      term_months: 12,
+      amortization_type: 'diminishing_balance',
+      min_amount: '10000.00',
+      max_amount: '75000.00',
+      is_active: true,
+    },
+    {
+      id: 2,
+      name: 'Regular Loan - Project Loan',
+      interest_rate: '0.0700',
+      term_months: 24,
+      amortization_type: 'diminishing_balance',
+      min_amount: '76000.00',
+      max_amount: '300000.00',
+      is_active: true,
+    },
+    {
+      id: 3,
+      name: 'Special Loan - Calamity Loan',
+      interest_rate: '0.0800',
+      term_months: 24,
+      amortization_type: 'flat_rate',
+      min_amount: '10000.00',
+      max_amount: '50000.00',
+      is_active: true,
+    },
+    {
+      id: 4,
+      name: 'Short Term Loan (STL) - Utility Loan',
+      interest_rate: '0.0300',
+      term_months: 1,
+      amortization_type: 'diminishing_balance',
+      min_amount: '3000.00',
+      max_amount: '3000.00',
+      is_active: true,
+    },
+    {
+      id: 5,
+      name: 'Short Term Loan (STL) - Emergency Loan',
+      interest_rate: '0.0400',
+      term_months: 2,
+      amortization_type: 'diminishing_balance',
+      min_amount: '5000.00',
+      max_amount: '5000.00',
+      is_active: true,
+    },
+    {
+      id: 6,
+      name: 'Short Term Loan (STL) - Cash Express',
+      interest_rate: '0.0800',
+      term_months: 2,
+      amortization_type: 'diminishing_balance',
+      min_amount: '7000.00',
+      max_amount: '7000.00',
+      is_active: true,
+    },
+    {
+      id: 7,
+      name: 'Short Term Loan (STL) - Special Occasion',
+      interest_rate: '0.0500',
+      term_months: 3,
+      amortization_type: 'diminishing_balance',
+      min_amount: '10000.00',
+      max_amount: '10000.00',
+      is_active: true,
+    },
+  ], []);
+
   // Loan Products data for right sidebar
   const [overviewLoanProducts, setOverviewLoanProducts] = useState<any[]>([]);
-  const [loanProductsLoading, setLoanProductsLoading] = useState(true);
+  const [loanProductsLoading, setLoanProductsLoading] = useState(false);
+  const [sidebarLoanCategory, setSidebarLoanCategory] = useState<'all' | 'regular' | 'stl'>('all');
 
   const fetchOverviewLoanProducts = useCallback(async () => {
     try {
       setLoanProductsLoading(true);
-      const res = await api.get('/loan-products');
-      if (res.data && res.data.success) {
-        setOverviewLoanProducts(res.data.data || []);
+      // Fetch available credit products from official /loans/products endpoint
+      const res = await api.get('/loans/products');
+      if (res.data && res.data.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
+        setOverviewLoanProducts(res.data.data);
+        setProducts(res.data.data.filter((p: any) => p.is_active));
+      } else {
+        setOverviewLoanProducts(DEFAULT_LOAN_PRODUCTS);
+        setProducts(DEFAULT_LOAN_PRODUCTS);
       }
     } catch (err: unknown) {
-      console.error('Error fetching loan products for overview:', err);
+      console.warn('Notice: Utilizing default cooperative loan catalog fallback for overview:', err);
+      setOverviewLoanProducts(DEFAULT_LOAN_PRODUCTS);
+      setProducts(DEFAULT_LOAN_PRODUCTS);
     } finally {
       setLoanProductsLoading(false);
     }
-  }, []);
+  }, [DEFAULT_LOAN_PRODUCTS]);
+
+  // Filtered loan products for right sidebar
+  const filteredSidebarLoanProducts = useMemo(() => {
+    const activeList = (overviewLoanProducts.length > 0 ? overviewLoanProducts : DEFAULT_LOAN_PRODUCTS)
+      .filter((p: any) => p.is_active !== false && p.is_active !== 'false');
+
+    if (sidebarLoanCategory === 'regular') {
+      return activeList.filter((p: any) => {
+        const name = (p.name || '').toLowerCase();
+        return !name.includes('stl') && !name.includes('short term');
+      });
+    }
+    if (sidebarLoanCategory === 'stl') {
+      return activeList.filter((p: any) => {
+        const name = (p.name || '').toLowerCase();
+        return name.includes('stl') || name.includes('short term');
+      });
+    }
+    return activeList;
+  }, [overviewLoanProducts, sidebarLoanCategory, DEFAULT_LOAN_PRODUCTS]);
 
 
   const fetchDashboardData = async (isRefresh = false) => {
@@ -1090,14 +1192,17 @@ export default function OverviewPage() {
     }
   };
 
+  // Initial load of loan products catalog on mount
+  useEffect(() => {
+    fetchOverviewLoanProducts();
+  }, [fetchOverviewLoanProducts]);
+
   useEffect(() => {
     fetchDashboardData();
-    // Fetch announcements + loan products for member overview page tabs and sidebar
-    if (user?.role === 'member') {
-      fetchOverviewAnnouncements();
-      fetchOverviewLoanProducts();
-    }
-  }, [user]);
+    // Fetch announcements + loan products for overview page tabs and sidebar
+    fetchOverviewAnnouncements();
+    fetchOverviewLoanProducts();
+  }, [user, fetchOverviewLoanProducts]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', {
@@ -1779,58 +1884,124 @@ export default function OverviewPage() {
                 </Link>
               </div>
 
+              {/* Category Filter Tabs */}
+              <div className="flex items-center gap-1 p-1 bg-neutral-100/80 dark:bg-neutral-900/60 rounded-xl border border-outline-variant/40 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setSidebarLoanCategory('all')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${
+                    sidebarLoanCategory === 'all'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                  }`}
+                >
+                  All ({overviewLoanProducts.length > 0 ? overviewLoanProducts.filter((p: any) => p.is_active !== false && p.is_active !== 'false').length : DEFAULT_LOAN_PRODUCTS.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSidebarLoanCategory('regular')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${
+                    sidebarLoanCategory === 'regular'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                  }`}
+                >
+                  Regular
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSidebarLoanCategory('stl')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${
+                    sidebarLoanCategory === 'stl'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                  }`}
+                >
+                  STL
+                </button>
+              </div>
+
               {/* Loan Products List */}
-              {loanProductsLoading ? (
+              {loanProductsLoading && filteredSidebarLoanProducts.length === 0 ? (
                 <div className="space-y-3">
-                  <div className="h-20 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
-                  <div className="h-20 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
-                  <div className="h-20 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
+                  <div className="h-24 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
+                  <div className="h-24 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
+                  <div className="h-24 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
                 </div>
-              ) : overviewLoanProducts.length === 0 ? (
-                <div className="text-center py-8 text-neutral-400 text-xs">
-                  No active loan products available.
+              ) : filteredSidebarLoanProducts.length === 0 ? (
+                <div className="text-center py-8 text-neutral-400 text-xs bg-neutral-50/50 dark:bg-neutral-900/30 rounded-2xl border border-outline-variant/30 p-4">
+                  No products found for this category.
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {overviewLoanProducts.filter((p: any) => p.is_active).map((prod: any) => (
-                    <div
-                      key={prod.id}
-                      className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40 hover:border-primary/40 dark:hover:border-secondary/40 transition-all space-y-2 group"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-headline font-bold text-xs sm:text-sm text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors">
-                          {prod.name}
-                        </h4>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-mono flex items-center gap-0.5 shrink-0">
-                          <Percent className="w-2.5 h-2.5" />
-                          {parseFloat(prod.interest_rate)}%
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-600 dark:text-neutral-400 font-body">
-                        <div>
-                          <span className="text-[9px] uppercase tracking-wider font-bold text-neutral-400 block">Max Term</span>
-                          <span className="font-medium">{prod.term_months} Months</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[9px] uppercase tracking-wider font-bold text-neutral-400 block">Amount Range</span>
-                          <span className="font-medium font-mono text-[10px]">
-                            ₱{Number(prod.min_amount).toLocaleString()} - ₱{Number(prod.max_amount).toLocaleString()}
+                <div className="space-y-3 max-h-[580px] overflow-y-auto pr-1 custom-scrollbar">
+                  {filteredSidebarLoanProducts.map((prod: any) => {
+                    const parsedRate = parseFloat(prod.interest_rate) || 0;
+                    const displayRate = (parsedRate <= 1 ? parsedRate * 100 : parsedRate).toFixed(0);
+                    const minNum = parseFloat(prod.min_amount) || 0;
+                    const maxNum = parseFloat(prod.max_amount) || 0;
+                    const amountLabel = minNum === maxNum
+                      ? `₱${minNum.toLocaleString()} (Fixed)`
+                      : `₱${minNum.toLocaleString()} - ₱${maxNum.toLocaleString()}`;
+                    const isSTL = (prod.name || '').toLowerCase().includes('stl') || (prod.name || '').toLowerCase().includes('short term');
+
+                    return (
+                      <div
+                        key={prod.id}
+                        className="p-4 rounded-2xl bg-neutral-50/80 dark:bg-neutral-900/60 border border-outline-variant/40 hover:border-primary/50 dark:hover:border-secondary/50 hover:shadow-md transition-all space-y-2.5 group"
+                      >
+                        {/* Header: Title + Rate */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1 flex-1">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${
+                              isSTL
+                                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
+                                : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
+                            }`}>
+                              {isSTL ? 'Short Term Loan' : 'Regular Facility'}
+                            </span>
+                            <h4 className="font-headline font-bold text-xs sm:text-sm text-on-surface dark:text-white group-hover:text-primary dark:group-hover:text-secondary transition-colors leading-snug">
+                              {prod.name}
+                            </h4>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-mono flex items-center gap-0.5 shrink-0 shadow-2xs">
+                            <Percent className="w-3 h-3" />
+                            {displayRate}%
                           </span>
                         </div>
+
+                        {/* Specs grid */}
+                        <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-600 dark:text-neutral-400 font-body pt-1">
+                          <div className="bg-white/60 dark:bg-surface-container-high/40 p-2 rounded-xl border border-outline-variant/30">
+                            <span className="text-[9px] uppercase tracking-wider font-bold text-neutral-400 block">Max Term</span>
+                            <span className="font-semibold text-on-surface dark:text-white">
+                              {prod.term_months} {prod.term_months === 1 ? 'Month' : 'Months'}
+                            </span>
+                          </div>
+                          <div className="bg-white/60 dark:bg-surface-container-high/40 p-2 rounded-xl border border-outline-variant/30 text-right">
+                            <span className="text-[9px] uppercase tracking-wider font-bold text-neutral-400 block">Borrow Limit</span>
+                            <span className="font-semibold font-mono text-on-surface dark:text-white text-[11px]">
+                              {amountLabel}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Footer: Formula + Apply CTA */}
+                        <div className="pt-1.5 flex items-center justify-between border-t border-outline-variant/30 text-xs">
+                          <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
+                            {prod.amortization_type === 'flat_rate' ? 'Straight (Flat)' : 'Diminishing'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => openLoanModalWithProduct(prod)}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white dark:bg-secondary/15 dark:text-secondary dark:hover:bg-secondary dark:hover:text-neutral-950 font-bold text-xs transition-all active:scale-95 cursor-pointer shadow-2xs"
+                          >
+                            <span>Apply</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="pt-1 flex items-center justify-between border-t border-outline-variant/30">
-                        <span className="text-[10px] text-neutral-400 capitalize">
-                          {prod.amortization_type?.replace('_', ' ')}
-                        </span>
-                        <button
-                          onClick={() => openLoanModalWithProduct(prod)}
-                          className="text-[11px] font-bold text-primary dark:text-secondary hover:underline inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          Apply <ArrowRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
