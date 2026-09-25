@@ -50,7 +50,6 @@ import {
 // Tab configuration matching the user spreadsheet structure
 export type DisbursementTab =
   | 'summary'
-  | 'loan'
   | 'stl_replenishment'
   | 'revolving_fund_replenishment'
   | 'petty_cash_replenishment'
@@ -69,17 +68,10 @@ interface TabConfig {
 export const DISBURSEMENT_TABS: TabConfig[] = [
   {
     id: 'summary',
-    label: 'Summary',
+    label: 'Check Vouchers',
     folderFilter: '',
-    defaultCategory: 'Loan',
-    description: 'Master summary registry of all check vouchers in order across all categories'
-  },
-  {
-    id: 'loan',
-    label: 'Loan',
-    folderFilter: 'Loan',
-    defaultCategory: 'Loan',
-    description: 'Check vouchers for approved regular loans and short-term loans'
+    defaultCategory: 'STL',
+    description: 'Master registry of all check vouchers in order across all categories'
   },
   {
     id: 'stl_replenishment',
@@ -276,6 +268,10 @@ function DisbursementPageContent() {
   // Sync tab with URL query parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
+    if (tabParam === 'loan' || tabParam === 'loans') {
+      router.replace('/dashboard/loans?tab=vouchers');
+      return;
+    }
     if (tabParam && DISBURSEMENT_TABS.some(t => t.id === tabParam)) {
       setActiveTab(tabParam as DisbursementTab);
     } else if (tabParam === 'revolving_funds' || tabParam === 'revolving') {
@@ -284,7 +280,7 @@ function DisbursementPageContent() {
       setActiveTab('stl_replenishment');
       setStlSubView('liquidations');
     }
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   const currentTabConfig = useMemo(() => {
     return DISBURSEMENT_TABS.find(t => t.id === activeTab) || DISBURSEMENT_TABS[0];
@@ -350,6 +346,7 @@ function DisbursementPageContent() {
   // Create Check Voucher Modal State
   const [isCreateCVOpen, setIsCreateCVOpen] = useState(false);
   const [isSavingNewCv, setIsSavingNewCv] = useState(false);
+  const [isFetchingNextVoucherNo, setIsFetchingNextVoucherNo] = useState(false);
   const [newCvVoucherNo, setNewCvVoucherNo] = useState('');
   const [newCvDate, setNewCvDate] = useState('');
   const [newCvReleasedDate, setNewCvReleasedDate] = useState('');
@@ -996,11 +993,27 @@ function DisbursementPageContent() {
     }
   };
 
+  // Fetch live next sequential voucher number from backend
+  const fetchNextVoucherNo = async (targetDate?: string) => {
+    try {
+      setIsFetchingNextVoucherNo(true);
+      const params = targetDate ? { date: targetDate } : {};
+      const res = await api.get('/accounts/check-vouchers/next-number', { params });
+      if (res.data?.data?.next_voucher_no) {
+        setNewCvVoucherNo(res.data.data.next_voucher_no);
+      }
+    } catch (err) {
+      console.error('Failed to get next voucher number:', err);
+    } finally {
+      setIsFetchingNextVoucherNo(false);
+    }
+  };
+
   // Open Create Check Voucher Modal
   const openCreateCheckVoucherModal = () => {
     const today = new Date().toISOString().split('T')[0];
     const yr = String(new Date().getFullYear()).slice(-2);
-    setNewCvVoucherNo(`${yr}-${Math.floor(100 + Math.random() * 900)}`);
+    setNewCvVoucherNo(`${yr}-...`);
     setNewCvDate(today);
     setNewCvReleasedDate(today);
     setNewCvPayee('');
@@ -1016,6 +1029,7 @@ function DisbursementPageContent() {
       { description: 'CIB - BDO', debit: '', credit: '' }
     ]);
     setIsCreateCVOpen(true);
+    fetchNextVoucherNo(today);
   };
 
   // Create Check Voucher Submission
@@ -1061,9 +1075,10 @@ function DisbursementPageContent() {
       };
 
       const res = await api.post('/accounts/check-vouchers', payload);
+      const issuedVoucherNo = res.data?.data?.voucher_no || newCvVoucherNo;
       setIsCreateCVOpen(false);
       loadCheckVouchers(1);
-      setCvActionFeedback({ type: 'success', message: `Check Voucher #${newCvVoucherNo} issued successfully!` });
+      setCvActionFeedback({ type: 'success', message: `Check Voucher #${issuedVoucherNo} issued successfully!` });
       setTimeout(() => setCvActionFeedback(null), 4000);
     } catch (err: any) {
       console.error('Failed to create check voucher:', err);
@@ -1811,16 +1826,31 @@ function DisbursementPageContent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
-                      Voucher No. *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase">
+                        Voucher No. *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => fetchNextVoucherNo(newCvDate)}
+                        className="text-[10px] text-primary dark:text-secondary hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                        title="Sync with next sequence number"
+                      >
+                        <RefreshCw className={`w-2.5 h-2.5 ${isFetchingNextVoucherNo ? 'animate-spin' : ''}`} />
+                        Sync Next No.
+                      </button>
+                    </div>
                     <input
                       type="text"
                       required
                       value={newCvVoucherNo}
                       onChange={e => setNewCvVoucherNo(e.target.value)}
+                      placeholder="e.g. 26-391"
                       className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-mono font-bold"
                     />
+                    <p className="text-[10px] text-neutral-500 mt-1">
+                      Sequential auto-numbering with database lock protection.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">

@@ -1113,10 +1113,62 @@ export const printCheckVoucher = async (req, res, next) => {
   }
 };
 
+/**
+ * Helper to compute the next sequential voucher number for a given year prefix.
+ * MUST be called within a transaction holding an advisory lock, or as a read query.
+ * Format: YY-NNN (e.g., 26-391)
+ */
+export const computeNextVoucherNo = async (clientOrPool, targetYearPrefix = null) => {
+  const yr = targetYearPrefix || String(new Date().getFullYear()).slice(-2);
+  const result = await clientOrPool.query(
+    `SELECT voucher_no
+     FROM check_vouchers
+     WHERE voucher_no ~ ('^' || $1 || '-[0-9]+$')
+     ORDER BY CAST(SPLIT_PART(voucher_no, '-', 2) AS INTEGER) DESC
+     LIMIT 1`,
+    [yr]
+  );
+
+  let nextSeq = 1;
+  if (result.rowCount > 0 && result.rows[0].voucher_no) {
+    const parts = result.rows[0].voucher_no.split('-');
+    const currentSeq = parseInt(parts[1], 10);
+    if (!isNaN(currentSeq)) {
+      nextSeq = currentSeq + 1;
+    }
+  }
+
+  const paddedSeq = String(nextSeq).padStart(3, '0');
+  return `${yr}-${paddedSeq}`;
+};
+
+// @desc    Get next sequential check voucher number
+// @route   GET /api/accounts/check-vouchers/next-number
+// @access  Protected (Admin, Manager, Staff)
+export const getNextCheckVoucherNumber = async (req, res, next) => {
+  try {
+    const yr = req.query.year_prefix || (req.query.date ? String(req.query.date).slice(2, 4) : String(new Date().getFullYear()).slice(-2));
+    const nextVoucherNo = await computeNextVoucherNo(pool, yr);
+    const seq = parseInt(nextVoucherNo.split('-')[1], 10) || 1;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        next_voucher_no: nextVoucherNo,
+        year_prefix: yr,
+        sequence: seq
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Create a new check voucher
 // @route   POST /api/accounts/check-vouchers
 // @access  Protected (Admin, Staff)
 export const createCheckVoucher = async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const {
       loan_id,
@@ -1131,13 +1183,14 @@ export const createCheckVoucher = async (req, res, next) => {
       folder_name,
       status,
       details,
-      signatories
+      signatories,
+      auto_assign
     } = req.body;
 
-    if (!payee || !voucher_no) {
+    if (!payee || !payee.trim()) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Voucher number and payee name are required' }
+        error: { message: 'Payee name is required' }
       });
     }
 
@@ -1148,8 +1201,47 @@ export const createCheckVoucher = async (req, res, next) => {
     };
 
     const initialStatus = (status || 'edit').toLowerCase();
+    const resolvedDate = voucher_date || new Date().toISOString().split('T')[0];
+    const yearPrefix = resolvedDate.slice(2, 4);
 
-    const result = await query(
+    await client.query('BEGIN');
+
+    // 1. Acquire transaction-level advisory lock specifically for voucher sequence numbering.
+    // This serializes any concurrent voucher creation requests across all processes.
+    // PostgreSQL automatically releases this lock immediately when the transaction COMMITS or ROLLS BACK.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('check_voucher_number_lock'))");
+
+    let finalVoucherNo = voucher_no ? voucher_no.trim() : '';
+
+    // Check if voucher_no is empty, explicitly 'AUTO', or requested auto_assign
+    const isAutoRequested = !finalVoucherNo || finalVoucherNo.toUpperCase() === 'AUTO' || auto_assign === true;
+
+    if (isAutoRequested) {
+      finalVoucherNo = await computeNextVoucherNo(client, yearPrefix);
+    } else {
+      // Check if provided voucher number already exists in the database
+      const existingCheck = await client.query(
+        'SELECT id, voucher_no, payee FROM check_vouchers WHERE voucher_no = $1 LIMIT 1',
+        [finalVoucherNo]
+      );
+
+      if (existingCheck.rowCount > 0) {
+        // If it matches sequential pattern YY-NNN, it collided because another user concurrently
+        // took the number. Automatically resolve by advancing to the next sequential number!
+        if (/^\d{2}-\d+$/.test(finalVoucherNo)) {
+          finalVoucherNo = await computeNextVoucherNo(client, yearPrefix);
+        } else {
+          // Manual custom identifier collision: reject cleanly
+          await client.query('ROLLBACK');
+          return res.status(409).json({
+            success: false,
+            error: { message: `Voucher number "${finalVoucherNo}" already exists in the system.` }
+          });
+        }
+      }
+    }
+
+    const result = await client.query(
       `INSERT INTO check_vouchers (
         loan_id,
         voucher_no,
@@ -1168,13 +1260,13 @@ export const createCheckVoucher = async (req, res, next) => {
       RETURNING *`,
       [
         loan_id || null,
-        voucher_no.trim(),
-        voucher_date || new Date().toISOString().split('T')[0],
+        finalVoucherNo,
+        resolvedDate,
         check_no || '',
         payee.trim(),
         bank || '',
         particulars || '',
-        amount !== undefined ? parseFloat(amount) : 0,
+        amount !== undefined && amount !== null && amount !== '' ? parseFloat(amount) : 0,
         date_released || null,
         folder_name || null,
         initialStatus,
@@ -1183,13 +1275,18 @@ export const createCheckVoucher = async (req, res, next) => {
       ]
     );
 
+    await client.query('COMMIT');
+
     res.status(201).json({
       success: true,
       message: 'Check voucher created successfully',
       data: result.rows[0]
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     next(error);
+  } finally {
+    client.release();
   }
 };
 

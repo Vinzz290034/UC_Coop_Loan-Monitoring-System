@@ -43,6 +43,7 @@ import {
   ArrowDown,
   ArrowUpDown,
   FileText,
+  FileEdit,
   ShoppingCart,
   Minus,
   Trash2,
@@ -65,6 +66,7 @@ import {
 } from 'lucide-react';
 import LoanApprovalModal from '@/components/loans/LoanApprovalModal';
 import RevolvingFundsTab from '@/components/loans/RevolvingFundsTab';
+import LoanVouchersTab from '@/components/loans/LoanVouchersTab';
 
 interface LoanProduct {
   id: number | string;
@@ -160,7 +162,7 @@ function LoansPageContent() {
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff' || (user?.role as string) === 'manager';
   const isVerified = isAdminOrManager || user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
 
-  const [activeTab, setActiveTab] = useState<'loans' | 'payments' | 'products'>('loans');
+  const [activeTab, setActiveTab] = useState<'loans' | 'vouchers' | 'payments' | 'products'>('loans');
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -169,10 +171,10 @@ function LoansPageContent() {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'payments' || tab === 'products' || tab === 'loans') {
+    if (tab === 'payments' || tab === 'products' || tab === 'loans' || tab === 'vouchers') {
       setActiveTab(tab as any);
-    } else if (tab === 'vouchers' || tab === 'revolving_funds' || tab === 'revolving') {
-      router.replace('/dashboard/disbursement');
+    } else if (tab === 'revolving_funds' || tab === 'revolving') {
+      router.replace('/dashboard/disbursement?tab=revolving_fund_replenishment');
     }
   }, [searchParams, router]);
 
@@ -859,9 +861,19 @@ function LoansPageContent() {
     { description: '', debit: '', credit: '' }
   ]);
 
-  const getNextVoucherNo = () => {
-    const currentYearPrefix = String(new Date().getFullYear()).slice(-2); // '26'
-    let highestNum = 266; // Specified: latest one was 26-266, so starting baseline is 266
+  const getNextVoucherNo = async (targetDate?: string) => {
+    try {
+      const params = targetDate ? { date: targetDate } : {};
+      const res = await api.get('/accounts/check-vouchers/next-number', { params });
+      if (res.data?.data?.next_voucher_no) {
+        return res.data.data.next_voucher_no;
+      }
+    } catch (err) {
+      console.error('Failed to get next voucher number from server:', err);
+    }
+
+    const currentYearPrefix = String(new Date().getFullYear()).slice(-2);
+    let highestNum = 266;
 
     (checkVouchers || []).forEach((v: any) => {
       if (!v || !v.voucher_no) return;
@@ -882,9 +894,13 @@ function LoansPageContent() {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
     const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const yr = String(now.getFullYear()).slice(-2);
     setCvDate(todayIso);
     setCvReleasedDate(todayIso);
-    setCvVoucherNo(getNextVoucherNo());
+    setCvVoucherNo(`${yr}-...`);
+    getNextVoucherNo(todayIso).then(nextNo => {
+      if (nextNo) setCvVoucherNo(nextNo);
+    });
     setCvPayee('');
     setCvBankName('BDO');
     setCvCheckNo('');
@@ -1504,6 +1520,9 @@ function LoansPageContent() {
         savedVoucher = res.data?.data;
         if (savedVoucher?.id) {
           setVoucherId(savedVoucher.id);
+        }
+        if (savedVoucher?.voucher_no) {
+          setVoucherNo(savedVoucher.voucher_no);
         }
       }
 
@@ -2740,6 +2759,18 @@ function LoansPageContent() {
           >
             {isAdminOrManager ? 'Loan Monitoring' : 'Loan Application'}
           </button>
+          {isAdminOrManager && (
+            <button
+              onClick={() => setActiveTab('vouchers')}
+              className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'vouchers'
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                }`}
+            >
+              <FileCheck className="w-4 h-4" />
+              <span>Loan Vouchers</span>
+            </button>
+          )}
           {isAdminOrManager ? (
             <button
               onClick={() => setActiveTab('payments')}
@@ -3248,27 +3279,15 @@ function LoansPageContent() {
                                                   {loan.status !== 'pending_approval' && (
                                                     <>
                                                       {isAdminOrManager && (
-                                                        <>
                                                         <button
                                                           type="button"
                                                           onClick={() => openVoucherModal(loanDetails)}
                                                           className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
-                                                          title="Generate and print check disbursement voucher"
+                                                          title="Configure, edit, and print check disbursement voucher"
                                                         >
-                                                          <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                                          <FileEdit className="w-3.5 h-3.5 text-primary dark:text-secondary" />
                                                           Check Voucher
                                                         </button>
-
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => router.push(`/dashboard/disbursement?tab=loan&search=${encodeURIComponent(loan.laf_no || '')}`)}
-                                                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
-                                                          title="View or manage this loan voucher in the Disbursement module"
-                                                        >
-                                                          <Receipt className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                                                          Disbursement Voucher
-                                                        </button>
-                                                        </>
                                                       )}
 
                                                       <button
@@ -3278,7 +3297,7 @@ function LoansPageContent() {
                                                         title="Print official loan amortization schedule"
                                                       >
                                                         <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                                                        Print Schedule
+                                                        Print Ammortization
                                                       </button>
 
                                                       <button
@@ -3541,6 +3560,8 @@ function LoansPageContent() {
               })()
             )}
           </div>
+        ) : activeTab === 'vouchers' ? (
+          <LoanVouchersTab isAdminOrManager={isAdminOrManager} />
         ) : activeTab === 'payments' ? (
           <div className="space-y-6">
             {/* Header & Quick Action Buttons */}

@@ -2416,7 +2416,7 @@ export default function RevolvingFundsTab({
             @media print {
               @page {
                 size: portrait;
-                margin: 0;
+                margin: 6mm 10mm;
               }
               body > *:not(#coop-printable-lf-sheet) {
                 display: none !important;
@@ -2428,7 +2428,7 @@ export default function RevolvingFundsTab({
                 max-width: 100% !important;
                 background: #ffffff !important;
                 color: #111827 !important;
-                padding: 14mm 24mm 20mm 24mm !important;
+                padding: 4mm 6mm 6mm 6mm !important;
                 margin: 0 auto !important;
                 box-sizing: border-box !important;
                 -webkit-print-color-adjust: exact !important;
@@ -2452,9 +2452,6 @@ export default function RevolvingFundsTab({
               #coop-printable-lf-sheet thead {
                 display: table-header-group;
               }
-              #coop-printable-lf-sheet tfoot {
-                display: table-footer-group;
-              }
               .no-print-break {
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
@@ -2471,65 +2468,65 @@ export default function RevolvingFundsTab({
             }}
           >
             {/* Official Brand Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #064e3b', paddingBottom: '12px', marginBottom: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <img src="/Coop.jpeg" alt="UC-METC MPC Logo" style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #064e3b', paddingBottom: '8px', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img src="/Coop.jpeg" alt="UC-METC MPC Logo" style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
               <div>
-                <h2 style={{ fontSize: '14px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#064e3b', margin: 0 }}>
+                <h2 style={{ fontSize: '13.5px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#064e3b', margin: 0 }}>
                   University of Cebu - METC Multipurpose Cooperative (UC-METC MPC)
                 </h2>
-                <p style={{ fontSize: '10px', color: '#4b5563', margin: '2px 0 0 0' }}>
+                <p style={{ fontSize: '9.5px', color: '#4b5563', margin: '2px 0 0 0' }}>
                   UC-METC Campus, Alumnos, Mambaling, Cebu City • Tel: (032) 410-8811 local 5155
                 </p>
-                <p style={{ fontSize: '9px', color: '#6b7280', margin: '1px 0 0 0' }}>
+                <p style={{ fontSize: '8.5px', color: '#6b7280', margin: '1px 0 0 0' }}>
                   Email: ucmetc.ecc@gmail.com • CDA Reg. No. 9520-1070000000029729
                 </p>
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <h1 style={{ fontSize: '16px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#111827', margin: 0 }}>
+              <h1 style={{ fontSize: '15px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#111827', margin: 0 }}>
                 Liquidation Form
               </h1>
-              <div style={{ fontSize: '15px', fontFamily: 'monospace', fontWeight: 'bold', color: '#b91c1c', marginTop: '2px' }}>
+              <div style={{ fontSize: '14px', fontFamily: 'monospace', fontWeight: 'bold', color: '#b91c1c', marginTop: '2px' }}>
                 {printingLf.form.lf_no}
               </div>
             </div>
           </div>
 
           {/* Metadata Banner */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', padding: '9px 12px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', marginBottom: '14px', fontSize: '11px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', padding: '6px 10px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', marginBottom: '8px', fontSize: '10.5px' }}>
             <div>
-              <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: 'bold', color: '#6b7280', display: 'block' }}>Custodian</span>
-              <strong style={{ fontSize: '11.5px', color: '#111827' }}>{printingLf.form.custodian_name || 'Michelle M. Pable'}</strong>
+              <span style={{ fontSize: '8.5px', textTransform: 'uppercase', fontWeight: 'bold', color: '#6b7280', display: 'block' }}>Custodian</span>
+              <strong style={{ fontSize: '11px', color: '#111827' }}>{printingLf.form.custodian_name || 'Michelle M. Pable'}</strong>
             </div>
             <div>
-              <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: 'bold', color: '#6b7280', display: 'block' }}>Sheet / Reference</span>
-              <strong style={{ fontSize: '11.5px', color: '#111827' }}>{printingLf.form.sheet_name || '—'}</strong>
+              <span style={{ fontSize: '8.5px', textTransform: 'uppercase', fontWeight: 'bold', color: '#6b7280', display: 'block' }}>Sheet / Reference</span>
+              <strong style={{ fontSize: '11px', color: '#111827' }}>{printingLf.form.sheet_name || '—'}</strong>
             </div>
             <div>
-              <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: 'bold', color: '#6b7280', display: 'block' }}>Linked Check Voucher</span>
-              <strong style={{ fontSize: '11.5px', color: '#064e3b' }}>
+              <span style={{ fontSize: '8.5px', textTransform: 'uppercase', fontWeight: 'bold', color: '#6b7280', display: 'block' }}>Linked Check Voucher</span>
+              <strong style={{ fontSize: '11px', color: '#064e3b' }}>
                 {printingLf.form.voucher_no || printingLf.form.cv_voucher_no ? `CV #${printingLf.form.voucher_no || printingLf.form.cv_voucher_no}` : 'Unlinked'}
               </strong>
             </div>
             <div>
-              <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: 'bold', color: '#6b7280', display: 'block' }}>Status</span>
-              <strong style={{ fontSize: '11.5px', color: printingLf.form.status === 'replenished' ? '#059669' : '#d97706', textTransform: 'uppercase' }}>
+              <span style={{ fontSize: '8.5px', textTransform: 'uppercase', fontWeight: 'bold', color: '#6b7280', display: 'block' }}>Status</span>
+              <strong style={{ fontSize: '11px', color: printingLf.form.status === 'replenished' ? '#059669' : '#d97706', textTransform: 'uppercase' }}>
                 {printingLf.form.status || 'OPEN'}
               </strong>
             </div>
           </div>
 
           {/* Table */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', marginBottom: '14px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5px', marginBottom: '8px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f3f4f6', borderTop: '1.5px solid #111827', borderBottom: '1.5px solid #111827' }}>
-                <th style={{ padding: '6px 8px', textAlign: 'left', width: '140px', borderRight: '1px solid #d1d5db' }}>Particulars / Voucher #</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left', width: '85px', borderRight: '1px solid #d1d5db' }}>Date</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right', width: '95px', borderRight: '1px solid #d1d5db' }}>Amount (₱)</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left', borderRight: '1px solid #d1d5db' }}>Account</th>
-                <th style={{ padding: '6px 8px', textAlign: 'center', width: '85px', borderRight: '1px solid #d1d5db' }}>Category</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left' }}>Remarks / Details</th>
+                <th style={{ padding: '4px 6px', textAlign: 'left', width: '140px', borderRight: '1px solid #d1d5db' }}>Particulars / Voucher #</th>
+                <th style={{ padding: '4px 6px', textAlign: 'left', width: '85px', borderRight: '1px solid #d1d5db' }}>Date</th>
+                <th style={{ padding: '4px 6px', textAlign: 'right', width: '95px', borderRight: '1px solid #d1d5db' }}>Amount (₱)</th>
+                <th style={{ padding: '4px 6px', textAlign: 'left', borderRight: '1px solid #d1d5db' }}>Account</th>
+                <th style={{ padding: '4px 6px', textAlign: 'center', width: '85px', borderRight: '1px solid #d1d5db' }}>Category</th>
+                <th style={{ padding: '4px 6px', textAlign: 'left' }}>Remarks / Details</th>
               </tr>
             </thead>
             <tbody>
@@ -2542,156 +2539,144 @@ export default function RevolvingFundsTab({
                     color: item.is_cancelled ? '#9ca3af' : 'inherit'
                   }}
                 >
-                  <td style={{ padding: '5px 8px', borderRight: '1px solid #e5e7eb', fontWeight: item.is_cancelled ? 'normal' : '600' }}>
+                  <td style={{ padding: '3px 6px', borderRight: '1px solid #e5e7eb', fontWeight: item.is_cancelled ? 'normal' : '600' }}>
                     {(!item.particulars || /^item\s*#\d+$/i.test(item.particulars.trim())) ? '—' : item.particulars}
                     {item.is_cancelled && ' (CANCELLED)'}
                   </td>
-                  <td style={{ padding: '5px 8px', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace' }}>
+                  <td style={{ padding: '3px 6px', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace' }}>
                     {item.item_date_raw ? String(item.item_date_raw).split('T')[0] : (item.item_date ? new Date(item.item_date).toLocaleDateString() : '—')}
                   </td>
-                  <td style={{ padding: '5px 8px', textAlign: 'right', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                  <td style={{ padding: '3px 6px', textAlign: 'right', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace', fontWeight: 'bold' }}>
                     {item.amount > 0 ? Number(item.amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}
                   </td>
-                  <td style={{ padding: '5px 8px', borderRight: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '3px 6px', borderRight: '1px solid #e5e7eb' }}>
                     {item.account_name}
                   </td>
-                  <td style={{ padding: '5px 8px', textAlign: 'center', borderRight: '1px solid #e5e7eb' }}>
-                    <span style={{ fontSize: '8.5px', padding: '2px 5px', borderRadius: '4px', backgroundColor: '#f3f4f6', fontWeight: 'bold' }}>
+                  <td style={{ padding: '3px 6px', textAlign: 'center', borderRight: '1px solid #e5e7eb' }}>
+                    <span style={{ fontSize: '8px', padding: '1px 4px', borderRadius: '3px', backgroundColor: '#f3f4f6', fontWeight: 'bold' }}>
                       {item.category || 'Operation'}
                     </span>
                   </td>
-                  <td style={{ padding: '5px 8px', color: '#4b5563' }}>
+                  <td style={{ padding: '3px 6px', color: '#4b5563' }}>
                     {item.remarks || '—'}
                   </td>
                 </tr>
               ))}
-            </tbody>
-            <tfoot>
+              {/* Total Amount Liquidated Row - only rendered at the end of the table on the final page */}
               <tr style={{ borderTop: '2px solid #111827', backgroundColor: '#f9fafb', fontWeight: 'bold' }}>
-                <td colSpan={3} style={{ padding: '7px 10px', textAlign: 'right', textTransform: 'uppercase', fontSize: '10px', letterSpacing: '0.04em' }}>
+                <td colSpan={2} style={{ padding: '5px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '9.5px', letterSpacing: '0.04em' }}>
                   Total Amount Liquidated:
                 </td>
-                <td style={{ padding: '7px 8px', textAlign: 'right', fontFamily: 'monospace', fontSize: '11.5px', fontWeight: 'bold' }}>
+                <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'monospace', fontSize: '11px', fontWeight: 'bold', borderRight: '1px solid #d1d5db' }}>
                   ₱{Number(printingLf.form.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </td>
                 <td colSpan={3}></td>
               </tr>
-            </tfoot>
+            </tbody>
           </table>
 
-          {/* Financial Reconciliation Summary Box */}
-          <div className="no-print-break" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '12px', marginBottom: '14px' }}>
-            <div style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: '#ffffff' }}>
-              <span style={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>
-                Authorized Fund Amount
-              </span>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', fontFamily: 'monospace', color: '#111827', marginTop: '2px' }}>
-                ₱{Number(printingLf.form.authorized_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: '#ffffff' }}>
-              <span style={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>
-                Total Liquidated ({printingLf.items.filter(i => !i.is_cancelled).length} active items)
-              </span>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', fontFamily: 'monospace', color: '#047857', marginTop: '2px' }}>
-                ₱{Number(printingLf.form.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div style={{ padding: '8px 12px', border: '1.5px solid #059669', borderRadius: '6px', backgroundColor: '#ecfdf5' }}>
-              <span style={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', color: '#047857', display: 'block' }}>
-                Balance to Replenish / Net Due
-              </span>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', fontFamily: 'monospace', color: '#065f46', marginTop: '2px' }}>
-                ₱{(Number(printingLf.form.authorized_amount) - Number(printingLf.form.total_liquidated)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-          </div>
-
-          {/* Category Summaries Box */}
-          {(() => {
-            const catSummary = (printingLf.categorySummary && Object.keys(printingLf.categorySummary).length > 0)
-              ? printingLf.categorySummary
-              : printingLf.items.reduce((acc, it) => {
-                  if (!it.is_cancelled && Number(it.amount) > 0) {
-                    const cat = (it.category || 'Operation').trim();
-                    acc[cat] = (acc[cat] || 0) + Number(it.amount);
-                  }
-                  return acc;
-                }, {} as Record<string, number>);
-
-            const catEntries = Object.entries(catSummary)
-              .filter(([_, amt]) => Number(amt) > 0)
-              .sort((a, b) => Number(b[1]) - Number(a[1]));
-
-            if (catEntries.length === 0) return null;
-
-            return (
-              <div className="no-print-break" style={{ border: '1px solid #e5e7eb', borderRadius: '6px', padding: '8px 12px', marginBottom: '16px', backgroundColor: '#fafafa', fontSize: '9.5px' }}>
-                <div style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', marginBottom: '6px', fontSize: '10px', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Expense Breakdown by Category ({catEntries.length} {catEntries.length === 1 ? 'Category' : 'Categories'})</span>
-                  <span>Total: ₱{Number(printingLf.form.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, Math.max(2, catEntries.length))}, 1fr)`, gap: '4px 14px' }}>
-                  {catEntries.map(([cat, amt]) => {
-                    const pct = printingLf.form.total_liquidated ? ((Number(amt) / Number(printingLf.form.total_liquidated)) * 100).toFixed(1) : '0';
-                    return (
-                      <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e5e7eb', padding: '2px 0' }}>
-                        <span style={{ color: '#4b5563', fontWeight: '600' }}>
-                          {cat}
-                        </span>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', marginLeft: '4px' }}>
-                          ₱{Number(amt).toLocaleString('en-US', { minimumFractionDigits: 2 })} <small style={{ color: '#6b7280', fontWeight: 'normal' }}>({pct}%)</small>
-                        </span>
-                      </div>
-                    );
-                  })}
+          {/* Summary, Reconciliation & Signatures Section (Never split across pages) */}
+          <div className="no-print-break" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+            {/* Financial Reconciliation Summary Box */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '8px', marginBottom: '8px' }}>
+              <div style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: '#ffffff' }}>
+                <span style={{ fontSize: '8.5px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>
+                  Fund Amount
+                </span>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', fontFamily: 'monospace', color: '#111827', marginTop: '1px' }}>
+                  ₱{Number(printingLf.form.authorized_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
               </div>
-            );
-          })()}
-
-          {/* Signatures */}
-          <div className="no-print-break" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px', marginTop: '22px', fontSize: '10.5px' }}>
-            <div>
-              <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px', display: 'block', letterSpacing: '0.04em' }}>
-                SUBMITTED BY (CUSTODIAN):
-              </span>
-              <div style={{ height: '34px' }}></div>
-              <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 2px 0', fontSize: '11px', color: '#111827' }}>
-                {printingLf.form.custodian_name || 'MICHELLE M. PABLE'}
-              </p>
-              <div style={{ borderBottom: '1.5px solid #111827', width: '100%' }}></div>
-              <span style={{ fontSize: '8.5px', color: '#6b7280', marginTop: '2px', display: 'block' }}>
-                Signature over Printed Name
-              </span>
+              <div style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '6px', backgroundColor: '#ffffff' }}>
+                <span style={{ fontSize: '8.5px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>
+                  Total Liquidated ({printingLf.items.filter(i => !i.is_cancelled).length} active items)
+                </span>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', fontFamily: 'monospace', color: '#047857', marginTop: '1px' }}>
+                  ₱{Number(printingLf.form.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div style={{ padding: '6px 10px', border: '1.5px solid #059669', borderRadius: '6px', backgroundColor: '#ecfdf5' }}>
+                <span style={{ fontSize: '8.5px', fontWeight: 'bold', textTransform: 'uppercase', color: '#047857', display: 'block' }}>
+                  Balance to Replenish / Net Due
+                </span>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', fontFamily: 'monospace', color: '#065f46', marginTop: '1px' }}>
+                  ₱{(Number(printingLf.form.authorized_amount) - Number(printingLf.form.total_liquidated)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
             </div>
 
-            <div>
-              <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px', display: 'block', letterSpacing: '0.04em' }}>
-                CHECKED & VERIFIED BY:
-              </span>
-              <div style={{ height: '34px' }}></div>
-              <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 2px 0', fontSize: '11px', color: '#111827' }}>
-                MANILYN VELOS
-              </p>
-              <div style={{ borderBottom: '1.5px solid #111827', width: '100%' }}></div>
-              <span style={{ fontSize: '8.5px', color: '#6b7280', marginTop: '2px', display: 'block' }}>
-                Audit & Inventory Committee
-              </span>
-            </div>
+            {/* Category Summaries Box */}
+            {(() => {
+              const catSummary = (printingLf.categorySummary && Object.keys(printingLf.categorySummary).length > 0)
+                ? printingLf.categorySummary
+                : printingLf.items.reduce((acc, it) => {
+                    if (!it.is_cancelled && Number(it.amount) > 0) {
+                      const cat = (it.category || 'Operation').trim();
+                      acc[cat] = (acc[cat] || 0) + Number(it.amount);
+                    }
+                    return acc;
+                  }, {} as Record<string, number>);
 
-            <div>
-              <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '9px', display: 'block', letterSpacing: '0.04em' }}>
-                APPROVED FOR REPLENISHMENT:
-              </span>
-              <div style={{ height: '34px' }}></div>
-              <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 2px 0', fontSize: '11px', color: '#111827' }}>
-                BOARD OF DIRECTORS / TREASURER
-              </p>
-              <div style={{ borderBottom: '1.5px solid #111827', width: '100%' }}></div>
-              <span style={{ fontSize: '8.5px', color: '#6b7280', marginTop: '2px', display: 'block' }}>
-                Cooperative Management
-              </span>
+              const catEntries = Object.entries(catSummary)
+                .filter(([_, amt]) => Number(amt) > 0)
+                .sort((a, b) => Number(b[1]) - Number(a[1]));
+
+              if (catEntries.length === 0) return null;
+
+              return (
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', padding: '6px 10px', marginBottom: '8px', backgroundColor: '#fafafa', fontSize: '9px' }}>
+                  <div style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', marginBottom: '3px', fontSize: '9.5px', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Expense Breakdown by Category ({catEntries.length} {catEntries.length === 1 ? 'Category' : 'Categories'})</span>
+                    <span>Total: ₱{Number(printingLf.form.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(4, Math.max(2, catEntries.length))}, 1fr)`, gap: '3px 12px' }}>
+                    {catEntries.map(([cat, amt]) => {
+                      const pct = printingLf.form.total_liquidated ? ((Number(amt) / Number(printingLf.form.total_liquidated)) * 100).toFixed(1) : '0';
+                      return (
+                        <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #e5e7eb', padding: '1px 0' }}>
+                          <span style={{ color: '#4b5563', fontWeight: '600' }}>
+                            {cat}
+                          </span>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', marginLeft: '4px' }}>
+                            ₱{Number(amt).toLocaleString('en-US', { minimumFractionDigits: 2 })} <small style={{ color: '#6b7280', fontWeight: 'normal' }}>({pct}%)</small>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Signatures */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '40px', marginTop: '12px', fontSize: '10px' }}>
+              <div>
+                <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
+                  SUBMITTED BY (CUSTODIAN):
+                </span>
+                <div style={{ height: '22px' }}></div>
+                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 2px 0', fontSize: '10.5px', color: '#111827' }}>
+                  {printingLf.form.custodian_name || 'MICHELLE M. PABLE'}
+                </p>
+                <div style={{ borderBottom: '1.5px solid #111827', width: '100%' }}></div>
+                <span style={{ fontSize: '8px', color: '#6b7280', marginTop: '2px', display: 'block' }}>
+                  Signature over Printed Name
+                </span>
+              </div>
+
+              <div>
+                <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
+                  CHECKED & VERIFIED BY:
+                </span>
+                <div style={{ height: '22px' }}></div>
+                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: '0 0 2px 0', fontSize: '10.5px', color: '#111827' }}>
+                  CANDILARIO N. TATOY
+                </p>
+                <div style={{ borderBottom: '1.5px solid #111827', width: '100%' }}></div>
+                <span style={{ fontSize: '8px', color: '#6b7280', marginTop: '2px', display: 'block' }}>
+                  Chairman
+                </span>
+              </div>
             </div>
           </div>
 

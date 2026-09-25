@@ -12,6 +12,7 @@ import {
   declinePlacementPayment,
   importCheckVouchers,
   getCheckVouchers,
+  getNextCheckVoucherNumber,
   createCheckVoucher,
   updateCheckVoucher,
   deleteCheckVoucher,
@@ -83,6 +84,9 @@ router.route('/check-vouchers/import')
 
 router.route('/check-vouchers/bulk-delete')
   .post(restrictTo('admin', 'staff'), bulkDeleteCheckVouchers);
+
+router.route('/check-vouchers/next-number')
+  .get(restrictTo('admin', 'manager', 'staff'), getNextCheckVoucherNumber);
 
 router.route('/check-vouchers/:id/sync-revolving-fund')
   .post(restrictTo('admin', 'manager', 'staff'), syncCheckVoucherWithRevolvingFund);
