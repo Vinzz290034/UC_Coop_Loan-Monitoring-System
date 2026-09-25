@@ -3302,7 +3302,7 @@ function LoansPageContent() {
                                                         title="Print official loan amortization schedule"
                                                       >
                                                         <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                                                        Print Ammortization
+                                                        Print Amortization
                                                       </button>
 
                                                       <button
