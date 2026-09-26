@@ -329,11 +329,6 @@ export const forgotPassword = async (req, res, next) => {
       email: recoveryEmail.toLowerCase(),
     };
 
-    // In dev mode, include OTP in response for testing
-    if (emailResult.devMode) {
-      responsePayload._dev_otp = otpCode;
-    }
-
     res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
@@ -696,11 +691,6 @@ export const memberRegister = async (req, res, next) => {
       email: email.toLowerCase(),
     };
 
-    // In dev mode, include OTP in response for testing
-    if (emailResult.devMode) {
-      responsePayload._dev_otp = otpCode;
-    }
-
     res.status(200).json(responsePayload);
   } catch (error) {
     next(error);
@@ -926,10 +916,6 @@ export const resendOtp = async (req, res, next) => {
       success: true,
       message: 'A new verification code has been sent to your email.',
     };
-
-    if (emailResult.devMode) {
-      responsePayload._dev_otp = newOtpCode;
-    }
 
     res.status(200).json(responsePayload);
   } catch (error) {

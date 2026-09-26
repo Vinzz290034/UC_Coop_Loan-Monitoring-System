@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import api from '@/lib/api';
 import LoanApprovalModal from '@/components/loans/LoanApprovalModal';
+import UnifiedCvLfPrintModal from '@/components/loans/UnifiedCvLfPrintModal';
 import {
   FileText,
   Plus,
@@ -112,6 +113,13 @@ export default function StlLiquidationsTab({
   // Expanded Rows & loaded items cache
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [itemsMap, setItemsMap] = useState<Record<string, { items: StlLiquidationItem[]; loading: boolean }>>({});
+  const [unifiedPrintModal, setUnifiedPrintModal] = useState<{
+    isOpen: boolean;
+    lf?: StlLiquidationForm | null;
+  }>({
+    isOpen: false,
+    lf: null
+  });
 
   // Create / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -474,30 +482,12 @@ export default function StlLiquidationsTab({
     }
   };
 
-  // Print Handler
-  const handlePrint = async (lf: StlLiquidationForm) => {
-    try {
-      let items = itemsMap[lf.id]?.items;
-      if (!items) {
-        const details = await fetchItemsForLiquidation(lf.id);
-        items = details?.items || [];
-      }
-      setPrintingLf({
-        form: lf,
-        items: items || []
-      });
-
-      const cleanup = () => {
-        window.removeEventListener('afterprint', cleanup);
-        setPrintingLf(null);
-      };
-      window.addEventListener('afterprint', cleanup);
-      setTimeout(() => {
-        window.print();
-      }, 250);
-    } catch (err) {
-      console.error('Failed to prepare print view:', err);
-    }
+  // Print Handler: Opens Unified CV & LF Print Modal (Page 1: CV, Page 2: LF)
+  const handlePrint = (lf: StlLiquidationForm) => {
+    setUnifiedPrintModal({
+      isOpen: true,
+      lf
+    });
   };
 
   // Link Check Voucher Flow
@@ -1920,6 +1910,17 @@ export default function StlLiquidationsTab({
         </div>,
         document.body
       )}
+
+      {/* UNIFIED CV + LF MERGED PRINT MODAL */}
+      <UnifiedCvLfPrintModal
+        isOpen={unifiedPrintModal.isOpen}
+        onClose={() => setUnifiedPrintModal(prev => ({ ...prev, isOpen: false }))}
+        initialLf={unifiedPrintModal.lf}
+        initialType="stl"
+        onLinkSuccess={() => {
+          fetchLiquidations();
+        }}
+      />
     </div>
   );
 }

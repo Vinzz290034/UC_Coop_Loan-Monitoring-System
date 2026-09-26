@@ -5,15 +5,16 @@ dotenv.config();
 
 const { Pool } = pg;
 
-// Railway provides a single DATABASE_URL; local dev uses individual DB_* vars.
+// Railway provides a single DATABASE_URL; local dev uses individual DB_* vars or DATABASE_URL.
 const isProduction = process.env.NODE_ENV === 'production';
+const isRemoteUrl = process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost') && !process.env.DATABASE_URL.includes('127.0.0.1');
 
 const pool = new Pool(
   process.env.DATABASE_URL
     ? {
         connectionString: process.env.DATABASE_URL,
-        ssl: isProduction ? { rejectUnauthorized: false } : false, // Required by Railway's managed PostgreSQL
-        connectionTimeoutMillis: 5000,
+        ssl: isProduction || isRemoteUrl ? { rejectUnauthorized: false } : false, // Required by Railway's managed PostgreSQL
+        connectionTimeoutMillis: 10000,
         idleTimeoutMillis: 30000,
       }
     : {

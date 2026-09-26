@@ -915,12 +915,35 @@ export const getCheckVouchers = async (req, res, next) => {
                   'lf_no', rf.lf_no,
                   'sheet_name', rf.sheet_name,
                   'custodian_name', rf.custodian_name,
-                  'total_liquidated', rf.total_liquidated
+                  'total_liquidated', rf.total_liquidated,
+                  'status', rf.status
                 )
                 FROM revolving_fund_liquidations rf
-                WHERE rf.check_voucher_id = check_vouchers.id OR rf.voucher_no = check_vouchers.voucher_no
+                WHERE rf.check_voucher_id = check_vouchers.id 
+                   OR rf.voucher_no = check_vouchers.voucher_no
+                   OR (rf.lf_no IS NOT NULL AND (check_vouchers.particulars ILIKE '%' || rf.lf_no || '%' OR check_vouchers.particulars ILIKE '%#' || rf.lf_no || '%'))
                 LIMIT 1
-              ) AS revolving_fund
+              ) AS revolving_fund,
+              (
+                SELECT JSON_BUILD_OBJECT(
+                  'id', stl.id,
+                  'lf_no', stl.lf_no,
+                  'voucher_no', stl.voucher_no,
+                  'authorized_amount', stl.authorized_amount,
+                  'total_expense', stl.total_expense,
+                  'cash_on_hand', stl.cash_on_hand,
+                  'status', stl.status,
+                  'prepared_by', stl.prepared_by,
+                  'approved_by', stl.approved_by,
+                  'date_submitted', stl.date_submitted,
+                  'date_approved', stl.date_approved
+                )
+                FROM stl_liquidations stl
+                WHERE stl.check_voucher_id = check_vouchers.id 
+                   OR stl.voucher_no = check_vouchers.voucher_no
+                   OR (stl.lf_no IS NOT NULL AND (check_vouchers.particulars ILIKE '%' || stl.lf_no || '%' OR check_vouchers.particulars ILIKE '%#' || stl.lf_no || '%'))
+                LIMIT 1
+              ) AS stl_liquidation
        FROM check_vouchers
        ${whereClause}
        ${orderClause}

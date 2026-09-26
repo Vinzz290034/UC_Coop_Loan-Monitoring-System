@@ -700,16 +700,6 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                {/* Dev mode OTP display */}
-                {devOtp && (
-                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-xs text-blue-700 dark:text-blue-300 font-bold flex items-start gap-2">
-                    <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Dev Mode:</strong> Your OTP is <span className="font-mono text-sm bg-blue-100 dark:bg-blue-800/50 px-1.5 py-0.5 rounded">{devOtp}</span>
-                    </span>
-                  </div>
-                )}
-
                 {/* OTP Input */}
                 <OtpInput value={otpValue} onChange={setOtpValue} />
 

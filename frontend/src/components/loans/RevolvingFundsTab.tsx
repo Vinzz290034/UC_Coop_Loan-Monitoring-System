@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import api from '@/lib/api';
+import UnifiedCvLfPrintModal from '@/components/loans/UnifiedCvLfPrintModal';
 import {
   FileSpreadsheet,
   Search,
@@ -233,6 +234,13 @@ export default function RevolvingFundsTab({
     accountSummary: Record<string, number>;
     categorySummary?: Record<string, number>;
   } | null>(null);
+  const [unifiedPrintModal, setUnifiedPrintModal] = useState<{
+    isOpen: boolean;
+    lf?: LiquidationForm | null;
+  }>({
+    isOpen: false,
+    lf: null
+  });
 
   // Delete state
   const [lfToDelete, setLfToDelete] = useState<LiquidationForm | null>(null);
@@ -695,41 +703,13 @@ export default function RevolvingFundsTab({
     }
   };
 
-  // Print LF
-  const handlePrint = async (lf: LiquidationForm, e?: React.MouseEvent) => {
+  // Print LF (Unified CV & LF Merged Print)
+  const handlePrint = (lf: LiquidationForm, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    try {
-      let details = expandedDetailsMap[lf.id];
-      if (!details || details.items.length === 0) {
-        const res = await api.get(`/revolving-funds/${lf.id}`);
-        if (res.data.success && res.data.data) {
-          details = {
-            items: res.data.data.items || [],
-            accountSummary: res.data.data.accountSummary || {},
-            categorySummary: res.data.data.categorySummary || {},
-            loading: false
-          };
-        }
-      }
-
-      setPrintingLf({
-        form: lf,
-        items: details?.items || [],
-        accountSummary: details?.accountSummary || {},
-        categorySummary: details?.categorySummary || {}
-      });
-
-      const cleanup = () => {
-        window.removeEventListener('afterprint', cleanup);
-        setPrintingLf(null);
-      };
-      window.addEventListener('afterprint', cleanup);
-      setTimeout(() => {
-        window.print();
-      }, 250);
-    } catch (err) {
-      console.error('Failed to prepare print view:', err);
-    }
+    setUnifiedPrintModal({
+      isOpen: true,
+      lf
+    });
   };
 
   // Open Edit / Create Form
@@ -2692,6 +2672,17 @@ export default function RevolvingFundsTab({
         </div>,
         document.body
       )}
+
+      {/* UNIFIED CV + LF MERGED PRINT MODAL */}
+      <UnifiedCvLfPrintModal
+        isOpen={unifiedPrintModal.isOpen}
+        onClose={() => setUnifiedPrintModal(prev => ({ ...prev, isOpen: false }))}
+        initialLf={unifiedPrintModal.lf}
+        initialType="rf"
+        onLinkSuccess={() => {
+          loadLiquidations();
+        }}
+      />
     </div>
   );
 }

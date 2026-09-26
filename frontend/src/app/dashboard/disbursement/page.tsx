@@ -7,8 +7,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
-import RevolvingFundsTab from '@/components/loans/RevolvingFundsTab';
-import StlLiquidationsTab from '@/components/loans/StlLiquidationsTab';
+import UnifiedCvLfPrintModal from '@/components/loans/UnifiedCvLfPrintModal';
 import {
   FileText,
   Search,
@@ -44,7 +43,8 @@ import {
   Clock,
   Send,
   Check,
-  RotateCcw
+  RotateCcw,
+  Link2
 } from 'lucide-react';
 
 // Tab configuration matching the user spreadsheet structure
@@ -244,6 +244,208 @@ function AnimatedSelect({
   );
 }
 
+export interface CvRowItem {
+  id?: string;
+  date?: string;
+  voucher_no?: string;
+  description: string;
+  debit: string;
+  credit: string;
+  isAutoCredit?: boolean;
+  pairedWithId?: string;
+}
+
+export const REPLENISHMENT_ACCOUNT_OPTIONS = [
+  'Advances to employee',
+  'Seminar & Training',
+  'Professional Fee',
+  'Professional and Consultancy Fee',
+  'Audit Professional Expense',
+  'SSS premium-EE Share',
+  'SSS premium-ER share',
+  'Pag-ibig premium ER share',
+  'Pag-ibig premium- EE share',
+  'Philhealth -EE share',
+  'Philhealth-ER share',
+  'COS -water',
+  'COS - Water Vendo',
+  'Transportation',
+  'Travel & Transportation',
+  'Honorarium',
+  'Honorarium and Allowances',
+  'Representation',
+  'COS- hardbound',
+  'COS- printing',
+  'COS- Insurance',
+  'COS-Wifi',
+  'Office supplies',
+  'Office Supplies Expenses',
+  'Office Use',
+  'Hygiene expense',
+  'Insurance payable- Climbs',
+  'Insurance Payable- 1CISP',
+  'Insurance Payable',
+  'Licenses & Taxes',
+  'Inventory-handbag',
+  'Inventory-hardhat',
+  'Inventory-safety goggles',
+  'Inventory-Pershing cap',
+  'Merchandise Inventory - Pershing Cap',
+  'Merchandise Inventory - Lanyard',
+  'COGS-Pershing cap',
+  'COGS - FREIGHT IN - Pershing Cap',
+  'COGS-handbag',
+  'Freight in',
+  'Porterage',
+  'Commission- Participation Card',
+  'Commission- ROTC Manual',
+  'Wages',
+  'Communication',
+  'Repair & Maintenance',
+  'Meeting & conferences',
+  'Meeting meals',
+  'Incentive',
+  'key locker duplicate',
+  'CE - Gala',
+  'Toga Rental Revenue',
+  'Toga Rental Labor Expense',
+  'labor',
+  'Fixture & Furniture',
+  'Account Payable',
+  'Credit Payable to Baterna',
+  'Due to CETF - Apex Organization',
+  'Donation Expense',
+  'Miscellaneous',
+  'Short Term Loan'
+];
+
+export const getCategoryForAccount = (acct: string): string => {
+  const lower = (acct || '').toLowerCase();
+  if (
+    lower.includes('wifi') ||
+    lower.includes('water') ||
+    lower.includes('cos') ||
+    lower.includes('service') ||
+    lower.includes('repair') ||
+    lower.includes('labor') ||
+    lower.includes('duplicate') ||
+    lower.includes('toga rental labor')
+  ) {
+    return 'Service';
+  }
+  if (
+    lower.includes('merchandise') ||
+    lower.includes('inventory') ||
+    lower.includes('cogs') ||
+    lower.includes('freight') ||
+    lower.includes('commission') ||
+    lower.includes('pershing') ||
+    lower.includes('lanyard') ||
+    lower.includes('handbag') ||
+    lower.includes('hardhat') ||
+    lower.includes('goggles') ||
+    lower.includes('porterage')
+  ) {
+    return 'Merchandise';
+  }
+  if (lower.includes('cetf') || lower.includes('apex')) {
+    return 'CETF';
+  }
+  if (lower.includes('cdf')) {
+    return 'CDF';
+  }
+  return 'Operation';
+};
+
+function ReplenishmentAccountDropdown({
+  value,
+  onChange,
+  placeholder = 'Select or type account...'
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return REPLENISHMENT_ACCOUNT_OPTIONS;
+    return REPLENISHMENT_ACCOUNT_OPTIONS.filter(acct =>
+      acct.toLowerCase().includes(term)
+    );
+  }, [search]);
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <input
+        type="text"
+        value={value}
+        onChange={e => {
+          onChange(e.target.value);
+          setSearch(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setSearch('');
+          setOpen(true);
+        }}
+        placeholder={placeholder}
+        className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-on-surface dark:text-white font-medium focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+      />
+      {open && (
+        <div className="absolute left-0 top-full mt-1 w-72 max-h-56 overflow-y-auto bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl shadow-2xl z-50 divide-y divide-outline-variant/20 py-1">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-neutral-400 italic">No matching predefined accounts</div>
+          ) : (
+            filtered.map(acct => {
+              const cat = getCategoryForAccount(acct);
+              return (
+                <button
+                  key={acct}
+                  type="button"
+                  onClick={() => {
+                    onChange(acct);
+                    setOpen(false);
+                  }}
+                  className={`w-full px-3 py-1.5 text-left text-xs flex items-center justify-between gap-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors ${
+                    value === acct ? 'bg-emerald-50 dark:bg-emerald-950/60 font-bold text-emerald-800 dark:text-emerald-200' : 'text-neutral-800 dark:text-neutral-200'
+                  }`}
+                >
+                  <span className="truncate flex-1">{acct}</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                    cat === 'Service'
+                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                      : cat === 'Merchandise'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+                      : cat === 'CETF' || cat === 'CDF'
+                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                  }`}>
+                    {cat}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DisbursementPageContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
@@ -256,8 +458,6 @@ function DisbursementPageContent() {
   // Active Tab state (defaults to master summary tab)
   const [activeTab, setActiveTab] = useState<DisbursementTab>('summary');
   const [cvSortOrder, setCvSortOrder] = useState<'voucher_desc' | 'voucher_asc'>('voucher_desc');
-  const [rfSubView, setRfSubView] = useState<'vouchers' | 'liquidations'>('vouchers');
-  const [stlSubView, setStlSubView] = useState<'vouchers' | 'liquidations'>('vouchers');
 
   // SSR hydration safety
   const [mounted, setMounted] = useState(false);
@@ -285,7 +485,6 @@ function DisbursementPageContent() {
       setActiveTab('revolving_fund_replenishment');
     } else if (tabParam === 'stl_liquidations' || tabParam === 'stl_liquidation') {
       setActiveTab('stl_replenishment');
-      setStlSubView('liquidations');
     }
   }, [searchParams, router]);
 
@@ -303,10 +502,6 @@ function DisbursementPageContent() {
   const [cvLimit] = useState(25);
   const [cvTotalCount, setCvTotalCount] = useState(0);
   const [cvTotalPages, setCvTotalPages] = useState(1);
-
-  // Cross-linking to Revolving Fund
-  const [rfTargetSearch, setRfTargetSearch] = useState('');
-  const [rfTargetId, setRfTargetId] = useState('');
 
   // Selection & Actions State
   const [selectedCvIds, setSelectedCvIds] = useState<string[]>([]);
@@ -345,6 +540,17 @@ function DisbursementPageContent() {
   // View / Edit / Print State
   const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
   const [printingCvBreakdown, setPrintingCvBreakdown] = useState<any | null>(null);
+  const [unifiedPrintModal, setUnifiedPrintModal] = useState<{
+    isOpen: boolean;
+    cv?: any | null;
+    lf?: any | null;
+    type?: 'stl' | 'rf' | null;
+  }>({
+    isOpen: false,
+    cv: null,
+    lf: null,
+    type: null
+  });
   const [isEditingCvModal, setIsEditingCvModal] = useState(false);
   const [initialCvEditSnapshot, setInitialCvEditSnapshot] = useState<string>('');
   const [isSavingCvEdit, setIsSavingCvEdit] = useState(false);
@@ -366,8 +572,8 @@ function DisbursementPageContent() {
   const [newCvPreparedBy, setNewCvPreparedBy] = useState('LAMOSTE, CHINNETTE A.');
   const [newCvCheckedBy, setNewCvCheckedBy] = useState('MARILOU LARIOSA');
   const [newCvApprovedBy, setNewCvApprovedBy] = useState('MICHELLE M. PABLE');
-  const [newCvRows, setNewCvRows] = useState<{ description: string; debit: string; credit: string }[]>([
-    { description: '', debit: '', credit: '' }
+  const [newCvRows, setNewCvRows] = useState<CvRowItem[]>([
+    { id: 'new-row-1', date: '', voucher_no: '', description: '', debit: '', credit: '' }
   ]);
 
   // Edit Check Voucher State
@@ -384,7 +590,35 @@ function DisbursementPageContent() {
     checked_by: '',
     approved_by: ''
   });
-  const [editCvRows, setEditCvRows] = useState<{ description: string; debit: string; credit: string }[]>([]);
+  const [editCvRows, setEditCvRows] = useState<CvRowItem[]>([]);
+
+  // Calculate live disbursed amount for newly created voucher
+  const getNewCvDisbursedAmount = (): number => {
+    for (const r of newCvRows) {
+      const desc = (r.description || '').trim();
+      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
+        const creditVal = parseFloat(String(r.credit || '0')) || 0;
+        if (creditVal > 0) return creditVal;
+        const debitVal = parseFloat(String(r.debit || '0')) || 0;
+        if (debitVal > 0) return debitVal;
+      }
+    }
+    let debitTotal = 0;
+    let creditTotal = 0;
+    for (const r of newCvRows) {
+      debitTotal += parseFloat(String(r.debit || '0')) || 0;
+      creditTotal += parseFloat(String(r.credit || '0')) || 0;
+    }
+    if (debitTotal > 0 && Math.abs(debitTotal - creditTotal) < 0.01) {
+      return debitTotal;
+    }
+    if (creditTotal > 0 && debitTotal > 0 && debitTotal > creditTotal) {
+      return debitTotal - creditTotal;
+    }
+    if (debitTotal > 0) return debitTotal;
+    if (creditTotal > 0) return creditTotal;
+    return 0;
+  };
 
   // Calculate live disbursed amount while editing/modifying voucher
   const getEditCvDisbursedAmount = (): number => {
@@ -407,6 +641,9 @@ function DisbursementPageContent() {
       creditTotal += parseFloat(String(r.credit || '0')) || 0;
     }
 
+    if (debitTotal > 0 && Math.abs(debitTotal - creditTotal) < 0.01) {
+      return debitTotal;
+    }
     if (creditTotal > 0 && debitTotal > 0 && debitTotal > creditTotal) {
       return debitTotal - creditTotal;
     }
@@ -550,6 +787,106 @@ function DisbursementPageContent() {
     return parseFloat(cv.amount || 0);
   };
 
+  const cleanCategoryName = (name: string): string => {
+    if (!name) return 'Operation';
+    return name
+      .replace(/^revolving\s*fund\s*-\s*/i, '')
+      .replace(/^stl\s*-\s*/i, '')
+      .replace(/^short\s*term\s*loan\s*-\s*/i, '')
+      .trim();
+  };
+
+  const formatCibAccountName = (bankName?: string): string => {
+    const b = (bankName || '').trim().toUpperCase();
+    if (!b) return 'CIB-MBTC';
+    if (b.includes('METRO') || b.includes('MBTC')) return 'CIB-MBTC';
+    if (b.includes('BDO')) return 'CIB-BDO';
+    if (b.includes('LAND') || b.includes('LBP')) return 'CIB-LBP';
+    if (b.includes('PNB')) return 'CIB-PNB';
+    if (b.includes('DBP')) return 'CIB-DBP';
+    if (b.includes('BPI')) return 'CIB-BPI';
+    if (b.startsWith('CIB-')) return b;
+    if (b.startsWith('CIB - ')) return `CIB-${b.slice(6)}`;
+    if (b.startsWith('CIB ')) return `CIB-${b.slice(4)}`;
+    return `CIB-${b.replace(/\s*BANK\b/i, '').trim()}`;
+  };
+
+  const getSummaryCvRows = (cv: any) => {
+    if (!cv) return { rows: [], debitTotal: 0, creditTotal: 0 };
+    let details: any[] = [];
+    if (Array.isArray(cv.details)) {
+      details = cv.details;
+    } else if (typeof cv.details === 'string') {
+      try {
+        const parsed = JSON.parse(cv.details);
+        if (Array.isArray(parsed)) details = parsed;
+      } catch {
+        details = [];
+      }
+    }
+
+    const rows: { id: string; date: string; voucher_no: string; description: string; debit: number | null; credit: number | null }[] = [];
+    let debitTotal = 0;
+    let creditTotal = 0;
+
+    const rawDate = cv.voucher_date || cv.date;
+    const dateStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : '') : '';
+    const vNo = (cv.voucher_no || '').replace(/^CV-?0*/i, '').trim();
+    const cibName = formatCibAccountName(cv.bank_name || cv.bank);
+
+    const catMap: Record<string, number> = {};
+    for (const item of details) {
+      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      const desc = item.book_of_account || item.description || '';
+      if (val > 0 && !/cib\b|cash\s*in\s*bank/i.test(desc)) {
+        const cat = cleanCategoryName(getCategoryForAccount(desc));
+        catMap[cat] = (catMap[cat] || 0) + val;
+      }
+    }
+
+    if (Object.keys(catMap).length > 0) {
+      let idx = 0;
+      for (const [cat, amt] of Object.entries(catMap)) {
+        rows.push({
+          id: `cat-${idx++}`,
+          date: dateStr,
+          voucher_no: vNo,
+          description: cat,
+          debit: amt,
+          credit: null
+        });
+        debitTotal += amt;
+      }
+    } else {
+      const fallbackAmt = parseFloat(cv.amount || 0);
+      if (fallbackAmt > 0) {
+        rows.push({
+          id: 'cat-0',
+          date: dateStr,
+          voucher_no: vNo,
+          description: 'Operation',
+          debit: fallbackAmt,
+          credit: null
+        });
+        debitTotal = fallbackAmt;
+      }
+    }
+
+    if (debitTotal > 0) {
+      rows.push({
+        id: 'credit-cib',
+        date: dateStr,
+        voucher_no: vNo,
+        description: cibName,
+        debit: null,
+        credit: debitTotal
+      });
+      creditTotal = debitTotal;
+    }
+
+    return { rows, debitTotal, creditTotal };
+  };
+
   const getBalancedCvRows = (cv: any) => {
     if (!cv) return { rows: [], debitTotal: 0, creditTotal: 0 };
     let details: any[] = [];
@@ -564,15 +901,22 @@ function DisbursementPageContent() {
       }
     }
 
-    const rows: { description: string; debit: number | null; credit: number | null }[] = [];
+    const rows: { id: string; date: string; voucher_no: string; description: string; debit: number | null; credit: number | null }[] = [];
     let debitTotal = 0;
     let creditTotal = 0;
 
-    for (const item of details) {
+    for (let idx = 0; idx < details.length; idx++) {
+      const item = details[idx];
       const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      const dateStr = item.date ? item.date.split('T')[0] : (cv?.voucher_date ? cv.voucher_date.split('T')[0] : '');
+      const vNo = item.voucher_no || cv?.voucher_no || '';
+
       if (val > 0) {
         rows.push({
-          description: item.book_of_account || 'Disbursement Line',
+          id: `item-${idx}`,
+          date: dateStr,
+          voucher_no: vNo,
+          description: item.book_of_account || item.description || 'Disbursement Line',
           debit: val,
           credit: null
         });
@@ -580,18 +924,41 @@ function DisbursementPageContent() {
       } else if (val < 0) {
         const creditVal = Math.abs(val);
         rows.push({
-          description: item.book_of_account || 'Credit / Deduction',
+          id: `item-${idx}`,
+          date: dateStr,
+          voucher_no: vNo,
+          description: item.book_of_account || item.description || 'Credit / Deduction',
           debit: null,
           credit: creditVal
         });
         creditTotal += creditVal;
-      } else if (item.book_of_account) {
+      } else if (item.book_of_account || item.description) {
         rows.push({
-          description: item.book_of_account,
+          id: `item-${idx}`,
+          date: dateStr,
+          voucher_no: vNo,
+          description: item.book_of_account || item.description,
           debit: null,
           credit: null
         });
       }
+    }
+
+    // Balancing Credit row if only debits were present
+    if (creditTotal === 0 && debitTotal > 0) {
+      const rawDate = cv.voucher_date || cv.date;
+      const dateStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : '') : '';
+      const vNo = (cv.voucher_no || '').replace(/^CV-?0*/i, '').trim();
+      const cibName = formatCibAccountName(cv.bank_name || cv.bank);
+      rows.push({
+        id: 'credit-cib',
+        date: dateStr,
+        voucher_no: vNo,
+        description: cibName,
+        debit: null,
+        credit: debitTotal
+      });
+      creditTotal = debitTotal;
     }
 
     return { rows, debitTotal, creditTotal };
@@ -601,7 +968,171 @@ function DisbursementPageContent() {
     if (!cv) return false;
     const folder = (cv.folder_name || '').toLowerCase();
     const particulars = (cv.particulars || '').toLowerCase();
-    return folder.includes('revolving') || particulars.includes('revolving') || Boolean(cv.revolving_fund?.id);
+    return folder === 'revolving fund' || 
+           folder.includes('revolving') || 
+           particulars.includes('revolving fund') || 
+           Boolean(cv.revolving_fund?.id);
+  };
+
+  const isStlVoucher = (cv: any) => {
+    if (!cv) return false;
+    const folder = (cv.folder_name || '').toLowerCase();
+    const particulars = (cv.particulars || '').toLowerCase();
+    return folder === 'stl' || 
+           folder.includes('stl replenishment') || 
+           particulars.includes('stl replenishment') || 
+           Boolean(cv.stl_liquidation?.id);
+  };
+
+  const isStlOrRfTabOrVoucher = (cv: any) => {
+    // Explicit other tabs (Petty Cash, Merchandise, Operation Expense, Audit) must NEVER be affected
+    if (activeTab === 'petty_cash_replenishment' || 
+        activeTab === 'merchandise_payment' || 
+        activeTab === 'operation_expense' || 
+        activeTab === 'services_expense') {
+      return false;
+    }
+
+    // Only apply to STL Replenishment and Revolving Fund Replenishment
+    if (activeTab === 'stl_replenishment') return true;
+    if (activeTab === 'revolving_fund_replenishment') return true;
+
+    if (!cv) return false;
+    return isStlVoucher(cv) || isRevolvingVoucher(cv);
+  };
+
+  const getReplenishmentType = (folderOrCat?: string, cv?: any): 'stl' | 'rf' | null => {
+    if (activeTab === 'petty_cash_replenishment' || 
+        activeTab === 'merchandise_payment' || 
+        activeTab === 'operation_expense' || 
+        activeTab === 'services_expense') {
+      return null;
+    }
+    const cat = (folderOrCat || cv?.folder_name || '').toLowerCase();
+    const part = (cv?.particulars || '').toLowerCase();
+    if (activeTab === 'stl_replenishment' || cat === 'stl' || cat.includes('stl') || part.includes('stl') || Boolean(cv?.stl_liquidation?.id)) {
+      return 'stl';
+    }
+    if (activeTab === 'revolving_fund_replenishment' || cat.includes('revolving') || part.includes('revolving') || Boolean(cv?.revolving_fund?.id)) {
+      return 'rf';
+    }
+    return null;
+  };
+
+  // Helper for row editing in Check Voucher modals
+  const updateCvRowField = (
+    isEdit: boolean,
+    rowId: string,
+    field: 'date' | 'voucher_no' | 'description' | 'debit' | 'credit',
+    val: string,
+    replenishType: 'stl' | 'rf' | null
+  ) => {
+    const setRows = isEdit ? setEditCvRows : setNewCvRows;
+
+    setRows(prev => {
+      const rowIdx = prev.findIndex(r => r.id === rowId);
+      if (rowIdx === -1) return prev;
+
+      const currentRow = prev[rowIdx];
+      const updatedRow = { ...currentRow, [field]: val };
+
+      // If not in replenishment mode, just update the single field
+      if (!replenishType) {
+        return prev.map((r, i) => (i === rowIdx ? updatedRow : r));
+      }
+
+      // If this is the credit row and user edits credit or description manually, let it update
+      const isCurrentCredit = currentRow.isAutoCredit || (Boolean(currentRow.credit) && !currentRow.debit) || currentRow.description.toLowerCase().startsWith('cib');
+      if (isCurrentCredit && (field === 'credit' || field === 'description')) {
+        return prev.map((r, i) => (i === rowIdx ? updatedRow : r));
+      }
+
+      // If user edits a debit row: update it, then recompute the balancing credit row amount
+      const nextRows = prev.map((r, i) => (i === rowIdx ? updatedRow : r));
+      let sumDebits = 0;
+      nextRows.forEach(r => {
+        const isCred = r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib');
+        if (!isCred) {
+          sumDebits += parseFloat(r.debit || '0') || 0;
+        }
+      });
+
+      // Find the balancing credit row
+      const creditRowIdx = nextRows.findIndex(
+        r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib')
+      );
+      if (creditRowIdx !== -1) {
+        nextRows[creditRowIdx] = {
+          ...nextRows[creditRowIdx],
+          credit: sumDebits > 0 ? String(sumDebits) : '',
+          debit: ''
+        };
+      }
+
+      return nextRows;
+    });
+  };
+
+  const removeCvRow = (isEdit: boolean, rowId: string) => {
+    const setRows = isEdit ? setEditCvRows : setNewCvRows;
+    setRows(prev => {
+      const filtered = prev.filter(r => r.id !== rowId);
+      let sumDebits = 0;
+      filtered.forEach(r => {
+        const isCred = r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib');
+        if (!isCred) {
+          sumDebits += parseFloat(r.debit || '0') || 0;
+        }
+      });
+      return filtered.map(r => {
+        const isCred = r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib');
+        if (isCred) {
+          return { ...r, credit: sumDebits > 0 ? String(sumDebits) : '' };
+        }
+        return r;
+      });
+    });
+  };
+
+  const addCvRow = (isEdit: boolean, replenishType: 'stl' | 'rf' | null) => {
+    const newId = 'row-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    const defaultDate = isEdit
+      ? (editCvFormData.voucher_date || new Date().toISOString().split('T')[0])
+      : (newCvDate || new Date().toISOString().split('T')[0]);
+    const defaultVoucherNo = isEdit ? editCvFormData.voucher_no : newCvVoucherNo;
+
+    const newRow: CvRowItem = {
+      id: newId,
+      date: defaultDate,
+      voucher_no: defaultVoucherNo,
+      description: replenishType === 'stl' ? 'Short Term Loan' : 'Operation',
+      debit: '',
+      credit: '',
+      isAutoCredit: false
+    };
+
+    const setRows = isEdit ? setEditCvRows : setNewCvRows;
+    setRows(prev => {
+      // In replenishment mode, if there is a credit row at the bottom, insert before it
+      const creditIdx = prev.findIndex(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib'));
+      if (creditIdx !== -1) {
+        const copy = [...prev];
+        copy.splice(creditIdx, 0, newRow);
+        return copy;
+      }
+      return [...prev, newRow];
+    });
+  };
+
+  const openUnifiedPrintModalForCv = (cv: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const type: 'stl' | 'rf' = (activeTab === 'revolving_fund_replenishment' || isRevolvingVoucher(cv)) ? 'rf' : 'stl';
+    setUnifiedPrintModal({
+      isOpen: true,
+      cv,
+      lf: null,
+      type
+    });
   };
 
   const extractRfNumber = (cv: any): string | null => {
@@ -888,7 +1419,8 @@ function DisbursementPageContent() {
       );
       return;
     }
-    const { rows } = getBalancedCvRows(cv);
+    const isReplenish = isStlOrRfTabOrVoucher(cv) || Boolean(getReplenishmentType(cv.folder_name, cv));
+    const { rows } = isReplenish ? getSummaryCvRows(cv) : getBalancedCvRows(cv);
     const initialForm = {
       id: cv.id,
       voucher_no: cv.voucher_no || '',
@@ -904,19 +1436,54 @@ function DisbursementPageContent() {
     };
     setEditCvFormData(initialForm);
 
-    let initialRowsList = [];
+    let initialRowsList: CvRowItem[] = [];
     if (rows.length > 0) {
-      initialRowsList = rows.map(r => ({
-        description: r.description,
-        debit: r.debit !== null ? String(r.debit) : '',
-        credit: r.credit !== null ? String(r.credit) : ''
-      }));
+      initialRowsList = rows.map((r, i) => {
+        const rowId = r.id || `edit-row-${i}-${Date.now()}`;
+        return {
+          id: rowId,
+          date: r.date || (cv.voucher_date ? cv.voucher_date.split('T')[0] : ''),
+          voucher_no: r.voucher_no || cv.voucher_no || '',
+          description: r.description,
+          debit: r.debit !== null ? String(r.debit) : '',
+          credit: r.credit !== null ? String(r.credit) : '',
+          isAutoCredit: r.credit !== null
+        };
+      });
     } else {
       const amt = parseFloat(cv.amount || 0);
-      initialRowsList = [
-        { description: cv.particulars || 'Disbursement Item', debit: amt > 0 ? String(amt) : '', credit: '' },
-        { description: `CIB - ${cv.bank || 'BDO'}`, debit: '', credit: amt > 0 ? String(amt) : '' }
-      ];
+      const defaultDate = cv.voucher_date ? cv.voucher_date.split('T')[0] : '';
+      const defaultVoucherNo = cv.voucher_no || '';
+      const row0Id = `row-0-${Date.now()}`;
+
+      if (isReplenish) {
+        const defaultBank = formatCibAccountName(cv.bank || 'MBTC');
+        initialRowsList = [
+          {
+            id: row0Id,
+            date: defaultDate,
+            voucher_no: defaultVoucherNo,
+            description: cv.particulars || (isReplenish === 'stl' ? 'Short Term Loan' : 'Operation'),
+            debit: amt > 0 ? String(amt) : '',
+            credit: '',
+            isAutoCredit: false
+          },
+          {
+            id: `credit-${row0Id}`,
+            date: defaultDate,
+            voucher_no: defaultVoucherNo,
+            description: defaultBank,
+            debit: '',
+            credit: amt > 0 ? String(amt) : '',
+            isAutoCredit: true
+          }
+        ];
+      } else {
+        initialRowsList = [
+          { id: row0Id, date: defaultDate, voucher_no: defaultVoucherNo, description: cv.particulars || 'Disbursement Item', debit: amt > 0 ? String(amt) : '', credit: '' },
+          { id: `cib-${row0Id}`, date: defaultDate, voucher_no: defaultVoucherNo, description: `CIB - ${cv.bank || 'BDO'}`, debit: '', credit: amt > 0 ? String(amt) : '' }
+        ];
+      }
     }
     setEditCvRows(initialRowsList);
     setInitialCvEditSnapshot(JSON.stringify({ formData: initialForm, rows: initialRowsList }));
@@ -969,6 +1536,8 @@ function DisbursementPageContent() {
           if (debitVal > 0) calculatedAmount += debitVal;
           const netAmount = debitVal > 0 ? debitVal : -creditVal;
           return {
+            date: r.date || null,
+            voucher_no: r.voucher_no || null,
             book_of_account: r.description.trim(),
             amount: netAmount
           };
@@ -1062,14 +1631,42 @@ function DisbursementPageContent() {
     setNewCvBankName('BDO');
     setNewCvCheckNo('');
     setNewCvParticulars('');
-    setNewCvCategory('Loan');
+    const defaultCat = currentTabConfig.defaultCategory || 'Loan';
+    setNewCvCategory(defaultCat);
     setNewCvPreparedBy('LAMOSTE, CHINNETTE A.');
     setNewCvCheckedBy('MARILOU LARIOSA');
     setNewCvApprovedBy('MICHELLE M. PABLE');
-    setNewCvRows([
-      { description: 'Loan', debit: '', credit: '' },
-      { description: 'CIB - BDO', debit: '', credit: '' }
-    ]);
+
+    const isReplenish = getReplenishmentType(defaultCat);
+    const row0Id = `new-row-0-${Date.now()}`;
+    if (isReplenish) {
+      const defaultBank = formatCibAccountName(newCvBankName || 'MBTC');
+      setNewCvRows([
+        {
+          id: row0Id,
+          date: today,
+          voucher_no: '',
+          description: isReplenish === 'stl' ? 'Short Term Loan' : 'Operation',
+          debit: '',
+          credit: '',
+          isAutoCredit: false
+        },
+        {
+          id: `credit-${row0Id}`,
+          date: today,
+          voucher_no: '',
+          description: defaultBank,
+          debit: '',
+          credit: '',
+          isAutoCredit: true
+        }
+      ]);
+    } else {
+      setNewCvRows([
+        { id: row0Id, date: today, voucher_no: '', description: defaultCat === 'Loan' ? 'Loan' : defaultCat, debit: '', credit: '' },
+        { id: `cib-${row0Id}`, date: today, voucher_no: '', description: 'CIB - BDO', debit: '', credit: '' }
+      ]);
+    }
     setIsCreateCVOpen(true);
     fetchNextVoucherNo(today);
   };
@@ -1092,6 +1689,8 @@ function DisbursementPageContent() {
           if (debitVal > 0) calculatedAmount += debitVal;
           const netAmount = debitVal > 0 ? debitVal : -creditVal;
           return {
+            date: r.date || null,
+            voucher_no: r.voucher_no || null,
             book_of_account: r.description.trim(),
             amount: netAmount
           };
@@ -1378,96 +1977,17 @@ function DisbursementPageContent() {
         })}
       </div>
 
-      {/* Sub-view toggle for Revolving Fund Replenishment */}
-      {activeTab === 'revolving_fund_replenishment' && (
-        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+      {/* Tab Context Subtitle */}
+      {currentTabConfig.id !== 'summary' && (
+        <div className="pt-1">
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Revolving fund check vouchers, liquidations, and expense breakdowns
+            {currentTabConfig.description}
           </p>
-          <div className="inline-flex items-center p-1 rounded-2xl bg-surface-container-low dark:bg-surface-container-high border border-outline-variant/60">
-            <button
-              type="button"
-              onClick={() => setRfSubView('vouchers')}
-              className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                rfSubView === 'vouchers'
-                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-xs'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-              }`}
-            >
-              Check Vouchers
-            </button>
-            <button
-              type="button"
-              onClick={() => setRfSubView('liquidations')}
-              className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                rfSubView === 'liquidations'
-                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-xs'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-              }`}
-            >
-              Liquidation Forms & Items
-            </button>
-          </div>
         </div>
       )}
 
-      {/* Sub-view toggle for STL Replenishment */}
-      {activeTab === 'stl_replenishment' && (
-        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Short Term Loan revolving replenishment, liquidation forms, and disbursed LAF vouchers
-          </p>
-          <div className="inline-flex items-center p-1 rounded-2xl bg-surface-container-low dark:bg-surface-container-high border border-outline-variant/60">
-            <button
-              type="button"
-              onClick={() => setStlSubView('vouchers')}
-              className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                stlSubView === 'vouchers'
-                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-xs'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-              }`}
-            >
-              Check Vouchers
-            </button>
-            <button
-              type="button"
-              onClick={() => setStlSubView('liquidations')}
-              className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                stlSubView === 'liquidations'
-                  ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 shadow-xs'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-              }`}
-            >
-              Liquidation Forms & Items
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* TAB CONTENT: IF REVOLVING FUND LIQUIDATION SUBVIEW */}
-      {activeTab === 'revolving_fund_replenishment' && rfSubView === 'liquidations' ? (
-        <div className="p-6 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs">
-          <RevolvingFundsTab
-            isAdminOrManager={isAdminOrManager}
-            onViewCheckVoucher={openCheckVoucherModalByIdOrNo}
-            initialSearch={rfTargetSearch}
-            targetLiquidationId={rfTargetId}
-            onClearTarget={() => {
-              setRfTargetSearch('');
-              setRfTargetId('');
-            }}
-          />
-        </div>
-      ) : activeTab === 'stl_replenishment' && stlSubView === 'liquidations' ? (
-        <div className="p-6 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs">
-          <StlLiquidationsTab
-            isAdminOrManager={isAdminOrManager}
-            onViewCheckVoucher={openCheckVoucherModalByIdOrNo}
-          />
-        </div>
-      ) : (
-        /* STANDARD CHECK VOUCHER REGISTRY TABLE FOR CURRENT DISBURSEMENT TAB */
-        <div className="space-y-4">
+      {/* STANDARD CHECK VOUCHER REGISTRY TABLE FOR CURRENT DISBURSEMENT TAB */}
+      <div className="space-y-4">
           {/* Table Filters & Toolbar */}
           <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -1702,8 +2222,46 @@ function DisbursementPageContent() {
                               '—'
                             )}
                           </td>
-                          <td className="py-3.5 px-4 text-neutral-700 dark:text-neutral-300 max-w-[280px] truncate" title={cv.particulars}>
-                            {cv.particulars || 'Disbursement voucher'}
+                          <td className="py-3.5 px-4 text-neutral-700 dark:text-neutral-300 max-w-[280px]" title={cv.particulars}>
+                            <div className="truncate font-medium">{cv.particulars || 'Disbursement voucher'}</div>
+                            {/* Linked STL Liquidation Badge */}
+                            {cv.stl_liquidation && (
+                              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                  <FileSpreadsheet className="w-2.5 h-2.5 text-emerald-600" />
+                                  <span>Schedule #{cv.stl_liquidation.lf_no}</span>
+                                </span>
+                                <span className="text-[10px] text-neutral-400 font-mono">
+                                  ₱{Number(cv.stl_liquidation.total_expense || 0).toLocaleString()} itemized
+                                </span>
+                              </div>
+                            )}
+                            {/* Linked Revolving Fund Itemized Schedule Badge */}
+                            {cv.revolving_fund && (
+                              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                  <FileSpreadsheet className="w-2.5 h-2.5 text-emerald-600" />
+                                  <span>Schedule #{cv.revolving_fund.lf_no}</span>
+                                </span>
+                                <span className="text-[10px] text-neutral-400 font-mono">
+                                  ₱{Number(cv.revolving_fund.total_liquidated || 0).toLocaleString()} itemized
+                                </span>
+                              </div>
+                            )}
+                            {/* Unlinked Quick-Link Action when on STL or RF tab */}
+                            {(activeTab === 'stl_replenishment' || activeTab === 'revolving_fund_replenishment') && !cv.stl_liquidation && !cv.revolving_fund && (
+                              <div className="mt-0.5">
+                                <button
+                                  type="button"
+                                  onClick={e => openUnifiedPrintModalForCv(cv, e)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                                  title="Attach an itemized expense schedule to this check voucher"
+                                >
+                                  <Link2 className="w-2.5 h-2.5" />
+                                  <span>+ Attach Schedule</span>
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 font-headline font-bold text-right text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
                             ₱{amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1713,18 +2271,32 @@ function DisbursementPageContent() {
                           </td>
                           <td className="py-3.5 px-4 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-center gap-1.5">
-                              {/* Print Fast Breakdown */}
-                              <button
-                                type="button"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handlePrintCvBreakdown(cv, e);
-                                }}
-                                className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
-                                title="Print voucher breakdown sheet"
-                              >
-                                <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                              </button>
+                              {/* Print Button: Check Voucher with itemized schedule for STL/RF or standard CV breakdown */}
+                              {isStlOrRfTabOrVoucher(cv) ? (
+                                <button
+                                  type="button"
+                                  onClick={e => openUnifiedPrintModalForCv(cv, e)}
+                                  className="p-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 transition-all cursor-pointer group"
+                                  title="Print Check Voucher with Itemized Schedule"
+                                >
+                                  <div className="relative">
+                                    <Printer className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                                    <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                  </div>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handlePrintCvBreakdown(cv, e);
+                                  }}
+                                  className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
+                                  title="Print voucher breakdown sheet"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                </button>
+                              )}
 
                               {/* Delete CV: HIDDEN/REMOVED if status is 'filed'! If filed, show locked indicator */}
                               {isAdminOrStaff && (
@@ -1817,7 +2389,6 @@ function DisbursementPageContent() {
             )}
           </div>
         </div>
-      )}
 
       {/* CREATE CHECK VOUCHER MODAL */}
       {isCreateCVOpen && mounted && createPortal(
@@ -1865,7 +2436,30 @@ function DisbursementPageContent() {
                       onChange={selected => {
                         setNewCvCategory(selected);
                         const matched = CATEGORY_TABS.find(t => t.defaultCategory === selected);
-                        if (matched) {
+                        const isRepl = getReplenishmentType(selected);
+                        if (isRepl) {
+                          const row0Id = `new-row-0-${Date.now()}`;
+                          setNewCvRows([
+                            {
+                              id: row0Id,
+                              date: newCvDate || new Date().toISOString().split('T')[0],
+                              voucher_no: '',
+                              description: isRepl === 'stl' ? 'Short Term Loan' : 'Communication',
+                              debit: '',
+                              credit: ''
+                            },
+                            {
+                              id: `credit-${row0Id}`,
+                              date: newCvDate || new Date().toISOString().split('T')[0],
+                              voucher_no: '',
+                              description: isRepl === 'stl' ? 'Revolving Fund - STL' : 'Revolving Fund - Operation',
+                              debit: '',
+                              credit: '',
+                              isAutoCredit: true,
+                              pairedWithId: row0Id
+                            }
+                          ]);
+                        } else if (matched) {
                           setNewCvRows(prev => {
                             if (prev.length > 0 && (!prev[0].description || CATEGORY_TABS.some(t => t.label === prev[0].description || t.defaultCategory === prev[0].description))) {
                               return prev.map((r, i) => i === 0 ? { ...r, description: matched.label } : r);
@@ -1999,116 +2593,239 @@ function DisbursementPageContent() {
                 </div>
 
                 {/* Line Items Rows (Balanced Double Entry) */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-neutral-900 dark:text-white uppercase text-[11px] tracking-wider block">
-                        Accounting Line Items &amp; Breakdown
-                      </span>
-                      <span className="text-[10px] text-neutral-500">
-                        Specify debit and credit entries to match disbursed check amount.
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setNewCvRows(prev => [...prev, { description: '', debit: '', credit: '' }])}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Breakdown Row</span>
-                    </button>
-                  </div>
+                {(() => {
+                  const replenishType = getReplenishmentType(newCvCategory);
+                  const isReplenish = Boolean(replenishType);
+                  let debitTotal = 0;
+                  let creditTotal = 0;
+                  newCvRows.forEach(r => {
+                    debitTotal += parseFloat(r.debit || '0') || 0;
+                    creditTotal += parseFloat(r.credit || '0') || 0;
+                  });
+                  const disbursedAmt = getNewCvDisbursedAmount();
 
-                  <div className="border border-outline-variant/60 rounded-2xl overflow-hidden divide-y divide-outline-variant/40">
-                    <div className="grid grid-cols-12 px-3 py-2 bg-surface-container-low dark:bg-surface-container font-bold text-[10px] uppercase tracking-wider text-neutral-500">
-                      <div className="col-span-6">Book of Account / Item Description</div>
-                      <div className="col-span-3 text-right">Debit (₱)</div>
-                      <div className="col-span-2 text-right">Credit (₱)</div>
-                      <div className="col-span-1 text-center">Action</div>
-                    </div>
+                  return (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-neutral-900 dark:text-white uppercase text-[11px] tracking-wider block">
+                            {isReplenish ? 'Transaction Details' : 'Accounting Line Items & Breakdown'}
+                          </span>
+                          <span className="text-[10px] text-neutral-500">
+                            {isReplenish
+                              ? 'Selecting an expense account auto-generates the balancing credit row with matching fund category.'
+                              : 'Specify debit and credit entries to match disbursed check amount.'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addCvRow(false, replenishType)}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Row</span>
+                        </button>
+                      </div>
 
-                    {newCvRows.map((row, idx) => (
-                      <div key={idx} className="grid grid-cols-12 px-3 py-2 items-center gap-2">
-                        <div className="col-span-6">
-                          <input
-                            type="text"
-                            placeholder={`Line item #${idx + 1}`}
-                            value={row.description}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setNewCvRows(prev => prev.map((r, i) => (i === idx ? { ...r, description: val } : r)));
-                            }}
-                            className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs"
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="Debit"
-                            value={row.debit}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setNewCvRows(prev => prev.map((r, i) => (i === idx ? { ...r, debit: val } : r)));
-                            }}
-                            className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="Credit"
-                            value={row.credit}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setNewCvRows(prev => prev.map((r, i) => (i === idx ? { ...r, credit: val } : r)));
-                            }}
-                            className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
-                          />
-                        </div>
-                        <div className="col-span-1 text-center">
-                          {newCvRows.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => setNewCvRows(prev => prev.filter((_, i) => i !== idx))}
-                              className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer"
-                              title="Remove row"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+                      <div className="border border-emerald-950/20 dark:border-emerald-800/40 rounded-2xl overflow-hidden shadow-xs">
+                        {isReplenish ? (
+                          <>
+                            {/* Top Banner matching Image 2 */}
+                            <div className="bg-[#064e3b] text-white py-2 px-3 text-center font-bold text-xs uppercase tracking-wider">
+                              TRANSACTION DETAILS
+                            </div>
+
+                            {/* Table Column Header for Replenishment matching Image 2 */}
+                            <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[11px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10">
+                              <div className="col-span-1 text-center">#</div>
+                              <div className="col-span-6">Book of Accounts</div>
+                              <div className="col-span-2 text-right">Debit (₱)</div>
+                              <div className="col-span-2 text-right">Credit (₱)</div>
+                              <div className="col-span-1 text-center">Action</div>
+                            </div>
+
+                            <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest">
+                              {newCvRows.map((row, idx) => {
+                                const isCreditRow = row.isAutoCredit || (Boolean(row.credit) && !row.debit) || row.description.toLowerCase().startsWith('cib');
+                                return (
+                                  <div
+                                    key={row.id || idx}
+                                    className={`grid grid-cols-12 px-3 py-2 items-center gap-2 transition-colors ${
+                                      isCreditRow
+                                        ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
+                                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
+                                    }`}
+                                  >
+                                    <div className="col-span-1 text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400">
+                                      {idx + 1}
+                                    </div>
+                                    <div className="col-span-6">
+                                      {isCreditRow ? (
+                                        <input
+                                          type="text"
+                                          value={row.description}
+                                          onChange={e => updateCvRowField(false, row.id!, 'description', e.target.value, replenishType)}
+                                          className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-xs font-bold text-emerald-900 dark:text-emerald-200 italic"
+                                          placeholder="Credit Account (e.g. CIB-MBTC)"
+                                        />
+                                      ) : (
+                                        <ReplenishmentAccountDropdown
+                                          value={row.description}
+                                          onChange={val => updateCvRowField(false, row.id!, 'description', val, replenishType)}
+                                        />
+                                      )}
+                                    </div>
+                                    <div className="col-span-2">
+                                      {isCreditRow ? (
+                                        <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
+                                      ) : (
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          placeholder="0.00"
+                                          value={row.debit}
+                                          onChange={e => updateCvRowField(false, row.id!, 'debit', e.target.value, replenishType)}
+                                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                        />
+                                      )}
+                                    </div>
+                                    <div className="col-span-2">
+                                      {isCreditRow ? (
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          placeholder="0.00"
+                                          value={row.credit}
+                                          onChange={e => updateCvRowField(false, row.id!, 'credit', e.target.value, replenishType)}
+                                          className="w-full px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 font-mono text-right text-xs font-bold text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                        />
+                                      ) : (
+                                        <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
+                                      )}
+                                    </div>
+                                    <div className="col-span-1 text-center">
+                                      {!isCreditRow && newCvRows.filter(r => !r.isAutoCredit && !(r.credit && !r.debit)).length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => removeCvRow(false, row.id!)}
+                                          className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                          title="Remove row"
+                                        >
+                                          <X className="w-3.5 h-3.5 mx-auto" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Table Total Footer matching Image 2 */}
+                            <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center">
+                              <div className="col-span-7 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                                TOTAL:
+                              </div>
+                              <div className="col-span-2 text-right font-mono font-bold text-neutral-900 dark:text-white">
+                                ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </div>
+                              <div className="col-span-2 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                                ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </div>
+                              <div className="col-span-1"></div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {/* Standard Column Header */}
+                            <div className="grid grid-cols-12 px-3 py-2 bg-surface-container-low dark:bg-surface-container font-bold text-[10px] uppercase tracking-wider text-neutral-500">
+                              <div className="col-span-1 text-center">#</div>
+                              <div className="col-span-5">Book of Account / Item Description</div>
+                              <div className="col-span-3 text-right">Debit (₱)</div>
+                              <div className="col-span-2 text-right">Credit (₱)</div>
+                              <div className="col-span-1 text-center">Action</div>
+                            </div>
+
+                            <div className="divide-y divide-outline-variant/20 bg-white dark:bg-surface-container-lowest">
+                              {newCvRows.map((row, idx) => (
+                                <div key={row.id || idx} className="grid grid-cols-12 px-3 py-2 items-center gap-2">
+                                  <div className="col-span-1 text-center font-mono font-medium text-xs text-neutral-500">
+                                    {idx + 1}
+                                  </div>
+                                  <div className="col-span-5">
+                                    <input
+                                      type="text"
+                                      placeholder={`Line item #${idx + 1}`}
+                                      value={row.description}
+                                      onChange={e => updateCvRowField(false, row.id!, 'description', e.target.value, null)}
+                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs"
+                                    />
+                                  </div>
+                                  <div className="col-span-3">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="Debit"
+                                      value={row.debit}
+                                      onChange={e => updateCvRowField(false, row.id!, 'debit', e.target.value, null)}
+                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
+                                    />
+                                  </div>
+                                  <div className="col-span-2">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="Credit"
+                                      value={row.credit}
+                                      onChange={e => updateCvRowField(false, row.id!, 'credit', e.target.value, null)}
+                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
+                                    />
+                                  </div>
+                                  <div className="col-span-1 text-center">
+                                    {newCvRows.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeCvRow(false, row.id!)}
+                                        className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer"
+                                        title="Remove row"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Calculated summary row */}
+                      <div className="p-3.5 rounded-2xl bg-surface-container-low dark:bg-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border border-outline-variant/40">
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <span className="font-bold text-neutral-600 dark:text-neutral-300">
+                            Total Debit: <span className="font-mono text-neutral-900 dark:text-neutral-100 font-extrabold">₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </span>
+                          <span className="font-bold text-neutral-600 dark:text-neutral-300">
+                            Total Credit: <span className="font-mono text-neutral-900 dark:text-neutral-100 font-extrabold">₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </span>
+                          {Math.abs(debitTotal - creditTotal) < 0.01 && debitTotal > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                              <Check className="w-3 h-3" /> Balanced
+                            </span>
                           )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Calculated summary row */}
-                  {(() => {
-                    let debitTotal = 0;
-                    let creditTotal = 0;
-                    newCvRows.forEach(r => {
-                      debitTotal += parseFloat(r.debit || '0') || 0;
-                      creditTotal += parseFloat(r.credit || '0') || 0;
-                    });
-                    const diff = debitTotal - creditTotal;
-                    return (
-                      <div className="p-3 rounded-xl bg-surface-container-low dark:bg-surface-container flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-3">
-                          <span className="font-bold text-neutral-600 dark:text-neutral-300">
-                            Total Net Debit: <span className="font-mono text-primary dark:text-secondary">₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                        <div className="text-right">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block">
+                            Disbursed Amount
                           </span>
-                          <span className="font-bold text-neutral-600 dark:text-neutral-300">
-                            Total Credit: <span className="font-mono text-neutral-500">₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                          <span className="font-mono font-extrabold text-sm text-emerald-700 dark:text-emerald-300">
+                            ₱{disbursedAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
-                        <span className="text-[11px] font-bold text-neutral-500">
-                          Net Disbursed Amount: ₱{diff > 0 ? diff.toLocaleString('en-US', { minimumFractionDigits: 2 }) : debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
                       </div>
-                    );
-                  })()}
-                </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Signatories */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-outline-variant/60">
@@ -2229,24 +2946,49 @@ function DisbursementPageContent() {
                     {selectedCvForModal.voucher_date ? new Date(selectedCvForModal.voucher_date).toLocaleDateString() : '—'}
                   </span>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Name</span>
-                  <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5" title={selectedCvForModal.payee || '—'}>
-                    {selectedCvForModal.payee || '—'}
-                  </span>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Check No.</span>
-                  <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
-                    {selectedCvForModal.check_no || '—'}
-                  </span>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
-                  <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
-                    {selectedCvForModal.bank || '—'}
-                  </span>
-                </div>
+                {isStlOrRfTabOrVoucher(selectedCvForModal) ? (
+                  <>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Fund Type</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
+                        {isRevolvingVoucher(selectedCvForModal) ? 'Revolving Fund' : 'STL Replenishment'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Name</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5" title={selectedCvForModal.payee || '—'}>
+                        {selectedCvForModal.payee || '—'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Check No.</span>
+                      <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
+                        {selectedCvForModal.check_no || '—'}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Name</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5" title={selectedCvForModal.payee || '—'}>
+                        {selectedCvForModal.payee || '—'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Check No.</span>
+                      <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
+                        {selectedCvForModal.check_no || '—'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
+                        {selectedCvForModal.bank || '—'}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Description */}
@@ -2259,108 +3001,114 @@ function DisbursementPageContent() {
                 </div>
               )}
 
-              {/* Linked Revolving Fund Banner */}
-              {isRevolvingVoucher(selectedCvForModal) && (
-                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-emerald-500/5 to-transparent border border-amber-400/50 dark:border-amber-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 flex items-center justify-center flex-shrink-0 shadow-2xs">
-                      <RotateCcw className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">
-                          Linked Liquidation Form
-                        </span>
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-200/80 dark:bg-amber-900/80 text-amber-950 dark:text-amber-200">
-                          {selectedCvForModal.revolving_fund?.lf_no || extractRfNumber(selectedCvForModal) || 'Revolving Fund'}
-                        </span>
-                        {selectedCvForModal.revolving_fund?.sheet_name && (
-                          <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
-                            ({selectedCvForModal.revolving_fund.sheet_name})
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-neutral-600 dark:text-neutral-300 mt-0.5">
-                        Custodian: <span className="font-semibold text-neutral-800 dark:text-neutral-100">{selectedCvForModal.revolving_fund?.custodian_name || selectedCvForModal.payee || 'Michelle M. Pable'}</span>
-                        {selectedCvForModal.revolving_fund?.total_liquidated && (
-                          <span className="ml-2 font-mono text-emerald-700 dark:text-emerald-400">
-                            • Liquidated: ₱{parseFloat(selectedCvForModal.revolving_fund.total_liquidated).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSyncCvWithRf}
-                    disabled={isSyncingCvRf}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 text-white shadow-2xs transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCvRf ? 'animate-spin' : ''}`} />
-                    <span>Sync with Liquidation Form</span>
-                  </button>
-                </div>
-              )}
 
               {/* Transaction Details Table */}
               {(() => {
-                const { rows, debitTotal, creditTotal } = getBalancedCvRows(selectedCvForModal);
+                const isReplenish = isStlOrRfTabOrVoucher(selectedCvForModal);
+                const summaryData = getSummaryCvRows(selectedCvForModal);
+                const detailedData = getBalancedCvRows(selectedCvForModal);
+                const { rows, debitTotal, creditTotal } = isReplenish ? summaryData : detailedData;
+
                 return (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                        Transaction Details
-                      </h5>
-                    </div>
-                    <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="bg-neutral-100/70 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 font-bold border-b border-outline-variant/40">
-                            <th className="px-4 py-2.5 text-left w-12">#</th>
-                            <th className="px-4 py-2.5 text-left">Book of Accounts</th>
-                            <th className="px-4 py-2.5 text-right w-36">Debit</th>
-                            <th className="px-4 py-2.5 text-right w-36">Credit</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-outline-variant/20">
-                          {rows.length > 0 ? (
-                            rows.map((item, idx) => (
-                              <tr key={idx} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
-                                <td className="px-4 py-2.5 text-neutral-400 font-mono">{idx + 1}</td>
-                                <td className="px-4 py-2.5 font-medium text-on-surface dark:text-white">
+                  <div className="space-y-4">
+                    {/* Format: 4 Columns (#, BOOK OF ACCOUNTS, DEBIT, CREDIT) matching Image 2 */}
+                    {isReplenish ? (
+                      <div className="border border-emerald-300 dark:border-emerald-700/60 rounded-2xl overflow-hidden text-[10px] shadow-2xs">
+                        <div className="bg-[#064e3b] text-white px-4 py-2 text-center">
+                          <span className="font-extrabold uppercase text-[10px] tracking-wider text-white">
+                            TRANSACTION DETAILS
+                          </span>
+                        </div>
+                        <table className="w-full text-left border-collapse">
+                          <thead className="bg-[#ecfdf5] dark:bg-emerald-950/40 text-[#064e3b] dark:text-emerald-300 font-extrabold uppercase text-[9px] border-b border-emerald-200 dark:border-emerald-800">
+                            <tr>
+                              <th className="p-2.5 w-12 text-center border-r border-emerald-200 dark:border-emerald-800">#</th>
+                              <th className="p-2.5 border-r border-emerald-200 dark:border-emerald-800">BOOK OF ACCOUNTS</th>
+                              <th className="p-2.5 w-36 text-right border-r border-emerald-200 dark:border-emerald-800">DEBIT (₱)</th>
+                              <th className="p-2.5 w-36 text-right">CREDIT (₱)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((item, idx) => (
+                              <tr key={idx} className="border-b border-neutral-200 dark:border-neutral-800 hover:bg-emerald-50/30">
+                                <td className="p-2.5 text-center font-mono font-medium text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
+                                  {idx + 1}
+                                </td>
+                                <td className="p-2.5 border-r border-neutral-200 dark:border-neutral-800 font-bold text-neutral-900 dark:text-white">
                                   {item.description}
                                 </td>
-                                <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100">
-                                  {item.debit !== null ? `₱${item.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                <td className="p-2.5 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                                  {item.debit !== null ? item.debit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : <span className="text-neutral-400 font-bold">–</span>}
                                 </td>
-                                <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-rose-600 dark:text-rose-400">
-                                  {item.credit !== null ? `₱${item.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                                <td className="p-2.5 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                                  {item.credit !== null ? item.credit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : <span className="text-rose-500 font-bold">–</span>}
                                 </td>
                               </tr>
-                            ))
-                          ) : (
-                            <tr>
-                              <td colSpan={4} className="px-4 py-6 text-center text-neutral-500 italic">
-                                No transaction breakdown details available for this voucher.
+                            ))}
+                            <tr className="bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold border-t border-emerald-300 dark:border-emerald-700 text-[10px]">
+                              <td colSpan={2} className="p-2.5 text-right uppercase tracking-wider text-neutral-900 dark:text-white font-extrabold">TOTAL:</td>
+                              <td className="p-2.5 text-right font-mono font-extrabold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                                ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="p-2.5 text-right font-mono font-extrabold text-rose-600 dark:text-rose-400">
+                                ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </td>
                             </tr>
-                          )}
-                        </tbody>
-                        <tfoot className="bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30 font-bold">
-                          <tr>
-                            <td colSpan={2} className="px-4 py-2.5 font-bold text-right text-neutral-600 dark:text-neutral-400 uppercase tracking-wide">
-                              Total:
-                            </td>
-                            <td className="px-4 py-2.5 text-right font-mono font-bold text-neutral-900 dark:text-neutral-100">
-                              ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td className="px-4 py-2.5 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
-                              ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      /* Standard Loan Disbursement Table */
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="text-[11px] font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
+                            Transaction Details
+                          </h5>
+                          <span className="text-[10px] text-neutral-500 font-mono">
+                            {rows.length} Entries • Total: ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-neutral-100/70 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 font-bold border-b border-outline-variant/40">
+                                <th className="px-4 py-2.5 text-left w-12">#</th>
+                                <th className="px-4 py-2.5 text-left">Book of Accounts</th>
+                                <th className="px-4 py-2.5 text-right w-36">Debit</th>
+                                <th className="px-4 py-2.5 text-right w-36">Credit</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-outline-variant/20">
+                              {rows.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
+                                  <td className="px-4 py-2.5 text-neutral-400 font-mono">{idx + 1}</td>
+                                  <td className="px-4 py-2.5 font-medium text-on-surface dark:text-white">
+                                    {item.description}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-neutral-900 dark:text-neutral-100">
+                                    {item.debit !== null ? `₱${item.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-rose-600 dark:text-rose-400">
+                                    {item.credit !== null ? `₱${item.credit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot className="font-bold bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30">
+                              <tr>
+                                <td colSpan={2} className="px-4 py-2.5 font-bold text-right uppercase tracking-wide">Total:</td>
+                                <td className="px-4 py-2.5 text-right font-mono font-bold">
+                                  ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-4 py-2.5 text-right font-mono font-bold text-rose-600">
+                                  ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Disbursed Amount Box below table */}
                     <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2378,6 +3126,32 @@ function DisbursementPageContent() {
                         </span>
                       </div>
                     </div>
+
+                    {/* 3 Summary Cards for STL & Revolving Fund matching photo */}
+                    {isStlOrRfTabOrVoucher(selectedCvForModal) && (
+                      <div className="grid grid-cols-3 gap-2.5 text-xs">
+                        <div className="p-3 border border-outline-variant/40 rounded-xl bg-surface-container-low dark:bg-surface-container">
+                          <span className="text-[9px] font-bold uppercase text-neutral-400 block tracking-wider">FUND AMOUNT</span>
+                          <div className="text-[13px] font-extrabold font-mono text-on-surface dark:text-white mt-0.5">
+                            ₱{(100000).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                        <div className="p-3 border border-outline-variant/40 rounded-xl bg-surface-container-low dark:bg-surface-container">
+                          <span className="text-[9px] font-bold uppercase text-neutral-400 block tracking-wider">
+                            TOTAL EXPENSE ({rows.filter(r => r.debit !== null).length} ITEMS)
+                          </span>
+                          <div className="text-[13px] font-extrabold font-mono text-on-surface dark:text-white mt-0.5">
+                            ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                        <div className="p-3 border-2 border-emerald-500 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40">
+                          <span className="text-[9px] font-bold uppercase text-emerald-800 dark:text-emerald-300 block tracking-wider">FUND BALANCE</span>
+                          <div className="text-[13px] font-extrabold font-mono text-emerald-900 dark:text-emerald-200 mt-0.5">
+                            ₱{(100000 - debitTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Signatures Block matching physical document */}
                     <div className="pt-4 border-t border-outline-variant/30 space-y-4 text-xs">
@@ -2508,14 +3282,37 @@ function DisbursementPageContent() {
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => handlePrintCvBreakdown(selectedCvForModal)}
-                  className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-full bg-emerald-700 hover:bg-emerald-800 text-white shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Breakdown</span>
-                </button>
+                {isStlOrRfTabOrVoucher(selectedCvForModal) ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handlePrintCvBreakdown(selectedCvForModal)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full border border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all active:scale-95 cursor-pointer"
+                      title="Print only the single check voucher sheet"
+                    >
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>Voucher Only</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openUnifiedPrintModalForCv(selectedCvForModal)}
+                      className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-full bg-emerald-700 hover:bg-emerald-800 text-white shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                      title="Print Check Voucher with integrated itemized expense breakdown"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print Check Voucher (Full Schedule)</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handlePrintCvBreakdown(selectedCvForModal)}
+                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-full bg-emerald-700 hover:bg-emerald-800 text-white shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print Breakdown</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -2598,7 +3395,20 @@ function DisbursementPageContent() {
                   </label>
                   <AnimatedSelect
                     value={editCvFormData.bank}
-                    onChange={val => setEditCvFormData({ ...editCvFormData, bank: val })}
+                    onChange={val => {
+                      setEditCvFormData(prev => ({ ...prev, bank: val }));
+                      const replenishType = getReplenishmentType(editCvFormData.folder_name, selectedCvForModal);
+                      if (replenishType) {
+                        const cibName = formatCibAccountName(val);
+                        setEditCvRows(rows =>
+                          rows.map(r =>
+                            (r.isAutoCredit || (r.description.toLowerCase().startsWith('cib') && !r.debit))
+                              ? { ...r, description: cibName }
+                              : r
+                          )
+                        );
+                      }
+                    }}
                     options={
                       DRAW_BANK_OPTIONS.some(o => o.value === editCvFormData.bank)
                         ? DRAW_BANK_OPTIONS
@@ -2657,82 +3467,228 @@ function DisbursementPageContent() {
               </div>
 
               {/* Rows */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-neutral-900 dark:text-white uppercase text-[11px] tracking-wider">
-                    Breakdown Rows
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setEditCvRows(prev => [...prev, { description: '', debit: '', credit: '' }])}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" /> Add Row
-                  </button>
-                </div>
+              {(() => {
+                const replenishType = getReplenishmentType(editCvFormData.folder_name, selectedCvForModal);
+                const isReplenish = Boolean(replenishType);
+                let debitTotal = 0;
+                let creditTotal = 0;
+                editCvRows.forEach(r => {
+                  debitTotal += parseFloat(r.debit || '0') || 0;
+                  creditTotal += parseFloat(r.credit || '0') || 0;
+                });
 
-                <div className="border border-outline-variant/60 rounded-2xl overflow-hidden divide-y divide-outline-variant/40">
-                  {/* Table Column Header */}
-                  <div className="grid grid-cols-12 px-3 py-2 bg-neutral-100/70 dark:bg-neutral-800/60 text-[10px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
-                    <div className="col-span-6">Book of Account</div>
-                    <div className="col-span-3 text-right">Debit (₱)</div>
-                    <div className="col-span-2 text-right">Credit (₱)</div>
-                    <div className="col-span-1"></div>
-                  </div>
+                return (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-neutral-900 dark:text-white uppercase text-[11px] tracking-wider block">
+                          {isReplenish ? 'Transaction Details' : 'Breakdown Rows'}
+                        </span>
+                        <span className="text-[10px] text-neutral-500">
+                          {isReplenish
+                            ? 'Selecting an expense account auto-generates the balancing credit row with matching fund category.'
+                            : 'Specify debit and credit entries to balance disbursed check amount.'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addCvRow(true, replenishType)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" /> Add Row
+                      </button>
+                    </div>
 
-                  {editCvRows.map((row, idx) => (
-                    <div key={idx} className="grid grid-cols-12 px-3 py-2 items-center gap-2">
-                      <div className="col-span-6">
-                        <input
-                          type="text"
-                          value={row.description}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setEditCvRows(prev => prev.map((r, i) => (i === idx ? { ...r, description: val } : r)));
-                          }}
-                          placeholder="Account description"
-                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs"
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={row.debit}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setEditCvRows(prev => prev.map((r, i) => (i === idx ? { ...r, debit: val } : r)));
-                          }}
-                          placeholder="Debit"
-                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={row.credit}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setEditCvRows(prev => prev.map((r, i) => (i === idx ? { ...r, credit: val } : r)));
-                          }}
-                          placeholder="Credit"
-                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
-                        />
-                      </div>
-                      <div className="col-span-1 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setEditCvRows(prev => prev.filter((_, i) => i !== idx))}
-                          className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                    <div className="border border-emerald-950/20 dark:border-emerald-800/40 rounded-2xl overflow-hidden shadow-xs">
+                      {isReplenish ? (
+                        <>
+                          {/* Top Banner matching Image 2 */}
+                          <div className="bg-[#064e3b] text-white py-2 px-3 text-center font-bold text-xs uppercase tracking-wider">
+                            TRANSACTION DETAILS
+                          </div>
+
+                          {/* Table Column Header for Replenishment matching Image 2 */}
+                          <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[11px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10">
+                            <div className="col-span-1 text-center">#</div>
+                            <div className="col-span-6">Book of Accounts</div>
+                            <div className="col-span-2 text-right">Debit (₱)</div>
+                            <div className="col-span-2 text-right">Credit (₱)</div>
+                            <div className="col-span-1 text-center">Action</div>
+                          </div>
+
+                          <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest">
+                            {editCvRows.map((row, idx) => {
+                              const isCreditRow = row.isAutoCredit || (Boolean(row.credit) && !row.debit) || row.description.toLowerCase().startsWith('cib');
+                              return (
+                                <div
+                                  key={row.id || idx}
+                                  className={`grid grid-cols-12 px-3 py-2 items-center gap-2 transition-colors ${
+                                    isCreditRow
+                                      ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
+                                      : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
+                                  }`}
+                                >
+                                  <div className="col-span-1 text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400">
+                                    {idx + 1}
+                                  </div>
+                                  <div className="col-span-6">
+                                    {isCreditRow ? (
+                                      <input
+                                        type="text"
+                                        value={row.description}
+                                        onChange={e => updateCvRowField(true, row.id!, 'description', e.target.value, replenishType)}
+                                        className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-xs font-bold text-emerald-900 dark:text-emerald-200 italic"
+                                        placeholder="Credit Account (e.g. CIB-MBTC)"
+                                      />
+                                    ) : (
+                                      <ReplenishmentAccountDropdown
+                                        value={row.description}
+                                        onChange={val => updateCvRowField(true, row.id!, 'description', val, replenishType)}
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="col-span-2">
+                                    {isCreditRow ? (
+                                      <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
+                                    ) : (
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        value={row.debit}
+                                        onChange={e => updateCvRowField(true, row.id!, 'debit', e.target.value, replenishType)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="col-span-2">
+                                    {isCreditRow ? (
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        value={row.credit}
+                                        onChange={e => updateCvRowField(true, row.id!, 'credit', e.target.value, replenishType)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 font-mono text-right text-xs font-bold text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                      />
+                                    ) : (
+                                      <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
+                                    )}
+                                  </div>
+                                  <div className="col-span-1 text-center">
+                                    {!isCreditRow && editCvRows.filter(r => !r.isAutoCredit && !(r.credit && !r.debit)).length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeCvRow(true, row.id!)}
+                                        className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                        title="Remove row"
+                                      >
+                                        <X className="w-3.5 h-3.5 mx-auto" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Table Total Footer matching Image 2 */}
+                          <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center">
+                            <div className="col-span-7 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                              TOTAL:
+                            </div>
+                            <div className="col-span-2 text-right font-mono font-bold text-neutral-900 dark:text-white">
+                              ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </div>
+                            <div className="col-span-2 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                              ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </div>
+                            <div className="col-span-1"></div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Standard Column Header */}
+                          <div className="grid grid-cols-12 px-3 py-2 bg-neutral-100/70 dark:bg-neutral-800/60 text-[10px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                            <div className="col-span-1 text-center font-bold">#</div>
+                            <div className="col-span-5">Book of Account</div>
+                            <div className="col-span-3 text-right">Debit (₱)</div>
+                            <div className="col-span-2 text-right">Credit (₱)</div>
+                            <div className="col-span-1 text-center">Action</div>
+                          </div>
+
+                          <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest">
+                            {editCvRows.map((row, idx) => (
+                              <div key={row.id || idx} className="grid grid-cols-12 px-3 py-2 items-center gap-2">
+                                <div className="col-span-1 text-center font-mono font-medium text-xs text-neutral-500">
+                                  {idx + 1}
+                                </div>
+                                <div className="col-span-5">
+                                  <input
+                                    type="text"
+                                    value={row.description}
+                                    onChange={e => updateCvRowField(true, row.id!, 'description', e.target.value, null)}
+                                    placeholder="Account description"
+                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs"
+                                  />
+                                </div>
+                                <div className="col-span-3">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={row.debit}
+                                    onChange={e => updateCvRowField(true, row.id!, 'debit', e.target.value, null)}
+                                    placeholder="Debit"
+                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
+                                  />
+                                </div>
+                                <div className="col-span-2">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={row.credit}
+                                    onChange={e => updateCvRowField(true, row.id!, 'credit', e.target.value, null)}
+                                    placeholder="Credit"
+                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
+                                  />
+                                </div>
+                                <div className="col-span-1 text-center">
+                                  {editCvRows.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => removeCvRow(true, row.id!)}
+                                      className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer"
+                                    >
+                                      <X className="w-3.5 h-3.5 mx-auto" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Summary row */}
+                    <div className="p-3 rounded-xl bg-surface-container-low dark:bg-surface-container flex items-center justify-between text-xs border border-outline-variant/40">
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-neutral-600 dark:text-neutral-300">
+                          Total Debit: <span className="font-mono text-neutral-900 dark:text-neutral-100 font-extrabold">₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                        </span>
+                        <span className="font-bold text-neutral-600 dark:text-neutral-300">
+                          Total Credit: <span className="font-mono text-neutral-900 dark:text-neutral-100 font-extrabold">₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                        </span>
+                        {Math.abs(debitTotal - creditTotal) < 0.01 && debitTotal > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                            <Check className="w-3 h-3" /> Balanced
+                          </span>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                );
+              })()}
 
               {/* Disbursed Amount Banner */}
               {(() => {
@@ -3108,37 +4064,37 @@ function DisbursementPageContent() {
 
             {/* Transaction Details Table */}
             {(() => {
-              const { rows, debitTotal, creditTotal } = getBalancedCvRows(printingCvBreakdown);
+              const { rows, debitTotal, creditTotal } = getSummaryCvRows(printingCvBreakdown);
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ border: '1px solid rgba(6, 78, 59, 0.2)', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
-                    <div style={{ backgroundColor: '#064e3b', color: '#ffffff', padding: '6px 14px', fontWeight: 'bold', fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase', textAlign: 'center' }}>
-                      Transaction Details
+                  <div style={{ border: '1px solid #6ee7b7', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
+                    <div style={{ backgroundColor: '#064e3b', color: '#ffffff', padding: '8px 14px', fontWeight: 'bold', fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', textAlign: 'center' }}>
+                      TRANSACTION DETAILS
                     </div>
                     <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '10px' }}>
                       <thead>
-                        <tr style={{ backgroundColor: '#ecfdf5', color: '#064e3b', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid rgba(6, 78, 59, 0.15)' }}>
-                          <th style={{ padding: '8px 12px', width: '36px', textAlign: 'center', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>#</th>
-                          <th style={{ padding: '8px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>Book of Accounts</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px', borderRight: '1px solid rgba(6, 78, 59, 0.1)' }}>Debit (₱)</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>Credit (₱)</th>
+                        <tr style={{ backgroundColor: '#ecfdf5', color: '#064e3b', fontWeight: 'bold', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #a7f3d0' }}>
+                          <th style={{ padding: '8px 12px', width: '40px', textAlign: 'center', borderRight: '1px solid #d1fae5' }}>#</th>
+                          <th style={{ padding: '8px 12px', borderRight: '1px solid #d1fae5' }}>BOOK OF ACCOUNTS</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px', borderRight: '1px solid #d1fae5' }}>DEBIT (₱)</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', width: '130px' }}>CREDIT (₱)</th>
                         </tr>
                       </thead>
                       <tbody>
                         {rows.length > 0 ? (
                           rows.map((item, idx) => (
-                            <tr key={idx} style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.08)', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#fcfdfd' }}>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', fontFamily: 'monospace', color: '#6b7280', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                            <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: idx % 2 === 0 ? '#ffffff' : '#fcfdfd' }}>
+                              <td style={{ padding: '8px 12px', textAlign: 'center', fontFamily: 'monospace', color: '#6b7280', borderRight: '1px solid #e5e7eb' }}>
                                 {idx + 1}
                               </td>
-                              <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#1f2937', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
+                              <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#111827', borderRight: '1px solid #e5e7eb' }}>
                                 {item.description}
                               </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
-                                {item.debit !== null ? item.debit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827', borderRight: '1px solid #e5e7eb' }}>
+                                {item.debit !== null ? item.debit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : <span style={{ color: '#9ca3af' }}>–</span>}
                               </td>
                               <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold', color: '#dc2626' }}>
-                                {item.credit !== null ? item.credit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                                {item.credit !== null ? item.credit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : <span style={{ color: '#dc2626' }}>–</span>}
                               </td>
                             </tr>
                           ))
@@ -3150,15 +4106,15 @@ function DisbursementPageContent() {
                           </tr>
                         )}
                         {/* Total row */}
-                        <tr style={{ backgroundColor: '#f9fafb', fontWeight: 'bold', fontSize: '10px', borderTop: '1px solid rgba(6, 78, 59, 0.15)' }}>
-                          <td colSpan={2} style={{ padding: '8px 12px', textAlign: 'right', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
-                            Total:
+                        <tr style={{ backgroundColor: '#ecfdf5', fontWeight: 'bold', fontSize: '10px', borderTop: '1px solid #6ee7b7' }}>
+                          <td colSpan={2} style={{ padding: '8px 12px', textAlign: 'right', color: '#111827', textTransform: 'uppercase', letterSpacing: '0.05em', borderRight: '1px solid #d1fae5' }}>
+                            TOTAL:
                           </td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#111827', borderRight: '1px solid rgba(6, 78, 59, 0.08)' }}>
-                            ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#111827', borderRight: '1px solid #d1fae5' }}>
+                            ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                           </td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace', color: '#dc2626' }}>
-                            ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       </tbody>
@@ -3261,6 +4217,18 @@ function DisbursementPageContent() {
         </div>,
         document.body
       )}
+
+      {/* UNIFIED CV + LF MERGED PRINT MODAL */}
+      <UnifiedCvLfPrintModal
+        isOpen={unifiedPrintModal.isOpen}
+        onClose={() => setUnifiedPrintModal(prev => ({ ...prev, isOpen: false }))}
+        initialCv={unifiedPrintModal.cv}
+        initialLf={unifiedPrintModal.lf}
+        initialType={unifiedPrintModal.type}
+        onLinkSuccess={() => {
+          loadCheckVouchers();
+        }}
+      />
     </div>
   );
 }

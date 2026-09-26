@@ -380,18 +380,6 @@ export default function ForgotPasswordPage() {
                   </p>
                 </header>
 
-                {devOtp && (
-                  <div className="p-3 bg-primary/10 border border-primary/20 text-primary dark:text-secondary rounded-xl text-xs font-bold flex items-start gap-2 mb-4">
-                    <ShieldCheck className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="font-extrabold">DEV MODE — OTP Code</p>
-                      <p className="font-mono mt-0.5 text-xs bg-white/40 dark:bg-black/35 px-1.5 py-0.5 rounded w-fit">
-                        {devOtp}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 <div className="space-y-2 mt-2">
                   <label className="font-label text-xs uppercase tracking-wider font-extrabold text-neutral-600 dark:text-neutral-400 block text-center">
                     Enter Verification Code
