@@ -2551,21 +2551,12 @@ function LoansPageContent() {
   return (
     <>
       <div className="space-y-6 animate-micro-elevate">
-        <div>
-          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-        </div>
-
-        {/* Header and Actions */}
+        {/* Top Header & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Credit Portfolio Ledger</h1>
-            {isAdminOrManager && (
-              <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-                Manage credit products, loan instantiation, approvals, and repayment bookings.
-              </p>
-            )}
+            <BackButton href="/dashboard">Back to System Dashboard</BackButton>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
             <button
               onClick={exportLoansToExcel}
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-full hover:shadow-md transition-all cursor-pointer"

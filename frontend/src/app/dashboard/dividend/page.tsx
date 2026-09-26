@@ -181,27 +181,16 @@ export default function DividendPage() {
 
   return (
     <div className="space-y-6 animate-micro-elevate">
-      <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-      </div>
-
-      {/* Header and Actions */}
+      {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
-            Dividend
-          </h1>
-          {isAdminOrStaff && (
-            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-              Annual Interest on Share Capital & Patronage Refund statements for cooperative members.
-            </p>
-          )}
+          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
           <button
             onClick={() => window.print()}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold border border-outline-variant/60 rounded-full hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white transition-all active:scale-95 cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold border border-outline-variant/60 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white transition-all active:scale-95 cursor-pointer shadow-xs"
             title="Print Dividend Statement"
           >
             <Printer className="w-4 h-4" />

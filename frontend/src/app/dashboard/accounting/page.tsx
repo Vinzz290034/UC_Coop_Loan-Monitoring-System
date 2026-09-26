@@ -689,30 +689,13 @@ export default function AccountingPage() {
 
   return (
     <div className="space-y-6 animate-micro-elevate">
-      <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-      </div>
-
-      {/* Header and Actions */}
+      {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">
-            {activeTab === 'savings' && isAdminOrManager && !viewingPassbookMember
-              ? 'Savings Accounts Ledger'
-              : isAdminOrManager
-                ? 'Shared Capital Ledger'
-                : 'Investment'}
-          </h1>
-          {isAdminOrManager && (
-            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-              {activeTab === 'savings' && !viewingPassbookMember
-                ? 'Monitor member savings accounts, total cooperative savings pools, and passbooks.'
-                : 'Monitor member share capital equity, savings accounts, and fixed term deposits.'}
-            </p>
-          )}
+          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
           {activeTab === 'savings' && (
             <>
               <button

@@ -133,16 +133,6 @@ export default function BillingPage() {
           <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
 
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Billing & Collection Desk</h1>
-            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-              Monitor chronological payments falling due, track aging tranches, and print payroll collection endorsement lists.
-            </p>
-          </div>
-        </div>
-
         {/* Tabs */}
         <div className="flex border-b border-outline-variant/50 overflow-x-auto">
           <button

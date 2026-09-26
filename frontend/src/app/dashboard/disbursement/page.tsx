@@ -1239,35 +1239,24 @@ function DisbursementPageContent() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Breadcrumb & Page Title Header */}
-      <div className="space-y-3">
-        <BackButton href="/dashboard" label="Back to Overview" />
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-headline font-extrabold tracking-tight text-neutral-900 dark:text-white flex items-center gap-3">
-              <span className="p-2.5 rounded-2xl bg-primary/10 text-primary dark:text-secondary dark:bg-secondary/10">
-                <FileSpreadsheet className="w-6 h-6 sm:w-7 sm:h-7" />
-              </span>
-              Disbursement Module
-            </h1>
-            <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-              Cooperative disbursement registries, replenishment schedules, check vouchers, and liquidation ledgers.
-            </p>
-          </div>
-
-          {isAdminOrStaff && activeTab === 'summary' && (
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                type="button"
-                onClick={openCreateCheckVoucherModal}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-headline font-bold text-xs rounded-full shadow-md hover:shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Issue Check Voucher
-              </button>
-            </div>
-          )}
+      {/* Top Header & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <BackButton href="/dashboard" label="Back to Overview" />
         </div>
+
+        {isAdminOrStaff && activeTab === 'summary' && (
+          <div className="flex items-center gap-3 flex-wrap self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={openCreateCheckVoucherModal}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-headline font-bold text-xs rounded-xl shadow-xs hover:shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Issue Check Voucher
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Action Feedback Toast */}

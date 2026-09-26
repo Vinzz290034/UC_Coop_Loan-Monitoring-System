@@ -416,22 +416,16 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6 animate-micro-elevate">
-      <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
-      </div>
-
+      {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-headline text-2xl sm:text-3xl font-bold text-on-surface dark:text-white flex items-center gap-3">Analytical Reports</h1>
-          <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-            Query read-optimized financial audits and download institutional OpenXML files.
-          </p>
+          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-2xl text-xs hover:opacity-95 transition-all shadow-sm cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-xl text-xs hover:opacity-95 transition-all shadow-xs cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Export View to Excel</span>
@@ -439,7 +433,7 @@ export default function ReportsPage() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
-            className="flex items-center gap-2 px-4 py-2.5 border border-outline-variant bg-white dark:bg-surface-container-low text-on-surface dark:text-white font-bold rounded-2xl text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all shadow-2xs disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 border border-outline-variant bg-white dark:bg-surface-container-low text-on-surface dark:text-white font-bold rounded-xl text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all shadow-2xs disabled:opacity-50 cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
             <span>{importing ? 'Processing...' : 'Import Audit File'}</span>

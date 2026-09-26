@@ -3544,20 +3544,12 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-headline text-3xl font-extrabold text-on-surface dark:text-white">
-            System Overview
-          </h1>
-          <p className="font-body text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-            Cooperative Credit Monitoring & Portfolio Analytics
-          </p>
-        </div>
+      {/* Top Header & Actions */}
+      <div className="flex items-center justify-end">
         <button
           onClick={() => fetchDashboardData(true)}
           disabled={refreshing}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface dark:bg-surface-container-high border border-outline-variant/50 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/10 transition-colors active:scale-95 disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface dark:bg-surface-container-high border border-outline-variant/50 text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/10 transition-colors active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
         >
           <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           {refreshing ? 'Refreshing...' : 'Refresh'}
