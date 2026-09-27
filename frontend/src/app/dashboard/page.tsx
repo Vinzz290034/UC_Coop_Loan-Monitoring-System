@@ -1683,17 +1683,25 @@ export default function OverviewPage() {
                   onClick={openLoanModal}
                   className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40 relative overflow-hidden"
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
                       Apply for a Loan
                       {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </h4>
-                    <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                      Apply for credit with flexible terms.
-                    </p>
-                    <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                      {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
-                    </span>
+                    <div className="pt-1">
+                      {isVerified ? (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-xs font-bold shadow-xs group-hover:shadow-md group-hover:scale-105 active:scale-95 transition-all">
+                          <span>Proceed</span>
+                          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold">
+                          <Lock className="w-3 h-3" />
+                          <span>Verification Required</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
                     <PlusCircle className="w-6 h-6" />
@@ -1714,17 +1722,25 @@ export default function OverviewPage() {
                   }}
                   className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
                       Add Share Capital
                       {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </h4>
-                    <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                      Grow your cooperative equity & dividends.
-                    </p>
-                    <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                      {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
-                    </span>
+                    <div className="pt-1">
+                      {isVerified ? (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-xs font-bold shadow-xs group-hover:shadow-md group-hover:scale-105 active:scale-95 transition-all">
+                          <span>Proceed</span>
+                          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold">
+                          <Lock className="w-3 h-3" />
+                          <span>Verification Required</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
                     <Coins className="w-6 h-6" />
@@ -1898,9 +1914,6 @@ export default function OverviewPage() {
                   <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white pt-1">
                     Member Investment Goal & Dividend Tracker
                   </h3>
-                  <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-                    Track your accumulated capital toward your annual milestone target.
-                  </p>
                 </div>
 
                 {balances.total_assets > 0 && (
@@ -1976,13 +1989,12 @@ export default function OverviewPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="p-3.5 bg-neutral-50 dark:bg-surface-container-high/40 border border-outline-variant/50 rounded-2xl flex items-center justify-between flex-wrap gap-3 text-xs text-neutral-600 dark:text-neutral-300">
-                        <div className="flex items-center gap-2">
-                          <PhoneCall className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
-                          <Mail className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
-                          <span><strong>Milestone Notice:</strong> When you reach 100%, an officer will contact you regarding payout or rollover options.</span>
-                        </div>
-                        <span className="font-mono text-[11px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/15 px-2.5 py-1 rounded-full">
+                      <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] text-neutral-400 dark:text-neutral-500 pt-0.5">
+                        <p className="flex items-center gap-1.5 italic">
+                          <Info className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 flex-shrink-0" />
+                          <span>Note: When you reach 100%, an officer will contact you regarding payout or rollover options.</span>
+                        </p>
+                        <span className="font-mono text-[10px] font-medium text-neutral-400 dark:text-neutral-500">
                           {100 - progressPercent}% remaining to goal
                         </span>
                       </div>
@@ -2155,18 +2167,15 @@ export default function OverviewPage() {
                           </div>
                         </div>
 
-                        {/* Footer: Formula + Apply CTA */}
-                        <div className="pt-1.5 flex items-center justify-between border-t border-outline-variant/30 text-xs">
-                          <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
-                            {prod.amortization_type === 'flat_rate' ? 'Fixed monthly interest' : 'Decreasing balance interest'}
-                          </span>
+                        {/* Footer: Apply CTA */}
+                        <div className="pt-2 flex items-center justify-end border-t border-outline-variant/30 text-xs">
                           <button
                             type="button"
                             onClick={() => openLoanModalWithProduct(prod)}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white dark:bg-secondary/15 dark:text-secondary dark:hover:bg-secondary dark:hover:text-neutral-950 font-bold text-xs transition-all active:scale-95 cursor-pointer shadow-2xs"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white dark:bg-secondary/15 dark:text-secondary dark:hover:bg-secondary dark:hover:text-neutral-950 font-bold text-xs transition-all active:scale-95 cursor-pointer shadow-2xs"
                           >
                             <span>Apply</span>
-                            <ArrowRight className="w-3 h-3" />
+                            <ArrowRight className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
