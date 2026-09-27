@@ -2165,11 +2165,11 @@ export default function OverviewPage() {
                         </div>
 
                         {/* Footer: Prominent Full-Width Apply CTA */}
-                        <div className="pt-3 border-t border-outline-variant/30">
+                        <div className="pt-1 border-t border-outline-variant/30">
                           <button
                             type="button"
                             onClick={() => openLoanModalWithProduct(prod)}
-                            className="w-full py-3.5 px-4 rounded-2xl bg-primary text-white hover:bg-primary/90 dark:bg-secondary dark:text-neutral-950 dark:hover:bg-secondary/90 font-extrabold text-sm transition-all active:scale-[0.98] cursor-pointer shadow-sm flex items-center justify-center gap-2 group-hover:shadow-md"
+                            className="w-full py-2.5 px-4 rounded-2xl bg-primary text-white hover:bg-primary/90 dark:bg-secondary dark:text-neutral-950 dark:hover:bg-secondary/90 font-extrabold text-sm transition-all active:scale-[0.98] cursor-pointer shadow-sm flex items-center justify-center gap-2 group-hover:shadow-md"
                           >
                             <span>Apply Loan</span>
                             <ArrowRight className="w-4 h-4" />
