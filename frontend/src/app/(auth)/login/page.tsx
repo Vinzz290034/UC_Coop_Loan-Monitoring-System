@@ -53,9 +53,6 @@ function LoginForm() {
         <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-on-surface dark:text-white mb-2">
           UC-METC MPC Portal
         </h2>
-        {/* <p className="font-body text-sm font-semibold text-on-surface/75 dark:text-neutral-300">
-          Please enter your credentials to access your account.
-        </p> */}
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-6">

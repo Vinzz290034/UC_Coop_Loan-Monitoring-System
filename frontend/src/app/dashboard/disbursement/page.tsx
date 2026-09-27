@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
+import { Skeleton } from '@/components/ui/Skeleton';
 import UnifiedCvLfPrintModal from '@/components/loans/UnifiedCvLfPrintModal';
 import {
   FileText,
@@ -2131,14 +2132,20 @@ function DisbursementPageContent() {
                 </thead>
                 <tbody className="divide-y divide-outline-variant/40">
                   {cvLoading && checkVouchers.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="py-12 text-center text-neutral-500">
-                        <div className="flex flex-col items-center justify-center gap-2">
-                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                          <span>Loading {currentTabConfig.label} check vouchers...</span>
-                        </div>
-                      </td>
-                    </tr>
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i} className="animate-pulse">
+                        <td className="py-4 px-4"><Skeleton className="h-4 w-4 rounded" /></td>
+                        <td className="py-4 px-4"><Skeleton className="h-4 w-24 rounded" /></td>
+                        <td className="py-4 px-4"><Skeleton className="h-4 w-20 rounded" /></td>
+                        <td className="py-4 px-4"><Skeleton className="h-4 w-20 rounded" /></td>
+                        <td className="py-4 px-4"><Skeleton className="h-4 w-32 rounded" /></td>
+                        <td className="py-4 px-4"><Skeleton className="h-4 w-20 rounded" /></td>
+                        <td className="py-4 px-4"><Skeleton className="h-4 w-40 rounded" /></td>
+                        <td className="py-4 px-4 text-right"><Skeleton className="h-4 w-24 rounded ml-auto" /></td>
+                        <td className="py-4 px-4 text-center"><Skeleton className="h-5 w-16 rounded-full mx-auto" /></td>
+                        <td className="py-4 px-4 text-center"><Skeleton className="h-7 w-16 rounded-xl mx-auto" /></td>
+                      </tr>
+                    ))
                   ) : checkVouchers.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="py-12 text-center text-neutral-500">

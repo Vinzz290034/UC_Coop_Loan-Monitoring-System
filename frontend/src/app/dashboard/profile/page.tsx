@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import BackButton from '@/components/BackButton';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import {
@@ -589,14 +590,44 @@ const computeAgeFromDob = (dobString: string): string => {
     }
   };
 
-  if (!user) return null;
+  // Show profile skeleton while user session hydrates (prevents white flash)
+  if (!user) return (
+    <div className="space-y-6 mx-auto animate-in fade-in duration-300">
+      <div>
+        <Skeleton className="h-9 w-36 rounded-full" />
+      </div>
+      {/* Profile Header Skeleton */}
+      <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl p-6">
+        <div className="flex flex-col sm:flex-row items-center gap-6">
+          <Skeleton className="w-24 h-24 rounded-full flex-shrink-0" />
+          <div className="space-y-2 flex-1 text-center sm:text-left">
+            <Skeleton className="h-7 w-48 rounded-xl" />
+            <Skeleton className="h-4 w-32 rounded-full opacity-70" />
+            <Skeleton className="h-3 w-56 rounded-full opacity-50" />
+          </div>
+        </div>
+      </div>
+      {/* Form Skeleton */}
+      <div className="bg-white dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl p-6 space-y-6">
+        <Skeleton className="h-6 w-40 rounded-xl" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-3 w-20 rounded-md" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   const displayName = firstName && lastName ? `${firstName} ${lastName}` : user.username;
 
   return (
     <div className="space-y-6 mx-auto animate-micro-elevate">
       <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+        <BackButton href="/dashboard">Back to Overview</BackButton>
       </div>
 
       {/* Profile Header */}

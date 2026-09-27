@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import { Skeleton } from '@/components/ui/Skeleton';
 import * as XLSX from 'xlsx';
 import {
   MessageSquare,
@@ -339,8 +340,27 @@ export default function MessagesSection({ onUnreadCountChange }: MessagesSection
           {/* Message List */}
           <div className="mt-3 space-y-2.5">
             {loading ? (
-              <div className="flex items-center justify-center py-16">
-                <div className="w-8 h-8 rounded-full border-3 border-neutral-200 border-t-primary dark:border-neutral-700 dark:border-t-secondary animate-spin" />
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="bg-white dark:bg-surface-container-low border border-outline-variant/40 rounded-3xl p-5 space-y-3 animate-pulse"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                        <Skeleton className="w-9 h-9 rounded-2xl shrink-0" />
+                        <div className="space-y-2 flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-4 w-32 rounded-md" />
+                            <Skeleton className="h-4 w-16 rounded-full" />
+                          </div>
+                          <Skeleton className="h-3.5 w-3/4 rounded-md" />
+                        </div>
+                      </div>
+                      <Skeleton className="h-3 w-16 rounded-md shrink-0" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : messages.length === 0 ? (
               <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-12 flex flex-col items-center gap-3 text-neutral-400 dark:text-neutral-500 shadow-sm text-center">
@@ -348,8 +368,8 @@ export default function MessagesSection({ onUnreadCountChange }: MessagesSection
                 <p className="text-sm font-semibold">No messages found</p>
                 <p className="text-xs max-w-sm">
                   {isMember
-                    ? "You haven't submitted any messages yet. Click 'Compose Message' to start."
-                    : "Contact form submissions and direct member inquiries will appear here."}
+                    ? "You haven't submitted any messages yet. Click 'Compose Message' to reach out to cooperative officers."
+                    : "Contact inquiries and messages from members will appear here."}
                 </p>
               </div>
             ) : (

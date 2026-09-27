@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import { Skeleton } from '@/components/ui/Skeleton';
 import {
   Bell,
   CheckCheck,
@@ -212,8 +213,23 @@ export default function NotificationsSection({ onUnreadCountChange }: Notificati
 
       {/* Notification List */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-10 h-10 rounded-full border-3 border-neutral-200 border-t-primary dark:border-neutral-700 dark:border-t-secondary animate-spin" />
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-white dark:bg-surface-container-low border border-outline-variant/40 rounded-3xl p-5 flex items-start gap-4 animate-pulse"
+            >
+              <Skeleton className="w-10 h-10 rounded-2xl shrink-0" />
+              <div className="space-y-2 flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-4 w-40 rounded-md" />
+                  <Skeleton className="h-3 w-16 rounded-md shrink-0" />
+                </div>
+                <Skeleton className="h-3 w-3/4 rounded-md" />
+                <Skeleton className="h-2.5 w-1/3 rounded-full opacity-60" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : notifications.length === 0 ? (
         <div className="bg-white dark:bg-surface-container-low border border-outline-variant/50 rounded-3xl p-16 flex flex-col items-center gap-3 text-neutral-400 dark:text-neutral-500 text-center">

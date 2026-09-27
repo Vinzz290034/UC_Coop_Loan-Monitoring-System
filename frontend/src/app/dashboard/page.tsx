@@ -473,16 +473,16 @@ export default function OverviewPage() {
   const getSortLabel = (key: string) => {
     switch (key) {
       case 'default': return 'Default View';
-      case 'member_id_asc': return 'Member ID (Ascending)';
-      case 'member_id_desc': return 'Member ID (Descending)';
-      case 'name_asc': return 'Last Name (A to Z)';
-      case 'name_desc': return 'Last Name (Z to A)';
-      case 'loan_amount_desc': return 'Loan Amount (Highest to Lowest)';
-      case 'loan_amount_asc': return 'Loan Amount (Lowest to Highest)';
-      case 'balance_desc': return 'Account Balance (Highest to Lowest)';
-      case 'balance_asc': return 'Account Balance (Lowest to Highest)';
-      case 'status_pending': return 'Member Status (Pending Review First)';
-      case 'status_active': return 'Member Status (Active First)';
+      case 'member_id_asc': return 'Member ID (Low to High)';
+      case 'member_id_desc': return 'Member ID (High to Low)';
+      case 'name_asc': return 'Last Name (A–Z)';
+      case 'name_desc': return 'Last Name (Z–A)';
+      case 'loan_amount_desc': return 'Loan Amount (High to Low)';
+      case 'loan_amount_asc': return 'Loan Amount (Low to High)';
+      case 'balance_desc': return 'Balance (High to Low)';
+      case 'balance_asc': return 'Balance (Low to High)';
+      case 'status_pending': return 'Status (Pending First)';
+      case 'status_active': return 'Status (Active First)';
       default: return 'Default View';
     }
   };
@@ -1250,6 +1250,112 @@ export default function OverviewPage() {
   };
 
   if (loading) {
+    // Role-aware skeleton: mirrors the actual layout each role sees,
+    // preventing cumulative layout shift (CLS) during data hydration
+    const isMemberRole = user?.role === 'member';
+
+    if (isMemberRole) {
+      // Member Overview Skeleton — matches the 2-column layout with
+      // greeting, quick transactions, tabs, milestone card, and loan products sidebar
+      return (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Header Greeting Shimmer */}
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-36 rounded-full" />
+            <Skeleton className="h-9 sm:h-10 w-72 sm:w-96 rounded-2xl" />
+          </div>
+
+          {/* Two-Column Layout Skeleton */}
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
+            {/* Left Column (~65-70%) */}
+            <div className="flex-1 min-w-0 space-y-8 w-full">
+              {/* Quick Transactions Skeleton */}
+              <div className="space-y-4">
+                <Skeleton className="h-5 w-40 rounded-xl" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="p-6 bg-white dark:bg-surface-container-low border-2 border-outline-variant/40 rounded-3xl space-y-3">
+                    <Skeleton className="h-5 w-32 rounded-lg" />
+                    <Skeleton className="h-3 w-48 rounded-full opacity-70" />
+                    <Skeleton className="h-3 w-20 rounded-full" />
+                  </div>
+                  <div className="p-6 bg-white dark:bg-surface-container-low border-2 border-outline-variant/40 rounded-3xl space-y-3">
+                    <Skeleton className="h-5 w-32 rounded-lg" />
+                    <Skeleton className="h-3 w-48 rounded-full opacity-70" />
+                    <Skeleton className="h-3 w-20 rounded-full" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Underline Tabs Skeleton */}
+              <div className="space-y-4">
+                <div className="flex gap-6 border-b border-outline-variant/50 pb-0">
+                  <Skeleton className="h-8 w-24 rounded-lg" />
+                  <Skeleton className="h-8 w-28 rounded-lg" />
+                  <Skeleton className="h-8 w-32 rounded-lg" />
+                </div>
+                {/* Tab content placeholder */}
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/50 rounded-3xl space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="w-8 h-8 rounded-xl flex-shrink-0" />
+                        <div className="space-y-1.5 flex-1">
+                          <Skeleton className="h-4 w-3/4 rounded-md" />
+                          <Skeleton className="h-3 w-1/2 rounded-full opacity-60" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Milestone Tracker Skeleton */}
+              <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-sm space-y-4">
+                <Skeleton className="h-6 w-28 rounded-full" />
+                <Skeleton className="h-6 w-64 rounded-xl" />
+                <Skeleton className="h-3 w-80 rounded-full opacity-70" />
+                <Skeleton className="h-3 w-full rounded-full" />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-3.5 rounded-2xl border border-outline-variant/40 space-y-2">
+                      <Skeleton className="h-2.5 w-20 rounded-md" />
+                      <Skeleton className="h-4 w-24 rounded-md" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column — Loan Products Sidebar (~30-35%) */}
+            <div className="w-full lg:w-[340px] xl:w-[380px] flex-shrink-0 space-y-4">
+              <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-sm space-y-4">
+                <Skeleton className="h-5 w-40 rounded-xl" />
+                <Skeleton className="h-8 w-full rounded-xl" />
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-4 rounded-2xl border border-outline-variant/40 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1.5 flex-1">
+                          <Skeleton className="h-3 w-16 rounded-full" />
+                          <Skeleton className="h-4 w-36 rounded-md" />
+                        </div>
+                        <Skeleton className="h-6 w-12 rounded-xl" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Skeleton className="h-12 rounded-xl" />
+                        <Skeleton className="h-12 rounded-xl" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Admin/Staff Overview Skeleton — matches 4 KPI cards + charts layout
     return (
       <div className="space-y-8 animate-in fade-in duration-300">
         {/* Header Greeting Shimmer */}
@@ -1549,7 +1655,7 @@ export default function OverviewPage() {
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary mb-2">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Verified Member Session</span>
+            <span>Verified Member</span>
           </div>
           <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
             {isReturning ? 'Welcome back' : 'Welcome'}, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
@@ -1566,7 +1672,7 @@ export default function OverviewPage() {
             {/* Quick Transactions Section */}
             <div className="space-y-4">
               <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
-              <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-2' : 'md:grid-cols-2'} gap-6`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 {/* Apply for Loan */}
                 <button
@@ -1579,7 +1685,7 @@ export default function OverviewPage() {
                       {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </h4>
                     <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                      Submit a new credit application request.
+                      Apply for credit with flexible terms.
                     </p>
                     <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
                       {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
@@ -1590,41 +1696,36 @@ export default function OverviewPage() {
                   </div>
                 </button>
 
-                {/* Initiate Investment */}
-                {balances.total_assets === 0 && (
-                  <button
-                    onClick={() => {
-                      if (!isVerified) {
-                        setActiveModal('unverified_loan');
-                        return;
-                      }
-                      setActiveModal('investment');
-                      setWizardStep(1);
-                      setSuccessData(null);
-                      setModalError(null);
-                    }}
-                    className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
-                  >
-                    <div className="space-y-1">
-                      <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
-                        Initiate Investment
-                        {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
-                      </h4>
-                      <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                        Add capital placement to your share equity.
-                      </p>
-                      <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                        {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
-                      </span>
-                    </div>
-                    <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
-                      <Coins className="w-6 h-6" />
-                    </div>
-                  </button>
-                )}
-
-                {/* Book Appointment moved to Schedule page */}
-
+                {/* Add Share Capital */}
+                <button
+                  onClick={() => {
+                    if (!isVerified) {
+                      setActiveModal('unverified_loan');
+                      return;
+                    }
+                    setActiveModal('investment');
+                    setWizardStep(1);
+                    setSuccessData(null);
+                    setModalError(null);
+                  }}
+                  className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+                >
+                  <div className="space-y-1">
+                    <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
+                      Add Share Capital
+                      {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                    </h4>
+                    <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
+                      Grow your cooperative equity & dividends.
+                    </p>
+                    <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
+                      {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
+                    </span>
+                  </div>
+                  <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                    <Coins className="w-6 h-6" />
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -1788,13 +1889,13 @@ export default function OverviewPage() {
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary">
                     <Award className="w-3.5 h-3.5" />
-                    <span>Co-op Equity & Investment Milestone</span>
+                    <span>Equity Milestone</span>
                   </div>
                   <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white pt-1">
                     Member Investment Goal & Dividend Tracker
                   </h3>
                   <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-                    Track your target capital placements. Reaching your goal notifies the Coop Office for call/email payout options.
+                    Track your accumulated capital toward your annual milestone target.
                   </p>
                 </div>
 
@@ -1875,7 +1976,7 @@ export default function OverviewPage() {
                         <div className="flex items-center gap-2">
                           <PhoneCall className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
                           <Mail className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
-                          <span><strong>Officer Contact Protocol:</strong> Once your investment hits 100%, a staff will call or email you.</span>
+                          <span><strong>Milestone Notice:</strong> When you reach 100%, an officer will contact you regarding payout or rollover options.</span>
                         </div>
                         <span className="font-mono text-[11px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/15 px-2.5 py-1 rounded-full">
                           {100 - progressPercent}% remaining to goal
@@ -2053,7 +2154,7 @@ export default function OverviewPage() {
                         {/* Footer: Formula + Apply CTA */}
                         <div className="pt-1.5 flex items-center justify-between border-t border-outline-variant/30 text-xs">
                           <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
-                            {prod.amortization_type === 'flat_rate' ? 'Straight (Flat)' : 'Diminishing'}
+                            {prod.amortization_type === 'flat_rate' ? 'Fixed monthly interest' : 'Decreasing balance interest'}
                           </span>
                           <button
                             type="button"
@@ -3761,14 +3862,14 @@ export default function OverviewPage() {
                     title="Sort Member Financial Overview"
                   >
                     <option value="default">Default View</option>
-                    <option value="member_id_asc">Member ID (Ascending ↑)</option>
-                    <option value="member_id_desc">Member ID (Descending ↓)</option>
-                    <option value="name_asc">Last Name (A → Z)</option>
-                    <option value="name_desc">Last Name (Z → A)</option>
-                    <option value="loan_amount_desc">Loan Amount (Highest → Lowest)</option>
-                    <option value="loan_amount_asc">Loan Amount (Lowest → Highest)</option>
-                    <option value="balance_desc">Account Balance (Highest → Lowest)</option>
-                    <option value="balance_asc">Account Balance (Lowest → Highest)</option>
+                    <option value="member_id_asc">Member ID (Low to High)</option>
+                    <option value="member_id_desc">Member ID (High to Low)</option>
+                    <option value="name_asc">Last Name (A–Z)</option>
+                    <option value="name_desc">Last Name (Z–A)</option>
+                    <option value="loan_amount_desc">Loan Amount (High to Low)</option>
+                    <option value="loan_amount_asc">Loan Amount (Low to High)</option>
+                    <option value="balance_desc">Balance (High to Low)</option>
+                    <option value="balance_asc">Balance (Low to High)</option>
                     <option value="status_pending">Status (Pending First)</option>
                     <option value="status_active">Status (Active First)</option>
                   </select>
@@ -4007,14 +4108,14 @@ export default function OverviewPage() {
                     title="Sort Member Financial Overview"
                   >
                     <option value="default">Default View</option>
-                    <option value="member_id_asc">Member ID (Ascending ↑)</option>
-                    <option value="member_id_desc">Member ID (Descending ↓)</option>
-                    <option value="name_asc">Last Name (A → Z)</option>
-                    <option value="name_desc">Last Name (Z → A)</option>
-                    <option value="loan_amount_desc">Loan Amount (Highest → Lowest)</option>
-                    <option value="loan_amount_asc">Loan Amount (Lowest → Highest)</option>
-                    <option value="balance_desc">Account Balance (Highest → Lowest)</option>
-                    <option value="balance_asc">Account Balance (Lowest → Highest)</option>
+                    <option value="member_id_asc">Member ID (Low to High)</option>
+                    <option value="member_id_desc">Member ID (High to Low)</option>
+                    <option value="name_asc">Last Name (A–Z)</option>
+                    <option value="name_desc">Last Name (Z–A)</option>
+                    <option value="loan_amount_desc">Loan Amount (High to Low)</option>
+                    <option value="loan_amount_asc">Loan Amount (Low to High)</option>
+                    <option value="balance_desc">Balance (High to Low)</option>
+                    <option value="balance_asc">Balance (Low to High)</option>
                     <option value="status_pending">Status (Pending First)</option>
                     <option value="status_active">Status (Active First)</option>
                   </select>

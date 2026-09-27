@@ -422,7 +422,7 @@ export default function MembersPage() {
         {/* Top Header & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+            <BackButton href="/dashboard">Back to Overview</BackButton>
           </div>
           <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
             <Link
@@ -444,7 +444,7 @@ export default function MembersPage() {
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all cursor-pointer"
             >
               <UserPlus className="w-4 h-4" />
-              Register Profile
+              Register Member
             </button>
           </div>
         </div>

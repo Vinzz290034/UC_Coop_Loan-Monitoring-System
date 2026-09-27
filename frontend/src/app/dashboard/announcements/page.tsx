@@ -290,7 +290,7 @@ export default function AnnouncementsPage() {
       {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+          <BackButton href="/dashboard">Back to Overview</BackButton>
         </div>
 
         {/* Create Announcement Button */}

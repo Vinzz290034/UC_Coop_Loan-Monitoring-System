@@ -2554,7 +2554,7 @@ function LoansPageContent() {
         {/* Top Header & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+            <BackButton href="/dashboard">Back to Overview</BackButton>
           </div>
           <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
             <button
@@ -2674,12 +2674,12 @@ function LoansPageContent() {
                     <FileCheck className="w-6 h-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">My Credit Status</span>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Active Loans</span>
                     <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
                       {memberMetrics?.loans?.active_count || 0} Active Loans
                     </span>
                     <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
-                      Approved cooperative contracts list
+                      Current active contracts
                     </span>
                   </div>
                 </div>
@@ -2695,7 +2695,7 @@ function LoansPageContent() {
                       {formatCurrency(memberMetrics?.loans?.outstanding_balance || 0)}
                     </span>
                     <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
-                      Initial Deployed: {formatCurrency(memberMetrics?.loans?.original_principal || 0)}
+                      Original Principal: {formatCurrency(memberMetrics?.loans?.original_principal || 0)}
                     </span>
                   </div>
                 </div>
@@ -2719,7 +2719,7 @@ function LoansPageContent() {
                           {formatCurrency(remaining)}
                         </span>
                         <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
-                          Policy Multiplier Limit: {formatCurrency(limit)}
+                          Total borrowing capacity: {formatCurrency(limit)}
                         </span>
                       </div>
                     </div>
@@ -2739,7 +2739,7 @@ function LoansPageContent() {
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
               }`}
           >
-            {isAdminOrManager ? 'Loan Monitoring' : 'Loan Application'}
+            {isAdminOrManager ? 'Loan Monitoring' : 'My Loans'}
           </button>
           {isAdminOrManager && (
             <button
@@ -2806,7 +2806,7 @@ function LoansPageContent() {
             <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
               <div className="w-full lg:w-auto flex-1 max-w-md">
                 <SearchInput
-                  placeholder="Search by LAF No., borrower, product, contract ID..."
+                  placeholder={isAdminOrManager ? "Search by LAF No., borrower, product, contract ID..." : "Search by LAF No., product, or contract ID..."}
                   defaultValue={loansSearch}
                   onSearch={(val) => {
                     setLoansSearch((prev) => {
