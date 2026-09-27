@@ -2167,15 +2167,15 @@ export default function OverviewPage() {
                           </div>
                         </div>
 
-                        {/* Footer: Apply CTA */}
-                        <div className="pt-2 flex items-center justify-end border-t border-outline-variant/30 text-xs">
+                        {/* Footer: Full-width Apply CTA */}
+                        <div className="pt-2.5 border-t border-outline-variant/30">
                           <button
                             type="button"
                             onClick={() => openLoanModalWithProduct(prod)}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white dark:bg-secondary/15 dark:text-secondary dark:hover:bg-secondary dark:hover:text-neutral-950 font-bold text-xs transition-all active:scale-95 cursor-pointer shadow-2xs"
+                            className="w-full py-2.5 px-4 rounded-2xl bg-primary/10 text-primary hover:bg-primary hover:text-white dark:bg-secondary/15 dark:text-secondary dark:hover:bg-secondary dark:hover:text-neutral-950 font-bold text-xs sm:text-sm transition-all active:scale-[0.98] cursor-pointer shadow-2xs flex items-center justify-center gap-2"
                           >
                             <span>Apply</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
+                            <ArrowRight className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
