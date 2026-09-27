@@ -1259,16 +1259,16 @@ export default function OverviewPage() {
       // greeting, quick transactions, tabs, milestone card, and loan products sidebar
       return (
         <div className="space-y-8 animate-in fade-in duration-300">
-          {/* Header Greeting Shimmer */}
-          <div className="space-y-2">
-            <Skeleton className="h-6 w-36 rounded-full" />
-            <Skeleton className="h-9 sm:h-10 w-72 sm:w-96 rounded-2xl" />
-          </div>
-
           {/* Two-Column Layout Skeleton */}
           <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
             {/* Left Column (~65-70%) */}
             <div className="flex-1 min-w-0 space-y-8 w-full">
+              {/* Header Greeting Shimmer */}
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-36 rounded-full" />
+                <Skeleton className="h-9 sm:h-10 w-72 sm:w-96 rounded-2xl" />
+              </div>
+
               {/* Quick Transactions Skeleton */}
               <div className="space-y-4">
                 <Skeleton className="h-5 w-40 rounded-xl" />
@@ -1327,11 +1327,18 @@ export default function OverviewPage() {
             </div>
 
             {/* Right Column — Loan Products Sidebar (~30-35%) */}
-            <div className="w-full lg:w-[340px] xl:w-[380px] flex-shrink-0 space-y-4">
-              <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-sm space-y-4">
-                <Skeleton className="h-5 w-40 rounded-xl" />
-                <Skeleton className="h-8 w-full rounded-xl" />
-                <div className="space-y-3">
+            <div className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-6 lg:self-start">
+              <div className="p-5 sm:p-6 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-sm flex flex-col lg:max-h-[calc(100vh-6rem)] overflow-hidden">
+                <div className="flex items-center justify-between flex-shrink-0 mb-4">
+                  <Skeleton className="h-5 w-40 rounded-xl" />
+                  <Skeleton className="h-4 w-16 rounded-md" />
+                </div>
+                <div className="flex gap-1 flex-shrink-0 mb-4">
+                  <Skeleton className="h-8 flex-1 rounded-xl" />
+                  <Skeleton className="h-8 flex-1 rounded-xl" />
+                  <Skeleton className="h-8 flex-1 rounded-xl" />
+                </div>
+                <div className="space-y-3 flex-1 min-h-0 overflow-hidden">
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="p-4 rounded-2xl border border-outline-variant/40 space-y-3">
                       <div className="flex items-start justify-between">
@@ -1643,31 +1650,28 @@ export default function OverviewPage() {
           onClose={() => setIsOnboardingModalOpen(false)}
         />
 
-        {!isProfileApproved && (
-          <IncompleteProfileBanner
-            onActionClick={() => setIsOnboardingModalOpen(true)}
-            status={memberStatus}
-            isCompleted={isProfileCompleted}
-          />
-        )}
-
-        {/* Header Greeting */}
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary mb-2">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Verified Member</span>
-          </div>
-          <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
-            {isReturning ? 'Welcome back' : 'Welcome'}, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
-          </h1>
-
-        </div>
-
-
         {/* ======== TWO-COLUMN LAYOUT: Main Content + Loan Products Sidebar ======== */}
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
           {/* ---- LEFT COLUMN (Main Content ~65-70%) ---- */}
           <div className="flex-1 min-w-0 space-y-8">
+            {!isProfileApproved && (
+              <IncompleteProfileBanner
+                onActionClick={() => setIsOnboardingModalOpen(true)}
+                status={memberStatus}
+                isCompleted={isProfileCompleted}
+              />
+            )}
+
+            {/* Header Greeting */}
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary mb-2">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Verified Member</span>
+              </div>
+              <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
+                {isReturning ? 'Welcome back' : 'Welcome'}, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
+              </h1>
+            </div>
 
             {/* Quick Transactions Section */}
             <div className="space-y-4">
@@ -1737,16 +1741,16 @@ export default function OverviewPage() {
                   type="button"
                   onClick={() => setOverviewTab('updates')}
                   className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${overviewTab === 'updates'
-                      ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-                      : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                    ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                    : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
                     }`}
                 >
                   <Megaphone className="w-4 h-4" />
                   <span>Updates</span>
                   {overviewAnnouncements.length > 0 && (
                     <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold ${overviewTab === 'updates'
-                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
-                        : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                      ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
                       }`}>
                       {overviewAnnouncements.length}
                     </span>
@@ -1756,8 +1760,8 @@ export default function OverviewPage() {
                   type="button"
                   onClick={() => setOverviewTab('merchandise')}
                   className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${overviewTab === 'merchandise'
-                      ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-                      : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                    ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                    : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
                     }`}
                 >
                   <ShoppingBag className="w-4 h-4" />
@@ -1776,8 +1780,8 @@ export default function OverviewPage() {
                           key={level}
                           onClick={() => setAnnouncementsPriorityFilter(level)}
                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer capitalize ${announcementsPriorityFilter === level
-                              ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
-                              : 'border-outline-variant/50 text-neutral-500 hover:border-neutral-400'
+                            ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
+                            : 'border-outline-variant/50 text-neutral-500 hover:border-neutral-400'
                             }`}
                         >
                           {level}
@@ -2023,9 +2027,9 @@ export default function OverviewPage() {
           </div>
 
           {/* ---- RIGHT COLUMN (Loan Products Sidebar) ---- */}
-          <div className="w-full lg:w-80 xl:w-96 shrink-0 space-y-6">
-            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 sm:p-6 shadow-sm space-y-5 lg:sticky lg:top-20">
-              <div className="flex items-center justify-between">
+          <div className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-6 lg:self-start">
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col lg:max-h-[calc(100vh-6rem)] overflow-hidden">
+              <div className="flex items-center justify-between flex-shrink-0 mb-4">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
                     <Banknote className="w-5 h-5" />
@@ -2051,13 +2055,13 @@ export default function OverviewPage() {
               </div>
 
               {/* Category Filter Tabs */}
-              <div className="flex items-center gap-1 p-1 bg-neutral-100/80 dark:bg-neutral-900/60 rounded-xl border border-outline-variant/40 text-[11px] font-bold">
+              <div className="flex items-center gap-1 p-1 bg-neutral-100/80 dark:bg-neutral-900/60 rounded-xl border border-outline-variant/40 text-[11px] font-bold flex-shrink-0 mb-4">
                 <button
                   type="button"
                   onClick={() => setSidebarLoanCategory('all')}
                   className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${sidebarLoanCategory === 'all'
-                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                      : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                    ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                    : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
                     }`}
                 >
                   All ({overviewLoanProducts.length > 0 ? overviewLoanProducts.filter((p: any) => p.is_active !== false && p.is_active !== 'false').length : DEFAULT_LOAN_PRODUCTS.length})
@@ -2066,8 +2070,8 @@ export default function OverviewPage() {
                   type="button"
                   onClick={() => setSidebarLoanCategory('regular')}
                   className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${sidebarLoanCategory === 'regular'
-                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                      : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                    ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                    : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
                     }`}
                 >
                   Regular
@@ -2076,17 +2080,17 @@ export default function OverviewPage() {
                   type="button"
                   onClick={() => setSidebarLoanCategory('stl')}
                   className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${sidebarLoanCategory === 'stl'
-                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                      : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                    ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                    : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
                     }`}
                 >
                   STL
                 </button>
               </div>
 
-              {/* Loan Products List */}
+              {/* Loan Products List — Scrollable only within its own section */}
               {loanProductsLoading && filteredSidebarLoanProducts.length === 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-3 flex-1 min-h-0 overflow-y-auto pr-1">
                   <div className="h-24 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
                   <div className="h-24 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
                   <div className="h-24 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
@@ -2096,7 +2100,7 @@ export default function OverviewPage() {
                   No products found for this category.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[580px] overflow-y-auto pr-1 custom-scrollbar">
+                <div className="space-y-3 flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 custom-scrollbar">
                   {filteredSidebarLoanProducts.map((prod: any) => {
                     const parsedRate = parseFloat(prod.interest_rate) || 0;
                     const displayRate = (parsedRate <= 1 ? parsedRate * 100 : parsedRate).toFixed(0);
@@ -2118,10 +2122,10 @@ export default function OverviewPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="space-y-1 flex-1">
                             <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${isSTL
-                                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
-                                : isSpecial
-                                  ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
-                                  : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
+                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
+                              : isSpecial
+                                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
+                                : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
                               }`}>
                               {isSTL ? 'Short Term Loan' : isSpecial ? 'Special Loan' : 'Regular Facility'}
                             </span>
@@ -2172,7 +2176,7 @@ export default function OverviewPage() {
               )}
 
               {/* Quick Loan Calculator Link / Promo */}
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/5 to-secondary/10 dark:from-primary/10 dark:to-secondary/5 border border-primary/20 dark:border-secondary/20 space-y-2">
+              {/* <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/5 to-secondary/10 dark:from-primary/10 dark:to-secondary/5 border border-primary/20 dark:border-secondary/20 space-y-2">
                 <div className="flex items-center gap-2 text-primary dark:text-secondary">
                   <Calculator className="w-4 h-4" />
                   <span className="text-xs font-bold font-headline">Need an Estimate?</span>
@@ -2186,7 +2190,7 @@ export default function OverviewPage() {
                 >
                   Go to Loan Calculator <ArrowRight className="w-3 h-3" />
                 </Link>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
@@ -3480,8 +3484,8 @@ export default function OverviewPage() {
                     type="button"
                     onClick={() => setCatalogCategory('all')}
                     className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${catalogCategory === 'all'
-                        ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
                       }`}
                   >
                     All ({overviewLoanProducts.length > 0 ? overviewLoanProducts.filter((p: any) => p.is_active !== false && p.is_active !== 'false').length : DEFAULT_LOAN_PRODUCTS.length})
@@ -3490,8 +3494,8 @@ export default function OverviewPage() {
                     type="button"
                     onClick={() => setCatalogCategory('regular')}
                     className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${catalogCategory === 'regular'
-                        ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
                       }`}
                   >
                     Regular
@@ -3500,8 +3504,8 @@ export default function OverviewPage() {
                     type="button"
                     onClick={() => setCatalogCategory('stl')}
                     className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${catalogCategory === 'stl'
-                        ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
                       }`}
                   >
                     STL
@@ -3558,10 +3562,10 @@ export default function OverviewPage() {
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${isSTL
-                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
-                                  : isSpecial
-                                    ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
-                                    : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
+                                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
+                                : isSpecial
+                                  ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
+                                  : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
                                 }`}>
                                 {isSTL ? 'Short Term Loan' : isSpecial ? 'Special Loan' : 'Regular Facility'}
                               </span>
