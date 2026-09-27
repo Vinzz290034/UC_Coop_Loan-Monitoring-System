@@ -865,7 +865,7 @@ const computeAgeFromDob = (dobString: string): string => {
           {user.role === 'member' && user.profile?.profile_completed && !(user.profile?.status === 'approved' || user.profile?.status === 'active' || user.profile?.is_verified === true) && user.profile?.status !== 'disapproved' && (
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs font-medium space-y-1 mb-4">
               <p className="font-bold">Your profile has been submitted for verification.</p>
-              <p>Your information is currently under review by Coop Admin. Approval typically takes 24–48 hours. Loan application features will be unlocked once your account has been approved.</p>
+              <p>Your profile is under review by Coop Admin. Loan application features will be unlocked upon approval.</p>
             </div>
           )}
 

@@ -890,7 +890,7 @@ export default function AccountingPage() {
                 {formatCurrency(parseFloat(savingsSummary?.total_savings_pool || 0))}
               </h3>
               <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-1">
-                {savingsSummary?.funded_accounts || 0} active funded member accounts
+                {savingsSummary?.funded_accounts || 0} funded accounts
               </p>
             </div>
 
@@ -902,7 +902,7 @@ export default function AccountingPage() {
               <h3 className="font-headline text-2xl font-extrabold text-on-surface dark:text-white mt-1">
                 {savingsSummary?.total_accounts || allSavingsAccounts.length}
               </h3>
-              <p className="text-[10px] text-neutral-400 mt-1">Total registered cooperative members</p>
+              <p className="text-[10px] text-neutral-400 mt-1">Registered member accounts</p>
             </div>
 
             <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
@@ -913,7 +913,7 @@ export default function AccountingPage() {
               <h3 className="font-headline text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
                 {formatCurrency(parseFloat(savingsSummary?.total_deposits_all || 0))}
               </h3>
-              <p className="text-[10px] text-neutral-400 mt-1">Total cash & check passbook inflows</p>
+              <p className="text-[10px] text-neutral-400 mt-1">Total deposit inflows</p>
             </div>
 
             <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
@@ -924,7 +924,7 @@ export default function AccountingPage() {
               <h3 className="font-headline text-2xl font-extrabold text-tertiary mt-1">
                 {formatCurrency(parseFloat(savingsSummary?.total_withdrawals_all || 0))}
               </h3>
-              <p className="text-[10px] text-neutral-400 mt-1">Disbursed member cash withdrawals</p>
+              <p className="text-[10px] text-neutral-400 mt-1">Total member withdrawals</p>
             </div>
           </div>
 

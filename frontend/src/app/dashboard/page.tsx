@@ -2209,7 +2209,7 @@ export default function OverviewPage() {
                 <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white capitalize">
                   {activeModal === 'loan' && 'Apply for a Loan'}
                   {activeModal === 'unverified_loan' && 'Account Verification Required'}
-                  {activeModal === 'investment' && 'Initiate Investment'}
+                  {activeModal === 'investment' && 'Add Share Capital'}
                   {activeModal === 'appointment' && 'Book Office Appointment'}
                   {activeModal === 'welcome' && (wizardStep === 1 ? 'Welcome to Coop Sync!' : wizardStep === 2 ? 'Set Your Investment Goal' : 'Account Verification Required')}
                 </h3>
@@ -2247,23 +2247,11 @@ export default function OverviewPage() {
                     </div>
                     <div className="space-y-2">
                       <h4 className="font-headline font-extrabold text-xl text-on-surface dark:text-white">
-                        Account Profile Not Yet Verified
+                        Profile Verification Required
                       </h4>
                       <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-md mx-auto leading-relaxed font-medium">
-                        Your account profile is currently unverified or pending review by Cooperative Management. You must complete your personal profile verification and receive Admin approval before applying for a credit line.
+                        Your profile is pending review. Please complete and submit your profile details on your Profile page for administrator approval to unlock loan applications.
                       </p>
-                    </div>
-
-                    <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs text-left space-y-2 font-medium">
-                      <p className="font-bold flex items-center gap-2">
-                        <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                        Next Steps Required:
-                      </p>
-                      <ul className="list-disc list-inside space-y-1 text-[11px] text-neutral-700 dark:text-neutral-300 pl-1">
-                        <li>Complete all personal profile details (TIN, Member Title, Address, etc.)</li>
-                        <li>Submit your profile for verification on the Profile Page</li>
-                        <li>Wait for Cooperative Admin or Staff review (typically 24–48 hours)</li>
-                      </ul>
                     </div>
 
                     <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -2378,11 +2366,11 @@ export default function OverviewPage() {
                             <div className="text-[11px] font-bold text-neutral-500/90 flex items-center gap-2 mt-2.5 bg-neutral/5 dark:bg-neutral/10 p-2 px-3.5 rounded-2xl border border-outline-variant/30">
                               <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
                               {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
-                                <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
+                                <span>Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
                               ) : selectedLoanCategory === LOAN_CATEGORIES.STL ? (
-                                <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
+                                <span>Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
                               ) : (
-                                <span>Coop Policy: <strong className="text-primary dark:text-secondary font-extrabold">Special Loan (Calamity Loan)</strong> is available during officially declared State of Calamity.</span>
+                                <span><strong className="text-primary dark:text-secondary font-extrabold">Special Loan (Calamity Loan)</strong> is available during a declared State of Calamity.</span>
                               )}
                             </div>
                           </div>
@@ -2396,9 +2384,9 @@ export default function OverviewPage() {
                               <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex items-start gap-2.5 font-semibold">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
                                 <div className="space-y-1">
-                                  <p className="font-bold">No Share Capital Deposit Found (₱0.00)</p>
+                                  <p className="font-bold">No Share Capital Found (₱0.00)</p>
                                   <p className="text-[11px] font-normal leading-relaxed text-on-surface/80 dark:text-neutral-300">
-                                    You have ₱0.00 in Share Capital. Under Cooperative Policy, your borrowing capacity is 80% of paid-up Share Capital (₱0.00), so loan applications are locked. Please post a Share Capital deposit first to enable loan borrowing.
+                                    Borrowing capacity is based on Share Capital. Deposit into Share Capital to unlock loan applications.
                                   </p>
                                 </div>
                               </div>
@@ -2412,19 +2400,19 @@ export default function OverviewPage() {
                             {hasStl1MonthRepayment && selectedLoanCategory === LOAN_CATEGORIES.STL && (
                               <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-                                <span><strong>STL Re-borrowing Unlocked:</strong> Users can loan again on STL after 1 month term of repayment (even if the term is more than 1month and this applies if they have 3 current loans on STL). At least one of your active STLs has reached 1 month of repayment!</span>
+                                <span><strong>STL Re-borrowing Unlocked:</strong> You are eligible to apply because at least one active STL has 1+ month of recorded repayments.</span>
                               </div>
                             )}
                             {isStlLocked && (
                               <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                                <span>You cannot apply for a new Short Term Loan (STL) because you have 3 active STLs, and none have reached 1 month of repayment yet.</span>
+                                <span>Application limit reached (3 active STLs with no qualifying repayment).</span>
                               </div>
                             )}
                             {selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && !isCalamityDeclared && (
                               <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-                                <span>Special Loan (Calamity Loan) is currently locked because no active State of Calamity is declared in the system.</span>
+                                <span>Calamity Loan is currently unavailable because no active State of Calamity is declared.</span>
                               </div>
                             )}
 
@@ -2602,14 +2590,14 @@ export default function OverviewPage() {
                       return (
                         <div className="space-y-6">
                           {/* Progressive Policy Info banner */}
-                          <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-5 space-y-2.5">
+                          <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-5 space-y-2">
                             <div className="flex items-center gap-2 font-bold text-sm text-primary dark:text-secondary">
-                              <Info className="w-5 h-5" /> Progressive Loan Policy Overview
+                              <Info className="w-5 h-5" /> Progressive Loan Limit
                             </div>
                             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                              You are currently categorized under the <strong className="text-on-surface dark:text-white font-bold">{tierName}</strong>.
-                              Based on your paid-up Share Capital of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>,
-                              your maximum borrow limit for this loan is capped at <strong className="text-on-surface dark:text-white font-bold">{multiplierText} ({formatCurrency(borrowLimit)})</strong>.
+                              Borrowing tier: <strong className="text-on-surface dark:text-white font-bold">{tierName}</strong>.
+                              Based on <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong> Share Capital,
+                              your borrowing limit is capped at <strong className="text-on-surface dark:text-white font-bold">{multiplierText} ({formatCurrency(borrowLimit)})</strong>.
                             </p>
                           </div>
 
@@ -2617,7 +2605,7 @@ export default function OverviewPage() {
                             {/* Left column: Slider and Repayments */}
                             <div className="space-y-5">
                               <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
-                                <span className="text-xs text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Requested Amortization Principal</span>
+                                <span className="text-xs text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Requested Loan Amount</span>
                                 <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
                                   {formatCurrency(currentLoanAmount)}
                                 </div>
@@ -2802,7 +2790,7 @@ export default function OverviewPage() {
                             onClick={closeModal}
                             className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer shadow"
                           >
-                            Go Back to Dashboard
+                            Back to Overview
                           </button>
                         </div>
                       </div>
@@ -2819,9 +2807,9 @@ export default function OverviewPage() {
                         {/* Selected Type summary banner */}
                         <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl text-xs">
                           <div>
-                            <span className="text-neutral-500 block">Investment Type</span>
+                            <span className="text-neutral-500 block">Deposit Type</span>
                             <span className="font-bold font-headline text-on-surface dark:text-white capitalize">
-                              Share Capital (Capital Build-Up)
+                              Share Capital Deposit
                             </span>
                           </div>
                         </div>
@@ -2829,7 +2817,7 @@ export default function OverviewPage() {
                         {/* Amount Input */}
                         <div className="space-y-2">
                           <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
-                            Placement Amount (₱):
+                            Deposit Amount (₱):
                           </label>
                           <input
                             type="number"
@@ -2858,7 +2846,7 @@ export default function OverviewPage() {
                               <WalletCards className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
                               <div>
                                 <span className="font-bold text-xs block">GCash</span>
-                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Instant online GCash mobile wallet transfer</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">GCash mobile wallet</span>
                               </div>
                             </button>
 
@@ -2876,7 +2864,7 @@ export default function OverviewPage() {
                               <Building className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
                               <div>
                                 <span className="font-bold text-xs block">Bank Transfer</span>
-                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Direct deposit to BDO Account</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">BDO bank deposit</span>
                               </div>
                             </button>
 
@@ -2894,7 +2882,7 @@ export default function OverviewPage() {
                               <Lock className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
                               <div>
                                 <span className="font-bold text-xs block">Salary Deduction</span>
-                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Deduct from upcoming payslip</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Upcoming payroll deduction</span>
                               </div>
                             </button>
 
@@ -2912,7 +2900,7 @@ export default function OverviewPage() {
                               <Users className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
                               <div>
                                 <span className="font-bold text-xs block">Hand-in</span>
-                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Hand-in cash to the co-op cashier</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Cash payment at office</span>
                               </div>
                             </button>
                           </div>

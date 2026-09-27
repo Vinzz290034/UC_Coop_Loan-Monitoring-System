@@ -271,7 +271,7 @@ export default function MessagesSection({ onUnreadCountChange }: MessagesSection
       {inquirySuccess && (
         <div className="p-4 bg-primary/15 dark:bg-secondary/15 border border-primary/30 dark:border-secondary/30 rounded-2xl text-xs font-bold text-primary dark:text-secondary flex items-center gap-2.5 animate-micro-elevate">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
-          Message submitted successfully! The cooperative management has been notified and will reply to your registered email.
+          Message sent! Cooperative staff will reply to your registered email.
         </div>
       )}
 
