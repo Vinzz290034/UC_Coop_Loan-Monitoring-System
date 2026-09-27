@@ -1825,9 +1825,6 @@ export default function OverviewPage() {
                       <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">
                         No updates found.
                       </h3>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                        Check back later for news from cooperative administration.
-                      </p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -1896,8 +1893,8 @@ export default function OverviewPage() {
                   <h3 className="font-headline font-bold text-on-surface dark:text-white text-base">
                     Merchandise Products
                   </h3>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">
-                    Coming soon — Cooperative merchandise products will appear here.
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">
+                    Coming soon
                   </p>
                 </div>
               )}
@@ -2167,14 +2164,14 @@ export default function OverviewPage() {
                           </div>
                         </div>
 
-                        {/* Footer: Full-width Apply CTA */}
-                        <div className="pt-2.5 border-t border-outline-variant/30">
+                        {/* Footer: Prominent Full-Width Apply CTA */}
+                        <div className="pt-3 border-t border-outline-variant/30">
                           <button
                             type="button"
                             onClick={() => openLoanModalWithProduct(prod)}
-                            className="w-full py-2.5 px-4 rounded-2xl bg-primary/10 text-primary hover:bg-primary hover:text-white dark:bg-secondary/15 dark:text-secondary dark:hover:bg-secondary dark:hover:text-neutral-950 font-bold text-xs sm:text-sm transition-all active:scale-[0.98] cursor-pointer shadow-2xs flex items-center justify-center gap-2"
+                            className="w-full py-3.5 px-4 rounded-2xl bg-primary text-white hover:bg-primary/90 dark:bg-secondary dark:text-neutral-950 dark:hover:bg-secondary/90 font-extrabold text-sm transition-all active:scale-[0.98] cursor-pointer shadow-sm flex items-center justify-center gap-2 group-hover:shadow-md"
                           >
-                            <span>Apply</span>
+                            <span>Apply for {prod.name}</span>
                             <ArrowRight className="w-4 h-4" />
                           </button>
                         </div>
@@ -3521,7 +3518,7 @@ export default function OverviewPage() {
                       No loan products found
                     </h4>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto">
-                      We could not find any active loan products matching &quot;{catalogSearch}&quot; in the {catalogCategory.toUpperCase()} category.
+                      No loan products match the selected criteria.
                     </p>
                     {(catalogSearch || catalogCategory !== 'all') && (
                       <button

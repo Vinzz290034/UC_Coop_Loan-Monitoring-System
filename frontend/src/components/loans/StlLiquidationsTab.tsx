@@ -720,9 +720,11 @@ export default function StlLiquidationsTab({
                     <p className="font-semibold text-neutral-600 dark:text-neutral-300">
                       No STL liquidation forms found
                     </p>
-                    <p className="text-[11px] text-neutral-400 mt-1">
-                      {search ? 'Try clearing your search query.' : 'Click "New Liquidation Form" to add your first record.'}
-                    </p>
+                    {search && (
+                      <p className="text-[11px] text-neutral-400 mt-1">
+                        No records match your search query.
+                      </p>
+                    )}
                   </td>
                 </tr>
               ) : (

@@ -1325,7 +1325,7 @@ export default function AccountingPage() {
                           return (
                             <tr>
                               <td colSpan={8} className="px-6 py-8 text-center text-neutral-500 italic">
-                                No savings transactions recorded yet. Click &quot;Deposit&quot; to initialize this member&apos;s passbook.
+                                No savings transactions recorded yet.
                               </td>
                             </tr>
                           );

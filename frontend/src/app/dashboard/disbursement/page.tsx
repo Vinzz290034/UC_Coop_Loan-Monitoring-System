@@ -2154,10 +2154,6 @@ function DisbursementPageContent() {
                           <p className="font-semibold text-neutral-700 dark:text-neutral-300">
                             No {currentTabConfig.label} check vouchers found.
                           </p>
-                          <p className="text-[11px] text-neutral-400 max-w-md">
-                            Issue a new check voucher using the &quot;Issue Check Voucher&quot; button above, or import
-                            historical spreadsheets from Data Import.
-                          </p>
                         </div>
                       </td>
                     </tr>

@@ -363,14 +363,9 @@ export default function MessagesSection({ onUnreadCountChange }: MessagesSection
                 ))}
               </div>
             ) : messages.length === 0 ? (
-              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-12 flex flex-col items-center gap-3 text-neutral-400 dark:text-neutral-500 shadow-sm text-center">
+              <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-12 flex flex-col items-center gap-2 text-neutral-400 dark:text-neutral-500 shadow-sm text-center">
                 <Inbox className="w-10 h-10 opacity-30" />
-                <p className="text-sm font-semibold">No messages found</p>
-                <p className="text-xs max-w-sm">
-                  {isMember
-                    ? "You haven't submitted any messages yet. Click 'Compose Message' to reach out to cooperative officers."
-                    : "Contact inquiries and messages from members will appear here."}
-                </p>
+                <h3 className="font-headline font-bold text-sm text-on-surface dark:text-white">No messages found</h3>
               </div>
             ) : (
               messages.map((msg) => (

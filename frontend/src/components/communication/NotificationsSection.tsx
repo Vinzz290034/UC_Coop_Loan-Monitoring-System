@@ -239,11 +239,6 @@ export default function NotificationsSection({ onUnreadCountChange }: Notificati
           <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">
             {showUnreadOnly ? 'No Unread Notifications' : 'No Notifications Yet'}
           </h3>
-          <p className="text-xs text-center max-w-xs text-neutral-500 dark:text-neutral-400">
-            {showUnreadOnly
-              ? 'All caught up! Switch to "All Alerts" to see past system notifications.'
-              : 'System alerts, loan notices, and member activity updates will appear here.'}
-          </p>
         </div>
       ) : (
         <div className="space-y-6">

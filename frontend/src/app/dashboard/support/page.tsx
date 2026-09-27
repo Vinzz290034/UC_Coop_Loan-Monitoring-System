@@ -482,9 +482,6 @@ export default function SupportPage() {
             <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">
               {statusFilter !== 'all' ? `No ${statusFilter.replace('_', ' ')} tickets.` : 'No support tickets yet.'}
             </h3>
-            <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-              {!isAdminOrManager ? 'Have a question? Create your first support ticket.' : 'No member tickets to review.'}
-            </p>
           </div>
         ) : (
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
@@ -564,9 +561,6 @@ export default function SupportPage() {
           <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
             <HelpCircle className="w-12 h-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
             <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">No FAQs available.</h3>
-            <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-              {isAdminOrManager ? 'Publish FAQs using the button above to assist members.' : 'Check back soon for answers to frequent questions.'}
-            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -604,9 +598,6 @@ export default function SupportPage() {
           <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
             <BookOpen className="w-12 h-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
             <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">No User Guides available.</h3>
-            <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-              {isAdminOrManager ? 'Publish user guides using the button above.' : 'Check back soon for step-by-step walkthroughs.'}
-            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

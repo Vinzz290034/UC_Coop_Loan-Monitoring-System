@@ -917,9 +917,11 @@ export default function LoanVouchersTab({
                   <td colSpan={10} className="py-12 px-4 text-center">
                     <AlertTriangle className="w-8 h-8 text-neutral-400 mx-auto mb-2" />
                     <p className="font-bold text-neutral-700 dark:text-neutral-300">No loan check vouchers found</p>
-                    <p className="text-[11px] text-neutral-500 mt-1">
-                      {cvSearch ? 'Try clearing your search query.' : 'Approved loans will automatically create check vouchers here.'}
-                    </p>
+                    {cvSearch && (
+                      <p className="text-[11px] text-neutral-500 mt-1">
+                        No vouchers match your search query.
+                      </p>
+                    )}
                   </td>
                 </tr>
               ) : (

@@ -2873,8 +2873,7 @@ function LoansPageContent() {
             ) : loans.length === 0 ? (
               <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
                 <AlertTriangle className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
-                <h3 className="font-headline font-bold text-on-surface dark:text-white">No Loans Registered</h3>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400">No loans found matching the status filter.</p>
+                <h3 className="font-headline font-bold text-on-surface dark:text-white">No Loans Found</h3>
               </div>
             ) : (
               (() => {
@@ -3769,13 +3768,11 @@ function LoansPageContent() {
                     <Banknote className="w-7 h-7" />
                   </div>
                   <h4 className="font-headline font-bold text-sm text-on-surface dark:text-white">No Payment Records Found</h4>
-                  <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
-                    {paymentsSearch || paymentsMethodFilter !== 'all'
-                      ? 'No repayment records matched your current search filters.'
-                      : isAdminOrManager
-                        ? 'There are currently no recorded loan repayments in the ledger.'
-                        : 'No payment records found for your active or past loans.'}
-                  </p>
+                  {(paymentsSearch || paymentsMethodFilter !== 'all') && (
+                    <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
+                      No repayment records matched your current search filters.
+                    </p>
+                  )}
                   {(paymentsSearch || paymentsMethodFilter !== 'all') && (
                     <button
                       onClick={() => {
@@ -4028,7 +4025,6 @@ function LoansPageContent() {
               <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
                 <AlertTriangle className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
                 <h3 className="font-headline font-bold text-on-surface dark:text-white">No Products Registered</h3>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400">No credit products configured yet.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

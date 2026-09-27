@@ -360,9 +360,6 @@ export default function AnnouncementsPage() {
           <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">
             No announcements found.
           </h3>
-          <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-            Check back later for updates from cooperative administration.
-          </p>
         </div>
       ) : (
         /* Announcements Feed List */
