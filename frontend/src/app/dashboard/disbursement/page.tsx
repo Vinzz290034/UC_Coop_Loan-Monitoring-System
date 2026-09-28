@@ -3148,7 +3148,7 @@ function DisbursementPageContent() {
                                 return (
                                   <div
                                     key={row.id || idx}
-                                    style={{ zIndex: 30 - idx }}
+                                    style={{ zIndex: newCvRows.length - idx + 10 }}
                                     className={`relative grid grid-cols-12 px-3 py-2 items-center gap-2 transition-colors ${
                                       isCreditRow
                                         ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
@@ -4050,7 +4050,7 @@ function DisbursementPageContent() {
                                     dragOverRowIdx.current = null;
                                   }}
                                   onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
-                                  style={{ zIndex: 30 - idx }}
+                                  style={{ zIndex: editCvRows.length - idx + 10 }}
                                   className={`relative grid grid-cols-12 px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
                                     isCreditRow
                                       ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
