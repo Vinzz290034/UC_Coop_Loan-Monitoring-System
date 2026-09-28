@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -45,7 +45,8 @@ import {
   Send,
   Check,
   RotateCcw,
-  Link2
+  Link2,
+  GripVertical
 } from 'lucide-react';
 
 // Tab configuration matching the user spreadsheet structure
@@ -867,6 +868,33 @@ function DisbursementPageContent() {
     approved_by: ''
   });
   const [editCvRows, setEditCvRows] = useState<CvRowItem[]>([]);
+  const dragRowIdx = useRef<number | null>(null);
+  const dragOverRowIdx = useRef<number | null>(null);
+  const editModalScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const reorderCvRows = useCallback((fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    setEditCvRows(prev => {
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIdx, 1);
+      updated.splice(toIdx, 0, moved);
+      return updated;
+    });
+  }, []);
+
+  const handleRowDragOver = useCallback((e: React.DragEvent, toIdx: number) => {
+    e.preventDefault();
+    dragOverRowIdx.current = toIdx;
+    const container = editModalScrollRef.current;
+    if (!container) return;
+    const { top, bottom } = container.getBoundingClientRect();
+    const threshold = 80;
+    if (e.clientY < top + threshold) {
+      container.scrollTop -= 12;
+    } else if (e.clientY > bottom - threshold) {
+      container.scrollTop += 12;
+    }
+  }, []);
 
   // Custom Accounts & Categories state for Book of Accounts dropdown
   const [customAccountOptions, setCustomAccountOptions] = useState<string[]>(() => {
@@ -1990,10 +2018,20 @@ function DisbursementPageContent() {
   // Safe close with unsaved changes confirmation
   const handleCloseEditCvModal = useCallback(() => {
     if (isCvEditDirty) {
-      const confirmDiscard = window.confirm(
-        'You have unsaved changes in this check voucher. Are you sure you want to close and discard your changes?'
-      );
-      if (!confirmDiscard) return;
+      setModalDialog({
+        type: 'confirm',
+        variant: 'amber',
+        title: 'Discard Unsaved Changes?',
+        message: 'You have unsaved changes in this check voucher. Are you sure you want to close and discard your changes?',
+        confirmLabel: 'Discard Changes',
+        cancelLabel: 'Keep Editing',
+        onConfirm: () => {
+          setModalDialog(null);
+          setIsEditingCvModal(false);
+        },
+        onCancel: () => setModalDialog(null),
+      });
+      return;
     }
     setIsEditingCvModal(false);
   }, [isCvEditDirty]);
@@ -3809,7 +3847,7 @@ function DisbursementPageContent() {
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5 text-xs custom-scrollbar">
+            <div ref={editModalScrollRef} className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5 text-xs custom-scrollbar">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
@@ -4000,8 +4038,19 @@ function DisbursementPageContent() {
                               return (
                                 <div
                                   key={row.id || idx}
+                                  draggable
+                                  onDragStart={() => { dragRowIdx.current = idx; }}
+                                  onDragOver={e => handleRowDragOver(e, idx)}
+                                  onDrop={() => {
+                                    if (dragRowIdx.current !== null && dragOverRowIdx.current !== null) {
+                                      reorderCvRows(dragRowIdx.current, dragOverRowIdx.current);
+                                    }
+                                    dragRowIdx.current = null;
+                                    dragOverRowIdx.current = null;
+                                  }}
+                                  onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
                                   style={{ zIndex: 30 - idx }}
-                                  className={`relative grid grid-cols-12 px-3 py-2 items-center gap-2 transition-colors ${
+                                  className={`relative grid grid-cols-12 px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
                                     isCreditRow
                                       ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                       : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
@@ -4066,7 +4115,7 @@ function DisbursementPageContent() {
                                       return canDelete ? (
                                         <button
                                           type="button"
-                                          onClick={() => removeCvRow(true, row.id!)}
+                                          onClick={e => { e.stopPropagation(); removeCvRow(true, row.id!); }}
                                           className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
                                           title="Remove row"
                                         >
@@ -4107,7 +4156,21 @@ function DisbursementPageContent() {
 
                           <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest">
                             {editCvRows.map((row, idx) => (
-                              <div key={row.id || idx} className="grid grid-cols-12 px-3 py-2 items-center gap-2">
+                              <div
+                                key={row.id || idx}
+                                draggable
+                                onDragStart={() => { dragRowIdx.current = idx; }}
+                                onDragOver={e => handleRowDragOver(e, idx)}
+                                onDrop={() => {
+                                  if (dragRowIdx.current !== null && dragOverRowIdx.current !== null) {
+                                    reorderCvRows(dragRowIdx.current, dragOverRowIdx.current);
+                                  }
+                                  dragRowIdx.current = null;
+                                  dragOverRowIdx.current = null;
+                                }}
+                                onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
+                                className="grid grid-cols-12 px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors select-none"
+                              >
                                 <div className="col-span-1 text-center font-mono font-medium text-xs text-neutral-500">
                                   {idx + 1}
                                 </div>
@@ -4117,7 +4180,7 @@ function DisbursementPageContent() {
                                     value={row.description}
                                     onChange={e => updateCvRowField(true, row.id!, 'description', e.target.value, null)}
                                     placeholder="Account description"
-                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs"
+                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs cursor-text"
                                   />
                                 </div>
                                 <div className="col-span-3">
@@ -4127,7 +4190,7 @@ function DisbursementPageContent() {
                                     value={row.debit}
                                     onChange={e => updateCvRowField(true, row.id!, 'debit', e.target.value, null)}
                                     placeholder="Debit"
-                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
+                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs cursor-text"
                                   />
                                 </div>
                                 <div className="col-span-2">
@@ -4137,14 +4200,14 @@ function DisbursementPageContent() {
                                     value={row.credit}
                                     onChange={e => updateCvRowField(true, row.id!, 'credit', e.target.value, null)}
                                     placeholder="Credit"
-                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
+                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs cursor-text"
                                   />
                                 </div>
                                 <div className="col-span-1 text-center">
                                   {editCvRows.length > 1 && (
                                     <button
                                       type="button"
-                                      onClick={() => removeCvRow(true, row.id!)}
+                                      onClick={e => { e.stopPropagation(); removeCvRow(true, row.id!); }}
                                       className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer"
                                     >
                                       <X className="w-3.5 h-3.5 mx-auto" />
