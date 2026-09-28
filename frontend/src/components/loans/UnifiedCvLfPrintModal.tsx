@@ -747,7 +747,7 @@ export default function UnifiedCvLfPrintModal({
             ) : (
               <>
                 {/* Schedule Attachment Status Banner */}
-                {hasAttachedSchedule ? (
+                {hasAttachedSchedule && (
                   <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
@@ -772,58 +772,6 @@ export default function UnifiedCvLfPrintModal({
                     <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-600/20 shrink-0 self-start sm:self-auto">
                       Itemized Schedule Attached
                     </span>
-                  </div>
-                ) : (
-                  /* Quick Attach Banner if schedule not yet linked */
-                  <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className="p-1.5 rounded-xl bg-amber-600 text-white shrink-0 mt-0.5">
-                        <AlertCircle className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 text-xs">
-                        <h4 className="font-bold text-amber-950 dark:text-amber-200">
-                          No Itemized Expense Schedule Currently Attached
-                        </h4>
-                        <p className="text-amber-800 dark:text-amber-300/80 mt-0.5">
-                          Attach the expense breakdown schedule below to include the itemized particulars, category summary, and balance cards on this Check Voucher.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                      <select
-                        value={selectedLinkTargetId}
-                        onChange={e => setSelectedLinkTargetId(e.target.value)}
-                        className="flex-1 px-3.5 py-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-neutral-900 text-xs text-neutral-800 dark:text-neutral-200 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                      >
-                        <option value="">
-                          {currentCv && !currentLf
-                            ? `-- Select Expense Schedule to attach to CV #${cleanCvNumber(currentCv.voucher_no)} --`
-                            : `-- Select Check Voucher for Schedule #${currentLf?.lf_no} --`}
-                        </option>
-                        {currentCv && !currentLf
-                          ? availableLiquidations.map(lf => (
-                              <option key={lf.id} value={lf.id}>
-                                Schedule #{lf.lf_no} • {resolvedType === 'stl' ? `Expense: ₱${Number(lf.total_expense || 0).toLocaleString()}` : `Total: ₱${Number(lf.total_liquidated || 0).toLocaleString()}`} • {lf.custodian_name || lf.prepared_by || 'Staff'}
-                              </option>
-                            ))
-                          : availableCheckVouchers.map(cv => (
-                              <option key={cv.id} value={cv.id}>
-                                CV #{cleanCvNumber(cv.voucher_no)} • {cv.payee} • ₱{Number(cv.amount || 0).toLocaleString()} • {cv.particulars || 'Disbursement'}
-                              </option>
-                            ))}
-                      </select>
-
-                      <button
-                        type="button"
-                        onClick={() => handleLinkTogether()}
-                        disabled={!selectedLinkTargetId || linkingAction}
-                        className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
-                      >
-                        {linkingAction ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
-                        <span>Attach Schedule</span>
-                      </button>
-                    </div>
                   </div>
                 )}
 
@@ -1128,14 +1076,7 @@ export default function UnifiedCvLfPrintModal({
           </div>
 
           {/* Footer Action Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-6 py-4 border-t border-outline-variant/40 bg-surface-container-lowest dark:bg-surface-container">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 font-bold">
-                <Check className="w-4 h-4 text-emerald-600" />
-                <span>Unified Check Voucher Ready</span>
-              </span>
-            </div>
-
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 px-6 py-4 border-t border-outline-variant/40 bg-surface-container-lowest dark:bg-surface-container">
             <div className="flex items-center gap-2.5 flex-wrap justify-end">
               <button
                 type="button"

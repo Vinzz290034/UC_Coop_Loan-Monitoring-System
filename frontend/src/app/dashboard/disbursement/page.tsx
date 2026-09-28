@@ -320,8 +320,38 @@ export const REPLENISHMENT_ACCOUNT_OPTIONS = [
   'Short Term Loan'
 ];
 
-export const getCategoryForAccount = (acct: string): string => {
-  const lower = (acct || '').toLowerCase();
+export const ACCOUNT_CATEGORIES = [
+  { value: 'Operation', label: 'Operation', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border-blue-300 dark:border-blue-700' },
+  { value: 'Merchandise', label: 'Merchandise', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700' },
+  { value: 'Service', label: 'Service', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 border-purple-300 dark:border-purple-700' },
+  { value: 'CETF', label: 'CETF', color: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-300 dark:border-rose-700' },
+  { value: 'CDF', label: 'CDF', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' }
+] as const;
+
+export const getCategoryForAccount = (acct: string, categoryMap?: Record<string, string>): string => {
+  const trimmed = (acct || '').trim();
+  if (!trimmed) return 'Operation';
+  const lower = trimmed.toLowerCase();
+
+  // 1. Check explicitly passed category map
+  if (categoryMap && categoryMap[lower]) {
+    return categoryMap[lower];
+  }
+
+  // 2. Check localStorage cache
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('rf_account_categories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed[lower]) return parsed[lower];
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Keyword-based heuristic auto-classification
   if (
     lower.includes('wifi') ||
     lower.includes('water') ||
@@ -361,85 +391,330 @@ export const getCategoryForAccount = (acct: string): string => {
 function ReplenishmentAccountDropdown({
   value,
   onChange,
+  options = REPLENISHMENT_ACCOUNT_OPTIONS,
+  categoryMap = {},
+  onAddAccount,
+  onDeleteAccount,
   placeholder = 'Select or type account...'
 }: {
   value: string;
   onChange: (val: string) => void;
+  options?: string[];
+  categoryMap?: Record<string, string>;
+  onAddAccount?: (name: string, category: string) => void;
+  onDeleteAccount?: (name: string) => void;
   placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [newAcctName, setNewAcctName] = useState('');
+  const [newAcctCategory, setNewAcctCategory] = useState('Operation');
+  const [categoryManuallySet, setCategoryManuallySet] = useState(false);
   const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const listRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setIsCreating(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isCreating) {
+          setIsCreating(false);
+        } else {
+          setOpen(false);
+        }
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isCreating]);
+
+  // Always start from top when opened
+  useEffect(() => {
+    if (open && listRef.current && !isCreating) {
+      listRef.current.scrollTop = 0;
+    }
+  }, [open, isCreating]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return REPLENISHMENT_ACCOUNT_OPTIONS;
-    return REPLENISHMENT_ACCOUNT_OPTIONS.filter(acct =>
+    if (!term) return options;
+    return options.filter(acct =>
       acct.toLowerCase().includes(term)
     );
-  }, [search]);
+  }, [options, search]);
+
+  const exactMatchExists = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return false;
+    return options.some(acct => acct.trim().toLowerCase() === term);
+  }, [options, search]);
+
+  const handleStartCreate = (suggestedName = search.trim()) => {
+    setNewAcctName(suggestedName);
+    const guessed = getCategoryForAccount(suggestedName, categoryMap);
+    setNewAcctCategory(guessed);
+    setCategoryManuallySet(false);
+    setIsCreating(true);
+  };
+
+  const handleSaveNewAccount = () => {
+    const cleanName = newAcctName.trim();
+    if (!cleanName) return;
+    const cat = newAcctCategory.trim() || 'Operation';
+
+    if (onAddAccount) {
+      onAddAccount(cleanName, cat);
+    }
+    onChange(cleanName);
+    setIsCreating(false);
+    setOpen(false);
+  };
 
   return (
-    <div className="relative w-full" ref={wrapperRef}>
-      <input
-        type="text"
-        value={value}
-        onChange={e => {
-          onChange(e.target.value);
-          setSearch(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => {
-          setSearch('');
-          setOpen(true);
-        }}
-        placeholder={placeholder}
-        className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-on-surface dark:text-white font-medium focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-      />
+    <div className={`relative w-full ${open ? 'z-50' : 'z-10'}`} ref={wrapperRef}>
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          value={value}
+          onChange={e => {
+            onChange(e.target.value);
+            setSearch(e.target.value);
+            setOpen(true);
+            setIsCreating(false);
+          }}
+          onFocus={() => {
+            setSearch('');
+            setOpen(true);
+            setIsCreating(false);
+          }}
+          placeholder={placeholder}
+          className="w-full pr-8 px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-on-surface dark:text-white font-medium focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => {
+            setOpen(prev => !prev);
+            setIsCreating(false);
+          }}
+          className="absolute right-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer p-0.5"
+          title="Toggle account list"
+        >
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? 'rotate-180 text-emerald-600 dark:text-emerald-400' : ''}`} />
+        </button>
+      </div>
+
       {open && (
-        <div className="absolute left-0 top-full mt-1 w-72 max-h-56 overflow-y-auto bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl shadow-2xl z-50 divide-y divide-outline-variant/20 py-1">
-          {filtered.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-neutral-400 italic">No matching predefined accounts</div>
-          ) : (
-            filtered.map(acct => {
-              const cat = getCategoryForAccount(acct);
-              return (
+        <div
+          ref={listRef}
+          className="absolute left-0 top-full mt-1.5 w-full min-w-[360px] max-w-lg bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl shadow-2xl z-[60] ring-1 ring-black/5 dark:ring-white/5 animate-dropdown-pop origin-top overflow-hidden flex flex-col"
+        >
+          {isCreating ? (
+            /* Inline New Account Creator View */
+            <div className="p-3 bg-neutral-50/70 dark:bg-neutral-900 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between pb-1.5 border-b border-outline-variant/20">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-800 dark:text-emerald-300">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Create Book of Account</span>
+                </div>
                 <button
-                  key={acct}
                   type="button"
-                  onClick={() => {
-                    onChange(acct);
-                    setOpen(false);
-                  }}
-                  className={`w-full px-3 py-1.5 text-left text-xs flex items-center justify-between gap-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors ${
-                    value === acct ? 'bg-emerald-50 dark:bg-emerald-950/60 font-bold text-emerald-800 dark:text-emerald-200' : 'text-neutral-800 dark:text-neutral-200'
-                  }`}
+                  onClick={() => setIsCreating(false)}
+                  className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 p-0.5 rounded cursor-pointer"
+                  title="Back to account list"
                 >
-                  <span className="truncate flex-1">{acct}</span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
-                    cat === 'Service'
-                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
-                      : cat === 'Merchandise'
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
-                      : cat === 'CETF' || cat === 'CDF'
-                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
-                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
-                  }`}>
-                    {cat}
-                  </span>
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              );
-            })
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
+                  Account Name
+                </label>
+                <input
+                  type="text"
+                  value={newAcctName}
+                  onChange={e => {
+                    setNewAcctName(e.target.value);
+                    if (!categoryManuallySet) {
+                      setNewAcctCategory(getCategoryForAccount(e.target.value, categoryMap));
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveNewAccount();
+                    }
+                  }}
+                  placeholder="e.g. Communication Equipment"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-800 text-xs font-semibold text-neutral-900 dark:text-white focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
+                  Select Category
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {ACCOUNT_CATEGORIES.map(cat => {
+                    const isSelected = newAcctCategory === cat.value;
+                    return (
+                      <button
+                        key={cat.value}
+                        type="button"
+                        onClick={() => {
+                          setNewAcctCategory(cat.value);
+                          setCategoryManuallySet(true);
+                        }}
+                        className={`px-2 py-1.5 rounded-lg text-xs font-bold border transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
+                          isSelected
+                            ? `${cat.color} ring-2 ring-emerald-500 shadow-xs font-black`
+                            : 'border-outline-variant/40 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 shrink-0" />}
+                        <span>{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="text-[10px] text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 rounded-md px-2 py-1">
+                Auto-fills credit row 2 as: <span className="font-bold font-mono">Revolving Fund - {newAcctCategory}</span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-outline-variant/20">
+                <button
+                  type="button"
+                  onClick={() => setIsCreating(false)}
+                  className="px-2.5 py-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 cursor-pointer font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!newAcctName.trim()}
+                  onClick={handleSaveNewAccount}
+                  className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Save & Select</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Search Results and Options List */
+            <>
+              <div className="max-h-56 overflow-y-auto divide-y divide-outline-variant/15 custom-scrollbar">
+                {filtered.length === 0 ? (
+                  <div className="p-4 text-center">
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
+                      No accounts matching &quot;<span className="font-semibold text-neutral-800 dark:text-neutral-200">{search}</span>&quot;
+                    </div>
+                    {search.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => handleStartCreate(search.trim())}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Create &quot;{search.trim()}&quot; & Set Category</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  filtered.map(acct => {
+                    const cat = getCategoryForAccount(acct, categoryMap);
+                    const isSelected = value.trim().toLowerCase() === acct.trim().toLowerCase();
+                    const isCustom = !REPLENISHMENT_ACCOUNT_OPTIONS.includes(acct);
+                    return (
+                      <div
+                        key={acct}
+                        className={`group w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 cursor-pointer transition-all duration-150 ${
+                          isSelected
+                            ? 'bg-emerald-100/70 dark:bg-emerald-950/70 font-bold text-emerald-900 dark:text-emerald-200'
+                            : 'hover:bg-emerald-50/80 dark:hover:bg-emerald-950/30 text-neutral-800 dark:text-neutral-200'
+                        }`}
+                        onClick={() => {
+                          onChange(acct);
+                          setOpen(false);
+                        }}
+                      >
+                        <span className="truncate flex-1">{acct}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                              cat === 'Service'
+                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                                : cat === 'Merchandise'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+                                : cat === 'CETF' || cat === 'CDF'
+                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                            }`}
+                          >
+                            {cat}
+                          </span>
+                          {isCustom && onDeleteAccount && (
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                onDeleteAccount(acct);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-rose-500 p-0.5 rounded transition-opacity cursor-pointer"
+                              title="Delete custom account"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Bottom Quick-Action Bar */}
+              <div className="p-2 border-t border-outline-variant/20 bg-neutral-50/80 dark:bg-neutral-800/40 flex items-center justify-between gap-2">
+                {search.trim() && !exactMatchExists ? (
+                  <button
+                    type="button"
+                    onClick={() => handleStartCreate(search.trim())}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-300/80 dark:border-emerald-700/60 font-medium text-xs transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5 font-bold">
+                      <Plus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Create &quot;{search.trim()}&quot;
+                    </span>
+                    <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold uppercase">
+                      + Set Category
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleStartCreate('')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer ml-auto px-1 py-0.5"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Create New Account</span>
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -592,6 +867,134 @@ function DisbursementPageContent() {
     approved_by: ''
   });
   const [editCvRows, setEditCvRows] = useState<CvRowItem[]>([]);
+
+  // Custom Accounts & Categories state for Book of Accounts dropdown
+  const [customAccountOptions, setCustomAccountOptions] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('rf_custom_accounts');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return Array.from(new Set([...REPLENISHMENT_ACCOUNT_OPTIONS, ...parsed])).sort((a, b) => a.localeCompare(b));
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return REPLENISHMENT_ACCOUNT_OPTIONS;
+  });
+
+  const [accountCategoryMap, setAccountCategoryMap] = useState<Record<string, string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('rf_account_categories');
+        if (saved) return JSON.parse(saved);
+      } catch {
+        // ignore
+      }
+    }
+    return {};
+  });
+
+  // Fetch accounts from server to sync custom accounts and categories
+  const fetchCustomAccounts = useCallback(async () => {
+    try {
+      const res = await api.get('/revolving-funds/accounts');
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        const serverNames: string[] = [];
+        const serverCatMap: Record<string, string> = {};
+        for (const item of res.data.data) {
+          const name = typeof item === 'string' ? item : item.name;
+          const cat = typeof item === 'string' ? '' : item.category;
+          if (name) {
+            serverNames.push(name);
+            if (cat) serverCatMap[name.toLowerCase()] = cat;
+          }
+        }
+        setCustomAccountOptions(prev => {
+          const merged = Array.from(new Set([...REPLENISHMENT_ACCOUNT_OPTIONS, ...prev, ...serverNames])).sort((a, b) => a.localeCompare(b));
+          try {
+            localStorage.setItem('rf_custom_accounts', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+        setAccountCategoryMap(prev => {
+          const merged = { ...prev, ...serverCatMap };
+          try {
+            localStorage.setItem('rf_account_categories', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
+    } catch {
+      // Quietly keep local options if server endpoint fails
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCustomAccounts();
+  }, [fetchCustomAccounts]);
+
+  const handleAddCustomAccount = async (name: string, category: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const catToUse = category.trim() || 'Operation';
+
+    // 1. Update category map in state & localStorage
+    setAccountCategoryMap(prev => {
+      const nextMap = { ...prev, [trimmed.toLowerCase()]: catToUse };
+      try {
+        localStorage.setItem('rf_account_categories', JSON.stringify(nextMap));
+      } catch {}
+      return nextMap;
+    });
+
+    // 2. Update options list in state & localStorage
+    setCustomAccountOptions(prev => {
+      const merged = Array.from(new Set([...prev, trimmed])).sort((a, b) => a.localeCompare(b));
+      try {
+        localStorage.setItem('rf_custom_accounts', JSON.stringify(merged));
+      } catch {}
+      return merged;
+    });
+
+    // 3. Persist to backend
+    try {
+      await api.post('/revolving-funds/accounts', { name: trimmed, category: catToUse });
+    } catch (err) {
+      console.error('Failed to save custom account to backend:', err);
+    }
+  };
+
+  const handleDeleteCustomAccount = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    setCustomAccountOptions(prev => {
+      const filtered = prev.filter(a => a.toLowerCase() !== trimmed.toLowerCase());
+      try {
+        localStorage.setItem('rf_custom_accounts', JSON.stringify(filtered));
+      } catch {}
+      return filtered;
+    });
+
+    setAccountCategoryMap(prev => {
+      const nextMap = { ...prev };
+      delete nextMap[trimmed.toLowerCase()];
+      try {
+        localStorage.setItem('rf_account_categories', JSON.stringify(nextMap));
+      } catch {}
+      return nextMap;
+    });
+
+    try {
+      await api.delete(`/revolving-funds/accounts/${encodeURIComponent(trimmed)}`);
+    } catch (err) {
+      console.error('Failed to remove custom account:', err);
+    }
+  };
 
   // Calculate live disbursed amount for newly created voucher
   const getNewCvDisbursedAmount = (): number => {
@@ -1048,7 +1451,7 @@ function DisbursementPageContent() {
         return prev.map((r, i) => (i === rowIdx ? updatedRow : r));
       }
 
-      // If user edits a debit row: update it, then recompute the balancing credit row amount
+      // If user edits a debit row: update it, then recompute balancing credit
       const nextRows = prev.map((r, i) => (i === rowIdx ? updatedRow : r));
       let sumDebits = 0;
       nextRows.forEach(r => {
@@ -1058,11 +1461,32 @@ function DisbursementPageContent() {
         }
       });
 
-      // Find the balancing credit row
+      // Find the credit rows
+      const creditRows = nextRows.filter(
+        r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib')
+      );
       const creditRowIdx = nextRows.findIndex(
         r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib')
       );
-      if (creditRowIdx !== -1) {
+
+      // If description was edited on a debit row, auto-fill matching category on the credit row!
+      if (field === 'description') {
+        const cat = getCategoryForAccount(val, accountCategoryMap);
+        const autoCreditDesc = replenishType === 'stl' ? 'Revolving Fund - STL' : `Revolving Fund - ${cat}`;
+        
+        // If there is a paired credit row, or if there's only 1 credit row, update its description
+        const pairedCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
+        const targetCreditIdx = pairedCreditIdx !== -1 ? pairedCreditIdx : (creditRows.length === 1 ? creditRowIdx : -1);
+        if (targetCreditIdx !== -1 && targetCreditIdx !== undefined) {
+          nextRows[targetCreditIdx] = {
+            ...nextRows[targetCreditIdx],
+            description: autoCreditDesc
+          };
+        }
+      }
+
+      // If there is only 1 credit row, auto-balance its credit amount to match total debits
+      if (creditRows.length === 1 && creditRowIdx !== -1) {
         nextRows[creditRowIdx] = {
           ...nextRows[creditRowIdx],
           credit: sumDebits > 0 ? String(sumDebits) : '',
@@ -1085,40 +1509,54 @@ function DisbursementPageContent() {
           sumDebits += parseFloat(r.debit || '0') || 0;
         }
       });
-      return filtered.map(r => {
-        const isCred = r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib');
-        if (isCred) {
-          return { ...r, credit: sumDebits > 0 ? String(sumDebits) : '' };
-        }
-        return r;
-      });
+      const creditRows = filtered.filter(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib'));
+      if (creditRows.length === 1) {
+        return filtered.map(r => {
+          const isCred = r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib');
+          if (isCred) {
+            return { ...r, credit: sumDebits > 0 ? String(sumDebits) : '' };
+          }
+          return r;
+        });
+      }
+      return filtered;
     });
   };
 
-  const addCvRow = (isEdit: boolean, replenishType: 'stl' | 'rf' | null) => {
+  const addCvRow = (isEdit: boolean, replenishType: 'stl' | 'rf' | null, isCredit: boolean = false) => {
     const newId = 'row-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
     const defaultDate = isEdit
       ? (editCvFormData.voucher_date || new Date().toISOString().split('T')[0])
       : (newCvDate || new Date().toISOString().split('T')[0]);
     const defaultVoucherNo = isEdit ? editCvFormData.voucher_no : newCvVoucherNo;
 
+    let defaultDesc = 'Operation';
+    if (isCredit) {
+      defaultDesc = replenishType === 'stl' ? 'Revolving Fund - STL' : 'Revolving Fund - Operation';
+    } else if (replenishType === 'stl') {
+      defaultDesc = 'Short Term Loan';
+    }
+
     const newRow: CvRowItem = {
       id: newId,
       date: defaultDate,
       voucher_no: defaultVoucherNo,
-      description: replenishType === 'stl' ? 'Short Term Loan' : 'Operation',
+      description: defaultDesc,
       debit: '',
       credit: '',
-      isAutoCredit: false
+      isAutoCredit: isCredit
     };
 
     const setRows = isEdit ? setEditCvRows : setNewCvRows;
     setRows(prev => {
-      // In replenishment mode, if there is a credit row at the bottom, insert before it
-      const creditIdx = prev.findIndex(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib'));
-      if (creditIdx !== -1) {
+      if (isCredit) {
+        return [...prev, newRow];
+      }
+      // In replenishment mode, if there are credit rows at the bottom, insert before the first credit row
+      const firstCreditIdx = prev.findIndex(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib'));
+      if (firstCreditIdx !== -1) {
         const copy = [...prev];
-        copy.splice(creditIdx, 0, newRow);
+        copy.splice(firstCreditIdx, 0, newRow);
         return copy;
       }
       return [...prev, newRow];
@@ -2602,21 +3040,44 @@ function DisbursementPageContent() {
                               : 'Specify debit and credit entries to match disbursed check amount.'}
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => addCvRow(false, replenishType)}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add Row</span>
-                        </button>
+                        {isReplenish ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => addCvRow(false, replenishType, false)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
+                              title="Add an expense debit line item"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Debit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addCvRow(false, replenishType, true)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
+                              title="Add a credit / replenishment line item"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Credit</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => addCvRow(false, null, false)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Row</span>
+                          </button>
+                        )}
                       </div>
 
-                      <div className="border border-emerald-950/20 dark:border-emerald-800/40 rounded-2xl overflow-hidden shadow-xs">
+                      <div className="border border-emerald-950/20 dark:border-emerald-800/40 rounded-2xl shadow-xs overflow-visible relative">
                         {isReplenish ? (
                           <>
                             {/* Top Banner matching Image 2 */}
-                            <div className="bg-[#064e3b] text-white py-2 px-3 text-center font-bold text-xs uppercase tracking-wider">
+                            <div className="bg-[#064e3b] text-white py-2 px-3 text-center font-bold text-xs uppercase tracking-wider rounded-t-2xl">
                               TRANSACTION DETAILS
                             </div>
 
@@ -2629,13 +3090,14 @@ function DisbursementPageContent() {
                               <div className="col-span-1 text-center">Action</div>
                             </div>
 
-                            <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest">
+                            <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest overflow-visible">
                               {newCvRows.map((row, idx) => {
                                 const isCreditRow = row.isAutoCredit || (Boolean(row.credit) && !row.debit) || row.description.toLowerCase().startsWith('cib');
                                 return (
                                   <div
                                     key={row.id || idx}
-                                    className={`grid grid-cols-12 px-3 py-2 items-center gap-2 transition-colors ${
+                                    style={{ zIndex: 30 - idx }}
+                                    className={`relative grid grid-cols-12 px-3 py-2 items-center gap-2 transition-colors ${
                                       isCreditRow
                                         ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                         : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
@@ -2657,6 +3119,10 @@ function DisbursementPageContent() {
                                         <ReplenishmentAccountDropdown
                                           value={row.description}
                                           onChange={val => updateCvRowField(false, row.id!, 'description', val, replenishType)}
+                                          options={customAccountOptions}
+                                          categoryMap={accountCategoryMap}
+                                          onAddAccount={handleAddCustomAccount}
+                                          onDeleteAccount={handleDeleteCustomAccount}
                                         />
                                       )}
                                     </div>
@@ -2689,16 +3155,21 @@ function DisbursementPageContent() {
                                       )}
                                     </div>
                                     <div className="col-span-1 text-center">
-                                      {!isCreditRow && newCvRows.filter(r => !r.isAutoCredit && !(r.credit && !r.debit)).length > 1 && (
-                                        <button
-                                          type="button"
-                                          onClick={() => removeCvRow(false, row.id!)}
-                                          className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                                          title="Remove row"
-                                        >
-                                          <X className="w-3.5 h-3.5 mx-auto" />
-                                        </button>
-                                      )}
+                                      {(() => {
+                                        const hasMultipleDebits = newCvRows.filter(r => !r.isAutoCredit && !(r.credit && !r.debit)).length > 1;
+                                        const hasMultipleCredits = newCvRows.filter(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit)).length > 1;
+                                        const canDelete = isCreditRow ? hasMultipleCredits : hasMultipleDebits;
+                                        return canDelete ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => removeCvRow(false, row.id!)}
+                                            className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                            title="Remove row"
+                                          >
+                                            <X className="w-3.5 h-3.5 mx-auto" />
+                                          </button>
+                                        ) : null;
+                                      })()}
                                     </div>
                                   </div>
                                 );
@@ -2706,7 +3177,7 @@ function DisbursementPageContent() {
                             </div>
 
                             {/* Table Total Footer matching Image 2 */}
-                            <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center">
+                            <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
                               <div className="col-span-7 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
                                 TOTAL:
                               </div>
@@ -2859,7 +3330,7 @@ function DisbursementPageContent() {
                   className="px-6 py-2.5 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isSavingNewCv ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  <span>Issue Voucher</span>
+                  <span>Create Voucher</span>
                 </button>
               </div>
             </form>
@@ -3475,20 +3946,43 @@ function DisbursementPageContent() {
                             : 'Specify debit and credit entries to balance disbursed check amount.'}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => addCvRow(true, replenishType)}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
-                      >
-                        <Plus className="w-3 h-3" /> Add Row
-                      </button>
+                      {isReplenish ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => addCvRow(true, replenishType, false)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
+                            title="Add an expense debit line item"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Debit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addCvRow(true, replenishType, true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
+                            title="Add a credit / replenishment line item"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Credit</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => addCvRow(true, null, false)}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" /> Add Row
+                        </button>
+                      )}
                     </div>
 
-                    <div className="border border-emerald-950/20 dark:border-emerald-800/40 rounded-2xl overflow-hidden shadow-xs">
+                    <div className="border border-emerald-950/20 dark:border-emerald-800/40 rounded-2xl shadow-xs overflow-visible relative">
                       {isReplenish ? (
                         <>
                           {/* Top Banner matching Image 2 */}
-                          <div className="bg-[#064e3b] text-white py-2 px-3 text-center font-bold text-xs uppercase tracking-wider">
+                          <div className="bg-[#064e3b] text-white py-2 px-3 text-center font-bold text-xs uppercase tracking-wider rounded-t-2xl">
                             TRANSACTION DETAILS
                           </div>
 
@@ -3501,13 +3995,14 @@ function DisbursementPageContent() {
                             <div className="col-span-1 text-center">Action</div>
                           </div>
 
-                          <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest">
+                          <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest overflow-visible">
                             {editCvRows.map((row, idx) => {
                               const isCreditRow = row.isAutoCredit || (Boolean(row.credit) && !row.debit) || row.description.toLowerCase().startsWith('cib');
                               return (
                                 <div
                                   key={row.id || idx}
-                                  className={`grid grid-cols-12 px-3 py-2 items-center gap-2 transition-colors ${
+                                  style={{ zIndex: 30 - idx }}
+                                  className={`relative grid grid-cols-12 px-3 py-2 items-center gap-2 transition-colors ${
                                     isCreditRow
                                       ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                       : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
@@ -3529,6 +4024,10 @@ function DisbursementPageContent() {
                                       <ReplenishmentAccountDropdown
                                         value={row.description}
                                         onChange={val => updateCvRowField(true, row.id!, 'description', val, replenishType)}
+                                        options={customAccountOptions}
+                                        categoryMap={accountCategoryMap}
+                                        onAddAccount={handleAddCustomAccount}
+                                        onDeleteAccount={handleDeleteCustomAccount}
                                       />
                                     )}
                                   </div>
@@ -3561,16 +4060,21 @@ function DisbursementPageContent() {
                                     )}
                                   </div>
                                   <div className="col-span-1 text-center">
-                                    {!isCreditRow && editCvRows.filter(r => !r.isAutoCredit && !(r.credit && !r.debit)).length > 1 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => removeCvRow(true, row.id!)}
-                                        className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                                        title="Remove row"
-                                      >
-                                        <X className="w-3.5 h-3.5 mx-auto" />
-                                      </button>
-                                    )}
+                                    {(() => {
+                                      const hasMultipleDebits = editCvRows.filter(r => !r.isAutoCredit && !(r.credit && !r.debit)).length > 1;
+                                      const hasMultipleCredits = editCvRows.filter(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit)).length > 1;
+                                      const canDelete = isCreditRow ? hasMultipleCredits : hasMultipleDebits;
+                                      return canDelete ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => removeCvRow(true, row.id!)}
+                                          className="text-neutral-400 hover:text-rose-500 transition-colors cursor-pointer p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                          title="Remove row"
+                                        >
+                                          <X className="w-3.5 h-3.5 mx-auto" />
+                                        </button>
+                                      ) : null;
+                                    })()}
                                   </div>
                                 </div>
                               );
@@ -3578,7 +4082,7 @@ function DisbursementPageContent() {
                           </div>
 
                           {/* Table Total Footer matching Image 2 */}
-                          <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center">
+                          <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
                             <div className="col-span-7 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
                               TOTAL:
                             </div>
