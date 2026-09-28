@@ -255,8 +255,22 @@ export interface CvRowItem {
   debit: string;
   credit: string;
   isAutoCredit?: boolean;
+  is_credit?: boolean;
   pairedWithId?: string;
 }
+
+export const isCreditAccountDesc = (desc?: string): boolean => {
+  if (!desc) return false;
+  return /^(cib\b|cash\s*in\s*bank|revolving\s*fund|rf\s*[-#]|petty\s*cash\s*fund)/i.test(desc.trim());
+};
+
+export const checkIsCreditRow = (row: { isAutoCredit?: boolean; is_credit?: boolean; description?: string; credit?: any; debit?: any }): boolean => {
+  if (row.isAutoCredit === true || row.is_credit === true) return true;
+  if (isCreditAccountDesc(row.description)) return true;
+  if (row.credit !== null && row.credit !== undefined && row.credit !== '' && Number(row.credit) > 0 && !row.debit) return true;
+  return false;
+};
+
 
 export const REPLENISHMENT_ACCOUNT_OPTIONS = [
   'Advances to employee',
@@ -1349,45 +1363,60 @@ function DisbursementPageContent() {
       }
     }
 
-    const rows: { id: string; date: string; voucher_no: string; description: string; debit: number | null; credit: number | null }[] = [];
+    const rows: { id: string; date: string; voucher_no: string; description: string; debit: number | null; credit: number | null; isAutoCredit?: boolean; is_credit?: boolean }[] = [];
     let debitTotal = 0;
     let creditTotal = 0;
 
     for (let idx = 0; idx < details.length; idx++) {
       const item = details[idx];
-      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      const desc = item.book_of_account || item.description || '';
+      const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      const isCreditItem = item.is_credit === true ||
+                           item.isAutoCredit === true ||
+                           isCreditAccountDesc(desc) ||
+                           rawVal < 0 ||
+                           (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+
       const dateStr = item.date ? item.date.split('T')[0] : (cv?.voucher_date ? cv.voucher_date.split('T')[0] : '');
       const vNo = item.voucher_no || cv?.voucher_no || '';
 
-      if (val > 0) {
+      if (isCreditItem) {
+        const creditAmt = rawVal < 0
+          ? Math.abs(rawVal)
+          : (item.credit !== null && item.credit !== undefined && item.credit !== '' ? Number(item.credit) : (item.debit && isCreditAccountDesc(desc) ? Number(item.debit) : (rawVal > 0 ? rawVal : null)));
         rows.push({
           id: `item-${idx}`,
           date: dateStr,
           voucher_no: vNo,
-          description: item.book_of_account || item.description || 'Disbursement Line',
-          debit: val,
-          credit: null
-        });
-        debitTotal += val;
-      } else if (val < 0) {
-        const creditVal = Math.abs(val);
-        rows.push({
-          id: `item-${idx}`,
-          date: dateStr,
-          voucher_no: vNo,
-          description: item.book_of_account || item.description || 'Credit / Deduction',
+          description: desc || 'Revolving Fund - Operation',
           debit: null,
-          credit: creditVal
+          credit: creditAmt,
+          isAutoCredit: true,
+          is_credit: true
         });
-        creditTotal += creditVal;
-      } else if (item.book_of_account || item.description) {
+        if (creditAmt) creditTotal += creditAmt;
+      } else if (rawVal > 0) {
         rows.push({
           id: `item-${idx}`,
           date: dateStr,
           voucher_no: vNo,
-          description: item.book_of_account || item.description,
+          description: desc || 'Disbursement Line',
+          debit: rawVal,
+          credit: null,
+          isAutoCredit: false,
+          is_credit: false
+        });
+        debitTotal += rawVal;
+      } else if (desc) {
+        rows.push({
+          id: `item-${idx}`,
+          date: dateStr,
+          voucher_no: vNo,
+          description: desc,
           debit: null,
-          credit: null
+          credit: null,
+          isAutoCredit: false,
+          is_credit: false
         });
       }
     }
@@ -1404,7 +1433,9 @@ function DisbursementPageContent() {
         voucher_no: vNo,
         description: cibName,
         debit: null,
-        credit: debitTotal
+        credit: debitTotal,
+        isAutoCredit: true,
+        is_credit: true
       });
       creditTotal = debitTotal;
     }
@@ -1490,7 +1521,7 @@ function DisbursementPageContent() {
       }
 
       // If this is the credit row and user edits credit or description manually, let it update
-      const isCurrentCredit = currentRow.isAutoCredit || (Boolean(currentRow.credit) && !currentRow.debit) || currentRow.description.toLowerCase().startsWith('cib');
+      const isCurrentCredit = checkIsCreditRow(currentRow);
       if (isCurrentCredit && (field === 'credit' || field === 'description')) {
         return prev.map((r, i) => (i === rowIdx ? updatedRow : r));
       }
@@ -1499,19 +1530,15 @@ function DisbursementPageContent() {
       const nextRows = prev.map((r, i) => (i === rowIdx ? updatedRow : r));
       let sumDebits = 0;
       nextRows.forEach(r => {
-        const isCred = r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib');
+        const isCred = checkIsCreditRow(r);
         if (!isCred) {
           sumDebits += parseFloat(r.debit || '0') || 0;
         }
       });
 
       // Find the credit rows
-      const creditRows = nextRows.filter(
-        r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib')
-      );
-      const creditRowIdx = nextRows.findIndex(
-        r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib')
-      );
+      const creditRows = nextRows.filter(r => checkIsCreditRow(r));
+      const creditRowIdx = nextRows.findIndex(r => checkIsCreditRow(r));
 
       // If description was edited on a debit row, auto-fill matching category on the credit row!
       if (field === 'description') {
@@ -1523,7 +1550,7 @@ function DisbursementPageContent() {
         const targetCreditIdx = pairedCreditIdx !== -1 ? pairedCreditIdx : (creditRows.length === 1 ? creditRowIdx : -1);
         if (targetCreditIdx !== -1 && targetCreditIdx !== undefined) {
           const currentCreditDesc = nextRows[targetCreditIdx]?.description || '';
-          if (!currentCreditDesc.toLowerCase().startsWith('cib')) {
+          if (!/cib\b|cash\s*in\s*bank/i.test(currentCreditDesc)) {
             nextRows[targetCreditIdx] = {
               ...nextRows[targetCreditIdx],
               description: autoCreditDesc
@@ -1551,15 +1578,15 @@ function DisbursementPageContent() {
       const filtered = prev.filter(r => r.id !== rowId);
       let sumDebits = 0;
       filtered.forEach(r => {
-        const isCred = r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib');
+        const isCred = checkIsCreditRow(r);
         if (!isCred) {
           sumDebits += parseFloat(r.debit || '0') || 0;
         }
       });
-      const creditRows = filtered.filter(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib'));
+      const creditRows = filtered.filter(r => checkIsCreditRow(r));
       if (creditRows.length === 1) {
         return filtered.map(r => {
-          const isCred = r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib');
+          const isCred = checkIsCreditRow(r);
           if (isCred) {
             return { ...r, credit: sumDebits > 0 ? String(sumDebits) : '' };
           }
@@ -1591,7 +1618,8 @@ function DisbursementPageContent() {
       description: defaultDesc,
       debit: '',
       credit: '',
-      isAutoCredit: isCredit
+      isAutoCredit: isCredit,
+      is_credit: isCredit
     };
 
     const setRows = isEdit ? setEditCvRows : setNewCvRows;
@@ -1600,7 +1628,7 @@ function DisbursementPageContent() {
         return [...prev, newRow];
       }
       // In replenishment mode, if there are credit rows at the bottom, insert before the first credit row
-      const firstCreditIdx = prev.findIndex(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit) || r.description.toLowerCase().startsWith('cib'));
+      const firstCreditIdx = prev.findIndex(r => checkIsCreditRow(r));
       if (firstCreditIdx !== -1) {
         const copy = [...prev];
         copy.splice(firstCreditIdx, 0, newRow);
@@ -2021,16 +2049,22 @@ function DisbursementPageContent() {
     if (rowsToUse.length > 0) {
       initialRowsList = rowsToUse.map((r, i) => {
         const rowId = r.id || `edit-row-${i}-${Date.now()}`;
-        const isCredit = (r.credit !== null && r.credit !== undefined && r.credit !== '' && Number(r.credit) > 0) ||
-                         (r.description && r.description.toLowerCase().startsWith('cib'));
+        const isCredit = checkIsCreditRow(r);
+        const creditVal = isCredit
+          ? (r.credit !== null && r.credit !== undefined && r.credit !== '' ? String(r.credit) : (r.debit && isCreditAccountDesc(r.description) ? String(r.debit) : ''))
+          : '';
+        const debitVal = !isCredit
+          ? (r.debit !== null && r.debit !== undefined && r.debit !== '' ? String(r.debit) : '')
+          : '';
         return {
           id: rowId,
           date: r.date || (cv.voucher_date ? cv.voucher_date.split('T')[0] : ''),
           voucher_no: r.voucher_no || cv.voucher_no || '',
           description: r.description || '',
-          debit: (r.debit !== null && r.debit !== undefined && r.debit !== '') ? String(r.debit) : '',
-          credit: (r.credit !== null && r.credit !== undefined && r.credit !== '') ? String(r.credit) : '',
-          isAutoCredit: Boolean(isCredit)
+          debit: debitVal,
+          credit: creditVal,
+          isAutoCredit: Boolean(isCredit),
+          is_credit: Boolean(isCredit)
         };
       });
     } else {
@@ -2186,15 +2220,20 @@ function DisbursementPageContent() {
       const detailsArray = editCvRows
         .filter(r => r.description.trim() || r.debit || r.credit)
         .map(r => {
-          const debitVal = parseFloat(r.debit || '0') || 0;
-          const creditVal = parseFloat(r.credit || '0') || 0;
-          if (debitVal > 0) calculatedAmount += debitVal;
-          const netAmount = debitVal > 0 ? debitVal : -creditVal;
+          const isCredit = checkIsCreditRow(r);
+          const debitVal = !isCredit ? (parseFloat(r.debit || '0') || 0) : 0;
+          const creditVal = isCredit ? (parseFloat(r.credit || '0') || (r.debit ? parseFloat(r.debit) : 0) || 0) : 0;
+          if (!isCredit && debitVal > 0) calculatedAmount += debitVal;
+          const netAmount = isCredit ? -Math.abs(creditVal) : debitVal;
           return {
             date: r.date || null,
             voucher_no: r.voucher_no || null,
             book_of_account: r.description.trim(),
-            amount: netAmount
+            amount: netAmount,
+            debit: isCredit ? null : (debitVal > 0 ? debitVal : null),
+            credit: isCredit ? (creditVal > 0 ? creditVal : null) : null,
+            is_credit: isCredit,
+            isAutoCredit: isCredit
           };
         });
 
@@ -2341,15 +2380,20 @@ function DisbursementPageContent() {
       const detailsArray = newCvRows
         .filter(r => r.description.trim() || r.debit || r.credit)
         .map(r => {
-          const debitVal = parseFloat(r.debit || '0') || 0;
-          const creditVal = parseFloat(r.credit || '0') || 0;
-          if (debitVal > 0) calculatedAmount += debitVal;
-          const netAmount = debitVal > 0 ? debitVal : -creditVal;
+          const isCredit = checkIsCreditRow(r);
+          const debitVal = !isCredit ? (parseFloat(r.debit || '0') || 0) : 0;
+          const creditVal = isCredit ? (parseFloat(r.credit || '0') || (r.debit ? parseFloat(r.debit) : 0) || 0) : 0;
+          if (!isCredit && debitVal > 0) calculatedAmount += debitVal;
+          const netAmount = isCredit ? -Math.abs(creditVal) : debitVal;
           return {
             date: r.date || null,
             voucher_no: r.voucher_no || null,
             book_of_account: r.description.trim(),
-            amount: netAmount
+            amount: netAmount,
+            debit: isCredit ? null : (debitVal > 0 ? debitVal : null),
+            credit: isCredit ? (creditVal > 0 ? creditVal : null) : null,
+            is_credit: isCredit,
+            isAutoCredit: isCredit
           };
         });
 
@@ -3272,7 +3316,7 @@ function DisbursementPageContent() {
 
                             <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest overflow-visible">
                               {newCvRows.map((row, idx) => {
-                                const isCreditRow = row.isAutoCredit || (Boolean(row.credit) && !row.debit) || row.description.toLowerCase().startsWith('cib');
+                                const isCreditRow = checkIsCreditRow(row);
                                 return (
                                   <div
                                     key={row.id || idx}
@@ -3336,8 +3380,8 @@ function DisbursementPageContent() {
                                     </div>
                                     <div className="col-span-1 text-center">
                                       {(() => {
-                                        const hasMultipleDebits = newCvRows.filter(r => !r.isAutoCredit && !(r.credit && !r.debit)).length > 1;
-                                        const hasMultipleCredits = newCvRows.filter(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit)).length > 1;
+                                        const hasMultipleDebits = newCvRows.filter(r => !checkIsCreditRow(r)).length > 1;
+                                        const hasMultipleCredits = newCvRows.filter(r => checkIsCreditRow(r)).length > 1;
                                         const canDelete = isCreditRow ? hasMultipleCredits : hasMultipleDebits;
                                         return canDelete ? (
                                           <button
@@ -4111,7 +4155,7 @@ function DisbursementPageContent() {
                         const cibName = formatCibAccountName(val);
                         setEditCvRows(rows =>
                           rows.map(r =>
-                            (r.isAutoCredit || (r.description.toLowerCase().startsWith('cib') && !r.debit))
+                            (/cib\b|cash\s*in\s*bank/i.test(r.description || '') || (!r.description && r.isAutoCredit))
                               ? { ...r, description: cibName }
                               : r
                           )
@@ -4264,7 +4308,7 @@ function DisbursementPageContent() {
 
                           <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest overflow-visible">
                             {editCvRows.map((row, idx) => {
-                              const isCreditRow = row.isAutoCredit || (Boolean(row.credit) && !row.debit) || row.description.toLowerCase().startsWith('cib');
+                              const isCreditRow = checkIsCreditRow(row);
                               return (
                                 <div
                                   key={row.id || idx}
@@ -4339,8 +4383,8 @@ function DisbursementPageContent() {
                                   </div>
                                   <div className="col-span-1 text-center">
                                     {(() => {
-                                      const hasMultipleDebits = editCvRows.filter(r => !r.isAutoCredit && !(r.credit && !r.debit)).length > 1;
-                                      const hasMultipleCredits = editCvRows.filter(r => r.isAutoCredit || (Boolean(r.credit) && !r.debit)).length > 1;
+                                      const hasMultipleDebits = editCvRows.filter(r => !checkIsCreditRow(r)).length > 1;
+                                      const hasMultipleCredits = editCvRows.filter(r => checkIsCreditRow(r)).length > 1;
                                       const canDelete = isCreditRow ? hasMultipleCredits : hasMultipleDebits;
                                       return canDelete ? (
                                         <button

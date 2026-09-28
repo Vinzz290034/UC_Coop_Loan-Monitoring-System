@@ -127,7 +127,24 @@ function getCvDisbursedAmount(cv: any): number {
 }
 
 function getCategoryForAccount(acct: string): string {
-  const lower = (acct || '').toLowerCase();
+  const trimmed = (acct || '').trim();
+  if (!trimmed) return 'Operation';
+  const lower = trimmed.toLowerCase();
+
+  // 1. Check localStorage cache if available
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('rf_account_categories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed[lower]) return parsed[lower];
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Keyword heuristic
   if (
     lower.includes('wifi') ||
     lower.includes('water') ||
@@ -150,7 +167,8 @@ function getCategoryForAccount(acct: string): string {
     lower.includes('lanyard') ||
     lower.includes('handbag') ||
     lower.includes('hardhat') ||
-    lower.includes('goggles')
+    lower.includes('goggles') ||
+    lower.includes('porterage')
   ) {
     return 'Merchandise';
   }
@@ -168,6 +186,8 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
   let debitTotal = 0;
   let creditTotal = 0;
 
+  const activeItems = (lfItems || []).filter((it: any) => !it.is_cancelled);
+
   let details: any[] = [];
   if (Array.isArray(cv?.details)) {
     details = cv.details;
@@ -180,63 +200,35 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
     }
   }
 
-  if (details.length > 0) {
-    for (const item of details) {
-      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
-      const dateStr = item.date ? formatIsoDate(item.date) : (cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—');
-      const vNo = item.voucher_no || cv?.voucher_no || '—';
-      if (val > 0) {
-        rows.push({
-          date: dateStr,
-          voucher_no: vNo,
-          description: item.book_of_account || item.description || 'Disbursement Line',
-          debit: val,
-          credit: null
-        });
-        debitTotal += val;
-      } else if (val < 0) {
-        const creditVal = Math.abs(val);
-        rows.push({
-          date: dateStr,
-          voucher_no: vNo,
-          description: item.book_of_account || item.description || 'Credit / Deduction',
-          debit: null,
-          credit: creditVal
-        });
-        creditTotal += creditVal;
-      } else if (item.book_of_account || item.description) {
-        rows.push({
-          date: dateStr,
-          voucher_no: vNo,
-          description: item.book_of_account || item.description,
-          debit: null,
-          credit: null
-        });
-      }
-    }
+  const isBroadCategoryDesc = (desc: string) => {
+    const d = (desc || '').trim().toLowerCase();
+    return ['operation', 'service', 'services', 'merchandise', 'stl', 'short term loan', 'revolving fund', 'loan', 'petty cash'].includes(d) ||
+           /^(revolving\s*fund|stl|short\s*term\s*loan)\s*-\s*(operation|service|services|stl)$/i.test(d);
+  };
 
-    if (creditTotal === 0 && debitTotal > 0) {
-      const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
-      rows.push({
-        date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
-        voucher_no: cv?.voucher_no || '—',
-        description: cibName,
-        debit: null,
-        credit: debitTotal
-      });
-      creditTotal = debitTotal;
-    }
-    return { rows, debitTotal, creditTotal };
-  }
+  const debitDetails = details.filter(d => {
+    const val = typeof d.amount === 'number' ? d.amount : parseFloat(d.amount || d.debit || 0);
+    const desc = d.book_of_account || d.description || '';
+    const isCredit = d.is_credit === true || /^(cib\b|cash\s*in\s*bank)/i.test(desc) || val < 0;
+    return !isCredit && val > 0;
+  });
 
-  const activeItems = (lfItems || []).filter((it: any) => !it.is_cancelled);
-  if (activeItems.length > 0) {
+  const detailsAreOnlyCategories = debitDetails.length > 0 && debitDetails.every(d => isBroadCategoryDesc(d.book_of_account || d.description || ''));
+
+  // Prioritize activeItems from attached liquidation schedule if:
+  // 1. activeItems exist AND details is empty, OR
+  // 2. details only contains the summary category names (e.g. Operation, Service, Merchandise), OR
+  // 3. activeItems has more itemized lines than details
+  const shouldUseActiveItems = activeItems.length > 0 && (debitDetails.length === 0 || detailsAreOnlyCategories || activeItems.length > debitDetails.length);
+
+  if (shouldUseActiveItems) {
+    const defaultVNo = (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—';
     for (const it of activeItems) {
       const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
       if (amt <= 0) continue;
       const rawDate = it.item_date || it.item_date_raw || it.release_date || it.release_date_raw;
       const dateStr = rawDate ? formatIsoDate(rawDate) : (cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—');
-      const vNo = it.particulars || it.voucher_no || cv?.voucher_no || '—';
+      const vNo = it.voucher_no || defaultVNo || it.particulars || '—';
       const expAccount = it.account_name || (resolvedType === 'stl' ? (it.particulars || 'Short Term Loan') : 'Expense');
 
       rows.push({
@@ -253,7 +245,65 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
       const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
       rows.push({
         date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
-        voucher_no: cv?.voucher_no || '—',
+        voucher_no: defaultVNo,
+        description: cibName,
+        debit: null,
+        credit: debitTotal
+      });
+      creditTotal = debitTotal;
+    }
+    return { rows, debitTotal, creditTotal };
+  }
+
+  if (details.length > 0) {
+    for (const item of details) {
+      const desc = item.book_of_account || item.description || '';
+      const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      const isCreditItem = item.is_credit === true ||
+                           item.isAutoCredit === true ||
+                           /^(cib\b|cash\s*in\s*bank|revolving\s*fund|rf\s*[-#]|petty\s*cash\s*fund)/i.test(desc.trim()) ||
+                           rawVal < 0 ||
+                           (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+      const dateStr = item.date ? formatIsoDate(item.date) : (cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—');
+      const vNo = item.voucher_no || (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—';
+
+      if (isCreditItem) {
+        const creditVal = rawVal < 0
+          ? Math.abs(rawVal)
+          : (item.credit !== null && item.credit !== undefined && item.credit !== '' ? Number(item.credit) : (item.debit ? Number(item.debit) : (rawVal > 0 ? rawVal : null)));
+        rows.push({
+          date: dateStr,
+          voucher_no: vNo,
+          description: desc || 'Credit / Deduction',
+          debit: null,
+          credit: creditVal
+        });
+        if (creditVal) creditTotal += creditVal;
+      } else if (rawVal > 0) {
+        rows.push({
+          date: dateStr,
+          voucher_no: vNo,
+          description: desc || 'Disbursement Line',
+          debit: rawVal,
+          credit: null
+        });
+        debitTotal += rawVal;
+      } else if (desc) {
+        rows.push({
+          date: dateStr,
+          voucher_no: vNo,
+          description: desc,
+          debit: null,
+          credit: null
+        });
+      }
+    }
+
+    if (creditTotal === 0 && debitTotal > 0) {
+      const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
+      rows.push({
+        date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
+        voucher_no: (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—',
         description: cibName,
         debit: null,
         credit: debitTotal
@@ -650,7 +700,8 @@ export default function UnifiedCvLfPrintModal({
       for (const it of activeLf) {
         const amt = parseFloat(it.amount) || 0;
         if (amt > 0) {
-          const cat = (it.category || getCategoryForAccount(it.account_name || '') || 'Operation').trim();
+          const rawCat = it.category || getCategoryForAccount(it.account_name || '') || 'Operation';
+          const cat = cleanCategoryName(rawCat);
           map[cat] = (map[cat] || 0) + amt;
           total += amt;
         }
@@ -668,10 +719,19 @@ export default function UnifiedCvLfPrintModal({
         }
       }
       for (const it of details) {
-        const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
+        const desc = (it.book_of_account || it.description || '').trim();
+        const rawVal = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
+        const isCreditItem = it.is_credit === true ||
+                             it.isAutoCredit === true ||
+                             /^(cib\b|cash\s*in\s*bank|revolving\s*fund|rf\s*[-#]|petty\s*cash\s*fund)/i.test(desc) ||
+                             rawVal < 0 ||
+                             (it.credit !== null && it.credit !== undefined && it.credit !== '' && !it.debit);
+        if (isCreditItem) continue;
+
+        const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
         if (amt > 0) {
-          const acct = it.book_of_account || it.description || '';
-          const cat = getCategoryForAccount(acct);
+          const rawCat = it.category || getCategoryForAccount(desc);
+          const cat = cleanCategoryName(rawCat);
           map[cat] = (map[cat] || 0) + amt;
           total += amt;
         }
@@ -709,6 +769,66 @@ export default function UnifiedCvLfPrintModal({
   const summaryCvData = useMemo(() => getSummaryCvRows(currentCv, resolvedType, categoryBreakdown), [currentCv, resolvedType, categoryBreakdown]);
   const detailedCvData = useMemo(() => getBalancedCvRows(currentCv, lfItems, resolvedType), [currentCv, lfItems, resolvedType]);
   const activeCvDebitTotal = cvViewMode === 'summary' ? summaryCvData.debitTotal : detailedCvData.debitTotal;
+
+  const isRevolvingFund = useMemo(() => {
+    if (resolvedType === 'stl') return false;
+    if (resolvedType === 'rf') return true;
+    const folder = (currentCv?.folder_name || '').toLowerCase();
+    const part = (currentCv?.particulars || '').toLowerCase();
+    return folder.includes('revolving') || part.includes('revolving') || Boolean(currentCv?.revolving_fund);
+  }, [resolvedType, currentCv]);
+
+  const rfDetailedCategoryBreakdown = useMemo(() => {
+    if (!isRevolvingFund) return [];
+
+    const preferredOrder = ['Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
+    const catMap: Record<string, number> = {};
+
+    const activeLf = (lfItems || []).filter((it: any) => !it.is_cancelled);
+    if (activeLf.length > 0) {
+      for (const it of activeLf) {
+        const amt = parseFloat(it.amount) || 0;
+        if (amt > 0) {
+          const rawCat = it.category || getCategoryForAccount(it.account_name || '');
+          const cat = cleanCategoryName(rawCat);
+          catMap[cat] = (catMap[cat] || 0) + amt;
+        }
+      }
+    } else if (detailedCvData.rows.length > 0) {
+      for (const r of detailedCvData.rows) {
+        const amt = Number(r.debit) || 0;
+        if (amt > 0) {
+          const cat = cleanCategoryName(getCategoryForAccount(r.description));
+          catMap[cat] = (catMap[cat] || 0) + amt;
+        }
+      }
+    } else if (categoryBreakdown.list.length > 0) {
+      for (const item of categoryBreakdown.list) {
+        if (item.amount > 0) {
+          const cat = cleanCategoryName(item.name);
+          catMap[cat] = (catMap[cat] || 0) + item.amount;
+        }
+      }
+    }
+
+    const categories = Object.keys(catMap).filter(k => catMap[k] > 0);
+    if (categories.length === 0) return [];
+
+    categories.sort((a, b) => {
+      const idxA = preferredOrder.indexOf(a);
+      const idxB = preferredOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return catMap[b] - catMap[a];
+    });
+
+    return categories.map(name => ({
+      name,
+      amount: catMap[name],
+      formatted: formatCurrency(catMap[name])
+    }));
+  }, [isRevolvingFund, lfItems, detailedCvData.rows, categoryBreakdown.list]);
 
   if (!isOpen || !mounted) return null;
 
@@ -900,13 +1020,34 @@ export default function UnifiedCvLfPrintModal({
                       </div>
                     </div>
 
-                    {/* Particulars */}
-                    <div className="text-xs bg-neutral-50 p-2.5 rounded border border-neutral-200">
-                      <strong className="text-neutral-700 uppercase text-[10px] tracking-wide">Particulars:</strong>{' '}
-                      <span className="italic text-neutral-800 font-medium">
-                        {currentCv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment Disbursement' : 'Revolving Fund Replenishment')}
-                      </span>
-                    </div>
+                    {/* Particulars / Breakdown */}
+                    {isRevolvingFund && cvViewMode === 'detailed' && rfDetailedCategoryBreakdown.length > 0 ? (
+                      <div className="bg-gradient-to-r from-emerald-50 via-teal-50/70 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40 p-2.5 rounded-xl border border-emerald-200/90 dark:border-emerald-800/60 shadow-2xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-md bg-[#064e3b] text-white font-extrabold text-[9.5px] uppercase tracking-wider shadow-2xs">
+                            Breakdown
+                          </span>
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            {rfDetailedCategoryBreakdown.map((cat) => (
+                              <span
+                                key={cat.name}
+                                className="inline-flex items-center gap-1.5 bg-white/95 dark:bg-neutral-900/90 px-2.5 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-700/60 shadow-2xs"
+                              >
+                                <span className="text-[#065f46] dark:text-emerald-400 font-bold text-[11px]">{cat.name}:</span>
+                                <span className="font-mono font-bold text-neutral-900 dark:text-neutral-100 text-[11.5px]">{cat.formatted}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs bg-neutral-50 dark:bg-neutral-900/60 p-2.5 rounded border border-neutral-200 dark:border-neutral-800">
+                        <strong className="text-neutral-700 dark:text-neutral-300 uppercase text-[10px] tracking-wide">Particulars:</strong>{' '}
+                        <span className="italic text-neutral-800 dark:text-neutral-200 font-medium">
+                          {currentCv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment Disbursement' : 'Revolving Fund Replenishment')}
+                        </span>
+                      </div>
+                    )}
 
                     {/* TRANSACTION DETAILS */}
                     {cvViewMode === 'summary' ? (
@@ -1285,13 +1426,29 @@ export default function UnifiedCvLfPrintModal({
               </div>
             </div>
 
-            {/* Particulars */}
-            <div style={{ backgroundColor: '#f9fafb', padding: '5px 8px', borderRadius: '4px', border: '1px solid #e5e7eb', fontSize: '9px' }}>
-              <strong style={{ color: '#374151' }}>PARTICULARS:</strong>{' '}
-              <span style={{ color: '#1f2937', fontStyle: 'italic' }}>
-                {currentCv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment Disbursement' : 'Revolving Fund Replenishment')}
-              </span>
-            </div>
+            {/* Particulars / Breakdown (PRINT) */}
+            {isRevolvingFund && cvViewMode === 'detailed' && rfDetailedCategoryBreakdown.length > 0 ? (
+              <div style={{ backgroundColor: '#ecfdf5', padding: '5px 8px', borderRadius: '4px', border: '1px solid #a7f3d0', fontSize: '9px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ backgroundColor: '#065f46', color: '#ffffff', padding: '1.5px 6px', borderRadius: '3px', fontWeight: 'bold', fontSize: '8px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  BREAKDOWN:
+                </span>
+                <span style={{ color: '#111827', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  {rfDetailedCategoryBreakdown.map((cat) => (
+                    <span key={cat.name} style={{ backgroundColor: '#ffffff', border: '1px solid #d1fae5', padding: '1.5px 6px', borderRadius: '3px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <strong style={{ color: '#065f46', fontWeight: 'bold' }}>{cat.name}:</strong>{' '}
+                      <span style={{ fontFamily: 'monospace', color: '#111827', fontWeight: 'bold' }}>{cat.formatted}</span>
+                    </span>
+                  ))}
+                </span>
+              </div>
+            ) : (
+              <div style={{ backgroundColor: '#f9fafb', padding: '5px 8px', borderRadius: '4px', border: '1px solid #e5e7eb', fontSize: '9px' }}>
+                <strong style={{ color: '#374151' }}>PARTICULARS:</strong>{' '}
+                <span style={{ color: '#1f2937', fontStyle: 'italic' }}>
+                  {currentCv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment Disbursement' : 'Revolving Fund Replenishment')}
+                </span>
+              </div>
+            )}
 
             {/* TRANSACTION DETAILS (PRINT) */}
             {cvViewMode === 'summary' ? (
