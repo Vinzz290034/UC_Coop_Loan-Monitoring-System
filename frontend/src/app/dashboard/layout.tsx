@@ -443,13 +443,15 @@ function DashboardLayoutContent({
             </button>
             <h2 className="font-headline text-base sm:text-lg font-bold text-on-surface dark:text-white capitalize truncate">
               {pathname === '/dashboard'
-                ? 'System Dashboard'
+                ? (isAdminOrStaff ? 'System Dashboard' : 'Overview')
                 : pathname
                     .split('/')
                     .slice(2)
                     .map((segment) => {
+                      // Role-aware breadcrumb overrides — members see friendly labels
+                      // that match their sidebar navigation naming convention
                       const staticOverrides: Record<string, string> = {
-                        accounting: 'Shared Capital',
+                        accounting: isAdminOrStaff ? 'Shared Capital' : 'Investment',
                         members: 'Membership',
                         billing: 'Billings',
                         import: 'Data Import',

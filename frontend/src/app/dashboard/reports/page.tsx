@@ -419,7 +419,7 @@ export default function ReportsPage() {
       {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+          <BackButton href="/dashboard">Back to Overview</BackButton>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
@@ -586,7 +586,6 @@ export default function ReportsPage() {
         <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
           <FileText className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
           <h3 className="font-headline font-bold text-on-surface dark:text-white">No Records Found</h3>
-          <p className="text-xs text-neutral-600 dark:text-neutral-400">No entries match the report search filters.</p>
         </div>
       ) : (
         <div className="space-y-4">

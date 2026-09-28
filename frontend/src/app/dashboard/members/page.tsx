@@ -25,6 +25,7 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  Users,
 } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
@@ -422,7 +423,7 @@ export default function MembersPage() {
         {/* Top Header & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+            <BackButton href="/dashboard">Back to Overview</BackButton>
           </div>
           <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
             <Link
@@ -444,7 +445,7 @@ export default function MembersPage() {
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all cursor-pointer"
             >
               <UserPlus className="w-4 h-4" />
-              Register Profile
+              Register Member
             </button>
           </div>
         </div>
@@ -529,9 +530,8 @@ export default function MembersPage() {
           </div>
         ) : members.length === 0 ? (
           <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60 shadow-sm">
-            <AlertTriangle className="w-8 h-8 text-neutral-600 dark:text-neutral-400/50 mx-auto mb-3" />
+            <Users className="w-8 h-8 text-neutral-600 dark:text-neutral-400/50 mx-auto mb-3" />
             <h3 className="font-headline font-bold text-on-surface dark:text-white">No Members Found</h3>
-            <p className="font-body text-xs text-neutral-600 dark:text-neutral-400/80 mt-1">Try relaxing search parameters or register a member.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -588,7 +588,14 @@ export default function MembersPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
-                    {displayedMembers.map((member) => {
+                    {displayedMembers.length === 0 ? (
+                      <tr>
+                        <td colSpan={10} className="px-6 py-12 text-center text-neutral-500 italic">
+                          No members found.
+                        </td>
+                      </tr>
+                    ) : (
+                      displayedMembers.map((member) => {
                       const isEditingName = editingCell?.memberId === member.id && editingCell?.field === 'name';
                       const isEditingMembershipType = editingCell?.memberId === member.id && editingCell?.field === 'membership_type';
                       const isEditingAge = editingCell?.memberId === member.id && editingCell?.field === 'age';
@@ -1235,7 +1242,7 @@ export default function MembersPage() {
                           </td>
                         </tr>
                       );
-                    })}
+                    }))}
                   </tbody>
                 </table>
               </div>

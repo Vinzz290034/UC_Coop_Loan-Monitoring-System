@@ -359,7 +359,7 @@ function CalendarPageContent() {
   return (
     <div className="space-y-6 animate-micro-elevate">
       <div>
-        <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+        <BackButton href="/dashboard">Back to Overview</BackButton>
       </div>
 
       {/* Top Combined Module Tab Switcher & Month Navigation Toolbar */}
@@ -556,7 +556,8 @@ function CalendarPageContent() {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="overflow-x-auto custom-scrollbar pb-1">
+                  <div className="min-w-[540px] sm:min-w-0 space-y-4">
                   {/* Days of Week Header */}
                   <div className="grid grid-cols-7 gap-1.5 text-center">
                     {daysOfWeek.map((day, idx) => (
@@ -634,6 +635,7 @@ function CalendarPageContent() {
                       );
                     })}
                   </div>
+                </div>
                 </div>
               )}
             </div>

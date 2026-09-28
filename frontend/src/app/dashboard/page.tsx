@@ -473,16 +473,16 @@ export default function OverviewPage() {
   const getSortLabel = (key: string) => {
     switch (key) {
       case 'default': return 'Default View';
-      case 'member_id_asc': return 'Member ID (Ascending)';
-      case 'member_id_desc': return 'Member ID (Descending)';
-      case 'name_asc': return 'Last Name (A to Z)';
-      case 'name_desc': return 'Last Name (Z to A)';
-      case 'loan_amount_desc': return 'Loan Amount (Highest to Lowest)';
-      case 'loan_amount_asc': return 'Loan Amount (Lowest to Highest)';
-      case 'balance_desc': return 'Account Balance (Highest to Lowest)';
-      case 'balance_asc': return 'Account Balance (Lowest to Highest)';
-      case 'status_pending': return 'Member Status (Pending Review First)';
-      case 'status_active': return 'Member Status (Active First)';
+      case 'member_id_asc': return 'Member ID (Low to High)';
+      case 'member_id_desc': return 'Member ID (High to Low)';
+      case 'name_asc': return 'Last Name (A–Z)';
+      case 'name_desc': return 'Last Name (Z–A)';
+      case 'loan_amount_desc': return 'Loan Amount (High to Low)';
+      case 'loan_amount_asc': return 'Loan Amount (Low to High)';
+      case 'balance_desc': return 'Balance (High to Low)';
+      case 'balance_asc': return 'Balance (Low to High)';
+      case 'status_pending': return 'Status (Pending First)';
+      case 'status_active': return 'Status (Active First)';
       default: return 'Default View';
     }
   };
@@ -1250,6 +1250,119 @@ export default function OverviewPage() {
   };
 
   if (loading) {
+    // Role-aware skeleton: mirrors the actual layout each role sees,
+    // preventing cumulative layout shift (CLS) during data hydration
+    const isMemberRole = user?.role === 'member';
+
+    if (isMemberRole) {
+      // Member Overview Skeleton — matches the 2-column layout with
+      // greeting, quick transactions, tabs, milestone card, and loan products sidebar
+      return (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Two-Column Layout Skeleton */}
+          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
+            {/* Left Column (~65-70%) */}
+            <div className="flex-1 min-w-0 space-y-8 w-full">
+              {/* Header Greeting Shimmer */}
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-36 rounded-full" />
+                <Skeleton className="h-9 sm:h-10 w-72 sm:w-96 rounded-2xl" />
+              </div>
+
+              {/* Quick Transactions Skeleton */}
+              <div className="space-y-4">
+                <Skeleton className="h-5 w-40 rounded-xl" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="p-6 bg-white dark:bg-surface-container-low border-2 border-outline-variant/40 rounded-3xl space-y-3">
+                    <Skeleton className="h-5 w-32 rounded-lg" />
+                    <Skeleton className="h-3 w-48 rounded-full opacity-70" />
+                    <Skeleton className="h-3 w-20 rounded-full" />
+                  </div>
+                  <div className="p-6 bg-white dark:bg-surface-container-low border-2 border-outline-variant/40 rounded-3xl space-y-3">
+                    <Skeleton className="h-5 w-32 rounded-lg" />
+                    <Skeleton className="h-3 w-48 rounded-full opacity-70" />
+                    <Skeleton className="h-3 w-20 rounded-full" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Underline Tabs Skeleton */}
+              <div className="space-y-4">
+                <div className="flex gap-6 border-b border-outline-variant/50 pb-0">
+                  <Skeleton className="h-8 w-24 rounded-lg" />
+                  <Skeleton className="h-8 w-28 rounded-lg" />
+                  <Skeleton className="h-8 w-32 rounded-lg" />
+                </div>
+                {/* Tab content placeholder */}
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/50 rounded-3xl space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="w-8 h-8 rounded-xl flex-shrink-0" />
+                        <div className="space-y-1.5 flex-1">
+                          <Skeleton className="h-4 w-3/4 rounded-md" />
+                          <Skeleton className="h-3 w-1/2 rounded-full opacity-60" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Milestone Tracker Skeleton */}
+              <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-sm space-y-4">
+                <Skeleton className="h-6 w-28 rounded-full" />
+                <Skeleton className="h-6 w-64 rounded-xl" />
+                <Skeleton className="h-3 w-80 rounded-full opacity-70" />
+                <Skeleton className="h-3 w-full rounded-full" />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-3.5 rounded-2xl border border-outline-variant/40 space-y-2">
+                      <Skeleton className="h-2.5 w-20 rounded-md" />
+                      <Skeleton className="h-4 w-24 rounded-md" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column — Loan Products Sidebar (~30-35%) */}
+            <div className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-6 lg:self-start">
+              <div className="p-5 sm:p-6 bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-sm flex flex-col lg:max-h-[calc(100vh-6rem)] overflow-hidden">
+                <div className="flex items-center justify-between flex-shrink-0 mb-4">
+                  <Skeleton className="h-5 w-40 rounded-xl" />
+                  <Skeleton className="h-4 w-16 rounded-md" />
+                </div>
+                <div className="flex gap-1 flex-shrink-0 mb-4">
+                  <Skeleton className="h-8 flex-1 rounded-xl" />
+                  <Skeleton className="h-8 flex-1 rounded-xl" />
+                  <Skeleton className="h-8 flex-1 rounded-xl" />
+                </div>
+                <div className="space-y-3 flex-1 min-h-0 overflow-hidden">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-4 rounded-2xl border border-outline-variant/40 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1.5 flex-1">
+                          <Skeleton className="h-3 w-16 rounded-full" />
+                          <Skeleton className="h-4 w-36 rounded-md" />
+                        </div>
+                        <Skeleton className="h-6 w-12 rounded-xl" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Skeleton className="h-12 rounded-xl" />
+                        <Skeleton className="h-12 rounded-xl" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Admin/Staff Overview Skeleton — matches 4 KPI cards + charts layout
     return (
       <div className="space-y-8 animate-in fade-in duration-300">
         {/* Header Greeting Shimmer */}
@@ -1537,94 +1650,102 @@ export default function OverviewPage() {
           onClose={() => setIsOnboardingModalOpen(false)}
         />
 
-        {!isProfileApproved && (
-          <IncompleteProfileBanner
-            onActionClick={() => setIsOnboardingModalOpen(true)}
-            status={memberStatus}
-            isCompleted={isProfileCompleted}
-          />
-        )}
-
-        {/* Header Greeting */}
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary mb-2">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Verified Member Session</span>
-          </div>
-          <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
-            {isReturning ? 'Welcome back' : 'Welcome'}, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
-          </h1>
-
-        </div>
-
-
         {/* ======== TWO-COLUMN LAYOUT: Main Content + Loan Products Sidebar ======== */}
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
           {/* ---- LEFT COLUMN (Main Content ~65-70%) ---- */}
           <div className="flex-1 min-w-0 space-y-8">
+            {!isProfileApproved && (
+              <IncompleteProfileBanner
+                onActionClick={() => setIsOnboardingModalOpen(true)}
+                status={memberStatus}
+                isCompleted={isProfileCompleted}
+              />
+            )}
+
+            {/* Header Greeting */}
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary mb-2">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Verified Member</span>
+              </div>
+              <h1 className="font-headline text-3xl md:text-4xl font-extrabold text-on-surface dark:text-white tracking-tight">
+                {isReturning ? 'Welcome back' : 'Welcome'}, {user?.profile?.first_name || memberMetrics?.first_name || (memberMetrics?.full_name || user?.username || '').trim().split(' ')[0]}!
+              </h1>
+            </div>
 
             {/* Quick Transactions Section */}
             <div className="space-y-4">
               <h3 className="font-headline text-lg font-bold text-on-surface dark:text-white">Quick Transactions</h3>
-              <div className={`grid grid-cols-1 ${balances.total_assets === 0 ? 'md:grid-cols-2' : 'md:grid-cols-2'} gap-6`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 {/* Apply for Loan */}
                 <button
                   onClick={openLoanModal}
                   className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40 relative overflow-hidden"
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
                       Apply for a Loan
                       {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                     </h4>
-                    <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                      Submit a new credit application request.
-                    </p>
-                    <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                      {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
-                    </span>
+                    <div className="pt-1">
+                      {isVerified ? (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-xs font-bold shadow-xs group-hover:shadow-md group-hover:scale-105 active:scale-95 transition-all">
+                          <span>Proceed</span>
+                          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold">
+                          <Lock className="w-3 h-3" />
+                          <span>Verification Required</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
                     <PlusCircle className="w-6 h-6" />
                   </div>
                 </button>
 
-                {/* Initiate Investment */}
-                {balances.total_assets === 0 && (
-                  <button
-                    onClick={() => {
-                      if (!isVerified) {
-                        setActiveModal('unverified_loan');
-                        return;
-                      }
-                      setActiveModal('investment');
-                      setWizardStep(1);
-                      setSuccessData(null);
-                      setModalError(null);
-                    }}
-                    className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
-                  >
-                    <div className="space-y-1">
-                      <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
-                        Initiate Investment
-                        {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
-                      </h4>
-                      <p className="text-xs text-neutral-700 dark:text-neutral-300 font-medium">
-                        Add capital placement to your share equity.
-                      </p>
-                      <span className="inline-block pt-1 text-xs font-extrabold text-primary dark:text-secondary group-hover:underline">
-                        {isVerified ? 'Proceed \u2192' : 'Verification Required \u2192'}
-                      </span>
+                {/* Add Share Capital */}
+                <button
+                  onClick={() => {
+                    if (!isVerified) {
+                      setActiveModal('unverified_loan');
+                      return;
+                    }
+                    setActiveModal('investment');
+                    setWizardStep(1);
+                    setSuccessData(null);
+                    setModalError(null);
+                  }}
+                  className="flex items-center justify-between p-6 bg-white dark:bg-surface-container-low border-2 border-primary/80 dark:border-secondary/80 ring-4 ring-primary/20 dark:ring-secondary/15 rounded-3xl hover:bg-primary/5 dark:hover:bg-secondary/5 hover:scale-[1.01] active:scale-95 transition-all text-left group shadow-lg cursor-pointer focus:outline-none focus:ring-secondary/40"
+                >
+                  <div className="space-y-2">
+                    <h4 className="font-headline font-black text-base text-primary dark:text-secondary transition-colors flex items-center gap-1.5">
+                      Add Share Capital
+                      {!isVerified && <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                    </h4>
+                    <div className="pt-1">
+                      {isVerified ? (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-xs font-bold shadow-xs group-hover:shadow-md group-hover:scale-105 active:scale-95 transition-all">
+                          <span>Proceed</span>
+                          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold">
+                          <Lock className="w-3 h-3" />
+                          <span>Verification Required</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </span>
+                      )}
                     </div>
-                    <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
-                      <Coins className="w-6 h-6" />
-                    </div>
-                  </button>
-                )}
-
-                {/* Book Appointment moved to Schedule page */}
-
+                  </div>
+                  <div className="p-3.5 bg-primary text-white dark:bg-secondary dark:text-neutral-950 rounded-2xl shadow-md flex-shrink-0 ml-4 group-hover:scale-105 transition-transform">
+                    <Coins className="w-6 h-6" />
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -1636,16 +1757,16 @@ export default function OverviewPage() {
                   type="button"
                   onClick={() => setOverviewTab('updates')}
                   className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${overviewTab === 'updates'
-                      ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-                      : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                    ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                    : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
                     }`}
                 >
                   <Megaphone className="w-4 h-4" />
                   <span>Updates</span>
                   {overviewAnnouncements.length > 0 && (
                     <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold ${overviewTab === 'updates'
-                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
-                        : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                      ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
                       }`}>
                       {overviewAnnouncements.length}
                     </span>
@@ -1655,8 +1776,8 @@ export default function OverviewPage() {
                   type="button"
                   onClick={() => setOverviewTab('merchandise')}
                   className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${overviewTab === 'merchandise'
-                      ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-                      : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                    ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                    : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
                     }`}
                 >
                   <ShoppingBag className="w-4 h-4" />
@@ -1675,8 +1796,8 @@ export default function OverviewPage() {
                           key={level}
                           onClick={() => setAnnouncementsPriorityFilter(level)}
                           className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer capitalize ${announcementsPriorityFilter === level
-                              ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
-                              : 'border-outline-variant/50 text-neutral-500 hover:border-neutral-400'
+                            ? 'bg-primary/10 border-primary text-primary dark:bg-secondary/15 dark:border-secondary dark:text-secondary'
+                            : 'border-outline-variant/50 text-neutral-500 hover:border-neutral-400'
                             }`}
                         >
                           {level}
@@ -1704,9 +1825,6 @@ export default function OverviewPage() {
                       <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">
                         No updates found.
                       </h3>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                        Check back later for news from cooperative administration.
-                      </p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -1775,8 +1893,8 @@ export default function OverviewPage() {
                   <h3 className="font-headline font-bold text-on-surface dark:text-white text-base">
                     Merchandise Products
                   </h3>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">
-                    Coming soon — Cooperative merchandise products will appear here.
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">
+                    Coming soon
                   </p>
                 </div>
               )}
@@ -1788,14 +1906,11 @@ export default function OverviewPage() {
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 dark:bg-secondary/15 border border-primary/20 dark:border-secondary/20 text-xs font-bold text-primary dark:text-secondary">
                     <Award className="w-3.5 h-3.5" />
-                    <span>Co-op Equity & Investment Milestone</span>
+                    <span>Equity Milestone</span>
                   </div>
                   <h3 className="font-headline text-xl font-bold text-on-surface dark:text-white pt-1">
                     Member Investment Goal & Dividend Tracker
                   </h3>
-                  <p className="font-body text-xs text-neutral-600 dark:text-neutral-400">
-                    Track your target capital placements. Reaching your goal notifies the Coop Office for call/email payout options.
-                  </p>
                 </div>
 
                 {balances.total_assets > 0 && (
@@ -1871,13 +1986,12 @@ export default function OverviewPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="p-3.5 bg-neutral-50 dark:bg-surface-container-high/40 border border-outline-variant/50 rounded-2xl flex items-center justify-between flex-wrap gap-3 text-xs text-neutral-600 dark:text-neutral-300">
-                        <div className="flex items-center gap-2">
-                          <PhoneCall className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
-                          <Mail className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
-                          <span><strong>Officer Contact Protocol:</strong> Once your investment hits 100%, a staff will call or email you.</span>
-                        </div>
-                        <span className="font-mono text-[11px] font-bold text-primary dark:text-secondary bg-primary/10 dark:bg-secondary/15 px-2.5 py-1 rounded-full">
+                      <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] text-neutral-400 dark:text-neutral-500 pt-0.5">
+                        <p className="flex items-center gap-1.5 italic">
+                          <Info className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500 flex-shrink-0" />
+                          <span>Note: When you reach 100%, an officer will contact you regarding payout or rollover options.</span>
+                        </p>
+                        <span className="font-mono text-[10px] font-medium text-neutral-400 dark:text-neutral-500">
                           {100 - progressPercent}% remaining to goal
                         </span>
                       </div>
@@ -1922,9 +2036,9 @@ export default function OverviewPage() {
           </div>
 
           {/* ---- RIGHT COLUMN (Loan Products Sidebar) ---- */}
-          <div className="w-full lg:w-80 xl:w-96 shrink-0 space-y-6">
-            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 sm:p-6 shadow-sm space-y-5 lg:sticky lg:top-20">
-              <div className="flex items-center justify-between">
+          <div className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-6 lg:self-start">
+            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col lg:max-h-[calc(100vh-6rem)] overflow-hidden">
+              <div className="flex items-center justify-between flex-shrink-0 mb-4">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
                     <Banknote className="w-5 h-5" />
@@ -1950,13 +2064,13 @@ export default function OverviewPage() {
               </div>
 
               {/* Category Filter Tabs */}
-              <div className="flex items-center gap-1 p-1 bg-neutral-100/80 dark:bg-neutral-900/60 rounded-xl border border-outline-variant/40 text-[11px] font-bold">
+              <div className="flex items-center gap-1 p-1 bg-neutral-100/80 dark:bg-neutral-900/60 rounded-xl border border-outline-variant/40 text-[11px] font-bold flex-shrink-0 mb-4">
                 <button
                   type="button"
                   onClick={() => setSidebarLoanCategory('all')}
                   className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${sidebarLoanCategory === 'all'
-                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                      : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                    ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                    : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
                     }`}
                 >
                   All ({overviewLoanProducts.length > 0 ? overviewLoanProducts.filter((p: any) => p.is_active !== false && p.is_active !== 'false').length : DEFAULT_LOAN_PRODUCTS.length})
@@ -1965,8 +2079,8 @@ export default function OverviewPage() {
                   type="button"
                   onClick={() => setSidebarLoanCategory('regular')}
                   className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${sidebarLoanCategory === 'regular'
-                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                      : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                    ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                    : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
                     }`}
                 >
                   Regular
@@ -1975,17 +2089,17 @@ export default function OverviewPage() {
                   type="button"
                   onClick={() => setSidebarLoanCategory('stl')}
                   className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer ${sidebarLoanCategory === 'stl'
-                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                      : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                    ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                    : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
                     }`}
                 >
                   STL
                 </button>
               </div>
 
-              {/* Loan Products List */}
+              {/* Loan Products List — Scrollable only within its own section */}
               {loanProductsLoading && filteredSidebarLoanProducts.length === 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-3 flex-1 min-h-0 overflow-y-auto pr-1">
                   <div className="h-24 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
                   <div className="h-24 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
                   <div className="h-24 bg-neutral-100 dark:bg-neutral-800 rounded-2xl animate-pulse" />
@@ -1995,7 +2109,7 @@ export default function OverviewPage() {
                   No products found for this category.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[580px] overflow-y-auto pr-1 custom-scrollbar">
+                <div className="space-y-3 flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 custom-scrollbar">
                   {filteredSidebarLoanProducts.map((prod: any) => {
                     const parsedRate = parseFloat(prod.interest_rate) || 0;
                     const displayRate = (parsedRate <= 1 ? parsedRate * 100 : parsedRate).toFixed(0);
@@ -2017,10 +2131,10 @@ export default function OverviewPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="space-y-1 flex-1">
                             <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${isSTL
-                                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
-                                : isSpecial
-                                  ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
-                                  : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
+                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
+                              : isSpecial
+                                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
+                                : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
                               }`}>
                               {isSTL ? 'Short Term Loan' : isSpecial ? 'Special Loan' : 'Regular Facility'}
                             </span>
@@ -2050,18 +2164,15 @@ export default function OverviewPage() {
                           </div>
                         </div>
 
-                        {/* Footer: Formula + Apply CTA */}
-                        <div className="pt-1.5 flex items-center justify-between border-t border-outline-variant/30 text-xs">
-                          <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
-                            {prod.amortization_type === 'flat_rate' ? 'Straight (Flat)' : 'Diminishing'}
-                          </span>
+                        {/* Footer: Prominent Full-Width Apply CTA */}
+                        <div className="pt-1 border-t border-outline-variant/30">
                           <button
                             type="button"
                             onClick={() => openLoanModalWithProduct(prod)}
-                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white dark:bg-secondary/15 dark:text-secondary dark:hover:bg-secondary dark:hover:text-neutral-950 font-bold text-xs transition-all active:scale-95 cursor-pointer shadow-2xs"
+                            className="w-full py-2.5 px-4 rounded-2xl bg-primary text-white hover:bg-primary/90 dark:bg-secondary dark:text-neutral-950 dark:hover:bg-secondary/90 font-extrabold text-sm transition-all active:scale-[0.98] cursor-pointer shadow-sm flex items-center justify-center gap-2 group-hover:shadow-md"
                           >
-                            <span>Apply</span>
-                            <ArrowRight className="w-3 h-3" />
+                            <span>Apply Loan</span>
+                            <ArrowRight className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -2071,7 +2182,7 @@ export default function OverviewPage() {
               )}
 
               {/* Quick Loan Calculator Link / Promo */}
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/5 to-secondary/10 dark:from-primary/10 dark:to-secondary/5 border border-primary/20 dark:border-secondary/20 space-y-2">
+              {/* <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/5 to-secondary/10 dark:from-primary/10 dark:to-secondary/5 border border-primary/20 dark:border-secondary/20 space-y-2">
                 <div className="flex items-center gap-2 text-primary dark:text-secondary">
                   <Calculator className="w-4 h-4" />
                   <span className="text-xs font-bold font-headline">Need an Estimate?</span>
@@ -2085,7 +2196,7 @@ export default function OverviewPage() {
                 >
                   Go to Loan Calculator <ArrowRight className="w-3 h-3" />
                 </Link>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
@@ -2104,7 +2215,7 @@ export default function OverviewPage() {
                 <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white capitalize">
                   {activeModal === 'loan' && 'Apply for a Loan'}
                   {activeModal === 'unverified_loan' && 'Account Verification Required'}
-                  {activeModal === 'investment' && 'Initiate Investment'}
+                  {activeModal === 'investment' && 'Add Share Capital'}
                   {activeModal === 'appointment' && 'Book Office Appointment'}
                   {activeModal === 'welcome' && (wizardStep === 1 ? 'Welcome to Coop Sync!' : wizardStep === 2 ? 'Set Your Investment Goal' : 'Account Verification Required')}
                 </h3>
@@ -2142,23 +2253,11 @@ export default function OverviewPage() {
                     </div>
                     <div className="space-y-2">
                       <h4 className="font-headline font-extrabold text-xl text-on-surface dark:text-white">
-                        Account Profile Not Yet Verified
+                        Profile Verification Required
                       </h4>
                       <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-md mx-auto leading-relaxed font-medium">
-                        Your account profile is currently unverified or pending review by Cooperative Management. You must complete your personal profile verification and receive Admin approval before applying for a credit line.
+                        Your profile is pending review. Please complete and submit your profile details on your Profile page for administrator approval to unlock loan applications.
                       </p>
-                    </div>
-
-                    <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs text-left space-y-2 font-medium">
-                      <p className="font-bold flex items-center gap-2">
-                        <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                        Next Steps Required:
-                      </p>
-                      <ul className="list-disc list-inside space-y-1 text-[11px] text-neutral-700 dark:text-neutral-300 pl-1">
-                        <li>Complete all personal profile details (TIN, Member Title, Address, etc.)</li>
-                        <li>Submit your profile for verification on the Profile Page</li>
-                        <li>Wait for Cooperative Admin or Staff review (typically 24–48 hours)</li>
-                      </ul>
                     </div>
 
                     <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -2273,11 +2372,11 @@ export default function OverviewPage() {
                             <div className="text-[11px] font-bold text-neutral-500/90 flex items-center gap-2 mt-2.5 bg-neutral/5 dark:bg-neutral/10 p-2 px-3.5 rounded-2xl border border-outline-variant/30">
                               <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
                               {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
-                                <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
+                                <span>Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
                               ) : selectedLoanCategory === LOAN_CATEGORIES.STL ? (
-                                <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
+                                <span>Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
                               ) : (
-                                <span>Coop Policy: <strong className="text-primary dark:text-secondary font-extrabold">Special Loan (Calamity Loan)</strong> is available during officially declared State of Calamity.</span>
+                                <span><strong className="text-primary dark:text-secondary font-extrabold">Special Loan (Calamity Loan)</strong> is available during a declared State of Calamity.</span>
                               )}
                             </div>
                           </div>
@@ -2291,9 +2390,9 @@ export default function OverviewPage() {
                               <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex items-start gap-2.5 font-semibold">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
                                 <div className="space-y-1">
-                                  <p className="font-bold">No Share Capital Deposit Found (₱0.00)</p>
+                                  <p className="font-bold">No Share Capital Found (₱0.00)</p>
                                   <p className="text-[11px] font-normal leading-relaxed text-on-surface/80 dark:text-neutral-300">
-                                    You have ₱0.00 in Share Capital. Under Cooperative Policy, your borrowing capacity is 80% of paid-up Share Capital (₱0.00), so loan applications are locked. Please post a Share Capital deposit first to enable loan borrowing.
+                                    Borrowing capacity is based on Share Capital. Deposit into Share Capital to unlock loan applications.
                                   </p>
                                 </div>
                               </div>
@@ -2307,19 +2406,19 @@ export default function OverviewPage() {
                             {hasStl1MonthRepayment && selectedLoanCategory === LOAN_CATEGORIES.STL && (
                               <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-                                <span><strong>STL Re-borrowing Unlocked:</strong> Users can loan again on STL after 1 month term of repayment (even if the term is more than 1month and this applies if they have 3 current loans on STL). At least one of your active STLs has reached 1 month of repayment!</span>
+                                <span><strong>STL Re-borrowing Unlocked:</strong> You are eligible to apply because at least one active STL has 1+ month of recorded repayments.</span>
                               </div>
                             )}
                             {isStlLocked && (
                               <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                                <span>You cannot apply for a new Short Term Loan (STL) because you have 3 active STLs, and none have reached 1 month of repayment yet.</span>
+                                <span>Application limit reached (3 active STLs with no qualifying repayment).</span>
                               </div>
                             )}
                             {selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && !isCalamityDeclared && (
                               <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
                                 <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-                                <span>Special Loan (Calamity Loan) is currently locked because no active State of Calamity is declared in the system.</span>
+                                <span>Calamity Loan is currently unavailable because no active State of Calamity is declared.</span>
                               </div>
                             )}
 
@@ -2497,14 +2596,14 @@ export default function OverviewPage() {
                       return (
                         <div className="space-y-6">
                           {/* Progressive Policy Info banner */}
-                          <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-5 space-y-2.5">
+                          <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-5 space-y-2">
                             <div className="flex items-center gap-2 font-bold text-sm text-primary dark:text-secondary">
-                              <Info className="w-5 h-5" /> Progressive Loan Policy Overview
+                              <Info className="w-5 h-5" /> Progressive Loan Limit
                             </div>
                             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                              You are currently categorized under the <strong className="text-on-surface dark:text-white font-bold">{tierName}</strong>.
-                              Based on your paid-up Share Capital of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>,
-                              your maximum borrow limit for this loan is capped at <strong className="text-on-surface dark:text-white font-bold">{multiplierText} ({formatCurrency(borrowLimit)})</strong>.
+                              Borrowing tier: <strong className="text-on-surface dark:text-white font-bold">{tierName}</strong>.
+                              Based on <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong> Share Capital,
+                              your borrowing limit is capped at <strong className="text-on-surface dark:text-white font-bold">{multiplierText} ({formatCurrency(borrowLimit)})</strong>.
                             </p>
                           </div>
 
@@ -2512,7 +2611,7 @@ export default function OverviewPage() {
                             {/* Left column: Slider and Repayments */}
                             <div className="space-y-5">
                               <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
-                                <span className="text-xs text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Requested Amortization Principal</span>
+                                <span className="text-xs text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Requested Loan Amount</span>
                                 <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
                                   {formatCurrency(currentLoanAmount)}
                                 </div>
@@ -2697,7 +2796,7 @@ export default function OverviewPage() {
                             onClick={closeModal}
                             className="px-8 py-3 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-2xl font-bold hover:opacity-90 transition-opacity cursor-pointer shadow"
                           >
-                            Go Back to Dashboard
+                            Back to Overview
                           </button>
                         </div>
                       </div>
@@ -2714,9 +2813,9 @@ export default function OverviewPage() {
                         {/* Selected Type summary banner */}
                         <div className="p-3.5 bg-neutral-50 dark:bg-neutral-900 border border-outline-variant/50 rounded-2xl text-xs">
                           <div>
-                            <span className="text-neutral-500 block">Investment Type</span>
+                            <span className="text-neutral-500 block">Deposit Type</span>
                             <span className="font-bold font-headline text-on-surface dark:text-white capitalize">
-                              Share Capital (Capital Build-Up)
+                              Share Capital Deposit
                             </span>
                           </div>
                         </div>
@@ -2724,7 +2823,7 @@ export default function OverviewPage() {
                         {/* Amount Input */}
                         <div className="space-y-2">
                           <label className="text-sm font-bold text-neutral-600 dark:text-neutral-400">
-                            Placement Amount (₱):
+                            Deposit Amount (₱):
                           </label>
                           <input
                             type="number"
@@ -2753,7 +2852,7 @@ export default function OverviewPage() {
                               <WalletCards className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
                               <div>
                                 <span className="font-bold text-xs block">GCash</span>
-                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Instant online GCash mobile wallet transfer</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">GCash mobile wallet</span>
                               </div>
                             </button>
 
@@ -2771,7 +2870,7 @@ export default function OverviewPage() {
                               <Building className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
                               <div>
                                 <span className="font-bold text-xs block">Bank Transfer</span>
-                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Direct deposit to BDO Account</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">BDO bank deposit</span>
                               </div>
                             </button>
 
@@ -2789,7 +2888,7 @@ export default function OverviewPage() {
                               <Lock className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
                               <div>
                                 <span className="font-bold text-xs block">Salary Deduction</span>
-                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Deduct from upcoming payslip</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Upcoming payroll deduction</span>
                               </div>
                             </button>
 
@@ -2807,7 +2906,7 @@ export default function OverviewPage() {
                               <Users className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
                               <div>
                                 <span className="font-bold text-xs block">Hand-in</span>
-                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Hand-in cash to the co-op cashier</span>
+                                <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Cash payment at office</span>
                               </div>
                             </button>
                           </div>
@@ -3379,8 +3478,8 @@ export default function OverviewPage() {
                     type="button"
                     onClick={() => setCatalogCategory('all')}
                     className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${catalogCategory === 'all'
-                        ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
                       }`}
                   >
                     All ({overviewLoanProducts.length > 0 ? overviewLoanProducts.filter((p: any) => p.is_active !== false && p.is_active !== 'false').length : DEFAULT_LOAN_PRODUCTS.length})
@@ -3389,8 +3488,8 @@ export default function OverviewPage() {
                     type="button"
                     onClick={() => setCatalogCategory('regular')}
                     className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${catalogCategory === 'regular'
-                        ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
                       }`}
                   >
                     Regular
@@ -3399,8 +3498,8 @@ export default function OverviewPage() {
                     type="button"
                     onClick={() => setCatalogCategory('stl')}
                     className={`py-1.5 px-3 rounded-lg transition-all text-center cursor-pointer ${catalogCategory === 'stl'
-                        ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
+                      ? 'bg-white dark:bg-surface-container-low text-primary dark:text-secondary shadow-xs font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-on-surface dark:hover:text-white'
                       }`}
                   >
                     STL
@@ -3419,7 +3518,7 @@ export default function OverviewPage() {
                       No loan products found
                     </h4>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto">
-                      We could not find any active loan products matching &quot;{catalogSearch}&quot; in the {catalogCategory.toUpperCase()} category.
+                      No loan products match the selected criteria.
                     </p>
                     {(catalogSearch || catalogCategory !== 'all') && (
                       <button
@@ -3457,10 +3556,10 @@ export default function OverviewPage() {
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${isSTL
-                                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
-                                  : isSpecial
-                                    ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
-                                    : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
+                                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
+                                : isSpecial
+                                  ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20'
+                                  : 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20'
                                 }`}>
                                 {isSTL ? 'Short Term Loan' : isSpecial ? 'Special Loan' : 'Regular Facility'}
                               </span>
@@ -3761,14 +3860,14 @@ export default function OverviewPage() {
                     title="Sort Member Financial Overview"
                   >
                     <option value="default">Default View</option>
-                    <option value="member_id_asc">Member ID (Ascending ↑)</option>
-                    <option value="member_id_desc">Member ID (Descending ↓)</option>
-                    <option value="name_asc">Last Name (A → Z)</option>
-                    <option value="name_desc">Last Name (Z → A)</option>
-                    <option value="loan_amount_desc">Loan Amount (Highest → Lowest)</option>
-                    <option value="loan_amount_asc">Loan Amount (Lowest → Highest)</option>
-                    <option value="balance_desc">Account Balance (Highest → Lowest)</option>
-                    <option value="balance_asc">Account Balance (Lowest → Highest)</option>
+                    <option value="member_id_asc">Member ID (Low to High)</option>
+                    <option value="member_id_desc">Member ID (High to Low)</option>
+                    <option value="name_asc">Last Name (A–Z)</option>
+                    <option value="name_desc">Last Name (Z–A)</option>
+                    <option value="loan_amount_desc">Loan Amount (High to Low)</option>
+                    <option value="loan_amount_asc">Loan Amount (Low to High)</option>
+                    <option value="balance_desc">Balance (High to Low)</option>
+                    <option value="balance_asc">Balance (Low to High)</option>
                     <option value="status_pending">Status (Pending First)</option>
                     <option value="status_active">Status (Active First)</option>
                   </select>
@@ -4007,14 +4106,14 @@ export default function OverviewPage() {
                     title="Sort Member Financial Overview"
                   >
                     <option value="default">Default View</option>
-                    <option value="member_id_asc">Member ID (Ascending ↑)</option>
-                    <option value="member_id_desc">Member ID (Descending ↓)</option>
-                    <option value="name_asc">Last Name (A → Z)</option>
-                    <option value="name_desc">Last Name (Z → A)</option>
-                    <option value="loan_amount_desc">Loan Amount (Highest → Lowest)</option>
-                    <option value="loan_amount_asc">Loan Amount (Lowest → Highest)</option>
-                    <option value="balance_desc">Account Balance (Highest → Lowest)</option>
-                    <option value="balance_asc">Account Balance (Lowest → Highest)</option>
+                    <option value="member_id_asc">Member ID (Low to High)</option>
+                    <option value="member_id_desc">Member ID (High to Low)</option>
+                    <option value="name_asc">Last Name (A–Z)</option>
+                    <option value="name_desc">Last Name (Z–A)</option>
+                    <option value="loan_amount_desc">Loan Amount (High to Low)</option>
+                    <option value="loan_amount_asc">Loan Amount (Low to High)</option>
+                    <option value="balance_desc">Balance (High to Low)</option>
+                    <option value="balance_asc">Balance (Low to High)</option>
                     <option value="status_pending">Status (Pending First)</option>
                     <option value="status_active">Status (Active First)</option>
                   </select>

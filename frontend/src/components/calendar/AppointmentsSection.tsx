@@ -390,11 +390,6 @@ export default function AppointmentsSection({ onPendingCountChange, initialOpenC
           <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">
             {statusFilter !== 'all' ? `No ${statusFilter} appointments found.` : 'No appointments recorded yet.'}
           </h3>
-          <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-            {user?.role === 'member'
-              ? 'Click "Book Appointment" above to schedule a consultation with the coop officers.'
-              : 'No member appointment requests match the current filters.'}
-          </p>
         </div>
       ) : (
         <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">

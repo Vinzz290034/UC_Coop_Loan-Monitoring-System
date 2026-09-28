@@ -290,7 +290,7 @@ export default function AnnouncementsPage() {
       {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+          <BackButton href="/dashboard">Back to Overview</BackButton>
         </div>
 
         {/* Create Announcement Button */}
@@ -360,9 +360,6 @@ export default function AnnouncementsPage() {
           <h3 className="font-headline font-bold text-on-surface dark:text-white text-sm">
             No announcements found.
           </h3>
-          <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-            Check back later for updates from cooperative administration.
-          </p>
         </div>
       ) : (
         /* Announcements Feed List */

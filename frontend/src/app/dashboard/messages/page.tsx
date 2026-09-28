@@ -54,7 +54,7 @@ function MessagesPageContent() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+          <BackButton href="/dashboard">Back to Overview</BackButton>
         </div>
       </div>
 

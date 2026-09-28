@@ -130,7 +130,7 @@ export default function BillingPage() {
     <>
       <div className="space-y-6 animate-micro-elevate">
         <div>
-          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+          <BackButton href="/dashboard">Back to Overview</BackButton>
         </div>
 
         {/* Tabs */}

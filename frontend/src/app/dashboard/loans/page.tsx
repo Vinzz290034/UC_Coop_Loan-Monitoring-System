@@ -2555,7 +2555,7 @@ function LoansPageContent() {
         {/* Top Header & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+            <BackButton href="/dashboard">Back to Overview</BackButton>
           </div>
           <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
             <button
@@ -2675,12 +2675,12 @@ function LoansPageContent() {
                     <FileCheck className="w-6 h-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">My Credit Status</span>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Active Loans</span>
                     <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
                       {memberMetrics?.loans?.active_count || 0} Active Loans
                     </span>
                     <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
-                      Approved cooperative contracts list
+                      Current active contracts
                     </span>
                   </div>
                 </div>
@@ -2696,7 +2696,7 @@ function LoansPageContent() {
                       {formatCurrency(memberMetrics?.loans?.outstanding_balance || 0)}
                     </span>
                     <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
-                      Initial Deployed: {formatCurrency(memberMetrics?.loans?.original_principal || 0)}
+                      Original Principal: {formatCurrency(memberMetrics?.loans?.original_principal || 0)}
                     </span>
                   </div>
                 </div>
@@ -2720,7 +2720,7 @@ function LoansPageContent() {
                           {formatCurrency(remaining)}
                         </span>
                         <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
-                          Policy Multiplier Limit: {formatCurrency(limit)}
+                          Total borrowing capacity: {formatCurrency(limit)}
                         </span>
                       </div>
                     </div>
@@ -2740,7 +2740,7 @@ function LoansPageContent() {
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
               }`}
           >
-            {isAdminOrManager ? 'Loan Monitoring' : 'Loan Application'}
+            {isAdminOrManager ? 'Loan Monitoring' : 'My Loans'}
           </button>
           {isAdminOrManager && (
             <button
@@ -2807,7 +2807,7 @@ function LoansPageContent() {
             <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
               <div className="w-full lg:w-auto flex-1 max-w-md">
                 <SearchInput
-                  placeholder="Search by LAF No., borrower, product, contract ID..."
+                  placeholder={isAdminOrManager ? "Search by LAF No., borrower, product, contract ID..." : "Search by LAF No., product, or contract ID..."}
                   defaultValue={loansSearch}
                   onSearch={(val) => {
                     setLoansSearch((prev) => {
@@ -2874,8 +2874,7 @@ function LoansPageContent() {
             ) : loans.length === 0 ? (
               <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
                 <AlertTriangle className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
-                <h3 className="font-headline font-bold text-on-surface dark:text-white">No Loans Registered</h3>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400">No loans found matching the status filter.</p>
+                <h3 className="font-headline font-bold text-on-surface dark:text-white">No Loans Found</h3>
               </div>
             ) : (
               (() => {
@@ -3770,13 +3769,11 @@ function LoansPageContent() {
                     <Banknote className="w-7 h-7" />
                   </div>
                   <h4 className="font-headline font-bold text-sm text-on-surface dark:text-white">No Payment Records Found</h4>
-                  <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
-                    {paymentsSearch || paymentsMethodFilter !== 'all'
-                      ? 'No repayment records matched your current search filters.'
-                      : isAdminOrManager
-                        ? 'There are currently no recorded loan repayments in the ledger.'
-                        : 'No payment records found for your active or past loans.'}
-                  </p>
+                  {(paymentsSearch || paymentsMethodFilter !== 'all') && (
+                    <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
+                      No repayment records matched your current search filters.
+                    </p>
+                  )}
                   {(paymentsSearch || paymentsMethodFilter !== 'all') && (
                     <button
                       onClick={() => {
@@ -4029,7 +4026,6 @@ function LoansPageContent() {
               <div className="text-center py-16 bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60">
                 <AlertTriangle className="w-8 h-8 text-neutral-600 dark:text-neutral-400/45 mx-auto mb-2" />
                 <h3 className="font-headline font-bold text-on-surface dark:text-white">No Products Registered</h3>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400">No credit products configured yet.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -4458,11 +4454,11 @@ function LoansPageContent() {
                               <div className="flex items-center gap-2">
                                 <Info className="w-4 h-4 text-primary dark:text-secondary flex-shrink-0" />
                                 {selectedLoanCategory === LOAN_CATEGORIES.REGULAR ? (
-                                  <span>Coop Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> at a time. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
+                                  <span>Policy Limit: <strong className="text-primary dark:text-secondary font-extrabold">1 active Regular Loan</strong> <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeRegularCount} / 1)</span></span>
                                 ) : selectedLoanCategory === LOAN_CATEGORIES.STL ? (
-                                  <span>Coop Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> concurrently. <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
+                                  <span>Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
                                 ) : (
-                                  <span>Coop Policy: <strong className="text-primary dark:text-secondary font-extrabold">Special Loan (Calamity Loan)</strong> is available during officially declared State of Calamity.</span>
+                                  <span><strong className="text-primary dark:text-secondary font-extrabold">Special Loan (Calamity Loan)</strong> is available during a declared State of Calamity.</span>
                                 )}
                               </div>
                             </div>
@@ -4474,9 +4470,9 @@ function LoansPageContent() {
                           <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex items-start gap-2.5 font-semibold">
                             <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
                             <div className="space-y-1">
-                              <p className="font-bold">No Share Capital Deposit Found (₱0.00)</p>
+                              <p className="font-bold">No Share Capital Found (₱0.00)</p>
                               <p className="text-[11px] font-normal leading-relaxed text-on-surface/80 dark:text-neutral-300">
-                                This member has ₱0.00 in Share Capital. Under Cooperative Policy, borrowing capacity is 80% of paid-up Share Capital (₱0.00), so loan applications are locked. Please post a Share Capital deposit first to enable loan borrowing.
+                                Borrowing capacity is based on Share Capital. Deposit into Share Capital to unlock loan applications.
                               </p>
                             </div>
                           </div>
@@ -4490,19 +4486,19 @@ function LoansPageContent() {
                         {!isAdminOrManager && hasStl1MonthRepayment && selectedLoanCategory === LOAN_CATEGORIES.STL && (
                           <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
                             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                            <span><strong>STL Re-borrowing Unlocked:</strong> Users can loan again on STL after 1 month term of repayment (even if the term is more than 1month and this applies if they have 3 current loans on STL). At least one of your active STLs has reached 1 month of repayment!</span>
+                            <span><strong>STL Re-borrowing Unlocked:</strong> You are eligible to apply because at least one active STL has 1+ month of recorded repayments.</span>
                           </div>
                         )}
                         {!isAdminOrManager && isStlLocked && (
                           <div className="p-4 bg-tertiary/10 border border-tertiary/20 text-tertiary rounded-2xl text-xs flex gap-2.5 font-semibold">
                             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                            <span>You cannot apply for a new Short Term Loan (STL) because this member has 3 active STLs, and none have reached 1 month of repayment yet.</span>
+                            <span>Application limit reached (3 active STLs with no qualifying repayment).</span>
                           </div>
                         )}
                         {!isAdminOrManager && selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && !isCalamityDeclared && (
                           <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs flex gap-2.5 font-semibold">
                             <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-                            <span>Special Loan (Calamity Loan) is currently locked because no active State of Calamity is declared in the system.</span>
+                            <span>Calamity Loan is currently unavailable because no active State of Calamity is declared.</span>
                           </div>
                         )}
 
@@ -4731,7 +4727,7 @@ function LoansPageContent() {
                             <FileText className="w-5 h-5" />
                           </div>
                           <div>
-                            <h4 className="font-bold text-sm text-on-surface dark:text-white">Admin Desk Application Slip Entry</h4>
+                            <h4 className="font-bold text-sm text-on-surface dark:text-white">Manual Application Slip Entry</h4>
                             <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
                               Selected Product: <strong className="text-primary dark:text-secondary">{selectedProduct.name}</strong> ({selectedProduct.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing Balance'})
                             </p>
@@ -5331,14 +5327,14 @@ function LoansPageContent() {
                 return (
                   <div className="space-y-6 animate-micro-elevate">
                     {/* Policy Banner */}
-                    <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-5 space-y-2.5">
+                    <div className="bg-primary/5 dark:bg-secondary/5 border border-primary/20 dark:border-secondary/20 rounded-3xl p-5 space-y-2">
                       <div className="flex items-center gap-2 font-bold text-sm text-primary dark:text-secondary">
-                        <Info className="w-5 h-5" /> Member progressive loan cap validation
+                        <Info className="w-5 h-5" /> Progressive Loan Limit
                       </div>
                       <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                        Borrower is classified under <strong className="text-on-surface dark:text-white font-bold">{tierName}</strong>.
-                        With Share Capital equity of <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong>,
-                        the progressive policy borrowing limit is capped at <strong className="text-on-surface dark:text-white font-bold">{multiplierText} ({formatCurrency(borrowLimit)})</strong>.
+                        Borrower tier: <strong className="text-on-surface dark:text-white font-bold">{tierName}</strong>.
+                        Based on <strong className="text-on-surface dark:text-white font-bold">{formatCurrency(shareCapital)}</strong> Share Capital,
+                        maximum limit is <strong className="text-on-surface dark:text-white font-bold">{multiplierText} ({formatCurrency(borrowLimit)})</strong>.
                       </p>
                     </div>
 
@@ -5346,7 +5342,7 @@ function LoansPageContent() {
                       {/* Left: Slider & Repayment summary */}
                       <div className="space-y-5">
                         <div className="bg-neutral/5 dark:bg-neutral/10 p-4 rounded-2xl text-center space-y-1">
-                          <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Loan Principal Amount</span>
+                          <span className="text-[10px] text-neutral-600 dark:text-neutral-400 uppercase font-bold tracking-wider">Loan Amount</span>
                           <div className="font-headline text-3xl font-extrabold text-primary dark:text-secondary">
                             {formatCurrency(currentAmountValue)}
                           </div>

@@ -184,7 +184,7 @@ export default function DividendPage() {
       {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <BackButton href="/dashboard">Back to System Dashboard</BackButton>
+          <BackButton href="/dashboard">Back to Overview</BackButton>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
@@ -317,7 +317,7 @@ export default function DividendPage() {
                   {formatCurrency(dividendCalc.netDividendPayable)}
                 </span>
                 <span className="text-[9px] font-bold text-neutral-400 block mt-0.5 truncate">
-                  After Authorized Deductions
+                  Net after deductions
                 </span>
               </div>
             </div>
@@ -373,7 +373,7 @@ export default function DividendPage() {
                       Interest on Share Capital
                     </span>
                     <span className="text-[10px] text-neutral-400">
-                      Standard statutory yield @ 6.5% p.a.
+                      Statutory yield (6.5% p.a.)
                     </span>
                   </div>
                   <span className="font-mono font-bold text-primary dark:text-secondary text-sm">
@@ -388,7 +388,7 @@ export default function DividendPage() {
                       Patronage Refund
                     </span>
                     <span className="text-[10px] text-neutral-400">
-                      Cooperative loan interest & store patronage rebate
+                      Patronage rebate
                     </span>
                   </div>
                   <span className="font-mono font-bold text-primary dark:text-secondary text-sm">
@@ -419,7 +419,7 @@ export default function DividendPage() {
                       Loan Balance
                     </span>
                     <span className="text-[10px] text-neutral-400">
-                      Amortization retention / overdue offsets
+                      Loan balance offset
                     </span>
                   </div>
                   <span className="font-mono font-bold text-neutral-800 dark:text-neutral-200 text-sm">
@@ -434,7 +434,7 @@ export default function DividendPage() {
                       Accident Insurance
                     </span>
                     <span className="text-[10px] text-neutral-400">
-                      Annual Member Group Accident Protection Plan
+                      Group accident protection
                     </span>
                   </div>
                   <span className="font-mono font-bold text-neutral-800 dark:text-neutral-200 text-sm">
@@ -449,7 +449,7 @@ export default function DividendPage() {
                       Others
                     </span>
                     <span className="text-[10px] text-neutral-400">
-                      Miscellaneous fees or voluntary withholdings
+                      Fees & withholdings
                     </span>
                   </div>
                   <span className="font-mono font-bold text-neutral-800 dark:text-neutral-200 text-sm">
@@ -474,7 +474,7 @@ export default function DividendPage() {
                       NET DIVIDEND PAYABLE
                     </span>
                     <span className="text-[10px] text-neutral-600 dark:text-neutral-400 block font-medium">
-                      Net authorized cash payout or share capital rollover
+                      Authorized payout or rollover
                     </span>
                   </div>
                   <div className="text-right">
@@ -493,7 +493,7 @@ export default function DividendPage() {
             <div className="px-6 py-4 bg-neutral-50/60 dark:bg-neutral-900/40 border-t border-outline-variant/40 flex items-start gap-3 text-xs text-neutral-600 dark:text-neutral-400">
               <Info className="w-4 h-4 text-primary dark:text-secondary shrink-0 mt-0.5" />
               <p className="leading-relaxed">
-                <strong>CDA Regulatory Notice:</strong> Interest on Share Capital and Patronage Refunds are calculated after the close of each calendar year and audited in accordance with the Cooperative Development Authority (CDA) rules. Payout disbursements or share equity rollover are formally released following the Annual General Assembly.
+                <strong>CDA Notice:</strong> Dividends and patronage refunds are audited annually under CDA guidelines and released following the General Assembly.
               </p>
             </div>
           </div>

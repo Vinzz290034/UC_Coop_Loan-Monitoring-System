@@ -1036,9 +1036,6 @@ export default function RevolvingFundsTab({
             <p className="font-semibold text-sm text-neutral-700 dark:text-neutral-300">
               No Revolving Fund Liquidation Forms found.
             </p>
-            <p className="text-neutral-500 max-w-md mx-auto">
-              Import liquidation sheets (e.g. RF-35, RF-48) directly from your Excel workbook or click &ldquo;New Liquidation Form&rdquo; to create one manually.
-            </p>
             <div className="pt-2">
               <Link
                 href="/dashboard/import?mode=revolving_funds"

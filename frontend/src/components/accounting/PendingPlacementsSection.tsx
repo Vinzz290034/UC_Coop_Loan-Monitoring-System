@@ -135,9 +135,6 @@ export default function PendingPlacementsSection({
           <h4 className="font-headline font-bold text-xs text-on-surface dark:text-white">
             No Pending Office Payments
           </h4>
-          <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-normal">
-            All member share capital and fixed deposit cash placements are currently up to date.
-          </p>
         </div>
       ) : (
         <div className="space-y-3.5">
