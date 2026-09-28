@@ -2019,6 +2019,7 @@ function DisbursementPageContent() {
   const handleCloseEditCvModal = useCallback(() => {
     if (isCvEditDirty) {
       setModalDialog({
+        isOpen: true,
         type: 'confirm',
         variant: 'amber',
         title: 'Discard Unsaved Changes?',
