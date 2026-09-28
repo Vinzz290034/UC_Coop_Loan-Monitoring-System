@@ -81,8 +81,35 @@ export const syncLoanCheckVoucher = async (clientOrPool, loanId) => {
       return null;
     }
 
+    // Determine category / folder_name:
+    const prodName = l.product_name || 'Loan';
+    const isSpecial = /special|calamity/i.test(prodName);
+    const isStl = !isSpecial && /stl|short\s*term/i.test(prodName);
+    const folderName = isSpecial ? 'Special Loans' : (isStl ? 'Short Term Loans' : 'Regular Loans');
+
+    // Short Term Loans (STL) are disbursed from the STL Revolving Fund, NOT individual bank check vouchers!
+    if (isStl) {
+      await db.query('DELETE FROM check_vouchers WHERE loan_id = $1', [loanId]);
+      return null;
+    }
+
+    // Check if an official check voucher is already linked to this loan
+    const existingCv = await db.query(
+      'SELECT id, voucher_no, check_no FROM check_vouchers WHERE loan_id = $1 LIMIT 1',
+      [loanId]
+    );
+
+    // If no check voucher has been issued for this loan, do NOT auto-generate a dummy check voucher using LAF number.
+    // Check vouchers must be officially issued with sequential voucher numbers (e.g. 26-285).
+    if (existingCv.rowCount === 0) {
+      return null;
+    }
+
+    const cvId = existingCv.rows[0].id;
+    const vNo = existingCv.rows[0].voucher_no; // PRESERVE actual voucher number!
+    const existingCheckNo = existingCv.rows[0].check_no || l.disbursement_reference || null;
+
     const payeeName = [l.first_name, l.middle_name, l.last_name].filter(Boolean).join(' ').trim().toUpperCase() || 'MEMBER BORROWER';
-    const vNo = l.laf_no || `CV-${String(l.id).slice(0, 8)}`;
 
     // Status mapping:
     // disbursed or fully_paid -> 'filed'
@@ -94,12 +121,6 @@ export const syncLoanCheckVoucher = async (clientOrPool, loanId) => {
     } else if (l.status === 'pending_approval') {
       cvStatus = 'edit';
     }
-
-    // Determine category / folder_name:
-    const prodName = l.product_name || 'Loan';
-    const isSpecial = /special|calamity/i.test(prodName);
-    const isStl = !isSpecial && /stl|short\s*term/i.test(prodName);
-    const folderName = isSpecial ? 'Special Loans' : (isStl ? 'Short Term Loans' : 'Regular Loans');
 
     // Amount: net proceeds or principal minus total deductions
     let netAmt = parseFloat(l.net_proceeds);
@@ -138,75 +159,33 @@ export const syncLoanCheckVoucher = async (clientOrPool, loanId) => {
       }
     }
 
-    const signatories = {
-      prepared_by: 'LAMOSTE, CHINNETTE A.',
-      checked_by: 'MARILOU LARIOSA',
-      approved_by: 'MICHELLE M. PABLE'
-    };
-
-    // Check if CV already exists by loan_id or by voucher_no in Loan folders
-    const existingCv = await db.query(
-      'SELECT id, check_no FROM check_vouchers WHERE loan_id = $1 OR (voucher_no = $2 AND folder_name ILIKE $3) LIMIT 1',
-      [loanId, vNo, '%Loan%']
-    );
-
-    if (existingCv.rowCount > 0) {
-      const cvId = existingCv.rows[0].id;
-      const existingCheckNo = existingCv.rows[0].check_no || l.disbursement_reference || null;
-      await db.query(`
-        UPDATE check_vouchers
-        SET 
-          loan_id = $1,
-          voucher_no = $2,
-          voucher_date = $3,
-          check_no = COALESCE($4, check_no),
-          payee = $5,
-          bank = COALESCE(bank, 'BDO'),
-          particulars = $6,
-          amount = $7,
-          folder_name = $8,
-          status = $9,
-          date_released = $10,
-          details = $11::jsonb,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $12
-      `, [
-        loanId,
-        vNo,
-        vDate,
-        existingCheckNo,
-        payeeName,
-        prodName,
-        netAmt,
-        folderName,
-        cvStatus,
-        relDate,
-        JSON.stringify(cvDetails),
-        cvId
-      ]);
-    } else {
-      await db.query(`
-        INSERT INTO check_vouchers (
-          loan_id, voucher_no, voucher_date, check_no, payee, bank,
-          particulars, amount, folder_name, status, date_released,
-          details, signatories
-        )
-        VALUES ($1, $2, $3, $4, $5, 'BDO', $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)
-      `, [
-        loanId,
-        vNo,
-        vDate,
-        l.disbursement_reference || null,
-        payeeName,
-        prodName,
-        netAmt,
-        folderName,
-        cvStatus,
-        relDate,
-        JSON.stringify(cvDetails),
-        JSON.stringify(signatories)
-      ]);
-    }
+    await db.query(`
+      UPDATE check_vouchers
+      SET 
+        voucher_date = $1,
+        check_no = COALESCE($2, check_no),
+        payee = $3,
+        bank = COALESCE(bank, 'BDO'),
+        particulars = $4,
+        amount = $5,
+        folder_name = $6,
+        status = $7,
+        date_released = $8,
+        details = $9::jsonb,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $10
+    `, [
+      vDate,
+      existingCheckNo,
+      payeeName,
+      prodName,
+      netAmt,
+      folderName,
+      cvStatus,
+      relDate,
+      JSON.stringify(cvDetails),
+      cvId
+    ]);
   } catch (err) {
     console.error(`[syncLoanCheckVoucher] Error syncing CV for loan ${loanId}:`, err.message);
   }

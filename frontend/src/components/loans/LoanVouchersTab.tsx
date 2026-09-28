@@ -28,7 +28,8 @@ import {
   Building,
   CreditCard,
   Banknote,
-  FileText
+  FileText,
+  ArrowUpDown
 } from 'lucide-react';
 
 interface SelectOption {
@@ -151,7 +152,7 @@ function AnimatedSelect({
 
 export const DRAW_BANK_OPTIONS: { value: string; label: string }[] = [
   { value: 'BDO', label: 'BDO' },
-  { value: 'Metro Bank', label: 'Metro Bank' }
+  { value: 'MBTC', label: 'MBTC' }
 ];
 
 interface LoanVouchersTabProps {
@@ -173,7 +174,7 @@ export default function LoanVouchersTab({
   const [cvBankFilter, setCvBankFilter] = useState('all');
   const [cvStatusFilter, setCvStatusFilter] = useState('all');
   const [cvSortOrder, setCvSortOrder] = useState<'desc' | 'asc'>('desc');
-  const [bankOptions, setBankOptions] = useState<string[]>(['BDO', 'Metro Bank']);
+  const [bankOptions, setBankOptions] = useState<string[]>(['BDO', 'MBTC']);
 
   // Modals & Details State
   const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
@@ -819,7 +820,7 @@ export default function LoanVouchersTab({
                 options={[
                   { value: 'all', label: 'All Banks' },
                   { value: 'BDO', label: 'BDO' },
-                  { value: 'Metro Bank', label: 'Metro Bank' }
+                  { value: 'MBTC', label: 'MBTC' }
                 ]}
                 className="w-36"
                 buttonClassName="font-medium text-xs py-1.5"
@@ -886,11 +887,10 @@ export default function LoanVouchersTab({
                   <button
                     onClick={() => setCvSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
                     className="flex items-center gap-1 font-bold text-[11px] hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+                    title={`Sort by voucher number (${cvSortOrder === 'desc' ? 'Descending' : 'Ascending'})`}
                   >
                     <span>Voucher No.</span>
-                    <span className="text-[10px] text-neutral-400">
-                      {cvSortOrder === 'desc' ? '↓ DESC' : '↑ ASC'}
-                    </span>
+                    <ArrowUpDown className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   </button>
                 </th>
                 <th className="py-3.5 px-4">Date</th>
@@ -946,12 +946,7 @@ export default function LoanVouchersTab({
                         </td>
                       )}
                       <td className="py-3 px-4 font-mono font-bold text-neutral-900 dark:text-white">
-                        <div className="flex items-center gap-1.5">
-                          <span>{cleanCvNumber(cv.voucher_no)}</span>
-                          <span className="px-1.5 py-0.5 text-[9px] rounded font-mono font-bold bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/25">
-                            LOAN
-                          </span>
-                        </div>
+                        <span>{cleanCvNumber(cv.voucher_no)}</span>
                       </td>
                       <td className="py-3 px-4 text-neutral-600 dark:text-neutral-300">
                         {cv.voucher_date ? new Date(cv.voucher_date).toLocaleDateString() : '—'}
@@ -964,7 +959,7 @@ export default function LoanVouchersTab({
                       </td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
-                          {cv.bank || 'BDO'}
+                          {/metro/i.test(cv.bank) ? 'MBTC' : (cv.bank || 'BDO')}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-neutral-600 dark:text-neutral-300 max-w-xs truncate" title={cv.particulars}>

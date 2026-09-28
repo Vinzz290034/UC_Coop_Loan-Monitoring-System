@@ -68,7 +68,7 @@ interface TabConfig {
 export const DISBURSEMENT_TABS: TabConfig[] = [
   {
     id: 'summary',
-    label: 'Check Vouchers',
+    label: 'All Vouchers',
     folderFilter: '',
     defaultCategory: 'STL',
     description: 'Master registry of all check vouchers in order across all categories'
@@ -121,7 +121,7 @@ export const CATEGORY_TABS: TabConfig[] = DISBURSEMENT_TABS.filter(t => t.id !==
 
 export const DRAW_BANK_OPTIONS: { value: string; label: string }[] = [
   { value: 'BDO', label: 'BDO' },
-  { value: 'Metro Bank', label: 'Metro Bank' }
+  { value: 'MBTC', label: 'MBTC' }
 ];
 
 interface SelectOption {
@@ -1852,7 +1852,7 @@ function DisbursementPageContent() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-headline font-bold text-xs rounded-xl shadow-xs hover:shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              Issue Check Voucher
+              Create Check Voucher
             </button>
           </div>
         )}
@@ -2027,9 +2027,9 @@ function DisbursementPageContent() {
                     options={[
                       { value: 'all', label: 'All Banks' },
                       { value: 'BDO', label: 'BDO' },
-                      { value: 'Metro Bank', label: 'Metro Bank' },
+                      { value: 'MBTC', label: 'MBTC' },
                       ...bankOptions
-                        .filter(b => !['BDO', 'METRO BANK', 'METROBANK'].includes(b.toUpperCase()))
+                        .filter(b => !['BDO', 'MBTC', 'METRO BANK', 'METROBANK'].includes(b.toUpperCase()))
                         .map(b => ({ value: b, label: b }))
                     ]}
                     className="w-36"
@@ -2114,9 +2114,6 @@ function DisbursementPageContent() {
                       <div className="flex items-center gap-1.5">
                         <span>Voucher No.</span>
                         <ArrowUpDown className="w-3.5 h-3.5 text-primary dark:text-secondary shrink-0" />
-                        <span className="text-[9px] font-mono text-neutral-400 font-semibold uppercase">
-                          {cvSortOrder === 'voucher_desc' ? 'Desc' : 'Asc'}
-                        </span>
                       </div>
                     </th>
                     <th className="py-3.5 px-4 font-bold">Date</th>
@@ -2135,7 +2132,7 @@ function DisbursementPageContent() {
                       <td colSpan={10} className="py-12 text-center text-neutral-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                          <span>Loading {currentTabConfig.label} check vouchers...</span>
+                          <span>Loading {currentTabConfig.id === 'summary' ? 'all' : currentTabConfig.label} check vouchers...</span>
                         </div>
                       </td>
                     </tr>
@@ -2145,10 +2142,10 @@ function DisbursementPageContent() {
                         <div className="flex flex-col items-center justify-center gap-2">
                           <FolderOpen className="w-8 h-8 text-neutral-400" />
                           <p className="font-semibold text-neutral-700 dark:text-neutral-300">
-                            No {currentTabConfig.label} check vouchers found.
+                            {currentTabConfig.id === 'summary' ? 'No check vouchers found.' : `No ${currentTabConfig.label} check vouchers found.`}
                           </p>
                           <p className="text-[11px] text-neutral-400 max-w-md">
-                            Issue a new check voucher using the &quot;Issue Check Voucher&quot; button above, or import
+                            Create a new check voucher using the &quot;Create Check Voucher&quot; button above, or import
                             historical spreadsheets from Data Import.
                           </p>
                         </div>
@@ -2185,23 +2182,8 @@ function DisbursementPageContent() {
                             </td>
                           )}
                           <td className="py-3.5 px-4 font-bold text-neutral-900 dark:text-white whitespace-nowrap">
-                            <span className="font-mono text-primary dark:text-secondary hover:underline flex items-center gap-1.5 flex-wrap">
-                              <span>{cv.voucher_no}</span>
-                              {cv.loan_id && (
-                                <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 font-sans font-bold">
-                                  LOAN
-                                </span>
-                              )}
-                              {isRf && (
-                                <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-sans font-bold">
-                                  {rfNum || 'RF'}
-                                </span>
-                              )}
-                              {activeTab === 'summary' && cv.folder_name && !cv.loan_id && !isRf && (
-                                <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-neutral-500/10 text-neutral-700 dark:text-neutral-300 border border-outline-variant font-sans font-medium">
-                                  {cv.folder_name}
-                                </span>
-                              )}
+                            <span className="font-mono text-primary dark:text-secondary hover:underline">
+                              {cv.voucher_no}
                             </span>
                           </td>
                           <td className="py-3.5 px-4 whitespace-nowrap text-neutral-600 dark:text-neutral-400">
@@ -2216,7 +2198,7 @@ function DisbursementPageContent() {
                           <td className="py-3.5 px-4 whitespace-nowrap text-neutral-600 dark:text-neutral-400">
                             {cv.bank ? (
                               <span className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 font-mono text-[11px] font-bold">
-                                {cv.bank}
+                                {/metro/i.test(cv.bank) ? 'MBTC' : cv.bank}
                               </span>
                             ) : (
                               '—'
@@ -2335,7 +2317,7 @@ function DisbursementPageContent() {
             {cvTotalPages > 1 && (
               <div className="p-4 border-t border-outline-variant/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-600 dark:text-neutral-400">
                 <span>
-                  Showing {checkVouchers.length} of {cvTotalCount} check vouchers in {currentTabConfig.label}
+                  Showing {checkVouchers.length} of {cvTotalCount} check vouchers {currentTabConfig.id === 'summary' ? 'total' : `in ${currentTabConfig.label}`}
                 </span>
 
                 <div className="flex items-center gap-1.5">

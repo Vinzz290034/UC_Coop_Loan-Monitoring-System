@@ -1350,9 +1350,10 @@ function LoansPageContent() {
     setVoucherModalFeedback(null);
 
     const yearSuffix = new Date().getFullYear().toString().slice(-2);
-    const cleanLaf = (loanObj.laf_no || '').replace(/^LAF\s*#?/i, '').trim();
-    const defaultVoucherNo = cleanLaf || `${yearSuffix}-${String(loanObj.id).slice(0, 3)}`;
-    setVoucherNo(defaultVoucherNo);
+    setVoucherNo(`${yearSuffix}-...`);
+    getNextVoucherNo().then(nextNo => {
+      if (nextNo) setVoucherNo(prev => prev.endsWith('...') ? nextNo : prev);
+    });
 
     setCheckNo(loanObj.check_no || '');
     setBankName(loanObj.bank || 'BDO');
@@ -1420,13 +1421,13 @@ function LoansPageContent() {
     // Asynchronously check if a saved check voucher exists for this loan
     (async () => {
       try {
-        const searchTarget = cleanLaf || defaultVoucherNo;
+        const cleanLaf = (loanObj.laf_no || '').replace(/^LAF\s*#?/i, '').trim();
         const res = await api.get('/accounts/check-vouchers', {
-          params: { search: searchTarget, limit: 10 }
+          params: { search: cleanLaf || loanObj.last_name || '', limit: 10 }
         });
         const match = res.data?.data?.find((v: any) =>
           v.loan_id === loanObj.id ||
-          (v.voucher_no && (v.voucher_no === defaultVoucherNo || v.voucher_no === cleanLaf || v.voucher_no === `CV-${cleanLaf}`))
+          (cleanLaf && (v.voucher_no === cleanLaf || v.voucher_no === `CV-${cleanLaf}`))
         );
         if (match) {
           setVoucherId(match.id);
