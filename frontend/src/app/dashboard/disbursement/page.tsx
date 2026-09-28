@@ -46,7 +46,8 @@ import {
   Check,
   RotateCcw,
   Link2,
-  GripVertical
+  GripVertical,
+  Unlock
 } from 'lucide-react';
 
 // Tab configuration matching the user spreadsheet structure
@@ -858,6 +859,8 @@ function DisbursementPageContent() {
     id: '',
     voucher_no: '',
     voucher_date: '',
+    date_released: '',
+    status: 'edit',
     check_no: '',
     payee: '',
     bank: '',
@@ -871,6 +874,19 @@ function DisbursementPageContent() {
   const dragRowIdx = useRef<number | null>(null);
   const dragOverRowIdx = useRef<number | null>(null);
   const editModalScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Dedicated modal for editing Date Sealed & Disbursed (or setting date when sealing)
+  const [disbursedDateModal, setDisbursedDateModal] = useState<{
+    isOpen: boolean;
+    cv: any | null;
+    date: string;
+    isSealingAction: boolean;
+  }>({
+    isOpen: false,
+    cv: null,
+    date: '',
+    isSealingAction: false
+  });
 
   const reorderCvRows = useCallback((fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
@@ -1708,6 +1724,23 @@ function DisbursementPageContent() {
           </span>
         );
       case 'filed':
+        if (cv && isAdminOrStaff) {
+          return (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                startEditingCv(cv);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 hover:bg-emerald-500/20 hover:border-emerald-500/50 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-xs group"
+              title="Click to override lock and edit filed check voucher"
+            >
+              <Lock className="w-3 h-3 group-hover:hidden" />
+              <Edit3 className="w-3 h-3 hidden group-hover:inline-block text-emerald-800 dark:text-emerald-200" />
+              <span>Filed</span>
+            </button>
+          );
+        }
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
             <Lock className="w-3 h-3" />
@@ -1809,33 +1842,73 @@ function DisbursementPageContent() {
     }
   };
 
-  // Advance to 'filed' (Admin Only Release & Seal)
-  const handleFileAndLockCv = async (cv: any) => {
+  // Advance to 'filed' (Admin Only Release & Seal with Disbursed Date)
+  const handleFileAndLockCv = (cv: any) => {
     if (!isAdmin) {
       showAppAlert('Permission Denied', 'Only administrators can release, seal, and file check vouchers.', 'amber');
       return;
     }
+    const defaultDate = cv.date_released
+      ? cv.date_released.split('T')[0]
+      : (cv.voucher_date ? cv.voucher_date.split('T')[0] : new Date().toISOString().split('T')[0]);
+    setDisbursedDateModal({
+      isOpen: true,
+      cv,
+      date: defaultDate,
+      isSealingAction: true
+    });
+  };
+
+  // Open modal to directly edit Date Sealed & Disbursed
+  const handleOpenEditDisbursedDate = (cv: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!isAdminOrStaff) {
+      showAppAlert('Permission Denied', 'Only authorized personnel can edit the disbursed date.', 'amber');
+      return;
+    }
+    const defaultDate = cv.date_released
+      ? cv.date_released.split('T')[0]
+      : (cv.voucher_date ? cv.voucher_date.split('T')[0] : new Date().toISOString().split('T')[0]);
+    setDisbursedDateModal({
+      isOpen: true,
+      cv,
+      date: defaultDate,
+      isSealingAction: false
+    });
+  };
+
+  // Save changes from Disbursed Date Modal (either sealing or updating date)
+  const handleSaveDisbursedDateModal = async () => {
+    if (!disbursedDateModal.cv) return;
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await api.put(`/accounts/check-vouchers/${cv.id}`, {
-        status: 'filed',
-        date_released: today
-      });
+      const payload: any = {
+        date_released: disbursedDateModal.date || null
+      };
+      if (disbursedDateModal.isSealingAction) {
+        payload.status = 'filed';
+      }
+      const res = await api.put(`/accounts/check-vouchers/${disbursedDateModal.cv.id}`, payload);
       const updated = res.data?.data;
       if (updated) {
-        setCheckVouchers(prev => prev.map(v => (v.id === cv.id ? { ...v, ...updated } : v)));
-        if (selectedCvForModal?.id === cv.id) {
+        setCheckVouchers(prev => prev.map(v => (v.id === disbursedDateModal.cv.id ? { ...v, ...updated } : v)));
+        if (selectedCvForModal?.id === disbursedDateModal.cv.id) {
           setSelectedCvForModal((prev: any) => (prev ? { ...prev, ...updated } : null));
         }
         setCvActionFeedback({
           type: 'success',
-          message: `Voucher #${cv.voucher_no} is now sealed, filed, and locked!`
+          message: disbursedDateModal.isSealingAction
+            ? `Voucher #${disbursedDateModal.cv.voucher_no} is now sealed and disbursed on ${disbursedDateModal.date}!`
+            : `Disbursed date updated to ${disbursedDateModal.date} for Voucher #${disbursedDateModal.cv.voucher_no}!`
         });
         setTimeout(() => setCvActionFeedback(null), 4000);
       }
+      setDisbursedDateModal({ isOpen: false, cv: null, date: '', isSealingAction: false });
     } catch (err: any) {
-      console.error('Failed to file check voucher:', err);
-      setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to file check voucher.' });
+      console.error('Failed to save disbursed date:', err);
+      setCvActionFeedback({
+        type: 'error',
+        message: err.response?.data?.error?.message || 'Failed to update disbursed date.'
+      });
       setTimeout(() => setCvActionFeedback(null), 4000);
     }
   };
@@ -1877,18 +1950,8 @@ function DisbursementPageContent() {
     });
   };
 
-  // Start Editing CV
-  const startEditingCv = (cv: any, mode?: 'summary' | 'detailed', passedRows?: any[]) => {
-    if (!cv) return;
-    const status = (cv.status || 'edit').toLowerCase();
-    if (status !== 'edit') {
-      showAppAlert(
-        'Voucher Locked',
-        `Check vouchers in "${cv.status?.toUpperCase() || 'LOCKED'}" status cannot be edited. Please revert the voucher to "Edit" status first to make changes.`,
-        'amber'
-      );
-      return;
-    }
+  // Helper to open Edit Check Voucher Modal with prepared data
+  const openEditCvModalActual = (cv: any, mode?: 'summary' | 'detailed', passedRows?: any[]) => {
     const isReplenish = isStlOrRfTabOrVoucher(cv) || Boolean(getReplenishmentType(cv.folder_name, cv));
 
     // Determine the rows to edit:
@@ -1941,6 +2004,8 @@ function DisbursementPageContent() {
       id: cv.id,
       voucher_no: cv.voucher_no || '',
       voucher_date: cv.voucher_date ? cv.voucher_date.split('T')[0] : '',
+      date_released: cv.date_released ? cv.date_released.split('T')[0] : '',
+      status: (cv.status || 'edit').toLowerCase(),
       check_no: cv.check_no || '',
       payee: cv.payee || cv.payee_name || '',
       bank: detectedBank,
@@ -2006,6 +2071,67 @@ function DisbursementPageContent() {
     setEditCvRows(initialRowsList);
     setInitialCvEditSnapshot(JSON.stringify({ formData: initialForm, rows: initialRowsList }));
     setIsEditingCvModal(true);
+  };
+
+  // Start Editing CV - supports overriding filed status check vouchers for authorized users
+  const startEditingCv = (cv: any, mode?: 'summary' | 'detailed', passedRows?: any[]) => {
+    if (!cv) return;
+    const status = (cv.status || 'edit').toLowerCase();
+
+    // If filed, prompt user with Override confirmation
+    if (status === 'filed') {
+      if (!isAdminOrStaff) {
+        showAppAlert(
+          'Permission Denied',
+          'Only administrators and authorized staff can override and edit a filed check voucher.',
+          'amber'
+        );
+        return;
+      }
+      setModalDialog({
+        isOpen: true,
+        type: 'confirm',
+        variant: 'amber',
+        title: 'Override Filed Voucher Lock?',
+        message: `Check Voucher #${cv.voucher_no} is currently sealed and filed. As an authorized user, do you want to override the lock to edit its details, date disbursed, or line items?`,
+        confirmLabel: 'Override & Edit',
+        cancelLabel: 'Cancel',
+        onConfirm: () => {
+          setModalDialog(null);
+          openEditCvModalActual(cv, mode, passedRows);
+        },
+        onCancel: () => setModalDialog(null)
+      });
+      return;
+    }
+
+    if (status !== 'edit') {
+      if (isAdminOrStaff) {
+        setModalDialog({
+          isOpen: true,
+          type: 'confirm',
+          variant: 'amber',
+          title: `Modify "${status.toUpperCase()}" Voucher?`,
+          message: `Check Voucher #${cv.voucher_no} is currently in "${status.toUpperCase()}" status. Do you want to edit it?`,
+          confirmLabel: 'Edit Voucher',
+          cancelLabel: 'Cancel',
+          onConfirm: () => {
+            setModalDialog(null);
+            openEditCvModalActual(cv, mode, passedRows);
+          },
+          onCancel: () => setModalDialog(null)
+        });
+        return;
+      }
+      showAppAlert(
+        'Voucher Locked',
+        `Check vouchers in "${cv.status?.toUpperCase() || 'LOCKED'}" status cannot be edited. Please revert the voucher to "Edit" status first to make changes.`,
+        'amber'
+      );
+      return;
+    }
+
+    openEditCvModalActual(cv, mode, passedRows);
   };
 
   // Track if check voucher edit has dirty/unsaved changes
@@ -2078,6 +2204,8 @@ function DisbursementPageContent() {
       const payload = {
         voucher_no: editCvFormData.voucher_no.trim(),
         voucher_date: editCvFormData.voucher_date || null,
+        date_released: editCvFormData.date_released || null,
+        status: editCvFormData.status || undefined,
         check_no: editCvFormData.check_no.trim() || null,
         payee: editCvFormData.payee.trim(),
         bank: editCvFormData.bank.trim() || null,
@@ -3447,7 +3575,7 @@ function DisbursementPageContent() {
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar flex-1">
               {/* Voucher Meta Summary Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className={`grid grid-cols-2 sm:grid-cols-4 ${(selectedCvForModal.status === 'filed' || selectedCvForModal.date_released) ? 'lg:grid-cols-5' : ''} gap-3`}>
                 <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
                   <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Voucher Date</span>
                   <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
@@ -3496,6 +3624,32 @@ function DisbursementPageContent() {
                       </span>
                     </div>
                   </>
+                )}
+
+                {/* Date Sealed & Disbursed Card */}
+                {(selectedCvForModal.status === 'filed' || selectedCvForModal.date_released) && (
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/40 flex flex-col justify-between group relative">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">
+                        Date Disbursed
+                      </span>
+                      {isAdminOrStaff && (
+                        <button
+                          type="button"
+                          onClick={e => handleOpenEditDisbursedDate(selectedCvForModal, e)}
+                          className="p-1 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200/50 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer"
+                          title="Edit Date Sealed & Disbursed"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-sm font-bold text-emerald-900 dark:text-emerald-100 truncate block mt-0.5 font-mono">
+                      {selectedCvForModal.date_released
+                        ? new Date(selectedCvForModal.date_released).toLocaleDateString()
+                        : '—'}
+                    </span>
+                  </div>
                 )}
               </div>
 
@@ -3698,7 +3852,13 @@ function DisbursementPageContent() {
                         </div>
                         <div>
                           <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">DATE:</span>
-                          <div className="h-8"></div>
+                          <div className="h-8 flex items-center">
+                            {selectedCvForModal.date_released ? (
+                              <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200 font-mono">
+                                {new Date(selectedCvForModal.date_released).toLocaleDateString('en-GB')}
+                              </span>
+                            ) : null}
+                          </div>
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                         </div>
                         <div></div>
@@ -3759,6 +3919,32 @@ function DisbursementPageContent() {
                   >
                     <Lock className="w-3.5 h-3.5" />
                     <span>Seal &amp; Disburse</span>
+                  </button>
+                )}
+
+                {/* Admin/Staff Override & Edit for Filed Vouchers */}
+                {selectedCvForModal.status === 'filed' && isAdminOrStaff && (
+                  <button
+                    type="button"
+                    onClick={() => startEditingCv(selectedCvForModal)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
+                    title="Override lock and edit this filed check voucher"
+                  >
+                    <Unlock className="w-3.5 h-3.5" />
+                    <span>Override &amp; Edit</span>
+                  </button>
+                )}
+
+                {/* Edit Disbursed Date button for Filed Vouchers */}
+                {selectedCvForModal.status === 'filed' && isAdminOrStaff && (
+                  <button
+                    type="button"
+                    onClick={e => handleOpenEditDisbursedDate(selectedCvForModal, e)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
+                    title="Edit date when voucher was sealed and disbursed"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Edit Date Disbursed</span>
                   </button>
                 )}
 
@@ -3849,6 +4035,35 @@ function DisbursementPageContent() {
             </div>
 
             <div ref={editModalScrollRef} className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5 text-xs custom-scrollbar">
+              {/* Override Banner when editing a filed check voucher */}
+              {editCvFormData.status === 'filed' && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 dark:text-amber-200">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-700 dark:text-amber-400 shrink-0">
+                      <Unlock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-xs block">Override Mode (Filed Voucher)</span>
+                      <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                        You are modifying a sealed &amp; filed check voucher. Any changes to amounts, particulars, dates, or line items will be updated.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">Status:</span>
+                    <select
+                      value={editCvFormData.status}
+                      onChange={e => setEditCvFormData(prev => ({ ...prev, status: e.target.value }))}
+                      className="px-2.5 py-1.5 rounded-xl border border-amber-500/40 bg-white dark:bg-neutral-800 text-xs font-bold text-amber-900 dark:text-amber-200 cursor-pointer"
+                    >
+                      <option value="filed">Keep as Filed (Locked)</option>
+                      <option value="edit">Revert to Edit</option>
+                      <option value="for release">Revert to For Release</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
@@ -3916,7 +4131,7 @@ function DisbursementPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                     Payee Name
@@ -3944,6 +4159,20 @@ function DisbursementPageContent() {
                     buttonClassName="font-medium"
                     menuClassName="min-w-[220px]"
                     align="right"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1 flex items-center justify-between">
+                    <span>Date Disbursed</span>
+                    {editCvFormData.date_released && (
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold lowercase tracking-normal">sealed/disbursed</span>
+                    )}
+                  </label>
+                  <input
+                    type="date"
+                    value={editCvFormData.date_released}
+                    onChange={e => setEditCvFormData({ ...editCvFormData, date_released: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60"
                   />
                 </div>
               </div>
@@ -4616,7 +4845,10 @@ function DisbursementPageContent() {
 
             {/* Transaction Details Table */}
             {(() => {
-              const { rows, debitTotal, creditTotal } = getSummaryCvRows(printingCvBreakdown);
+              const isReplenish = isStlOrRfTabOrVoucher(printingCvBreakdown);
+              const summaryData = getSummaryCvRows(printingCvBreakdown);
+              const detailedData = getBalancedCvRows(printingCvBreakdown);
+              const { rows, debitTotal, creditTotal } = isReplenish ? summaryData : detailedData;
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{ border: '1px solid #6ee7b7', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
@@ -4748,7 +4980,9 @@ function DisbursementPageContent() {
                   <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
                     DATE:
                   </span>
-                  <div style={{ height: '36px' }}></div>
+                  <div style={{ height: '36px', display: 'flex', alignItems: 'flex-end', paddingBottom: '3px', fontWeight: 'bold', fontSize: '11px', color: '#111827', fontFamily: 'monospace' }}>
+                    {printingCvBreakdown.date_released ? new Date(printingCvBreakdown.date_released).toLocaleDateString('en-GB') : ''}
+                  </div>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                 </div>
 
@@ -4765,6 +4999,94 @@ function DisbursementPageContent() {
               <span>Printed on: {new Date().toLocaleString()}</span>
             </div>
 
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL FOR SEAL & DISBURSE DATE / EDIT DISBURSED DATE */}
+      {disbursedDateModal.isOpen && mounted && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop"
+          onClick={() => setDisbursedDateModal({ isOpen: false, cv: null, date: '', isSealingAction: false })}
+        >
+          <div
+            className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-headline font-bold text-base text-on-surface dark:text-white">
+                    {disbursedDateModal.isSealingAction ? 'Seal & Disburse Voucher' : 'Edit Disbursed Date'}
+                  </h3>
+                  <p className="text-xs text-neutral-500">
+                    Check Voucher #{disbursedDateModal.cv?.voucher_no}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDisbursedDateModal({ isOpen: false, cv: null, date: '', isSealingAction: false })}
+                className="p-1 rounded-full text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {disbursedDateModal.isSealingAction && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl text-emerald-900 dark:text-emerald-200">
+                  <p className="leading-relaxed">
+                    Setting this date will seal, disburse, and lock Check Voucher #{disbursedDateModal.cv?.voucher_no}.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1.5">
+                  Date Sealed &amp; Disbursed *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={disbursedDateModal.date}
+                  onChange={e => setDisbursedDateModal(prev => ({ ...prev, date: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-medium text-sm text-on-surface dark:text-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDisbursedDateModal({ isOpen: false, cv: null, date: '', isSealingAction: false })}
+                  className="px-4 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!disbursedDateModal.date}
+                  onClick={handleSaveDisbursedDateModal}
+                  className="px-5 py-2 text-xs font-bold rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {disbursedDateModal.isSealingAction ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Seal &amp; Disburse</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Date</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>,
         document.body

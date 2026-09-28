@@ -998,26 +998,27 @@ export const updateCheckVoucher = async (req, res, next) => {
     }
     const currentCv = currentCvRes.rows[0];
 
-    // If current status is 'filed', only admin can modify or unlock it
-    if (currentCv.status === 'filed' && req.user?.role !== 'admin') {
+    // If current status is 'filed', allow admin or staff/manager to override and modify
+    const isAuthorizedModifier = req.user?.role === 'admin' || req.user?.role === 'staff' || req.user?.role === 'manager';
+    if (currentCv.status === 'filed' && !isAuthorizedModifier) {
       return res.status(403).json({
         success: false,
-        error: { message: 'This check voucher is filed and locked. Only administrators can modify it.' }
+        error: { message: 'This check voucher is filed and locked. Only authorized personnel can modify it.' }
       });
     }
 
-    // Only admin can change status to 'filed'
-    if (status === 'filed' && req.user?.role !== 'admin') {
+    // Only admin can transition status to 'filed'
+    if (status === 'filed' && currentCv.status !== 'filed' && req.user?.role !== 'admin') {
       return res.status(403).json({
         success: false,
         error: { message: 'Only an administrator can seal and file a check voucher.' }
       });
     }
 
-    // Check vouchers in 'on process', 'for release', or 'filed' cannot be edited unless reverted to 'edit'
+    // Check vouchers in 'on process', 'for release', or 'filed' cannot be edited unless authorized
     const currentStatus = (currentCv.status || 'edit').toLowerCase();
     const isModifyingContent = details !== undefined || payee !== undefined || amount !== undefined || check_no !== undefined || particulars !== undefined || voucher_no !== undefined;
-    const isLoanOrAdmin = req.user?.role === 'admin' || req.user?.role === 'manager' || currentCv.loan_id || loan_id;
+    const isLoanOrAdmin = isAuthorizedModifier || currentCv.loan_id || loan_id;
     if (currentStatus !== 'edit' && isModifyingContent && status !== 'edit' && !isLoanOrAdmin) {
       return res.status(400).json({
         success: false,
