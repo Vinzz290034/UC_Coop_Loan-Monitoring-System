@@ -14,7 +14,8 @@ import {
   Loader2,
   Receipt,
   FileSpreadsheet,
-  Check
+  Check,
+  Edit3
 } from 'lucide-react';
 
 export interface UnifiedCvLfPrintModalProps {
@@ -24,6 +25,7 @@ export interface UnifiedCvLfPrintModalProps {
   initialCv?: any | null;
   initialLf?: any | null;
   initialType?: 'stl' | 'rf' | null;
+  onEdit?: (cv: any, mode?: 'summary' | 'detailed', rows?: any[]) => void;
   onLinkSuccess?: (updatedCv?: any, updatedLf?: any) => void;
 }
 
@@ -166,41 +168,6 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
   let debitTotal = 0;
   let creditTotal = 0;
 
-  const activeItems = (lfItems || []).filter((it: any) => !it.is_cancelled);
-  if (activeItems.length > 0) {
-    for (const it of activeItems) {
-      const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
-      if (amt <= 0) continue;
-      const rawDate = it.item_date || it.item_date_raw || it.release_date || it.release_date_raw;
-      const dateStr = rawDate ? formatIsoDate(rawDate) : (cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—');
-      const vNo = it.particulars || it.voucher_no || cv?.voucher_no || '—';
-      const expAccount = it.account_name || (resolvedType === 'stl' ? (it.particulars || 'Short Term Loan') : 'Expense');
-      const cat = it.category || getCategoryForAccount(expAccount);
-      const rfCreditAccount = resolvedType === 'stl' ? 'Revolving Fund - STL' : `Revolving Fund - ${cat}`;
-
-      // 1. Debit row (Expense Account)
-      rows.push({
-        date: dateStr,
-        voucher_no: vNo,
-        description: expAccount,
-        debit: amt,
-        credit: null
-      });
-      debitTotal += amt;
-
-      // 2. Balancing Credit row (Revolving Fund sub-account)
-      rows.push({
-        date: dateStr,
-        voucher_no: vNo,
-        description: rfCreditAccount,
-        debit: null,
-        credit: amt
-      });
-      creditTotal += amt;
-    }
-    return { rows, debitTotal, creditTotal };
-  }
-
   let details: any[] = [];
   if (Array.isArray(cv?.details)) {
     details = cv.details;
@@ -247,6 +214,52 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         });
       }
     }
+
+    if (creditTotal === 0 && debitTotal > 0) {
+      const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
+      rows.push({
+        date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
+        voucher_no: cv?.voucher_no || '—',
+        description: cibName,
+        debit: null,
+        credit: debitTotal
+      });
+      creditTotal = debitTotal;
+    }
+    return { rows, debitTotal, creditTotal };
+  }
+
+  const activeItems = (lfItems || []).filter((it: any) => !it.is_cancelled);
+  if (activeItems.length > 0) {
+    for (const it of activeItems) {
+      const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
+      if (amt <= 0) continue;
+      const rawDate = it.item_date || it.item_date_raw || it.release_date || it.release_date_raw;
+      const dateStr = rawDate ? formatIsoDate(rawDate) : (cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—');
+      const vNo = it.particulars || it.voucher_no || cv?.voucher_no || '—';
+      const expAccount = it.account_name || (resolvedType === 'stl' ? (it.particulars || 'Short Term Loan') : 'Expense');
+
+      rows.push({
+        date: dateStr,
+        voucher_no: vNo,
+        description: expAccount,
+        debit: amt,
+        credit: null
+      });
+      debitTotal += amt;
+    }
+
+    if (debitTotal > 0) {
+      const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
+      rows.push({
+        date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
+        voucher_no: cv?.voucher_no || '—',
+        description: cibName,
+        debit: null,
+        credit: debitTotal
+      });
+      creditTotal = debitTotal;
+    }
     return { rows, debitTotal, creditTotal };
   }
 
@@ -254,17 +267,18 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
   if (fallbackAmt > 0) {
     const dateStr = cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—';
     const vNo = cv?.voucher_no || '—';
+    const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
     rows.push({
       date: dateStr,
       voucher_no: vNo,
-      description: cv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment' : 'Revolving Fund Replenishment'),
+      description: cv?.particulars || (resolvedType === 'stl' ? 'Short Term Loan' : 'Operation'),
       debit: fallbackAmt,
       credit: null
     });
     rows.push({
       date: dateStr,
       voucher_no: vNo,
-      description: resolvedType === 'stl' ? 'Revolving Fund - STL' : 'Revolving Fund - Operation',
+      description: cibName,
       debit: null,
       credit: fallbackAmt
     });
@@ -406,6 +420,7 @@ export default function UnifiedCvLfPrintModal({
   initialCv,
   initialLf,
   initialType,
+  onEdit,
   onLinkSuccess
 }: UnifiedCvLfPrintModalProps) {
   const [loading, setLoading] = useState(false);
@@ -802,6 +817,22 @@ export default function UnifiedCvLfPrintModal({
                       <Layers className="w-3.5 h-3.5" />
                       <span>Detailed Check Voucher</span>
                     </button>
+
+                    {onEdit && (currentCv || initialCv) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const activeCv = currentCv || initialCv;
+                          const rowsToPass = cvViewMode === 'detailed' ? detailedCvData.rows : summaryCvData.rows;
+                          onEdit(activeCv, cvViewMode, rowsToPass);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all active:scale-95 cursor-pointer ml-1"
+                        title="Edit Voucher details"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Edit Voucher</span>
+                      </button>
+                    )}
                   </div>
 
                   <span className="text-[11px] text-neutral-500 font-medium hidden sm:inline-block">
@@ -827,7 +858,7 @@ export default function UnifiedCvLfPrintModal({
                             UC-METC Campus, Alumnos, Mambaling, Cebu City • Tel: (032) 410-8811 local 5155
                           </p>
                           <p className="text-[8.5px] text-neutral-500 leading-tight">
-                            Email: ucmetc.ecc@gmail.com • CDA Reg. No. 9520-1070000000029729
+                            Email: ucmetcmpc@gmail.com • CDA Reg. No. 9520-1070000000029729
                           </p>
                         </div>
                       </div>
@@ -1018,47 +1049,92 @@ export default function UnifiedCvLfPrintModal({
                     </div>
 
                     {/* Official Signatories */}
-                    <div className="pt-3 border-t border-neutral-200 grid grid-cols-4 gap-4 text-[9px] text-neutral-700">
-                      <div>
-                        <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">SUBMITTED / PREPARED BY:</span>
-                        <div className="h-4"></div>
-                        <p className="font-bold text-neutral-900 uppercase text-[9.5px]">
-                          {currentCv?.signatories?.prepared_by || currentLf?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
-                        </p>
-                        <div className="border-b border-neutral-800 mt-0.5"></div>
-                        <span className="text-[7.5px] text-neutral-500 block mt-0.5">Custodian / Staff</span>
-                      </div>
+                    {cvViewMode === 'summary' ? (
+                      <div className="pt-4 border-t border-neutral-200">
+                        <div className="grid grid-cols-3 gap-x-8 gap-y-4 text-left">
+                          {/* Row 1 */}
+                          <div>
+                            <span className="font-bold uppercase text-[9.5px] text-neutral-500 tracking-wider block">
+                              PREPARED BY:
+                            </span>
+                            <div className="pt-2.5 pb-1">
+                              <p className="font-bold text-neutral-900 uppercase text-[11px] tracking-wide">
+                                {currentCv?.signatories?.prepared_by || currentLf?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
+                              </p>
+                            </div>
+                            <div className="border-b border-neutral-300"></div>
+                          </div>
 
-                      <div>
-                        <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">CHECKED & VERIFIED BY:</span>
-                        <div className="h-4"></div>
-                        <p className="font-bold text-neutral-900 uppercase text-[9.5px]">
-                          {currentCv?.signatories?.checked_by || currentLf?.checked_by || 'MARILOU LARIOSA'}
-                        </p>
-                        <div className="border-b border-neutral-800 mt-0.5"></div>
-                        <span className="text-[7.5px] text-neutral-500 block mt-0.5">Audit & Inventory Committee</span>
-                      </div>
+                          <div>
+                            <span className="font-bold uppercase text-[9.5px] text-neutral-500 tracking-wider block">
+                              CHECKED BY:
+                            </span>
+                            <div className="pt-2.5 pb-1">
+                              <p className="font-bold text-neutral-900 uppercase text-[11px] tracking-wide">
+                                {currentCv?.signatories?.checked_by || currentLf?.checked_by || 'MARILOU LARIOSA'}
+                              </p>
+                            </div>
+                            <div className="border-b border-neutral-300"></div>
+                          </div>
 
-                      <div>
-                        <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">APPROVED FOR PAYMENT:</span>
-                        <div className="h-4"></div>
-                        <p className="font-bold text-neutral-900 uppercase text-[9.5px]">
-                          {currentCv?.signatories?.approved_by || currentLf?.approved_by || 'MICHELLE M. PABLE'}
-                        </p>
-                        <div className="border-b border-neutral-800 mt-0.5"></div>
-                        <span className="text-[7.5px] text-neutral-500 block mt-0.5">Cooperative Management</span>
-                      </div>
+                          <div>
+                            <span className="font-bold uppercase text-[9.5px] text-neutral-500 tracking-wider block">
+                              APPROVED BY:
+                            </span>
+                            <div className="pt-2.5 pb-1">
+                              <p className="font-bold text-neutral-900 uppercase text-[11px] tracking-wide">
+                                {currentCv?.signatories?.approved_by || currentLf?.approved_by || 'MICHELLE M. PABLE'}
+                              </p>
+                            </div>
+                            <div className="border-b border-neutral-300"></div>
+                          </div>
 
-                      <div>
-                        <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">RECEIVED BY:</span>
-                        <div className="h-4"></div>
-                        <p className="font-bold text-neutral-900 uppercase text-[9.5px]">
-                          {currentCv?.signatories?.received_by || currentCv?.payee || currentLf?.custodian_name || 'MICHELLE M. PABLE'}
-                        </p>
-                        <div className="border-b border-neutral-800 mt-0.5"></div>
-                        <span className="text-[7.5px] text-neutral-500 block mt-0.5">Signature / Date</span>
+                          {/* Row 2 */}
+                          <div>
+                            <span className="font-bold uppercase text-[9.5px] text-neutral-500 tracking-wider block">
+                              RECEIVED BY:
+                            </span>
+                            <div className="h-6"></div>
+                            <div className="border-b border-neutral-300"></div>
+                            <span className="text-[8.5px] text-neutral-500 block mt-1">
+                              Signature over Printed Name
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="font-bold uppercase text-[9.5px] text-neutral-500 tracking-wider block">
+                              DATE:
+                            </span>
+                            <div className="h-6"></div>
+                            <div className="border-b border-neutral-300"></div>
+                          </div>
+
+                          <div>{/* Blank spacer column */}</div>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="pt-3 border-t border-neutral-200 grid grid-cols-2 gap-8 text-[9px] text-neutral-700">
+                        <div>
+                          <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">LIQUIDATED BY:</span>
+                          <div className="h-4"></div>
+                          <p className="font-bold text-neutral-900 uppercase text-[9.5px] m-0">
+                            MICHELLE M. PABLE
+                          </p>
+                          <div className="border-b border-neutral-800 mt-0.5" style={{ width: '180px' }}></div>
+                          <span className="text-[7.5px] text-neutral-500 block mt-0.5">Manager</span>
+                        </div>
+
+                        <div>
+                          <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">APPROVED BY:</span>
+                          <div className="h-4"></div>
+                          <p className="font-bold text-neutral-900 uppercase text-[9.5px] m-0">
+                            CANDILARIO N. TATOY
+                          </p>
+                          <div className="border-b border-neutral-800 mt-0.5" style={{ width: '180px' }}></div>
+                          <span className="text-[7.5px] text-neutral-500 block mt-0.5">Chairman</span>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Footer */}
                     <div className="flex justify-between items-center pt-2 border-t border-neutral-200 text-[8px] text-neutral-400">
@@ -1167,7 +1243,7 @@ export default function UnifiedCvLfPrintModal({
                     UC-METC Campus, Alumnos, Mambaling, Cebu City • Tel: (032) 410-8811 local 5155
                   </p>
                   <p style={{ fontSize: '7.5px', color: '#6b7280', margin: '1px 0 0 0', lineHeight: 1.2 }}>
-                    Email: ucmetc.ecc@gmail.com • CDA Reg. No. 9520-1070000000029729
+                    Email: ucmetcmpc@gmail.com • CDA Reg. No. 9520-1070000000029729
                   </p>
                 </div>
               </div>
@@ -1354,63 +1430,100 @@ export default function UnifiedCvLfPrintModal({
             </div>
 
             {/* Signatures */}
-            <div className="no-print-split" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginTop: '6px', fontSize: '8px' }}>
-              <div>
-                <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '7px', display: 'block' }}>
-                  SUBMITTED / PREPARED BY:
-                </span>
-                <div style={{ height: '12px' }}></div>
-                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9px', color: '#111827' }}>
-                  {currentCv?.signatories?.prepared_by || currentLf?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
-                </p>
-                <div style={{ borderBottom: '1px solid #111827', width: '100%', marginTop: '1px' }}></div>
-                <span style={{ fontSize: '7px', color: '#6b7280', display: 'block' }}>
-                  Custodian / Staff
-                </span>
-              </div>
+            {cvViewMode === 'summary' ? (
+              <div className="no-print-split" style={{ borderTop: '1px solid #e5e7eb', paddingTop: '8px', marginTop: '6px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', columnGap: '20px', rowGap: '10px' }}>
+                  {/* Row 1 */}
+                  <div>
+                    <span style={{ fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', fontSize: '7.5px', display: 'block', letterSpacing: '0.04em' }}>
+                      PREPARED BY:
+                    </span>
+                    <div style={{ paddingTop: '8px', paddingBottom: '2px' }}>
+                      <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9.5px', color: '#111827' }}>
+                        {currentCv?.signatories?.prepared_by || currentLf?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
+                      </p>
+                    </div>
+                    <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
+                  </div>
 
-              <div>
-                <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '7px', display: 'block' }}>
-                  CHECKED & VERIFIED BY:
-                </span>
-                <div style={{ height: '12px' }}></div>
-                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9px', color: '#111827' }}>
-                  {currentCv?.signatories?.checked_by || currentLf?.checked_by || 'MARILOU LARIOSA'}
-                </p>
-                <div style={{ borderBottom: '1px solid #111827', width: '100%', marginTop: '1px' }}></div>
-                <span style={{ fontSize: '7px', color: '#6b7280', display: 'block' }}>
-                  Audit & Inventory Committee
-                </span>
-              </div>
+                  <div>
+                    <span style={{ fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', fontSize: '7.5px', display: 'block', letterSpacing: '0.04em' }}>
+                      CHECKED BY:
+                    </span>
+                    <div style={{ paddingTop: '8px', paddingBottom: '2px' }}>
+                      <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9.5px', color: '#111827' }}>
+                        {currentCv?.signatories?.checked_by || currentLf?.checked_by || 'MARILOU LARIOSA'}
+                      </p>
+                    </div>
+                    <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
+                  </div>
 
-              <div>
-                <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '7px', display: 'block' }}>
-                  APPROVED FOR PAYMENT:
-                </span>
-                <div style={{ height: '12px' }}></div>
-                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9px', color: '#111827' }}>
-                  {currentCv?.signatories?.approved_by || currentLf?.approved_by || 'MICHELLE M. PABLE'}
-                </p>
-                <div style={{ borderBottom: '1px solid #111827', width: '100%', marginTop: '1px' }}></div>
-                <span style={{ fontSize: '7px', color: '#6b7280', display: 'block' }}>
-                  Cooperative Management
-                </span>
-              </div>
+                  <div>
+                    <span style={{ fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', fontSize: '7.5px', display: 'block', letterSpacing: '0.04em' }}>
+                      APPROVED BY:
+                    </span>
+                    <div style={{ paddingTop: '8px', paddingBottom: '2px' }}>
+                      <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9.5px', color: '#111827' }}>
+                        {currentCv?.signatories?.approved_by || currentLf?.approved_by || 'MICHELLE M. PABLE'}
+                      </p>
+                    </div>
+                    <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
+                  </div>
 
-              <div>
-                <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '7px', display: 'block' }}>
-                  RECEIVED BY:
-                </span>
-                <div style={{ height: '12px' }}></div>
-                <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9px', color: '#111827' }}>
-                  {currentCv?.signatories?.received_by || currentCv?.payee || currentLf?.custodian_name || 'MICHELLE M. PABLE'}
-                </p>
-                <div style={{ borderBottom: '1px solid #111827', width: '100%', marginTop: '1px' }}></div>
-                <span style={{ fontSize: '7px', color: '#6b7280', display: 'block' }}>
-                  Signature / Date
-                </span>
+                  {/* Row 2 */}
+                  <div>
+                    <span style={{ fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', fontSize: '7.5px', display: 'block', letterSpacing: '0.04em' }}>
+                      RECEIVED BY:
+                    </span>
+                    <div style={{ height: '18px' }}></div>
+                    <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
+                    <span style={{ fontSize: '7px', color: '#6b7280', display: 'block', marginTop: '2px' }}>
+                      Signature over Printed Name
+                    </span>
+                  </div>
+
+                  <div>
+                    <span style={{ fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', fontSize: '7.5px', display: 'block', letterSpacing: '0.04em' }}>
+                      DATE:
+                    </span>
+                    <div style={{ height: '18px' }}></div>
+                    <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
+                  </div>
+
+                  <div>{/* Blank spacer column */}</div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="no-print-split" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginTop: '6px', fontSize: '8px' }}>
+                <div>
+                  <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '7px', display: 'block' }}>
+                    LIQUIDATED BY:
+                  </span>
+                  <div style={{ height: '12px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9px', color: '#111827' }}>
+                    MICHELLE M. PABLE
+                  </p>
+                  <div style={{ borderBottom: '1px solid #111827', marginTop: '1px', width: '180px' }}></div>
+                  <span style={{ fontSize: '7px', color: '#6b7280', display: 'block' }}>
+                    Manager
+                  </span>
+                </div>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', fontSize: '7px', display: 'block' }}>
+                    APPROVED BY:
+                  </span>
+                  <div style={{ height: '12px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9px', color: '#111827' }}>
+                    CANDILARIO N. TATOY
+                  </p>
+                  <div style={{ borderBottom: '1px solid #111827', marginTop: '1px', width: '180px' }}></div>
+                  <span style={{ fontSize: '7px', color: '#6b7280', display: 'block' }}>
+                    Chairman
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Footer */}
             <div className="no-print-split" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderTop: '1px solid #e5e7eb', paddingTop: '4px', fontSize: '7px', color: '#9ca3af', marginTop: '6px' }}>

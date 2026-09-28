@@ -1762,7 +1762,7 @@ export default function StlLiquidationsTab({
               UC-METC Campus, Alumnos, Mambaling, Cebu City
             </div>
             <div style={{ fontSize: '8.5pt', color: '#374151' }}>
-              ucmetc.ecc@gmail.com tel no.410-8811 local 5155
+              ucmetcmpc@gmail.com tel no.410-8811 local 5155
             </div>
             <div style={{ fontSize: '7.5pt', color: '#4b5563' }}>
               Reg. No. 9520-1070000000029729

@@ -2456,7 +2456,7 @@ export default function RevolvingFundsTab({
                   UC-METC Campus, Alumnos, Mambaling, Cebu City • Tel: (032) 410-8811 local 5155
                 </p>
                 <p style={{ fontSize: '8.5px', color: '#6b7280', margin: '1px 0 0 0' }}>
-                  Email: ucmetc.ecc@gmail.com • CDA Reg. No. 9520-1070000000029729
+                  Email: ucmetcmpc@gmail.com • CDA Reg. No. 9520-1070000000029729
                 </p>
               </div>
             </div>

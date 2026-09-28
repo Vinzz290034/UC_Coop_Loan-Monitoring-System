@@ -158,8 +158,8 @@ const SECTIONS = [
         </div>
         <p className="text-on-surface/70 dark:text-neutral-400 text-sm mt-4 leading-relaxed">
           To exercise any of these rights, contact the cooperative office at{' '}
-          <a href="mailto:ucmetc.ecc@gmail.com" className="text-primary dark:text-secondary font-bold hover:underline">
-            ucmetc.ecc@gmail.com
+          <a href="mailto:ucmetcmpc@gmail.com" className="text-primary dark:text-secondary font-bold hover:underline">
+            ucmetcmpc@gmail.com
           </a>.
         </p>
       </>
@@ -311,11 +311,11 @@ export default function PrivacyPage() {
               Have questions about how your data is handled? Contact the UC-METC Cooperative office and we will be happy to assist you.
             </p>
             <a
-              href="mailto:ucmetc.ecc@gmail.com"
+              href="mailto:ucmetcmpc@gmail.com"
               className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-label text-sm font-bold shadow-lg shadow-primary/25 hover:-translate-y-0.5 hover:shadow-xl transition-all active:scale-95"
             >
               <Mail className="w-4 h-4" />
-              ucmetc.ecc@gmail.com
+              ucmetcmpc@gmail.com
             </a>
           </div>
 

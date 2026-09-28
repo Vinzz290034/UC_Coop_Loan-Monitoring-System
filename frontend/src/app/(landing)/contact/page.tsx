@@ -144,11 +144,11 @@ export default function ContactPage() {
                         Official Dispatch
                       </span>
                       <a
-                        href="mailto:ucmetc.ecc@gmail.com"
+                        href="mailto:ucmetcmpc@gmail.com"
                         className="font-headline text-sm font-bold text-primary dark:text-secondary hover:underline leading-snug mt-0.5"
-                        title="ucmetc.ecc@gmail.com"
+                        title="ucmetcmpc@gmail.com"
                       >
-                        ucmetc.ecc@gmail.com
+                        ucmetcmpc@gmail.com
                       </a>
                     </div>
                   </div>

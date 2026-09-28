@@ -216,7 +216,7 @@ export default function LoginPage() {
 
         <div className="text-center font-body text-xs text-on-surface/50 dark:text-neutral-400 leading-relaxed font-semibold">
           <p>Protected by UC Coop Loans Secure Encryption protocol.</p>
-          <p className="mt-1">For support, contact ucmetc.ecc@gmail.com or visit the UC METC Coop Office</p>
+          <p className="mt-1">For support, contact ucmetcmpc@gmail.com or visit the UC METC Coop Office</p>
         </div>
       </main>
     </div>

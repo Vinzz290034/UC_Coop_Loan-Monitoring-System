@@ -1474,14 +1474,17 @@ function DisbursementPageContent() {
         const cat = getCategoryForAccount(val, accountCategoryMap);
         const autoCreditDesc = replenishType === 'stl' ? 'Revolving Fund - STL' : `Revolving Fund - ${cat}`;
         
-        // If there is a paired credit row, or if there's only 1 credit row, update its description
+        // If there is a paired credit row, or if there's only 1 credit row, update its description (unless it is a CIB bank row)
         const pairedCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
         const targetCreditIdx = pairedCreditIdx !== -1 ? pairedCreditIdx : (creditRows.length === 1 ? creditRowIdx : -1);
         if (targetCreditIdx !== -1 && targetCreditIdx !== undefined) {
-          nextRows[targetCreditIdx] = {
-            ...nextRows[targetCreditIdx],
-            description: autoCreditDesc
-          };
+          const currentCreditDesc = nextRows[targetCreditIdx]?.description || '';
+          if (!currentCreditDesc.toLowerCase().startsWith('cib')) {
+            nextRows[targetCreditIdx] = {
+              ...nextRows[targetCreditIdx],
+              description: autoCreditDesc
+            };
+          }
         }
       }
 
@@ -1847,7 +1850,7 @@ function DisbursementPageContent() {
   };
 
   // Start Editing CV
-  const startEditingCv = (cv: any) => {
+  const startEditingCv = (cv: any, mode?: 'summary' | 'detailed', passedRows?: any[]) => {
     if (!cv) return;
     const status = (cv.status || 'edit').toLowerCase();
     if (status !== 'edit') {
@@ -1859,14 +1862,60 @@ function DisbursementPageContent() {
       return;
     }
     const isReplenish = isStlOrRfTabOrVoucher(cv) || Boolean(getReplenishmentType(cv.folder_name, cv));
-    const { rows } = isReplenish ? getSummaryCvRows(cv) : getBalancedCvRows(cv);
+
+    // Determine the rows to edit:
+    // 1. If explicit passedRows are provided from the print modal (e.g. from Detailed Check Voucher view), prioritize them!
+    // 2. If mode === 'summary', use summary category rows.
+    // 3. Otherwise, use getBalancedCvRows(cv) which preserves the detailed itemized book of accounts stored on the voucher!
+    let rowsToUse: any[] = [];
+    if (passedRows && passedRows.length > 0) {
+      rowsToUse = passedRows;
+    } else if (mode === 'summary') {
+      rowsToUse = getSummaryCvRows(cv).rows;
+    } else {
+      const balanced = getBalancedCvRows(cv);
+      rowsToUse = balanced.rows;
+    }
+
+    let detectedBank = cv.bank || '';
+    if (!detectedBank) {
+      let details: any[] = [];
+      if (Array.isArray(cv.details)) details = cv.details;
+      else if (typeof cv.details === 'string') {
+        try { details = JSON.parse(cv.details); } catch {}
+      }
+      for (const d of details) {
+        const desc = (d.book_of_account || d.description || '').toLowerCase();
+        if (desc.includes('mbtc') || desc.includes('metro')) {
+          detectedBank = 'MBTC';
+          break;
+        } else if (desc.includes('bdo')) {
+          detectedBank = 'BDO';
+          break;
+        }
+      }
+      if (!detectedBank && rowsToUse.length > 0) {
+        for (const r of rowsToUse) {
+          const desc = (r.description || '').toLowerCase();
+          if (desc.includes('mbtc') || desc.includes('metro')) {
+            detectedBank = 'MBTC';
+            break;
+          } else if (desc.includes('bdo')) {
+            detectedBank = 'BDO';
+            break;
+          }
+        }
+      }
+    }
+    if (!detectedBank) detectedBank = 'BDO';
+
     const initialForm = {
       id: cv.id,
       voucher_no: cv.voucher_no || '',
       voucher_date: cv.voucher_date ? cv.voucher_date.split('T')[0] : '',
       check_no: cv.check_no || '',
       payee: cv.payee || cv.payee_name || '',
-      bank: cv.bank || 'BDO',
+      bank: detectedBank,
       particulars: cv.particulars || '',
       folder_name: cv.folder_name || currentTabConfig.defaultCategory,
       prepared_by: cv.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.',
@@ -1876,17 +1925,19 @@ function DisbursementPageContent() {
     setEditCvFormData(initialForm);
 
     let initialRowsList: CvRowItem[] = [];
-    if (rows.length > 0) {
-      initialRowsList = rows.map((r, i) => {
+    if (rowsToUse.length > 0) {
+      initialRowsList = rowsToUse.map((r, i) => {
         const rowId = r.id || `edit-row-${i}-${Date.now()}`;
+        const isCredit = (r.credit !== null && r.credit !== undefined && r.credit !== '' && Number(r.credit) > 0) ||
+                         (r.description && r.description.toLowerCase().startsWith('cib'));
         return {
           id: rowId,
           date: r.date || (cv.voucher_date ? cv.voucher_date.split('T')[0] : ''),
           voucher_no: r.voucher_no || cv.voucher_no || '',
-          description: r.description,
-          debit: r.debit !== null ? String(r.debit) : '',
-          credit: r.credit !== null ? String(r.credit) : '',
-          isAutoCredit: r.credit !== null
+          description: r.description || '',
+          debit: (r.debit !== null && r.debit !== undefined && r.debit !== '') ? String(r.debit) : '',
+          credit: (r.credit !== null && r.credit !== undefined && r.credit !== '') ? String(r.credit) : '',
+          isAutoCredit: Boolean(isCredit)
         };
       });
     } else {
@@ -1896,7 +1947,7 @@ function DisbursementPageContent() {
       const row0Id = `row-0-${Date.now()}`;
 
       if (isReplenish) {
-        const defaultBank = formatCibAccountName(cv.bank || 'MBTC');
+        const defaultBank = formatCibAccountName(detectedBank);
         initialRowsList = [
           {
             id: row0Id,
@@ -1920,7 +1971,7 @@ function DisbursementPageContent() {
       } else {
         initialRowsList = [
           { id: row0Id, date: defaultDate, voucher_no: defaultVoucherNo, description: cv.particulars || 'Disbursement Item', debit: amt > 0 ? String(amt) : '', credit: '' },
-          { id: `cib-${row0Id}`, date: defaultDate, voucher_no: defaultVoucherNo, description: `CIB - ${cv.bank || 'BDO'}`, debit: '', credit: amt > 0 ? String(amt) : '' }
+          { id: `cib-${row0Id}`, date: defaultDate, voucher_no: defaultVoucherNo, description: `CIB - ${detectedBank}`, debit: '', credit: amt > 0 ? String(amt) : '' }
         ];
       }
     }
@@ -2647,44 +2698,6 @@ function DisbursementPageContent() {
                           </td>
                           <td className="py-3.5 px-4 text-neutral-700 dark:text-neutral-300 max-w-[280px]" title={cv.particulars}>
                             <div className="truncate font-medium">{cv.particulars || 'Disbursement voucher'}</div>
-                            {/* Linked STL Liquidation Badge */}
-                            {cv.stl_liquidation && (
-                              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                                  <FileSpreadsheet className="w-2.5 h-2.5 text-emerald-600" />
-                                  <span>Schedule #{cv.stl_liquidation.lf_no}</span>
-                                </span>
-                                <span className="text-[10px] text-neutral-400 font-mono">
-                                  ₱{Number(cv.stl_liquidation.total_expense || 0).toLocaleString()} itemized
-                                </span>
-                              </div>
-                            )}
-                            {/* Linked Revolving Fund Itemized Schedule Badge */}
-                            {cv.revolving_fund && (
-                              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                                  <FileSpreadsheet className="w-2.5 h-2.5 text-emerald-600" />
-                                  <span>Schedule #{cv.revolving_fund.lf_no}</span>
-                                </span>
-                                <span className="text-[10px] text-neutral-400 font-mono">
-                                  ₱{Number(cv.revolving_fund.total_liquidated || 0).toLocaleString()} itemized
-                                </span>
-                              </div>
-                            )}
-                            {/* Unlinked Quick-Link Action when on STL or RF tab */}
-                            {(activeTab === 'stl_replenishment' || activeTab === 'revolving_fund_replenishment') && !cv.stl_liquidation && !cv.revolving_fund && (
-                              <div className="mt-0.5">
-                                <button
-                                  type="button"
-                                  onClick={e => openUnifiedPrintModalForCv(cv, e)}
-                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
-                                  title="Attach an itemized expense schedule to this check voucher"
-                                >
-                                  <Link2 className="w-2.5 h-2.5" />
-                                  <span>+ Attach Schedule</span>
-                                </button>
-                              </div>
-                            )}
                           </td>
                           <td className="py-3.5 px-4 font-headline font-bold text-right text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
                             ₱{amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -3723,17 +3736,6 @@ function DisbursementPageContent() {
                   </button>
                 )}
 
-                {/* Edit CV: Available only in 'edit' status (locked when on process, for release, or filed) */}
-                {isAdminOrStaff && (!selectedCvForModal.status || selectedCvForModal.status.toLowerCase() === 'edit') && (
-                  <button
-                    type="button"
-                    onClick={() => startEditingCv(selectedCvForModal)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full border border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all active:scale-95 cursor-pointer"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>Edit Voucher</span>
-                  </button>
-                )}
 
                 {isStlOrRfTabOrVoucher(selectedCvForModal) ? (
                   <div className="flex items-center gap-2 flex-wrap">
@@ -4711,6 +4713,11 @@ function DisbursementPageContent() {
         initialCv={unifiedPrintModal.cv}
         initialLf={unifiedPrintModal.lf}
         initialType={unifiedPrintModal.type}
+        onEdit={(cv, mode, rows) => {
+          setUnifiedPrintModal(prev => ({ ...prev, isOpen: false }));
+          setSelectedCvForModal(null);
+          startEditingCv(cv || unifiedPrintModal.cv, mode, rows);
+        }}
         onLinkSuccess={() => {
           loadCheckVouchers();
         }}

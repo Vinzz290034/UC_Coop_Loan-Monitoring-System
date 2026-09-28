@@ -131,10 +131,10 @@ export default function TermsPage() {
                     Questions about these terms? Reach out to the UC-METC MPC office.
                   </p>
                   <a
-                    href="mailto:ucmetc.ecc@gmail.com"
+                    href="mailto:ucmetcmpc@gmail.com"
                     className="text-sm font-bold text-primary dark:text-secondary hover:underline underline-offset-2"
                   >
-                    ucmetc.ecc@gmail.com
+                    ucmetcmpc@gmail.com
                   </a>
                 </div>
               </div>
