@@ -931,9 +931,6 @@ export default function UnifiedCvLfPrintModal({
                           <span className="font-extrabold uppercase text-[10px] tracking-wider text-[#064e3b]">
                             TRANSACTION DETAILS
                           </span>
-                          <span className="text-[10px] text-neutral-500 font-mono">
-                            {detailedCvData.rows.length} Entries • Total: ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </span>
                         </div>
                         <div className="border border-emerald-300 dark:border-emerald-700/60 rounded-2xl overflow-hidden text-[10px] shadow-2xs">
                           <table className="w-full text-left border-collapse">
@@ -1273,9 +1270,6 @@ export default function UnifiedCvLfPrintModal({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', textTransform: 'uppercase', color: '#064e3b', letterSpacing: '0.04em' }}>
                     TRANSACTION DETAILS
-                  </span>
-                  <span style={{ fontSize: '7.5px', color: '#4b5563', fontFamily: 'monospace' }}>
-                    {detailedCvData.rows.length} Entries • Total: ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div style={{ border: '1px solid #6ee7b7', borderRadius: '6px', overflow: 'hidden' }}>

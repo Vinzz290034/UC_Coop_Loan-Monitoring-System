@@ -3520,9 +3520,6 @@ function DisbursementPageContent() {
                           <h5 className="text-[11px] font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
                             Transaction Details
                           </h5>
-                          <span className="text-[10px] text-neutral-500 font-mono">
-                            {rows.length} Entries • Total: ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </span>
                         </div>
                         <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
                           <table className="w-full text-xs">
