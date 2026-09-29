@@ -25,6 +25,7 @@ export interface UnifiedCvLfPrintModalProps {
   initialCv?: any | null;
   initialLf?: any | null;
   initialType?: 'stl' | 'rf' | null;
+  initialMode?: 'summary' | 'detailed';
   onEdit?: (cv: any, mode?: 'summary' | 'detailed', rows?: any[]) => void;
   onLinkSuccess?: (updatedCv?: any, updatedLf?: any) => void;
 }
@@ -217,9 +218,8 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
 
   // Prioritize activeItems from attached liquidation schedule if:
   // 1. activeItems exist AND details is empty, OR
-  // 2. details only contains the summary category names (e.g. Operation, Service, Merchandise), OR
-  // 3. activeItems has more itemized lines than details
-  const shouldUseActiveItems = activeItems.length > 0 && (debitDetails.length === 0 || detailsAreOnlyCategories || activeItems.length > debitDetails.length);
+  // 2. details only contains the summary category names (e.g. Operation, Service, Merchandise)
+  const shouldUseActiveItems = activeItems.length > 0 && (debitDetails.length === 0 || detailsAreOnlyCategories);
 
   if (shouldUseActiveItems) {
     const defaultVNo = (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—';
@@ -258,20 +258,8 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
   }
 
   if (details.length > 0) {
-    const hasNonCibCreditRows = details.some(item => {
-      const desc = (item.book_of_account || item.description || '').trim();
-      const isCib = /^(cib\b|cash\s*in\s*bank)/i.test(desc);
-      const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
-      const isCredit = item.is_credit === true || item.isAutoCredit === true || /^(cib\b|cash\s*in\s*bank|revolving\s*fund|rf\s*[-#]|petty\s*cash\s*fund)/i.test(desc) || rawVal < 0 || (item.credit && !item.debit);
-      return isCredit && !isCib;
-    });
-
     for (const item of details) {
       const desc = item.book_of_account || item.description || '';
-      const isCibDesc = /^(cib\b|cash\s*in\s*bank)/i.test(desc.trim());
-      if (hasNonCibCreditRows && isCibDesc) {
-        continue;
-      }
       const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
       const isCreditItem = item.is_credit === true ||
                            item.isAutoCredit === true ||
@@ -316,7 +304,12 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
       }
     }
 
-    if (creditTotal === 0 && debitTotal > 0) {
+    // Check if CIB row is present
+    const hasCibRow = rows.some(r => /^(cib\b|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+
+    // If no CIB row exists and debitTotal > creditTotal, add balancing CIB row for the net difference
+    if (!hasCibRow && debitTotal > creditTotal) {
+      const netCib = debitTotal - creditTotal;
       const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
       rows.push({
         date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
@@ -324,9 +317,9 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         description: cibName,
         remarks: '',
         debit: null,
-        credit: debitTotal
+        credit: netCib
       });
-      creditTotal = debitTotal;
+      creditTotal += netCib;
     }
     return { rows, debitTotal, creditTotal };
   }
@@ -491,6 +484,7 @@ export default function UnifiedCvLfPrintModal({
   initialCv,
   initialLf,
   initialType,
+  initialMode,
   onEdit,
   onLinkSuccess
 }: UnifiedCvLfPrintModalProps) {
@@ -502,7 +496,13 @@ export default function UnifiedCvLfPrintModal({
   const [resolvedType, setResolvedType] = useState<'stl' | 'rf'>('stl');
 
   // View mode: 'summary' (categorized 4-row summary) | 'detailed' (detailed itemized schedule)
-  const [cvViewMode, setCvViewMode] = useState<'summary' | 'detailed'>('summary');
+  const [cvViewMode, setCvViewMode] = useState<'summary' | 'detailed'>(initialMode || 'summary');
+
+  useEffect(() => {
+    if (isOpen && initialMode) {
+      setCvViewMode(initialMode);
+    }
+  }, [isOpen, initialMode]);
 
   // Available options for linking when unlinked
   const [availableLiquidations, setAvailableLiquidations] = useState<any[]>([]);
@@ -790,6 +790,17 @@ export default function UnifiedCvLfPrintModal({
   const summaryCvData = useMemo(() => getSummaryCvRows(currentCv, resolvedType, categoryBreakdown), [currentCv, resolvedType, categoryBreakdown]);
   const detailedCvData = useMemo(() => getBalancedCvRows(currentCv, lfItems, resolvedType), [currentCv, lfItems, resolvedType]);
   const activeCvDebitTotal = cvViewMode === 'summary' ? summaryCvData.debitTotal : detailedCvData.debitTotal;
+
+  // Net disbursed = gross debit minus actual non-CIB credit deductions
+  const netDisbursedAmount = useMemo(() => {
+    const rows = cvViewMode === 'summary' ? summaryCvData.rows : detailedCvData.rows;
+    const grossDebit = cvViewMode === 'summary' ? summaryCvData.debitTotal : detailedCvData.debitTotal;
+    // Sum only credit rows that are NOT auto-generated CIB rows (real deductions)
+    const realCreditDeductions = rows
+      .filter(r => r.credit !== null && !/^cib\b/i.test((r.description || '').trim()))
+      .reduce((acc, r) => acc + (r.credit ?? 0), 0);
+    return Math.max(0, grossDebit - realCreditDeductions);
+  }, [cvViewMode, summaryCvData, detailedCvData]);
 
   const isRevolvingFund = useMemo(() => {
     if (resolvedType === 'stl') return false;
@@ -1191,12 +1202,12 @@ export default function UnifiedCvLfPrintModal({
                       <div>
                         <span className="text-[8.5px] uppercase font-bold text-emerald-800 block">Disbursed Amount</span>
                         <span className="font-bold text-neutral-900 uppercase text-[10px]">
-                          {formatDisbursedInWords(activeCvDebitTotal || totalExpenseAmount || getCvDisbursedAmount(currentCv))}
+                          {formatDisbursedInWords(netDisbursedAmount || totalExpenseAmount || getCvDisbursedAmount(currentCv))}
                         </span>
                       </div>
                       <div className="text-right">
                         <span className="font-mono font-extrabold text-sm text-emerald-900">
-                          ₱{(activeCvDebitTotal || totalExpenseAmount || getCvDisbursedAmount(currentCv)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          ₱{(netDisbursedAmount || totalExpenseAmount || getCvDisbursedAmount(currentCv)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
@@ -1214,13 +1225,25 @@ export default function UnifiedCvLfPrintModal({
                           TOTAL EXPENSE ({activeItems.length > 0 ? activeItems.length : (cvViewMode === 'summary' ? summaryCvData.rows.filter(r => r.debit !== null).length : detailedCvData.rows.filter(r => r.debit !== null).length)} ITEMS)
                         </span>
                         <div className="text-[13px] font-extrabold font-mono text-neutral-900 mt-0.5">
-                          ₱{(activeCvDebitTotal || totalExpenseAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          ₱{(netDisbursedAmount || totalExpenseAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </div>
                       </div>
-                      <div className="p-2.5 border-2 border-emerald-500 rounded-lg bg-emerald-50/70">
-                        <span className="text-[8px] font-bold uppercase text-emerald-800 block tracking-wider">FUND BALANCE</span>
-                        <div className="text-[13px] font-extrabold font-mono text-emerald-900 mt-0.5">
-                          ₱{(authorizedAmount - (activeCvDebitTotal || totalExpenseAmount)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      <div className={`p-2.5 border-2 rounded-lg ${
+                        (authorizedAmount - (netDisbursedAmount || totalExpenseAmount)) < 0
+                          ? 'border-rose-500 bg-rose-50/70'
+                          : 'border-emerald-500 bg-emerald-50/70'
+                      }`}>
+                        <span className={`text-[8px] font-bold uppercase block tracking-wider ${
+                          (authorizedAmount - (netDisbursedAmount || totalExpenseAmount)) < 0
+                            ? 'text-rose-800'
+                            : 'text-emerald-800'
+                        }`}>FUND BALANCE</span>
+                        <div className={`text-[13px] font-extrabold font-mono mt-0.5 ${
+                          (authorizedAmount - (netDisbursedAmount || totalExpenseAmount)) < 0
+                            ? 'text-rose-700'
+                            : 'text-emerald-900'
+                        }`}>
+                          ₱{(authorizedAmount - (netDisbursedAmount || totalExpenseAmount)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </div>
                       </div>
                     </div>

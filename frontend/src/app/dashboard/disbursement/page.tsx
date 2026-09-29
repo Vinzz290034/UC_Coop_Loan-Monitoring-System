@@ -838,14 +838,18 @@ function DisbursementPageContent() {
     cv?: any | null;
     lf?: any | null;
     type?: 'stl' | 'rf' | null;
+    mode?: 'summary' | 'detailed' | null;
   }>({
     isOpen: false,
     cv: null,
     lf: null,
-    type: null
+    type: null,
+    mode: 'detailed'
   });
   const [isEditingCvModal, setIsEditingCvModal] = useState(false);
   const [editingOriginalCv, setEditingOriginalCv] = useState<any | null>(null);
+  const [editCvViewMode, setEditCvViewMode] = useState<'summary' | 'detailed'>('detailed');
+  const [openedFromPrintModal, setOpenedFromPrintModal] = useState(false);
   const [initialCvEditSnapshot, setInitialCvEditSnapshot] = useState<string>('');
   const [isSavingCvEdit, setIsSavingCvEdit] = useState(false);
   const [isSyncingCvRf, setIsSyncingCvRf] = useState(false);
@@ -1373,21 +1377,9 @@ function DisbursementPageContent() {
     let debitTotal = 0;
     let creditTotal = 0;
 
-    const hasNonCibCreditRows = details.some(item => {
-      const desc = (item.book_of_account || item.description || '').trim();
-      const isCib = /^(cib\b|cash\s*in\s*bank)/i.test(desc);
-      const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
-      const isCredit = item.is_credit === true || item.isAutoCredit === true || isCreditAccountDesc(desc) || rawVal < 0 || (item.credit && !item.debit);
-      return isCredit && !isCib;
-    });
-
     for (let idx = 0; idx < details.length; idx++) {
       const item = details[idx];
       const desc = item.book_of_account || item.description || '';
-      const isCibDesc = /^(cib\b|cash\s*in\s*bank)/i.test(desc.trim());
-      if (hasNonCibCreditRows && isCibDesc) {
-        continue;
-      }
       const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
       const isCreditItem = item.is_credit === true ||
                            item.isAutoCredit === true ||
@@ -1443,8 +1435,12 @@ function DisbursementPageContent() {
       }
     }
 
-    // Balancing Credit row if only debits were present
-    if (creditTotal === 0 && debitTotal > 0) {
+    // Check if CIB row is present
+    const hasCibRow = rows.some(r => /^(cib\b|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+
+    // If no CIB row exists and debitTotal > creditTotal, add balancing CIB row for the net disbursed difference
+    if (!hasCibRow && debitTotal > creditTotal) {
+      const netCibAmount = debitTotal - creditTotal;
       const rawDate = cv.voucher_date || cv.date;
       const dateStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : '') : '';
       const vNo = (cv.voucher_no || '').replace(/^CV-?0*/i, '').trim();
@@ -1456,11 +1452,11 @@ function DisbursementPageContent() {
         description: cibName,
         remarks: '',
         debit: null,
-        credit: debitTotal,
+        credit: netCibAmount,
         isAutoCredit: true,
         is_credit: true
       });
-      creditTotal = debitTotal;
+      creditTotal += netCibAmount;
     }
 
     return { rows, debitTotal, creditTotal };
@@ -1648,28 +1644,34 @@ function DisbursementPageContent() {
 
     const setRows = isEdit ? setEditCvRows : setNewCvRows;
     setRows(prev => {
-      if (isCredit) {
-        return [...prev, newRow];
-      }
-      // In replenishment mode, if there are credit rows at the bottom, insert before the first credit row
-      const firstCreditIdx = prev.findIndex(r => checkIsCreditRow(r));
-      if (firstCreditIdx !== -1) {
-        const copy = [...prev];
-        copy.splice(firstCreditIdx, 0, newRow);
+      const copy = [...prev];
+      if (copy.length >= 1) {
+        copy.splice(1, 0, newRow);
         return copy;
       }
-      return [...prev, newRow];
+      return [newRow];
     });
   };
 
-  const openUnifiedPrintModalForCv = (cv: any, e?: React.MouseEvent) => {
+  const openUnifiedPrintModalForCv = (
+    cv: any,
+    modeOrEvent?: 'summary' | 'detailed' | React.MouseEvent,
+    e?: React.MouseEvent
+  ) => {
+    let mode: 'summary' | 'detailed' = 'detailed';
+    if (typeof modeOrEvent === 'string') {
+      mode = modeOrEvent;
+    } else if (modeOrEvent && 'stopPropagation' in modeOrEvent) {
+      modeOrEvent.stopPropagation();
+    }
     if (e) e.stopPropagation();
     const type: 'stl' | 'rf' = (activeTab === 'revolving_fund_replenishment' || isRevolvingVoucher(cv)) ? 'rf' : 'stl';
     setUnifiedPrintModal({
       isOpen: true,
       cv,
       lf: null,
-      type
+      type,
+      mode
     });
   };
 
@@ -2005,6 +2007,8 @@ function DisbursementPageContent() {
   // Helper to open Edit Check Voucher Modal with prepared data
   const openEditCvModalActual = (cv: any, mode?: 'summary' | 'detailed', passedRows?: any[]) => {
     setEditingOriginalCv(cv);
+    setEditCvViewMode(mode || 'detailed');
+    setOpenedFromPrintModal(Boolean(passedRows && passedRows.length > 0) || Boolean(unifiedPrintModal.isOpen));
     const isReplenish = isStlOrRfTabOrVoucher(cv) || Boolean(getReplenishmentType(cv.folder_name, cv));
 
     // Determine the rows to edit:
@@ -2205,11 +2209,11 @@ function DisbursementPageContent() {
 
   const performCloseEditCvModal = useCallback(() => {
     setIsEditingCvModal(false);
-    if (editingOriginalCv) {
-      openUnifiedPrintModalForCv(editingOriginalCv);
+    if (openedFromPrintModal && editingOriginalCv) {
+      openUnifiedPrintModalForCv(editingOriginalCv, editCvViewMode);
       setEditingOriginalCv(null);
     }
-  }, [editingOriginalCv]);
+  }, [openedFromPrintModal, editingOriginalCv, editCvViewMode]);
 
   // Safe close with unsaved changes confirmation
   const handleCloseEditCvModal = useCallback(() => {
@@ -2300,7 +2304,9 @@ function DisbursementPageContent() {
       const updatedCv = res.data?.data || { ...selectedCvForModal, ...payload };
       setSelectedCvForModal(updatedCv);
       setIsEditingCvModal(false);
-      openUnifiedPrintModalForCv(updatedCv);
+      if (openedFromPrintModal) {
+        openUnifiedPrintModalForCv(updatedCv, editCvViewMode);
+      }
       setEditingOriginalCv(null);
 
       setCheckVouchers(prev => prev.map(cv => (cv.id === editCvFormData.id ? { ...cv, ...updatedCv } : cv)));
@@ -3771,7 +3777,7 @@ function DisbursementPageContent() {
                 )}
 
                 {/* Date Sealed & Disbursed Card */}
-                {(selectedCvForModal.status === 'filed' || selectedCvForModal.date_released) && (
+                {(selectedCvForModal.status === 'filed' || selectedCvForModal.date_released || isStlOrRfTabOrVoucher(selectedCvForModal)) && (
                   <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/40 flex flex-col justify-between group relative">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">
@@ -3782,7 +3788,7 @@ function DisbursementPageContent() {
                           type="button"
                           onClick={e => handleOpenEditDisbursedDate(selectedCvForModal, e)}
                           className="p-1 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200/50 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer"
-                          title="Edit Date Sealed & Disbursed"
+                          title="Edit Date Disbursed"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
@@ -3861,7 +3867,7 @@ function DisbursementPageContent() {
                                 ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </td>
                               <td className="p-2.5 text-right font-mono font-extrabold text-rose-600 dark:text-rose-400">
-                                ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </td>
                             </tr>
                           </tbody>
@@ -5252,6 +5258,7 @@ function DisbursementPageContent() {
         initialCv={unifiedPrintModal.cv}
         initialLf={unifiedPrintModal.lf}
         initialType={unifiedPrintModal.type}
+        initialMode={unifiedPrintModal.mode || 'detailed'}
         onEdit={(cv, mode, rows) => {
           setUnifiedPrintModal(prev => ({ ...prev, isOpen: false }));
           setSelectedCvForModal(null);
