@@ -182,7 +182,7 @@ function getCategoryForAccount(acct: string): string {
 }
 
 function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf') {
-  const rows: { date: string; voucher_no: string; description: string; debit: number | null; credit: number | null }[] = [];
+  const rows: { date: string; voucher_no: string; description: string; remarks: string; debit: number | null; credit: number | null }[] = [];
   let debitTotal = 0;
   let creditTotal = 0;
 
@@ -235,6 +235,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         date: dateStr,
         voucher_no: vNo,
         description: expAccount,
+        remarks: it.remarks || '',
         debit: amt,
         credit: null
       });
@@ -247,6 +248,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
         voucher_no: defaultVNo,
         description: cibName,
+        remarks: '',
         debit: null,
         credit: debitTotal
       });
@@ -256,8 +258,20 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
   }
 
   if (details.length > 0) {
+    const hasNonCibCreditRows = details.some(item => {
+      const desc = (item.book_of_account || item.description || '').trim();
+      const isCib = /^(cib\b|cash\s*in\s*bank)/i.test(desc);
+      const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      const isCredit = item.is_credit === true || item.isAutoCredit === true || /^(cib\b|cash\s*in\s*bank|revolving\s*fund|rf\s*[-#]|petty\s*cash\s*fund)/i.test(desc) || rawVal < 0 || (item.credit && !item.debit);
+      return isCredit && !isCib;
+    });
+
     for (const item of details) {
       const desc = item.book_of_account || item.description || '';
+      const isCibDesc = /^(cib\b|cash\s*in\s*bank)/i.test(desc.trim());
+      if (hasNonCibCreditRows && isCibDesc) {
+        continue;
+      }
       const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
       const isCreditItem = item.is_credit === true ||
                            item.isAutoCredit === true ||
@@ -275,6 +289,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           date: dateStr,
           voucher_no: vNo,
           description: desc || 'Credit / Deduction',
+          remarks: item.remarks || '',
           debit: null,
           credit: creditVal
         });
@@ -284,6 +299,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           date: dateStr,
           voucher_no: vNo,
           description: desc || 'Disbursement Line',
+          remarks: item.remarks || '',
           debit: rawVal,
           credit: null
         });
@@ -293,6 +309,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           date: dateStr,
           voucher_no: vNo,
           description: desc,
+          remarks: item.remarks || '',
           debit: null,
           credit: null
         });
@@ -305,6 +322,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
         voucher_no: (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—',
         description: cibName,
+        remarks: '',
         debit: null,
         credit: debitTotal
       });
@@ -322,6 +340,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
       date: dateStr,
       voucher_no: vNo,
       description: cv?.particulars || (resolvedType === 'stl' ? 'Short Term Loan' : 'Operation'),
+      remarks: '',
       debit: fallbackAmt,
       credit: null
     });
@@ -329,6 +348,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
       date: dateStr,
       voucher_no: vNo,
       description: cibName,
+      remarks: '',
       debit: null,
       credit: fallbackAmt
     });
@@ -457,6 +477,7 @@ function getJournalCvRows(
     date: dateStr,
     voucher_no: vNo,
     description: r.description,
+    remarks: '',
     debit: r.debit,
     credit: r.credit
   }));
@@ -993,28 +1014,34 @@ export default function UnifiedCvLfPrintModal({
                     </div>
 
                     {/* Voucher Info Grid */}
-                    <div className="grid grid-cols-4 gap-3 bg-emerald-50/70 p-3 rounded-lg border border-emerald-200 text-xs">
+                    <div className="grid grid-cols-[1fr_1.8fr_1.5fr_1fr_1fr] gap-3 bg-emerald-50/70 p-3 rounded-lg border border-emerald-200 text-xs items-center">
                       <div>
                         <span className="text-[9px] font-bold text-emerald-800 uppercase block tracking-wider">Voucher Date</span>
-                        <strong className="text-neutral-900 font-medium text-[11.5px]">
+                        <strong className="text-neutral-900 font-medium text-[11.5px] whitespace-nowrap">
                           {currentCv?.voucher_date ? new Date(currentCv.voucher_date).toLocaleDateString() : '—'}
                         </strong>
                       </div>
                       <div>
-                        <span className="text-[9px] font-bold text-emerald-800 uppercase block tracking-wider">Fund Type</span>
-                        <strong className="text-neutral-900 font-medium text-[11.5px]">
-                          {resolvedType === 'stl' ? 'STL Replenishment' : 'Revolving Fund'}
+                        <span className="text-[9px] font-bold text-emerald-800 uppercase block tracking-wider">Transaction Type</span>
+                        <strong className="text-neutral-900 font-medium text-[11.5px] whitespace-nowrap">
+                          {resolvedType === 'stl' ? 'STL Replenishment' : 'Revolving Fund Replenishment'}
                         </strong>
                       </div>
                       <div>
-                        <span className="text-[9px] font-bold text-emerald-800 uppercase block tracking-wider">Name</span>
-                        <strong className="text-neutral-900 font-medium text-[11.5px]">
+                        <span className="text-[9px] font-bold text-emerald-800 uppercase block tracking-wider">Payee</span>
+                        <strong className="text-neutral-900 font-medium text-[11.5px] whitespace-nowrap">
                           {currentCv?.payee || currentLf?.custodian_name || 'Michelle Pable'}
+                        </strong>
+                      </div>
+                      <div className="text-right pr-2">
+                        <span className="text-[9px] font-bold text-emerald-800 uppercase block tracking-wider">Bank</span>
+                        <strong className="text-neutral-900 font-medium text-[11.5px] whitespace-nowrap">
+                          {currentCv?.bank_name || currentCv?.bank || '—'}
                         </strong>
                       </div>
                       <div className="text-right">
                         <span className="text-[9px] font-bold text-emerald-800 uppercase block tracking-wider">Check No.</span>
-                        <strong className="text-emerald-950 font-mono font-bold text-[12px]">
+                        <strong className="text-emerald-950 font-mono font-bold text-[12px] whitespace-nowrap">
                           {currentCv?.check_no || 'PENDING'}
                         </strong>
                       </div>
@@ -1108,9 +1135,10 @@ export default function UnifiedCvLfPrintModal({
                           <table className="w-full text-left border-collapse">
                             <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] border-b border-emerald-800">
                               <tr>
-                                <th className="p-2.5 w-24 text-left border-r border-emerald-700/60 text-white whitespace-nowrap">DATE</th>
-                                <th className="p-2.5 w-24 text-left border-r border-emerald-700/60 text-white whitespace-nowrap">VOUCHER #</th>
-                                <th className="p-2.5 text-left border-r border-emerald-700/60 text-white">BOOK OF ACCOUNTS</th>
+                                <th className="p-2.5 w-28 text-left border-r border-emerald-700/60 text-white whitespace-nowrap">DATE</th>
+                                <th className="p-2.5 w-28 text-left border-r border-emerald-700/60 text-white whitespace-nowrap">{resolvedType === 'stl' ? 'LAF No.' : 'RF VOUCHER #'}</th>
+                                <th className="p-2.5 w-1/3 text-left border-r border-emerald-700/60 text-white">BOOK OF ACCOUNTS</th>
+                                <th className="p-2.5 w-1/3 text-left border-r border-emerald-700/60 text-white">REMARKS</th>
                                 <th className="p-2.5 w-32 text-right border-r border-emerald-700/60 text-white whitespace-nowrap">DEBIT (₱)</th>
                                 <th className="p-2.5 w-32 text-right text-white whitespace-nowrap">CREDIT (₱)</th>
                               </tr>
@@ -1118,7 +1146,7 @@ export default function UnifiedCvLfPrintModal({
                             <tbody>
                               {detailedCvData.rows.map((r, i) => (
                                 <tr key={i} className="border-b border-neutral-200 hover:bg-emerald-50/30">
-                                  <td className="p-2.5 font-mono text-[9.5px] text-neutral-600 border-r border-neutral-200">
+                                  <td className="p-2.5 font-mono text-[9.5px] text-neutral-600 border-r border-neutral-200 whitespace-nowrap">
                                     {r.date}
                                   </td>
                                   <td className="p-2.5 font-mono text-[10px] font-bold text-neutral-800 border-r border-neutral-200">
@@ -1126,6 +1154,9 @@ export default function UnifiedCvLfPrintModal({
                                   </td>
                                   <td className={`p-2.5 border-r border-neutral-200 ${r.credit !== null ? 'pl-6 italic text-neutral-700 font-medium' : 'font-bold text-neutral-900'}`}>
                                     {r.description}
+                                  </td>
+                                  <td className="p-2.5 border-r border-neutral-200 text-[9.5px] text-neutral-600 italic">
+                                    {r.remarks || <span className="text-neutral-300">—</span>}
                                   </td>
                                   <td className="p-2.5 text-right font-mono font-bold text-neutral-900 border-r border-neutral-200">
                                     {r.debit !== null ? `₱${r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : <span className="text-neutral-400 font-bold">–</span>}
@@ -1136,12 +1167,17 @@ export default function UnifiedCvLfPrintModal({
                                 </tr>
                               ))}
                               <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-300 text-[10px]">
-                                <td colSpan={3} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">TOTAL:</td>
+                                <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">TOTAL:</td>
                                 <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
                                   ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 </td>
+                                <td className="p-2.5 text-right font-mono font-bold text-neutral-400">–</td>
+                              </tr>
+                              <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-200 text-[10px]">
+                                <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">{formatCibAccountName(currentCv?.bank || currentCv?.bank_name)}:</td>
+                                <td className="p-2.5 text-right font-mono font-bold text-neutral-400 border-r border-neutral-200">–</td>
                                 <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
-                                  ₱{detailedCvData.creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                  ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 </td>
                               </tr>
                             </tbody>
@@ -1155,12 +1191,12 @@ export default function UnifiedCvLfPrintModal({
                       <div>
                         <span className="text-[8.5px] uppercase font-bold text-emerald-800 block">Disbursed Amount</span>
                         <span className="font-bold text-neutral-900 uppercase text-[10px]">
-                          {formatDisbursedInWords(getCvDisbursedAmount(currentCv) || activeCvDebitTotal || totalExpenseAmount)}
+                          {formatDisbursedInWords(activeCvDebitTotal || totalExpenseAmount || getCvDisbursedAmount(currentCv))}
                         </span>
                       </div>
                       <div className="text-right">
                         <span className="font-mono font-extrabold text-sm text-emerald-900">
-                          ₱{(getCvDisbursedAmount(currentCv) || activeCvDebitTotal || totalExpenseAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          ₱{(activeCvDebitTotal || totalExpenseAmount || getCvDisbursedAmount(currentCv)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
@@ -1399,23 +1435,29 @@ export default function UnifiedCvLfPrintModal({
             </div>
 
             {/* Info Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1.8fr 1fr', gap: '8px', backgroundColor: '#ecfdf5', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1fae5' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.8fr 1.5fr 1fr 1fr', gap: '8px', backgroundColor: '#ecfdf5', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1fae5' }}>
               <div>
                 <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block' }}>Voucher Date</span>
-                <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '1px 0 0 0' }}>
+                <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '1px 0 0 0', whiteSpace: 'nowrap' }}>
                   {currentCv?.voucher_date ? new Date(currentCv.voucher_date).toLocaleDateString() : '—'}
                 </p>
               </div>
               <div>
-                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block' }}>Fund Type</span>
-                <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '1px 0 0 0' }}>
-                  {resolvedType === 'stl' ? 'STL Replenishment' : 'Revolving Fund'}
+                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block' }}>Transaction Type</span>
+                <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '1px 0 0 0', whiteSpace: 'nowrap' }}>
+                  {resolvedType === 'stl' ? 'STL Replenishment' : 'Revolving Fund Replenishment'}
                 </p>
               </div>
               <div>
-                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block' }}>Name</span>
-                <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '1px 0 0 0' }}>
+                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block' }}>Payee</span>
+                <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '1px 0 0 0', whiteSpace: 'nowrap' }}>
                   {currentCv?.payee || currentLf?.custodian_name || 'Michelle Pable'}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block' }}>Bank</span>
+                <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '1px 0 0 0', whiteSpace: 'nowrap' }}>
+                  {currentCv?.bank_name || currentCv?.bank || '—'}
                 </p>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -1509,9 +1551,10 @@ export default function UnifiedCvLfPrintModal({
                   <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '8px' }}>
                     <thead>
                       <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold' }}>
-                        <th style={{ padding: '2.5px 5px', width: '60px', borderRight: '1px solid #047857', color: '#ffffff' }}>DATE</th>
-                        <th style={{ padding: '2.5px 5px', width: '55px', borderRight: '1px solid #047857', color: '#ffffff' }}>VOUCHER #</th>
-                        <th style={{ padding: '2.5px 5px', borderRight: '1px solid #047857', color: '#ffffff' }}>BOOK OF ACCOUNTS</th>
+                        <th style={{ padding: '2.5px 5px', width: '75px', borderRight: '1px solid #047857', color: '#ffffff', whiteSpace: 'nowrap' }}>DATE</th>
+                        <th style={{ padding: '2.5px 5px', width: '65px', borderRight: '1px solid #047857', color: '#ffffff', whiteSpace: 'nowrap' }}>{resolvedType === 'stl' ? 'LAF No.' : 'RF VOUCHER #'}</th>
+                        <th style={{ padding: '2.5px 5px', width: '30%', borderRight: '1px solid #047857', color: '#ffffff' }}>BOOK OF ACCOUNTS</th>
+                        <th style={{ padding: '2.5px 5px', width: '30%', borderRight: '1px solid #047857', color: '#ffffff' }}>REMARKS</th>
                         <th style={{ padding: '2.5px 5px', textAlign: 'right', width: '85px', borderRight: '1px solid #047857', color: '#ffffff' }}>DEBIT (₱)</th>
                         <th style={{ padding: '2.5px 5px', textAlign: 'right', width: '85px', color: '#ffffff' }}>CREDIT (₱)</th>
                       </tr>
@@ -1519,10 +1562,13 @@ export default function UnifiedCvLfPrintModal({
                     <tbody>
                       {detailedCvData.rows.map((r, i) => (
                         <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                          <td style={{ padding: '2px 5px', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace', color: '#4b5563' }}>{r.date}</td>
+                          <td style={{ padding: '2px 5px', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace', color: '#4b5563', whiteSpace: 'nowrap' }}>{r.date}</td>
                           <td style={{ padding: '2px 5px', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827' }}>{r.voucher_no}</td>
                           <td style={{ padding: '2px 5px', borderRight: '1px solid #e5e7eb', fontWeight: r.credit !== null ? 'normal' : 'bold', paddingLeft: r.credit !== null ? '12px' : '5px', fontStyle: r.credit !== null ? 'italic' : 'normal', color: r.credit !== null ? '#4b5563' : '#111827' }}>
                             {r.description}
+                          </td>
+                          <td style={{ padding: '2px 5px', borderRight: '1px solid #e5e7eb', fontStyle: 'italic', color: '#6b7280', fontSize: '7.5px' }}>
+                            {r.remarks || '—'}
                           </td>
                           <td style={{ padding: '2px 5px', textAlign: 'right', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827' }}>
                             {r.debit !== null ? `₱${r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '–'}
@@ -1533,12 +1579,17 @@ export default function UnifiedCvLfPrintModal({
                         </tr>
                       ))}
                       <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #6ee7b7', fontWeight: 'bold', color: '#064e3b' }}>
-                        <td colSpan={3} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>TOTAL:</td>
+                        <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>TOTAL:</td>
                         <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
                           ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
+                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af' }}>–</td>
+                      </tr>
+                      <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #a7f3d0', fontWeight: 'bold', color: '#064e3b' }}>
+                        <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>{formatCibAccountName(currentCv?.bank || currentCv?.bank_name)}:</td>
+                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0', color: '#9ca3af' }}>–</td>
                         <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace' }}>
-                          ₱{detailedCvData.creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
                     </tbody>
@@ -1552,12 +1603,12 @@ export default function UnifiedCvLfPrintModal({
               <div>
                 <span style={{ fontSize: '7px', fontWeight: 'bold', color: '#064e3b', textTransform: 'uppercase', display: 'block' }}>Disbursed Amount</span>
                 <p style={{ fontSize: '8px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase' }}>
-                  {formatDisbursedInWords(getCvDisbursedAmount(currentCv) || activeCvDebitTotal || totalExpenseAmount)}
+                  {formatDisbursedInWords(activeCvDebitTotal || totalExpenseAmount || getCvDisbursedAmount(currentCv))}
                 </p>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <span style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
-                  ₱{(getCvDisbursedAmount(currentCv) || activeCvDebitTotal || totalExpenseAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₱{(activeCvDebitTotal || totalExpenseAmount || getCvDisbursedAmount(currentCv)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>

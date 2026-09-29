@@ -1579,64 +1579,67 @@ export default function LoanVouchersTab({
             {/* Accounting Table */}
             {(() => {
               const { rows, debitTotal, creditTotal } = getBalancedCvRows(printingCvBreakdown);
+              const printAmt = debitTotal || getCvDisbursedAmount(printingCvBreakdown);
               return (
-                <div style={{ border: '1px solid #d1d5db', borderRadius: '8px', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10.5px' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1px solid #d1d5db' }}>
-                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold' }}>Book of Accounts</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'bold', width: '130px' }}>Debit (₱)</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'bold', width: '130px' }}>Credit (₱)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                          <td style={{ padding: '6px 12px' }}>{r.description}</td>
-                          <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                            {r.debit ? r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : ''}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ border: '1px solid #d1d5db', borderRadius: '8px', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10.5px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1px solid #d1d5db' }}>
+                          <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold' }}>Book of Accounts</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'bold', width: '130px' }}>Debit (₱)</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'bold', width: '130px' }}>Credit (₱)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                            <td style={{ padding: '6px 12px' }}>{r.description}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                              {r.debit ? r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : ''}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                              {r.credit ? r.credit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : ''}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ backgroundColor: '#f9fafb', fontWeight: 'bold', borderTop: '2px solid #111827' }}>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', textTransform: 'uppercase', fontSize: '9px' }}>Total</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
+                            ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                           </td>
-                          <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                            {r.credit ? r.credit.toLocaleString('en-US', { minimumFractionDigits: 2 }) : ''}
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
+                            ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{ backgroundColor: '#f9fafb', fontWeight: 'bold', borderTop: '2px solid #111827' }}>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', textTransform: 'uppercase', fontSize: '9px' }}>Total</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
-                          ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
-                          ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Disbursed Amount Box */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ecfdf5', border: '1.5px solid #059669', borderRadius: '10px', padding: '10px 16px' }}>
+                    <div>
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block' }}>
+                        Amount in Words:
+                      </span>
+                      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#065f46' }}>
+                        {formatDisbursedInWords(printAmt)}
+                      </span>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block' }}>
+                        Net Check Amount:
+                      </span>
+                      <span style={{ fontSize: '16px', fontWeight: '900', fontFamily: 'monospace', color: '#064e3b' }}>
+                        ₱{printAmt.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               );
             })()}
-
-            {/* Disbursed Amount Box */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ecfdf5', border: '1.5px solid #059669', borderRadius: '10px', padding: '10px 16px' }}>
-              <div>
-                <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block' }}>
-                  Amount in Words:
-                </span>
-                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#065f46' }}>
-                  {formatDisbursedInWords(getCvDisbursedAmount(printingCvBreakdown))}
-                </span>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block' }}>
-                  Net Check Amount:
-                </span>
-                <span style={{ fontSize: '16px', fontWeight: '900', fontFamily: 'monospace', color: '#064e3b' }}>
-                  ₱{getCvDisbursedAmount(printingCvBreakdown).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-            </div>
 
             {/* Signatures */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginTop: '16px', fontSize: '9.5px' }}>

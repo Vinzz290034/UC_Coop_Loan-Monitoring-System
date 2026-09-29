@@ -252,6 +252,7 @@ export interface CvRowItem {
   date?: string;
   voucher_no?: string;
   description: string;
+  remarks?: string;
   debit: string;
   credit: string;
   isAutoCredit?: boolean;
@@ -844,6 +845,7 @@ function DisbursementPageContent() {
     type: null
   });
   const [isEditingCvModal, setIsEditingCvModal] = useState(false);
+  const [editingOriginalCv, setEditingOriginalCv] = useState<any | null>(null);
   const [initialCvEditSnapshot, setInitialCvEditSnapshot] = useState<string>('');
   const [isSavingCvEdit, setIsSavingCvEdit] = useState(false);
   const [isSyncingCvRf, setIsSyncingCvRf] = useState(false);
@@ -860,12 +862,13 @@ function DisbursementPageContent() {
   const [newCvBankName, setNewCvBankName] = useState('BDO');
   const [newCvCheckNo, setNewCvCheckNo] = useState('');
   const [newCvParticulars, setNewCvParticulars] = useState('');
+  const [newCvFundAmount, setNewCvFundAmount] = useState('');
   const [newCvCategory, setNewCvCategory] = useState('');
   const [newCvPreparedBy, setNewCvPreparedBy] = useState('LAMOSTE, CHINNETTE A.');
   const [newCvCheckedBy, setNewCvCheckedBy] = useState('MARILOU LARIOSA');
   const [newCvApprovedBy, setNewCvApprovedBy] = useState('MICHELLE M. PABLE');
   const [newCvRows, setNewCvRows] = useState<CvRowItem[]>([
-    { id: 'new-row-1', date: '', voucher_no: '', description: '', debit: '', credit: '' }
+    { id: 'new-row-1', date: '', voucher_no: '', description: '', remarks: '', debit: '', credit: '' }
   ]);
 
   // Edit Check Voucher State
@@ -1287,7 +1290,7 @@ function DisbursementPageContent() {
       }
     }
 
-    const rows: { id: string; date: string; voucher_no: string; description: string; debit: number | null; credit: number | null }[] = [];
+    const rows: { id: string; date: string; voucher_no: string; description: string; remarks?: string; debit: number | null; credit: number | null }[] = [];
     let debitTotal = 0;
     let creditTotal = 0;
 
@@ -1314,6 +1317,7 @@ function DisbursementPageContent() {
           date: dateStr,
           voucher_no: vNo,
           description: cat,
+          remarks: '',
           debit: amt,
           credit: null
         });
@@ -1327,6 +1331,7 @@ function DisbursementPageContent() {
           date: dateStr,
           voucher_no: vNo,
           description: 'Operation',
+          remarks: '',
           debit: fallbackAmt,
           credit: null
         });
@@ -1340,6 +1345,7 @@ function DisbursementPageContent() {
         date: dateStr,
         voucher_no: vNo,
         description: cibName,
+        remarks: '',
         debit: null,
         credit: debitTotal
       });
@@ -1363,13 +1369,25 @@ function DisbursementPageContent() {
       }
     }
 
-    const rows: { id: string; date: string; voucher_no: string; description: string; debit: number | null; credit: number | null; isAutoCredit?: boolean; is_credit?: boolean }[] = [];
+    const rows: { id: string; date: string; voucher_no: string; description: string; remarks: string; debit: number | null; credit: number | null; isAutoCredit?: boolean; is_credit?: boolean }[] = [];
     let debitTotal = 0;
     let creditTotal = 0;
+
+    const hasNonCibCreditRows = details.some(item => {
+      const desc = (item.book_of_account || item.description || '').trim();
+      const isCib = /^(cib\b|cash\s*in\s*bank)/i.test(desc);
+      const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      const isCredit = item.is_credit === true || item.isAutoCredit === true || isCreditAccountDesc(desc) || rawVal < 0 || (item.credit && !item.debit);
+      return isCredit && !isCib;
+    });
 
     for (let idx = 0; idx < details.length; idx++) {
       const item = details[idx];
       const desc = item.book_of_account || item.description || '';
+      const isCibDesc = /^(cib\b|cash\s*in\s*bank)/i.test(desc.trim());
+      if (hasNonCibCreditRows && isCibDesc) {
+        continue;
+      }
       const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
       const isCreditItem = item.is_credit === true ||
                            item.isAutoCredit === true ||
@@ -1379,6 +1397,7 @@ function DisbursementPageContent() {
 
       const dateStr = item.date ? item.date.split('T')[0] : (cv?.voucher_date ? cv.voucher_date.split('T')[0] : '');
       const vNo = item.voucher_no || cv?.voucher_no || '';
+      const itemRemarks = item.remarks || item.particulars || item.note || '';
 
       if (isCreditItem) {
         const creditAmt = rawVal < 0
@@ -1389,6 +1408,7 @@ function DisbursementPageContent() {
           date: dateStr,
           voucher_no: vNo,
           description: desc || 'Revolving Fund - Operation',
+          remarks: itemRemarks,
           debit: null,
           credit: creditAmt,
           isAutoCredit: true,
@@ -1401,6 +1421,7 @@ function DisbursementPageContent() {
           date: dateStr,
           voucher_no: vNo,
           description: desc || 'Disbursement Line',
+          remarks: itemRemarks,
           debit: rawVal,
           credit: null,
           isAutoCredit: false,
@@ -1413,6 +1434,7 @@ function DisbursementPageContent() {
           date: dateStr,
           voucher_no: vNo,
           description: desc,
+          remarks: itemRemarks,
           debit: null,
           credit: null,
           isAutoCredit: false,
@@ -1432,6 +1454,7 @@ function DisbursementPageContent() {
         date: dateStr,
         voucher_no: vNo,
         description: cibName,
+        remarks: '',
         debit: null,
         credit: debitTotal,
         isAutoCredit: true,
@@ -1502,7 +1525,7 @@ function DisbursementPageContent() {
   const updateCvRowField = (
     isEdit: boolean,
     rowId: string,
-    field: 'date' | 'voucher_no' | 'description' | 'debit' | 'credit',
+    field: 'date' | 'voucher_no' | 'description' | 'remarks' | 'debit' | 'credit',
     val: string,
     replenishType: 'stl' | 'rf' | null
   ) => {
@@ -1616,6 +1639,7 @@ function DisbursementPageContent() {
       date: defaultDate,
       voucher_no: defaultVoucherNo,
       description: defaultDesc,
+      remarks: '',
       debit: '',
       credit: '',
       isAutoCredit: isCredit,
@@ -1980,6 +2004,7 @@ function DisbursementPageContent() {
 
   // Helper to open Edit Check Voucher Modal with prepared data
   const openEditCvModalActual = (cv: any, mode?: 'summary' | 'detailed', passedRows?: any[]) => {
+    setEditingOriginalCv(cv);
     const isReplenish = isStlOrRfTabOrVoucher(cv) || Boolean(getReplenishmentType(cv.folder_name, cv));
 
     // Determine the rows to edit:
@@ -2061,6 +2086,7 @@ function DisbursementPageContent() {
           date: r.date || (cv.voucher_date ? cv.voucher_date.split('T')[0] : ''),
           voucher_no: r.voucher_no || cv.voucher_no || '',
           description: r.description || '',
+          remarks: r.remarks || '',
           debit: debitVal,
           credit: creditVal,
           isAutoCredit: Boolean(isCredit),
@@ -2081,6 +2107,7 @@ function DisbursementPageContent() {
             date: defaultDate,
             voucher_no: defaultVoucherNo,
             description: cv.particulars || (isReplenish === 'stl' ? 'Short Term Loan' : 'Operation'),
+            remarks: '',
             debit: amt > 0 ? String(amt) : '',
             credit: '',
             isAutoCredit: false
@@ -2090,6 +2117,7 @@ function DisbursementPageContent() {
             date: defaultDate,
             voucher_no: defaultVoucherNo,
             description: defaultBank,
+            remarks: '',
             debit: '',
             credit: amt > 0 ? String(amt) : '',
             isAutoCredit: true
@@ -2097,8 +2125,8 @@ function DisbursementPageContent() {
         ];
       } else {
         initialRowsList = [
-          { id: row0Id, date: defaultDate, voucher_no: defaultVoucherNo, description: cv.particulars || 'Disbursement Item', debit: amt > 0 ? String(amt) : '', credit: '' },
-          { id: `cib-${row0Id}`, date: defaultDate, voucher_no: defaultVoucherNo, description: `CIB - ${detectedBank}`, debit: '', credit: amt > 0 ? String(amt) : '' }
+          { id: row0Id, date: defaultDate, voucher_no: defaultVoucherNo, description: cv.particulars || 'Disbursement Item', remarks: '', debit: amt > 0 ? String(amt) : '', credit: '' },
+          { id: `cib-${row0Id}`, date: defaultDate, voucher_no: defaultVoucherNo, description: `CIB - ${detectedBank}`, remarks: '', debit: '', credit: amt > 0 ? String(amt) : '' }
         ];
       }
     }
@@ -2175,6 +2203,14 @@ function DisbursementPageContent() {
     return current !== initialCvEditSnapshot;
   }, [isEditingCvModal, initialCvEditSnapshot, editCvFormData, editCvRows]);
 
+  const performCloseEditCvModal = useCallback(() => {
+    setIsEditingCvModal(false);
+    if (editingOriginalCv) {
+      openUnifiedPrintModalForCv(editingOriginalCv);
+      setEditingOriginalCv(null);
+    }
+  }, [editingOriginalCv]);
+
   // Safe close with unsaved changes confirmation
   const handleCloseEditCvModal = useCallback(() => {
     if (isCvEditDirty) {
@@ -2188,14 +2224,14 @@ function DisbursementPageContent() {
         cancelLabel: 'Keep Editing',
         onConfirm: () => {
           setModalDialog(null);
-          setIsEditingCvModal(false);
+          performCloseEditCvModal();
         },
         onCancel: () => setModalDialog(null),
       });
       return;
     }
-    setIsEditingCvModal(false);
-  }, [isCvEditDirty]);
+    performCloseEditCvModal();
+  }, [isCvEditDirty, performCloseEditCvModal]);
 
   // Keep session alive while Check Voucher edit or create modal is open so the user is never timed out
   useEffect(() => {
@@ -2229,6 +2265,7 @@ function DisbursementPageContent() {
             date: r.date || null,
             voucher_no: r.voucher_no || null,
             book_of_account: r.description.trim(),
+            remarks: r.remarks ? r.remarks.trim() : null,
             amount: netAmount,
             debit: isCredit ? null : (debitVal > 0 ? debitVal : null),
             credit: isCredit ? (creditVal > 0 ? creditVal : null) : null,
@@ -2263,6 +2300,8 @@ function DisbursementPageContent() {
       const updatedCv = res.data?.data || { ...selectedCvForModal, ...payload };
       setSelectedCvForModal(updatedCv);
       setIsEditingCvModal(false);
+      openUnifiedPrintModalForCv(updatedCv);
+      setEditingOriginalCv(null);
 
       setCheckVouchers(prev => prev.map(cv => (cv.id === editCvFormData.id ? { ...cv, ...updatedCv } : cv)));
       setCvActionFeedback({ type: 'success', message: 'Check Voucher updated successfully!' });
@@ -2327,6 +2366,7 @@ function DisbursementPageContent() {
     setNewCvBankName('BDO');
     setNewCvCheckNo('');
     setNewCvParticulars('');
+    setNewCvFundAmount('');
     const defaultCat = currentTabConfig.defaultCategory || 'Loan';
     setNewCvCategory(defaultCat);
     setNewCvPreparedBy('LAMOSTE, CHINNETTE A.');
@@ -2389,6 +2429,7 @@ function DisbursementPageContent() {
             date: r.date || null,
             voucher_no: r.voucher_no || null,
             book_of_account: r.description.trim(),
+            remarks: r.remarks ? r.remarks.trim() : null,
             amount: netAmount,
             debit: isCredit ? null : (debitVal > 0 ? debitVal : null),
             credit: isCredit ? (creditVal > 0 ? creditVal : null) : null,
@@ -2408,6 +2449,7 @@ function DisbursementPageContent() {
         particulars: newCvParticulars.trim() || `${matchedCat?.label || 'Disbursement'}`,
         folder_name: newCvCategory || 'Loan',
         amount: calculatedAmount,
+        fund_amount: newCvFundAmount !== '' ? parseFloat(newCvFundAmount) : null,
         details: detailsArray,
         signatories: {
           prepared_by: newCvPreparedBy.trim(),
@@ -3048,7 +3090,7 @@ function DisbursementPageContent() {
           }}
         >
           <div
-            className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-modal-pop overflow-hidden"
+            className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-modal-pop overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-outline-variant/60 p-5 sm:p-6 shrink-0 bg-surface-container-lowest dark:bg-neutral-900">
@@ -3239,6 +3281,28 @@ function DisbursementPageContent() {
                   />
                 </div>
 
+                {/* Fund Amount */}
+                <div>
+                  <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
+                    Fund Amount <span className="text-neutral-400 font-normal normal-case">(Total fund amount)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-sm">₱</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={newCvFundAmount}
+                      onChange={e => setNewCvFundAmount(e.target.value)}
+                      className="w-full pl-7 pr-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-mono font-bold"
+                    />
+                  </div>
+                  <p className="text-[10px] text-neutral-500 mt-1">
+                    Used to compute Fund Balance on the detailed check voucher.
+                  </p>
+                </div>
+
                 {/* Line Items Rows (Balanced Double Entry) */}
                 {(() => {
                   const replenishType = getReplenishmentType(newCvCategory);
@@ -3305,13 +3369,15 @@ function DisbursementPageContent() {
                               TRANSACTION DETAILS
                             </div>
 
-                            {/* Table Column Header for Replenishment matching Image 2 */}
-                            <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[11px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10">
-                              <div className="col-span-1 text-center">#</div>
-                              <div className="col-span-6">Book of Accounts</div>
-                              <div className="col-span-2 text-right">Debit (₱)</div>
-                              <div className="col-span-2 text-right">Credit (₱)</div>
-                              <div className="col-span-1 text-center">Action</div>
+                            {/* Table Column Header for Replenishment */}
+                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
+                              <div className="text-center">#</div>
+                              <div>RF Voucher #</div>
+                              <div>Book of Accounts</div>
+                              <div>Remarks</div>
+                              <div className="text-right">Debit (₱)</div>
+                              <div className="text-right">Credit (₱)</div>
+                              <div className="text-center">Action</div>
                             </div>
 
                             <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest overflow-visible">
@@ -3321,16 +3387,25 @@ function DisbursementPageContent() {
                                   <div
                                     key={row.id || idx}
                                     style={{ zIndex: newCvRows.length - idx + 10 }}
-                                    className={`relative grid grid-cols-12 px-3 py-2 items-center gap-2 transition-colors ${
+                                    className={`relative grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 transition-colors ${
                                       isCreditRow
                                         ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                         : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
                                     }`}
                                   >
-                                    <div className="col-span-1 text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400">
+                                    <div className="text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400">
                                       {idx + 1}
                                     </div>
-                                    <div className="col-span-6">
+                                    <div>
+                                      <input
+                                        type="text"
+                                        placeholder="RF Voucher #"
+                                        value={row.voucher_no || ''}
+                                        onChange={e => updateCvRowField(false, row.id!, 'voucher_no', e.target.value, replenishType)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                      />
+                                    </div>
+                                    <div>
                                       {isCreditRow ? (
                                         <input
                                           type="text"
@@ -3350,7 +3425,16 @@ function DisbursementPageContent() {
                                         />
                                       )}
                                     </div>
-                                    <div className="col-span-2">
+                                    <div>
+                                      <input
+                                        type="text"
+                                        placeholder="Remarks..."
+                                        value={row.remarks || ''}
+                                        onChange={e => updateCvRowField(false, row.id!, 'remarks', e.target.value, replenishType)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                      />
+                                    </div>
+                                    <div>
                                       {isCreditRow ? (
                                         <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
                                       ) : (
@@ -3364,7 +3448,7 @@ function DisbursementPageContent() {
                                         />
                                       )}
                                     </div>
-                                    <div className="col-span-2">
+                                    <div>
                                       {isCreditRow ? (
                                         <input
                                           type="number"
@@ -3401,37 +3485,38 @@ function DisbursementPageContent() {
                             </div>
 
                             {/* Table Total Footer matching Image 2 */}
-                            <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
-                              <div className="col-span-7 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
+                              <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
                                 TOTAL:
                               </div>
-                              <div className="col-span-2 text-right font-mono font-bold text-neutral-900 dark:text-white">
+                              <div className="text-right font-mono font-bold text-neutral-900 dark:text-white">
                                 ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </div>
-                              <div className="col-span-2 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                              <div className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
                                 ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </div>
-                              <div className="col-span-1"></div>
+                              <div></div>
                             </div>
                           </>
                         ) : (
                           <>
                             {/* Standard Column Header */}
-                            <div className="grid grid-cols-12 px-3 py-2 bg-surface-container-low dark:bg-surface-container font-bold text-[10px] uppercase tracking-wider text-neutral-500">
-                              <div className="col-span-1 text-center">#</div>
-                              <div className="col-span-5">Book of Account / Item Description</div>
-                              <div className="col-span-3 text-right">Debit (₱)</div>
-                              <div className="col-span-2 text-right">Credit (₱)</div>
-                              <div className="col-span-1 text-center">Action</div>
+                            <div className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 bg-surface-container-low dark:bg-surface-container font-bold text-[10px] uppercase tracking-wider text-neutral-500 items-center gap-2">
+                              <div className="text-center font-bold">#</div>
+                              <div>Book of Account / Item Description</div>
+                              <div>Remarks</div>
+                              <div className="text-right">Debit (₱)</div>
+                              <div className="text-right">Credit (₱)</div>
+                              <div className="text-center">Action</div>
                             </div>
 
                             <div className="divide-y divide-outline-variant/20 bg-white dark:bg-surface-container-lowest">
                               {newCvRows.map((row, idx) => (
-                                <div key={row.id || idx} className="grid grid-cols-12 px-3 py-2 items-center gap-2">
-                                  <div className="col-span-1 text-center font-mono font-medium text-xs text-neutral-500">
+                                <div key={row.id || idx} className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 items-center gap-2">
+                                  <div className="text-center font-mono font-medium text-xs text-neutral-500">
                                     {idx + 1}
                                   </div>
-                                  <div className="col-span-5">
+                                  <div>
                                     <input
                                       type="text"
                                       placeholder={`Line item #${idx + 1}`}
@@ -3440,7 +3525,16 @@ function DisbursementPageContent() {
                                       className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs"
                                     />
                                   </div>
-                                  <div className="col-span-3">
+                                  <div>
+                                    <input
+                                      type="text"
+                                      placeholder="Remarks..."
+                                      value={row.remarks || ''}
+                                      onChange={e => updateCvRowField(false, row.id!, 'remarks', e.target.value, null)}
+                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs"
+                                    />
+                                  </div>
+                                  <div>
                                     <input
                                       type="number"
                                       step="0.01"
@@ -3450,7 +3544,7 @@ function DisbursementPageContent() {
                                       className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
                                     />
                                   </div>
-                                  <div className="col-span-2">
+                                  <div>
                                     <input
                                       type="number"
                                       step="0.01"
@@ -3460,7 +3554,7 @@ function DisbursementPageContent() {
                                       className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
                                     />
                                   </div>
-                                  <div className="col-span-1 text-center">
+                                  <div className="text-center">
                                     {newCvRows.length > 1 && (
                                       <button
                                         type="button"
@@ -3570,7 +3664,7 @@ function DisbursementPageContent() {
           onClick={() => setSelectedCvForModal(null)}
         >
           <div
-            className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-2xl shadow-2xl relative animate-modal-pop overflow-hidden max-h-[90vh] flex flex-col"
+            className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-3xl shadow-2xl relative animate-modal-pop overflow-hidden max-h-[90vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -3619,7 +3713,7 @@ function DisbursementPageContent() {
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-5 custom-scrollbar flex-1">
               {/* Voucher Meta Summary Cards */}
-              <div className={`grid grid-cols-2 sm:grid-cols-4 ${(selectedCvForModal.status === 'filed' || selectedCvForModal.date_released) ? 'lg:grid-cols-5' : ''} gap-3`}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
                   <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Voucher Date</span>
                   <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
@@ -3629,15 +3723,21 @@ function DisbursementPageContent() {
                 {isStlOrRfTabOrVoucher(selectedCvForModal) ? (
                   <>
                     <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Fund Type</span>
-                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
-                        {isRevolvingVoucher(selectedCvForModal) ? 'Revolving Fund' : 'STL Replenishment'}
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Transaction Type</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white block mt-0.5">
+                        {isRevolvingVoucher(selectedCvForModal) ? 'Revolving Fund Replenishment' : 'STL Replenishment'}
                       </span>
                     </div>
                     <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Name</span>
-                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5" title={selectedCvForModal.payee || '—'}>
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Payee</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white block mt-0.5" title={selectedCvForModal.payee || '—'}>
                         {selectedCvForModal.payee || '—'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
+                        {selectedCvForModal.bank_name || selectedCvForModal.bank || '—'}
                       </span>
                     </div>
                     <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
@@ -3650,21 +3750,21 @@ function DisbursementPageContent() {
                 ) : (
                   <>
                     <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Name</span>
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Payee</span>
                       <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5" title={selectedCvForModal.payee || '—'}>
                         {selectedCvForModal.payee || '—'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
+                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
+                        {selectedCvForModal.bank_name || selectedCvForModal.bank || '—'}
                       </span>
                     </div>
                     <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
                       <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Check No.</span>
                       <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
                         {selectedCvForModal.check_no || '—'}
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
-                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
-                        {selectedCvForModal.bank || '—'}
                       </span>
                     </div>
                   </>
@@ -3729,6 +3829,7 @@ function DisbursementPageContent() {
                           <thead className="bg-[#ecfdf5] dark:bg-emerald-950/40 text-[#064e3b] dark:text-emerald-300 font-extrabold uppercase text-[9px] border-b border-emerald-200 dark:border-emerald-800">
                             <tr>
                               <th className="p-2.5 w-12 text-center border-r border-emerald-200 dark:border-emerald-800">#</th>
+                              <th className="p-2.5 w-28 border-r border-emerald-200 dark:border-emerald-800">RF VOUCHER #</th>
                               <th className="p-2.5 border-r border-emerald-200 dark:border-emerald-800">BOOK OF ACCOUNTS</th>
                               <th className="p-2.5 w-36 text-right border-r border-emerald-200 dark:border-emerald-800">DEBIT (₱)</th>
                               <th className="p-2.5 w-36 text-right">CREDIT (₱)</th>
@@ -3739,6 +3840,9 @@ function DisbursementPageContent() {
                               <tr key={idx} className="border-b border-neutral-200 dark:border-neutral-800 hover:bg-emerald-50/30">
                                 <td className="p-2.5 text-center font-mono font-medium text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
                                   {idx + 1}
+                                </td>
+                                <td className="p-2.5 border-r border-neutral-200 dark:border-neutral-800 font-mono font-bold text-neutral-800 dark:text-neutral-200">
+                                  {item.voucher_no || '—'}
                                 </td>
                                 <td className="p-2.5 border-r border-neutral-200 dark:border-neutral-800 font-bold text-neutral-900 dark:text-white">
                                   {item.description}
@@ -3752,12 +3856,12 @@ function DisbursementPageContent() {
                               </tr>
                             ))}
                             <tr className="bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold border-t border-emerald-300 dark:border-emerald-700 text-[10px]">
-                              <td colSpan={2} className="p-2.5 text-right uppercase tracking-wider text-neutral-900 dark:text-white font-extrabold">TOTAL:</td>
+                              <td colSpan={3} className="p-2.5 text-right uppercase tracking-wider text-neutral-900 dark:text-white font-extrabold">TOTAL:</td>
                               <td className="p-2.5 text-right font-mono font-extrabold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
                                 ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </td>
                               <td className="p-2.5 text-right font-mono font-extrabold text-rose-600 dark:text-rose-400">
-                                ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </td>
                             </tr>
                           </tbody>
@@ -3820,41 +3924,16 @@ function DisbursementPageContent() {
                           Disbursed Amount:
                         </span>
                         <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide leading-relaxed">
-                          {formatDisbursedInWords(getCvDisbursedAmount(selectedCvForModal))}
+                          {formatDisbursedInWords(debitTotal || getCvDisbursedAmount(selectedCvForModal))}
                         </p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <span className="font-mono font-extrabold text-base text-emerald-700 dark:text-emerald-300">
-                          ₱{getCvDisbursedAmount(selectedCvForModal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₱{(debitTotal || getCvDisbursedAmount(selectedCvForModal)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
 
-                    {/* 3 Summary Cards for STL & Revolving Fund matching photo */}
-                    {isStlOrRfTabOrVoucher(selectedCvForModal) && (
-                      <div className="grid grid-cols-3 gap-2.5 text-xs">
-                        <div className="p-3 border border-outline-variant/40 rounded-xl bg-surface-container-low dark:bg-surface-container">
-                          <span className="text-[9px] font-bold uppercase text-neutral-400 block tracking-wider">FUND AMOUNT</span>
-                          <div className="text-[13px] font-extrabold font-mono text-on-surface dark:text-white mt-0.5">
-                            ₱{(100000).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </div>
-                        </div>
-                        <div className="p-3 border border-outline-variant/40 rounded-xl bg-surface-container-low dark:bg-surface-container">
-                          <span className="text-[9px] font-bold uppercase text-neutral-400 block tracking-wider">
-                            TOTAL EXPENSE ({rows.filter(r => r.debit !== null).length} ITEMS)
-                          </span>
-                          <div className="text-[13px] font-extrabold font-mono text-on-surface dark:text-white mt-0.5">
-                            ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </div>
-                        </div>
-                        <div className="p-3 border-2 border-emerald-500 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40">
-                          <span className="text-[9px] font-bold uppercase text-emerald-800 dark:text-emerald-300 block tracking-wider">FUND BALANCE</span>
-                          <div className="text-[13px] font-extrabold font-mono text-emerald-900 dark:text-emerald-200 mt-0.5">
-                            ₱{(100000 - debitTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                          </div>
-                        </div>
-                      </div>
-                    )}
 
                     {/* Signatures Block matching physical document */}
                     <div className="pt-4 border-t border-outline-variant/30 space-y-4 text-xs">
@@ -4055,7 +4134,7 @@ function DisbursementPageContent() {
           }}
         >
           <div
-            className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-modal-pop overflow-hidden"
+            className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-modal-pop overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-outline-variant/60 p-5 sm:p-6 shrink-0 bg-surface-container-lowest dark:bg-neutral-900">
@@ -4297,13 +4376,15 @@ function DisbursementPageContent() {
                             TRANSACTION DETAILS
                           </div>
 
-                          {/* Table Column Header for Replenishment matching Image 2 */}
-                          <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[11px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10">
-                            <div className="col-span-1 text-center">#</div>
-                            <div className="col-span-6">Book of Accounts</div>
-                            <div className="col-span-2 text-right">Debit (₱)</div>
-                            <div className="col-span-2 text-right">Credit (₱)</div>
-                            <div className="col-span-1 text-center">Action</div>
+                          {/* Table Column Header for Replenishment */}
+                          <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
+                            <div className="text-center">#</div>
+                            <div>RF Voucher #</div>
+                            <div>Book of Accounts</div>
+                            <div>Remarks</div>
+                            <div className="text-right">Debit (₱)</div>
+                            <div className="text-right">Credit (₱)</div>
+                            <div className="text-center">Action</div>
                           </div>
 
                           <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest overflow-visible">
@@ -4324,16 +4405,25 @@ function DisbursementPageContent() {
                                   }}
                                   onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
                                   style={{ zIndex: editCvRows.length - idx + 10 }}
-                                  className={`relative grid grid-cols-12 px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
+                                  className={`relative grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
                                     isCreditRow
                                       ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                       : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
                                   }`}
                                 >
-                                  <div className="col-span-1 text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400">
+                                  <div className="text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400">
                                     {idx + 1}
                                   </div>
-                                  <div className="col-span-6">
+                                  <div>
+                                    <input
+                                      type="text"
+                                      placeholder="RF Voucher #"
+                                      value={row.voucher_no || ''}
+                                      onChange={e => updateCvRowField(true, row.id!, 'voucher_no', e.target.value, replenishType)}
+                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                    />
+                                  </div>
+                                  <div>
                                     {isCreditRow ? (
                                       <input
                                         type="text"
@@ -4353,7 +4443,16 @@ function DisbursementPageContent() {
                                       />
                                     )}
                                   </div>
-                                  <div className="col-span-2">
+                                  <div>
+                                    <input
+                                      type="text"
+                                      placeholder="Remarks..."
+                                      value={row.remarks || ''}
+                                      onChange={e => updateCvRowField(true, row.id!, 'remarks', e.target.value, replenishType)}
+                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                    />
+                                  </div>
+                                  <div>
                                     {isCreditRow ? (
                                       <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
                                     ) : (
@@ -4367,7 +4466,7 @@ function DisbursementPageContent() {
                                       />
                                     )}
                                   </div>
-                                  <div className="col-span-2">
+                                  <div>
                                     {isCreditRow ? (
                                       <input
                                         type="number"
@@ -4381,7 +4480,7 @@ function DisbursementPageContent() {
                                       <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
                                     )}
                                   </div>
-                                  <div className="col-span-1 text-center">
+                                  <div className="text-center">
                                     {(() => {
                                       const hasMultipleDebits = editCvRows.filter(r => !checkIsCreditRow(r)).length > 1;
                                       const hasMultipleCredits = editCvRows.filter(r => checkIsCreditRow(r)).length > 1;
@@ -4404,28 +4503,29 @@ function DisbursementPageContent() {
                           </div>
 
                           {/* Table Total Footer matching Image 2 */}
-                          <div className="grid grid-cols-12 px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
-                            <div className="col-span-7 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                          <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
+                            <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
                               TOTAL:
                             </div>
-                            <div className="col-span-2 text-right font-mono font-bold text-neutral-900 dark:text-white">
+                            <div className="text-right font-mono font-bold text-neutral-900 dark:text-white">
                               ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </div>
-                            <div className="col-span-2 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                            <div className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
                               ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </div>
-                            <div className="col-span-1"></div>
+                            <div></div>
                           </div>
                         </>
                       ) : (
                         <>
                           {/* Standard Column Header */}
-                          <div className="grid grid-cols-12 px-3 py-2 bg-neutral-100/70 dark:bg-neutral-800/60 text-[10px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
-                            <div className="col-span-1 text-center font-bold">#</div>
-                            <div className="col-span-5">Book of Account</div>
-                            <div className="col-span-3 text-right">Debit (₱)</div>
-                            <div className="col-span-2 text-right">Credit (₱)</div>
-                            <div className="col-span-1 text-center">Action</div>
+                          <div className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 bg-neutral-100/70 dark:bg-neutral-800/60 text-[10px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 items-center gap-2">
+                            <div className="text-center font-bold">#</div>
+                            <div>Book of Account</div>
+                            <div>Remarks</div>
+                            <div className="text-right">Debit (₱)</div>
+                            <div className="text-right">Credit (₱)</div>
+                            <div className="text-center">Action</div>
                           </div>
 
                           <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest">
@@ -4443,12 +4543,12 @@ function DisbursementPageContent() {
                                   dragOverRowIdx.current = null;
                                 }}
                                 onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
-                                className="grid grid-cols-12 px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors select-none"
+                                className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors select-none"
                               >
-                                <div className="col-span-1 text-center font-mono font-medium text-xs text-neutral-500">
+                                <div className="text-center font-mono font-medium text-xs text-neutral-500">
                                   {idx + 1}
                                 </div>
-                                <div className="col-span-5">
+                                <div>
                                   <input
                                     type="text"
                                     value={row.description}
@@ -4457,7 +4557,16 @@ function DisbursementPageContent() {
                                     className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs cursor-text"
                                   />
                                 </div>
-                                <div className="col-span-3">
+                                <div>
+                                  <input
+                                    type="text"
+                                    value={row.remarks || ''}
+                                    onChange={e => updateCvRowField(true, row.id!, 'remarks', e.target.value, null)}
+                                    placeholder="Remarks..."
+                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs cursor-text"
+                                  />
+                                </div>
+                                <div>
                                   <input
                                     type="number"
                                     step="0.01"
@@ -4467,7 +4576,7 @@ function DisbursementPageContent() {
                                     className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs cursor-text"
                                   />
                                 </div>
-                                <div className="col-span-2">
+                                <div>
                                   <input
                                     type="number"
                                     step="0.01"
@@ -4477,7 +4586,7 @@ function DisbursementPageContent() {
                                     className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs cursor-text"
                                   />
                                 </div>
-                                <div className="col-span-1 text-center">
+                                <div className="text-center">
                                   {editCvRows.length > 1 && (
                                     <button
                                       type="button"
@@ -4956,12 +5065,12 @@ function DisbursementPageContent() {
                         Disbursed Amount:
                       </span>
                       <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.4 }}>
-                        {formatDisbursedInWords(getCvDisbursedAmount(printingCvBreakdown))}
+                        {formatDisbursedInWords(debitTotal || getCvDisbursedAmount(printingCvBreakdown))}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <span style={{ fontSize: '15px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
-                        ₱{getCvDisbursedAmount(printingCvBreakdown).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₱{(debitTotal || getCvDisbursedAmount(printingCvBreakdown)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>

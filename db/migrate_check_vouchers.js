@@ -32,6 +32,7 @@ export async function migrateCheckVouchers() {
       ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS signatories JSONB DEFAULT '{"prepared_by":"LAMOSTE, CHINNETTE A.","checked_by":"MARILOU LARIOSA","approved_by":"MICHELLE M. PABLE"}'::jsonb;
       ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'edit';
       ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS loan_id UUID REFERENCES loans(id) ON DELETE SET NULL;
+      ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS fund_amount NUMERIC(15,2) DEFAULT NULL;
 
       CREATE INDEX IF NOT EXISTS idx_check_vouchers_voucher_date ON check_vouchers(voucher_date DESC);
       CREATE INDEX IF NOT EXISTS idx_check_vouchers_folder_name ON check_vouchers(folder_name);

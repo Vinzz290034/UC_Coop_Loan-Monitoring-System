@@ -1203,6 +1203,7 @@ export const createCheckVoucher = async (req, res, next) => {
       bank,
       particulars,
       amount,
+      fund_amount,
       date_released,
       folder_name,
       status,
@@ -1275,12 +1276,13 @@ export const createCheckVoucher = async (req, res, next) => {
         bank,
         particulars,
         amount,
+        fund_amount,
         date_released,
         folder_name,
         status,
         details,
         signatories
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
         loan_id || null,
@@ -1291,6 +1293,7 @@ export const createCheckVoucher = async (req, res, next) => {
         bank || '',
         particulars || '',
         amount !== undefined && amount !== null && amount !== '' ? parseFloat(amount) : 0,
+        fund_amount !== undefined && fund_amount !== null && fund_amount !== '' ? parseFloat(fund_amount) : null,
         date_released || null,
         folder_name || null,
         initialStatus,
