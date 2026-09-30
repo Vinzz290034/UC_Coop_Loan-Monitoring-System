@@ -736,45 +736,45 @@ export default function UnifiedCvLfPrintModal({
     const map: Record<string, number> = {};
     let total = 0;
 
-    let cvDetails: any[] = [];
-    if (Array.isArray(currentCv?.details)) {
-      cvDetails = currentCv.details;
-    } else if (typeof currentCv?.details === 'string') {
-      try {
-        const parsed = JSON.parse(currentCv.details);
-        if (Array.isArray(parsed)) cvDetails = parsed;
-      } catch {
-        cvDetails = [];
-      }
-    }
-
-    const cvDebitItems = cvDetails.filter(it => {
-      const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
-      const desc = it.book_of_account || it.description || '';
-      const isCredit = it.is_credit === true || /^(cib\b|cash\s*in\s*bank)/i.test(desc) || val < 0;
-      return !isCredit && val > 0;
-    });
-
-    if (cvDebitItems.length > 0) {
-      for (const it of cvDebitItems) {
-        const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
-        const desc = (it.book_of_account || it.description || '').trim();
-        const rawCat = it.category || getCategoryForAccount(desc);
-        const cat = cleanCategoryName(rawCat);
-        map[cat] = (map[cat] || 0) + amt;
-        total += amt;
+    const activeLf = (lfItems || []).filter((it: any) => !it.is_cancelled);
+    if (activeLf.length > 0) {
+      for (const it of activeLf) {
+        const amt = parseFloat(it.amount) || 0;
+        if (amt > 0) {
+          const rawCat = it.category || getCategoryForAccount(it.account_name || '') || 'Operation';
+          const cat = cleanCategoryName(rawCat);
+          map[cat] = (map[cat] || 0) + amt;
+          total += amt;
+        }
       }
     } else {
-      const activeLf = (lfItems || []).filter((it: any) => !it.is_cancelled);
-      if (activeLf.length > 0) {
-        for (const it of activeLf) {
-          const amt = parseFloat(it.amount) || 0;
-          if (amt > 0) {
-            const rawCat = it.category || getCategoryForAccount(it.account_name || '') || 'Operation';
-            const cat = cleanCategoryName(rawCat);
-            map[cat] = (map[cat] || 0) + amt;
-            total += amt;
-          }
+      let cvDetails: any[] = [];
+      if (Array.isArray(currentCv?.details)) {
+        cvDetails = currentCv.details;
+      } else if (typeof currentCv?.details === 'string') {
+        try {
+          const parsed = JSON.parse(currentCv.details);
+          if (Array.isArray(parsed)) cvDetails = parsed;
+        } catch {
+          cvDetails = [];
+        }
+      }
+
+      const cvDebitItems = cvDetails.filter(it => {
+        const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
+        const desc = it.book_of_account || it.description || '';
+        const isCredit = it.is_credit === true || /^(cib\b|cash\s*in\s*bank)/i.test(desc) || val < 0;
+        return !isCredit && val > 0;
+      });
+
+      if (cvDebitItems.length > 0) {
+        for (const it of cvDebitItems) {
+          const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
+          const desc = (it.book_of_account || it.description || '').trim();
+          const rawCat = it.category || getCategoryForAccount(desc);
+          const cat = cleanCategoryName(rawCat);
+          map[cat] = (map[cat] || 0) + amt;
+          total += amt;
         }
       }
     }
@@ -853,37 +853,35 @@ export default function UnifiedCvLfPrintModal({
     const preferredOrder = ['Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
     const catMap: Record<string, number> = {};
 
-    // 1. Primary source: the active CV rows in the Book of Accounts table directly below
-    if (detailedCvData.rows && detailedCvData.rows.length > 0) {
+    // 1. Primary source: Active LF liquidation schedule items (preserves user-assigned categories and true totals)
+    const activeLf = (lfItems || []).filter((it: any) => !it.is_cancelled);
+    if (activeLf.length > 0) {
+      for (const it of activeLf) {
+        const amt = parseFloat(it.amount) || 0;
+        if (amt > 0) {
+          const rawCat = it.category || getCategoryForAccount(it.account_name || '');
+          const cat = cleanCategoryName(rawCat);
+          catMap[cat] = (catMap[cat] || 0) + amt;
+        }
+      }
+    } else if (detailedCvData.rows && detailedCvData.rows.length > 0) {
+      // 2. Secondary source: active CV rows in the Book of Accounts table if no LF items attached
       const nonCibRows = detailedCvData.rows.filter(r => !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
       const hasDebitRows = nonCibRows.some(r => Number(r.debit) > 0);
 
       for (const r of nonCibRows) {
         const amt = hasDebitRows ? (Number(r.debit) || 0) : (Number(r.credit) || 0);
         if (amt > 0) {
-          const rawCat = getCategoryForAccount(r.description || '');
+          const rawCat = (r as any).category || getCategoryForAccount(r.description || '');
           const cat = cleanCategoryName(rawCat);
           catMap[cat] = (catMap[cat] || 0) + amt;
         }
       }
-    } else {
-      // 2. Fallback if no CV table rows: check active LF items or categoryBreakdown list
-      const activeLf = (lfItems || []).filter((it: any) => !it.is_cancelled);
-      if (activeLf.length > 0) {
-        for (const it of activeLf) {
-          const amt = parseFloat(it.amount) || 0;
-          if (amt > 0) {
-            const rawCat = it.category || getCategoryForAccount(it.account_name || '');
-            const cat = cleanCategoryName(rawCat);
-            catMap[cat] = (catMap[cat] || 0) + amt;
-          }
-        }
-      } else if (categoryBreakdown.list.length > 0) {
-        for (const item of categoryBreakdown.list) {
-          if (item.amount > 0) {
-            const cat = cleanCategoryName(item.name);
-            catMap[cat] = (catMap[cat] || 0) + item.amount;
-          }
+    } else if (categoryBreakdown.list.length > 0) {
+      for (const item of categoryBreakdown.list) {
+        if (item.amount > 0) {
+          const cat = cleanCategoryName(item.name);
+          catMap[cat] = (catMap[cat] || 0) + item.amount;
         }
       }
     }
@@ -958,34 +956,7 @@ export default function UnifiedCvLfPrintModal({
               </div>
             ) : (
               <>
-                {/* Schedule Attachment Status Banner */}
-                {hasAttachedSchedule && (
-                  <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
-                        <CheckCircle2 className="w-4 h-4" />
-                      </div>
-                      <div className="text-xs">
-                        <div className="font-bold text-emerald-950 dark:text-emerald-200 flex items-center gap-2 flex-wrap">
-                          <span>Check Voucher #{cleanCvNumber(currentCv?.voucher_no)}</span>
-                          <span className="text-neutral-400">•</span>
-                          <span>{formatPayeeName(currentCv?.payee || 'Michelle Pable')}</span>
-                          <span className="text-neutral-400">•</span>
-                          <span className="text-emerald-700 dark:text-emerald-300 font-mono font-bold">
-                            {formatCurrency(currentCv?.amount || totalExpenseAmount)}
-                          </span>
-                        </div>
-                        <div className="text-emerald-800 dark:text-emerald-300/80 mt-0.5">
-                          Integrated Schedule Ref #{currentLf?.lf_no} • {activeItems.length} active breakdown items • Total: {formatCurrency(totalExpenseAmount)}
-                        </div>
-                      </div>
-                    </div>
 
-                    <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-600/20 shrink-0 self-start sm:self-auto">
-                      Itemized Schedule Attached
-                    </span>
-                  </div>
-                )}
 
                 {/* View Mode Indicator / Switcher */}
                 <div className="flex items-center justify-between border-b border-outline-variant/40 pb-2">
