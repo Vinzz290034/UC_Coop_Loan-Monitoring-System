@@ -1754,7 +1754,7 @@ function DisbursementPageContent() {
           </span>
         );
       case 'filed':
-        if (cv && isAdminOrStaff) {
+        if (cv && isAdmin) {
           return (
             <button
               type="button"
@@ -1889,11 +1889,11 @@ function DisbursementPageContent() {
     });
   };
 
-  // Open modal to directly edit Date Sealed & Disbursed
+  // Open modal to directly edit Date Sealed & Disbursed (Admin Only)
   const handleOpenEditDisbursedDate = (cv: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!isAdminOrStaff) {
-      showAppAlert('Permission Denied', 'Only authorized personnel can edit the disbursed date.', 'amber');
+    if (!isAdmin) {
+      showAppAlert('Permission Denied', 'Only administrators can edit the disbursed date.', 'amber');
       return;
     }
     const defaultDate = cv.date_released
@@ -2130,12 +2130,12 @@ function DisbursementPageContent() {
     if (!cv) return;
     const status = (cv.status || 'edit').toLowerCase();
 
-    // If filed, prompt user with Override confirmation
+    // If filed, prompt user with Override confirmation (Admin Only)
     if (status === 'filed') {
-      if (!isAdminOrStaff) {
+      if (!isAdmin) {
         showAppAlert(
           'Permission Denied',
-          'Only administrators and authorized staff can override and edit a filed check voucher.',
+          'Only administrators can override and edit a filed (sealed) check voucher.',
           'amber'
         );
         return;
@@ -3999,8 +3999,8 @@ function DisbursementPageContent() {
               </button>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Manager / Admin: Approve for Release when 'on process' */}
-                {selectedCvForModal.status === 'on process' && isAdminOrManager && (
+                {/* Staff / Admin: Approve for Release when 'on process' */}
+                {selectedCvForModal.status === 'on process' && isAdminOrStaff && (
                   <button
                     type="button"
                     disabled={isApprovingCv}
@@ -4029,7 +4029,7 @@ function DisbursementPageContent() {
                   </button>
                 )}
 
-                {/* Admin: Release & File (Locked) when 'for release' */}
+                {/* Admin ONLY: Release & File (Seal & Disburse) when 'for release' */}
                 {selectedCvForModal.status === 'for release' && isAdmin && (
                   <button
                     type="button"
@@ -4041,8 +4041,8 @@ function DisbursementPageContent() {
                   </button>
                 )}
 
-                {/* Admin/Staff Override & Edit for Filed Vouchers */}
-                {selectedCvForModal.status === 'filed' && isAdminOrStaff && (
+                {/* Admin ONLY: Override & Edit for Filed Vouchers */}
+                {selectedCvForModal.status === 'filed' && isAdmin && (
                   <button
                     type="button"
                     onClick={() => startEditingCv(selectedCvForModal)}
@@ -4054,8 +4054,8 @@ function DisbursementPageContent() {
                   </button>
                 )}
 
-                {/* Edit Disbursed Date button for Filed Vouchers */}
-                {selectedCvForModal.status === 'filed' && isAdminOrStaff && (
+                {/* Admin ONLY: Edit Disbursed Date button for Filed Vouchers */}
+                {selectedCvForModal.status === 'filed' && isAdmin && (
                   <button
                     type="button"
                     onClick={e => handleOpenEditDisbursedDate(selectedCvForModal, e)}
@@ -4289,9 +4289,11 @@ function DisbursementPageContent() {
                   </label>
                   <input
                     type="date"
+                    disabled={!isAdmin}
+                    title={!isAdmin ? 'Only administrators can edit the disbursed date' : undefined}
                     value={editCvFormData.date_released}
                     onChange={e => setEditCvFormData({ ...editCvFormData, date_released: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60"
+                    className={`w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
                   />
                 </div>
               </div>
