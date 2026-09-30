@@ -127,6 +127,23 @@ function getCvDisbursedAmount(cv: any): number {
   return parseFloat(cv.amount || 0);
 }
 
+export function formatPayeeName(name?: string): string {
+  if (!name || typeof name !== 'string') return name || '';
+  const trimmed = name.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.includes(',')) {
+    const parts = trimmed.split(',');
+    const lastName = parts[0].trim();
+    const firstName = parts.slice(1).join(',').trim();
+    if (firstName && lastName) {
+      return `${firstName} ${lastName}`.replace(/\s+/g, ' ').toUpperCase();
+    }
+  }
+
+  return trimmed.replace(/\s+/g, ' ').toUpperCase();
+}
+
 function getCategoryForAccount(acct: string): string {
   const trimmed = (acct || '').trim();
   if (!trimmed) return 'Operation';
@@ -216,10 +233,8 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
 
   const detailsAreOnlyCategories = debitDetails.length > 0 && debitDetails.every(d => isBroadCategoryDesc(d.book_of_account || d.description || ''));
 
-  // Prioritize activeItems from attached liquidation schedule if:
-  // 1. activeItems exist AND details is empty, OR
-  // 2. details only contains the summary category names (e.g. Operation, Service, Merchandise)
-  const shouldUseActiveItems = activeItems.length > 0 && (debitDetails.length === 0 || detailsAreOnlyCategories);
+  // Prioritize activeItems from attached liquidation schedule ONLY when cv details is empty
+  const shouldUseActiveItems = activeItems.length > 0 && debitDetails.length === 0;
 
   if (shouldUseActiveItems) {
     const defaultVNo = (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—';
@@ -261,11 +276,16 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
     for (const item of details) {
       const desc = item.book_of_account || item.description || '';
       const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      
+      // Skip CIB in body rows because CIB is rendered as the dedicated CIB footer row at the table bottom
+      if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc.trim())) {
+        continue;
+      }
+
       const isCreditItem = item.is_credit === true ||
                            item.isAutoCredit === true ||
-                           /^(cib\b|cash\s*in\s*bank|revolving\s*fund|rf\s*[-#]|petty\s*cash\s*fund)/i.test(desc.trim()) ||
                            rawVal < 0 ||
-                           (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+                           (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit && !item.book_of_account && !item.description);
       const dateStr = item.date ? formatIsoDate(item.date) : (cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—');
       const vNo = item.voucher_no || (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—';
 
@@ -716,45 +736,45 @@ export default function UnifiedCvLfPrintModal({
     const map: Record<string, number> = {};
     let total = 0;
 
-    const activeLf = (lfItems || []).filter((it: any) => !it.is_cancelled);
-    if (activeLf.length > 0) {
-      for (const it of activeLf) {
-        const amt = parseFloat(it.amount) || 0;
-        if (amt > 0) {
-          const rawCat = it.category || getCategoryForAccount(it.account_name || '') || 'Operation';
-          const cat = cleanCategoryName(rawCat);
-          map[cat] = (map[cat] || 0) + amt;
-          total += amt;
-        }
+    let cvDetails: any[] = [];
+    if (Array.isArray(currentCv?.details)) {
+      cvDetails = currentCv.details;
+    } else if (typeof currentCv?.details === 'string') {
+      try {
+        const parsed = JSON.parse(currentCv.details);
+        if (Array.isArray(parsed)) cvDetails = parsed;
+      } catch {
+        cvDetails = [];
+      }
+    }
+
+    const cvDebitItems = cvDetails.filter(it => {
+      const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
+      const desc = it.book_of_account || it.description || '';
+      const isCredit = it.is_credit === true || /^(cib\b|cash\s*in\s*bank)/i.test(desc) || val < 0;
+      return !isCredit && val > 0;
+    });
+
+    if (cvDebitItems.length > 0) {
+      for (const it of cvDebitItems) {
+        const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
+        const desc = (it.book_of_account || it.description || '').trim();
+        const rawCat = it.category || getCategoryForAccount(desc);
+        const cat = cleanCategoryName(rawCat);
+        map[cat] = (map[cat] || 0) + amt;
+        total += amt;
       }
     } else {
-      let details: any[] = [];
-      if (Array.isArray(currentCv?.details)) {
-        details = currentCv.details;
-      } else if (typeof currentCv?.details === 'string') {
-        try {
-          const parsed = JSON.parse(currentCv.details);
-          if (Array.isArray(parsed)) details = parsed;
-        } catch {
-          details = [];
-        }
-      }
-      for (const it of details) {
-        const desc = (it.book_of_account || it.description || '').trim();
-        const rawVal = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
-        const isCreditItem = it.is_credit === true ||
-                             it.isAutoCredit === true ||
-                             /^(cib\b|cash\s*in\s*bank|revolving\s*fund|rf\s*[-#]|petty\s*cash\s*fund)/i.test(desc) ||
-                             rawVal < 0 ||
-                             (it.credit !== null && it.credit !== undefined && it.credit !== '' && !it.debit);
-        if (isCreditItem) continue;
-
-        const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
-        if (amt > 0) {
-          const rawCat = it.category || getCategoryForAccount(desc);
-          const cat = cleanCategoryName(rawCat);
-          map[cat] = (map[cat] || 0) + amt;
-          total += amt;
+      const activeLf = (lfItems || []).filter((it: any) => !it.is_cancelled);
+      if (activeLf.length > 0) {
+        for (const it of activeLf) {
+          const amt = parseFloat(it.amount) || 0;
+          if (amt > 0) {
+            const rawCat = it.category || getCategoryForAccount(it.account_name || '') || 'Operation';
+            const cat = cleanCategoryName(rawCat);
+            map[cat] = (map[cat] || 0) + amt;
+            total += amt;
+          }
         }
       }
     }
@@ -780,8 +800,8 @@ export default function UnifiedCvLfPrintModal({
   }, [currentLf, resolvedType, categoryBreakdown.total]);
 
   const authorizedAmount = useMemo(() => {
-    return Number(currentLf?.authorized_amount || 100000);
-  }, [currentLf]);
+    return Number(currentCv?.fund_amount || currentCv?.authorized_amount || currentLf?.authorized_amount || 100000);
+  }, [currentCv, currentLf]);
 
   const balanceNetDue = useMemo(() => {
     return authorizedAmount - totalExpenseAmount;
@@ -802,6 +822,23 @@ export default function UnifiedCvLfPrintModal({
     return Math.max(0, grossDebit - realCreditDeductions);
   }, [cvViewMode, summaryCvData, detailedCvData]);
 
+  const displayedTotalExpense = useMemo(() => {
+    if (activeCvDebitTotal > 0) return activeCvDebitTotal;
+    if (totalExpenseAmount > 0) return totalExpenseAmount;
+    return getCvDisbursedAmount(currentCv);
+  }, [activeCvDebitTotal, totalExpenseAmount, currentCv]);
+
+  const displayedDisbursedAmount = useMemo(() => {
+    if (activeCvDebitTotal > 0) return activeCvDebitTotal;
+    if (netDisbursedAmount > 0) return netDisbursedAmount;
+    if (totalExpenseAmount > 0) return totalExpenseAmount;
+    return getCvDisbursedAmount(currentCv);
+  }, [activeCvDebitTotal, netDisbursedAmount, totalExpenseAmount, currentCv]);
+
+  const displayedFundBalance = useMemo(() => {
+    return authorizedAmount - displayedTotalExpense;
+  }, [authorizedAmount, displayedTotalExpense]);
+
   const isRevolvingFund = useMemo(() => {
     if (resolvedType === 'stl') return false;
     if (resolvedType === 'rf') return true;
@@ -816,29 +853,37 @@ export default function UnifiedCvLfPrintModal({
     const preferredOrder = ['Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
     const catMap: Record<string, number> = {};
 
-    const activeLf = (lfItems || []).filter((it: any) => !it.is_cancelled);
-    if (activeLf.length > 0) {
-      for (const it of activeLf) {
-        const amt = parseFloat(it.amount) || 0;
+    // 1. Primary source: the active CV rows in the Book of Accounts table directly below
+    if (detailedCvData.rows && detailedCvData.rows.length > 0) {
+      const nonCibRows = detailedCvData.rows.filter(r => !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+      const hasDebitRows = nonCibRows.some(r => Number(r.debit) > 0);
+
+      for (const r of nonCibRows) {
+        const amt = hasDebitRows ? (Number(r.debit) || 0) : (Number(r.credit) || 0);
         if (amt > 0) {
-          const rawCat = it.category || getCategoryForAccount(it.account_name || '');
+          const rawCat = getCategoryForAccount(r.description || '');
           const cat = cleanCategoryName(rawCat);
           catMap[cat] = (catMap[cat] || 0) + amt;
         }
       }
-    } else if (detailedCvData.rows.length > 0) {
-      for (const r of detailedCvData.rows) {
-        const amt = Number(r.debit) || 0;
-        if (amt > 0) {
-          const cat = cleanCategoryName(getCategoryForAccount(r.description));
-          catMap[cat] = (catMap[cat] || 0) + amt;
+    } else {
+      // 2. Fallback if no CV table rows: check active LF items or categoryBreakdown list
+      const activeLf = (lfItems || []).filter((it: any) => !it.is_cancelled);
+      if (activeLf.length > 0) {
+        for (const it of activeLf) {
+          const amt = parseFloat(it.amount) || 0;
+          if (amt > 0) {
+            const rawCat = it.category || getCategoryForAccount(it.account_name || '');
+            const cat = cleanCategoryName(rawCat);
+            catMap[cat] = (catMap[cat] || 0) + amt;
+          }
         }
-      }
-    } else if (categoryBreakdown.list.length > 0) {
-      for (const item of categoryBreakdown.list) {
-        if (item.amount > 0) {
-          const cat = cleanCategoryName(item.name);
-          catMap[cat] = (catMap[cat] || 0) + item.amount;
+      } else if (categoryBreakdown.list.length > 0) {
+        for (const item of categoryBreakdown.list) {
+          if (item.amount > 0) {
+            const cat = cleanCategoryName(item.name);
+            catMap[cat] = (catMap[cat] || 0) + item.amount;
+          }
         }
       }
     }
@@ -860,7 +905,7 @@ export default function UnifiedCvLfPrintModal({
       amount: catMap[name],
       formatted: formatCurrency(catMap[name])
     }));
-  }, [isRevolvingFund, lfItems, detailedCvData.rows, categoryBreakdown.list]);
+  }, [isRevolvingFund, detailedCvData.rows, lfItems, categoryBreakdown.list]);
 
   if (!isOpen || !mounted) return null;
 
@@ -924,7 +969,7 @@ export default function UnifiedCvLfPrintModal({
                         <div className="font-bold text-emerald-950 dark:text-emerald-200 flex items-center gap-2 flex-wrap">
                           <span>Check Voucher #{cleanCvNumber(currentCv?.voucher_no)}</span>
                           <span className="text-neutral-400">•</span>
-                          <span>{currentCv?.payee || 'Michelle Pable'}</span>
+                          <span>{formatPayeeName(currentCv?.payee || 'Michelle Pable')}</span>
                           <span className="text-neutral-400">•</span>
                           <span className="text-emerald-700 dark:text-emerald-300 font-mono font-bold">
                             {formatCurrency(currentCv?.amount || totalExpenseAmount)}
@@ -1041,7 +1086,7 @@ export default function UnifiedCvLfPrintModal({
                       <div>
                         <span className="text-[9px] font-bold text-emerald-800 uppercase block tracking-wider">Payee</span>
                         <strong className="text-neutral-900 font-medium text-[11.5px] whitespace-nowrap">
-                          {currentCv?.payee || currentLf?.custodian_name || 'Michelle Pable'}
+                          {formatPayeeName(currentCv?.payee || currentLf?.custodian_name || 'Michelle Pable')}
                         </strong>
                       </div>
                       <div className="text-right pr-2">
@@ -1188,7 +1233,7 @@ export default function UnifiedCvLfPrintModal({
                                 <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">{formatCibAccountName(currentCv?.bank || currentCv?.bank_name)}:</td>
                                 <td className="p-2.5 text-right font-mono font-bold text-neutral-400 border-r border-neutral-200">–</td>
                                 <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
-                                  ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                  ₱{displayedDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 </td>
                               </tr>
                             </tbody>
@@ -1202,12 +1247,12 @@ export default function UnifiedCvLfPrintModal({
                       <div>
                         <span className="text-[8.5px] uppercase font-bold text-emerald-800 block">Disbursed Amount</span>
                         <span className="font-bold text-neutral-900 uppercase text-[10px]">
-                          {formatDisbursedInWords(netDisbursedAmount || totalExpenseAmount || getCvDisbursedAmount(currentCv))}
+                          {formatDisbursedInWords(displayedDisbursedAmount)}
                         </span>
                       </div>
                       <div className="text-right">
                         <span className="font-mono font-extrabold text-sm text-emerald-900">
-                          ₱{(netDisbursedAmount || totalExpenseAmount || getCvDisbursedAmount(currentCv)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          ₱{displayedDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
@@ -1225,25 +1270,25 @@ export default function UnifiedCvLfPrintModal({
                           TOTAL EXPENSE ({activeItems.length > 0 ? activeItems.length : (cvViewMode === 'summary' ? summaryCvData.rows.filter(r => r.debit !== null).length : detailedCvData.rows.filter(r => r.debit !== null).length)} ITEMS)
                         </span>
                         <div className="text-[13px] font-extrabold font-mono text-neutral-900 mt-0.5">
-                          ₱{(netDisbursedAmount || totalExpenseAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          ₱{displayedTotalExpense.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </div>
                       </div>
                       <div className={`p-2.5 border-2 rounded-lg ${
-                        (authorizedAmount - (netDisbursedAmount || totalExpenseAmount)) < 0
+                        displayedFundBalance < 0
                           ? 'border-rose-500 bg-rose-50/70'
                           : 'border-emerald-500 bg-emerald-50/70'
                       }`}>
                         <span className={`text-[8px] font-bold uppercase block tracking-wider ${
-                          (authorizedAmount - (netDisbursedAmount || totalExpenseAmount)) < 0
+                          displayedFundBalance < 0
                             ? 'text-rose-800'
                             : 'text-emerald-800'
                         }`}>FUND BALANCE</span>
                         <div className={`text-[13px] font-extrabold font-mono mt-0.5 ${
-                          (authorizedAmount - (netDisbursedAmount || totalExpenseAmount)) < 0
+                          displayedFundBalance < 0
                             ? 'text-rose-700'
                             : 'text-emerald-900'
                         }`}>
-                          ₱{(authorizedAmount - (netDisbursedAmount || totalExpenseAmount)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          ₱{displayedFundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </div>
                       </div>
                     </div>
@@ -1474,7 +1519,7 @@ export default function UnifiedCvLfPrintModal({
               <div>
                 <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block' }}>Payee</span>
                 <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '1px 0 0 0', whiteSpace: 'nowrap' }}>
-                  {currentCv?.payee || currentLf?.custodian_name || 'Michelle Pable'}
+                  {formatPayeeName(currentCv?.payee || currentLf?.custodian_name || 'Michelle Pable')}
                 </p>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -1612,7 +1657,7 @@ export default function UnifiedCvLfPrintModal({
                         <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>{formatCibAccountName(currentCv?.bank || currentCv?.bank_name)}:</td>
                         <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0', color: '#9ca3af' }}>–</td>
                         <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace' }}>
-                          ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          ₱{displayedDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
                     </tbody>
@@ -1626,12 +1671,12 @@ export default function UnifiedCvLfPrintModal({
               <div>
                 <span style={{ fontSize: '7px', fontWeight: 'bold', color: '#064e3b', textTransform: 'uppercase', display: 'block' }}>Disbursed Amount</span>
                 <p style={{ fontSize: '8px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase' }}>
-                  {formatDisbursedInWords(activeCvDebitTotal || totalExpenseAmount || getCvDisbursedAmount(currentCv))}
+                  {formatDisbursedInWords(displayedDisbursedAmount)}
                 </p>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <span style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
-                  ₱{(activeCvDebitTotal || totalExpenseAmount || getCvDisbursedAmount(currentCv)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₱{displayedDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -1649,13 +1694,13 @@ export default function UnifiedCvLfPrintModal({
                   TOTAL EXPENSE ({activeItems.length > 0 ? activeItems.length : (cvViewMode === 'summary' ? summaryCvData.rows.filter(r => r.debit !== null).length : detailedCvData.rows.filter(r => r.debit !== null).length)} ITEMS)
                 </span>
                 <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace', color: '#047857' }}>
-                  ₱{(activeCvDebitTotal || totalExpenseAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ₱{displayedTotalExpense.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
               </div>
-              <div style={{ padding: '3px 6px', border: '1.5px solid #059669', borderRadius: '4px', backgroundColor: '#ecfdf5' }}>
-                <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: '#047857', display: 'block' }}>FUND BALANCE</span>
-                <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace', color: '#065f46' }}>
-                  ₱{(authorizedAmount - (activeCvDebitTotal || totalExpenseAmount)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              <div style={{ padding: '3px 6px', border: displayedFundBalance < 0 ? '1.5px solid #ef4444' : '1.5px solid #059669', borderRadius: '4px', backgroundColor: displayedFundBalance < 0 ? '#fef2f2' : '#ecfdf5' }}>
+                <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: displayedFundBalance < 0 ? '#991b1b' : '#047857', display: 'block' }}>FUND BALANCE</span>
+                <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace', color: displayedFundBalance < 0 ? '#b91c1c' : '#065f46' }}>
+                  ₱{displayedFundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
               </div>
             </div>

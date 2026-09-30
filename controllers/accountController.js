@@ -1,5 +1,22 @@
 import pool, { query } from '../config/db.js';
 
+export function formatPayeeName(name) {
+  if (!name || typeof name !== 'string') return name || '';
+  const trimmed = name.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.includes(',')) {
+    const parts = trimmed.split(',');
+    const lastName = parts[0].trim();
+    const firstName = parts.slice(1).join(',').trim();
+    if (firstName && lastName) {
+      return `${firstName} ${lastName}`.replace(/\s+/g, ' ').toUpperCase();
+    }
+  }
+
+  return trimmed.replace(/\s+/g, ' ').toUpperCase();
+}
+
 // ==========================================
 // 1. SHARE CAPITAL LEDGER
 // ==========================================
@@ -760,6 +777,8 @@ export const importCheckVouchers = async (req, res, next) => {
         continue;
       }
 
+      const formattedPayee = formatPayeeName(payee);
+
       const result = await query(
         `INSERT INTO check_vouchers
            (voucher_no, voucher_date, check_no, payee, bank, particulars, amount,
@@ -782,7 +801,7 @@ export const importCheckVouchers = async (req, res, next) => {
           voucher_no,
           voucher_date || null,
           check_no || null,
-          payee,
+          formattedPayee,
           bank || null,
           particulars || null,
           amount ?? 0,
@@ -1041,7 +1060,7 @@ export const updateCheckVoucher = async (req, res, next) => {
     const resolvedVoucherNo = voucher_no !== undefined ? voucher_no : currentCv.voucher_no;
     const resolvedVoucherDate = voucher_date !== undefined ? (voucher_date || null) : currentCv.voucher_date;
     const resolvedCheckNo = check_no !== undefined ? check_no : currentCv.check_no;
-    const resolvedPayee = payee !== undefined ? payee : currentCv.payee;
+    const resolvedPayee = formatPayeeName(payee !== undefined ? payee : currentCv.payee);
     const resolvedBank = bank !== undefined ? bank : currentCv.bank;
     const resolvedParticulars = particulars !== undefined ? particulars : currentCv.particulars;
     const resolvedAmount = amount !== undefined ? (amount !== null && amount !== '' ? parseFloat(amount) : null) : currentCv.amount;
@@ -1289,7 +1308,7 @@ export const createCheckVoucher = async (req, res, next) => {
         finalVoucherNo,
         resolvedDate,
         check_no || '',
-        payee.trim(),
+        formatPayeeName(payee),
         bank || '',
         particulars || '',
         amount !== undefined && amount !== null && amount !== '' ? parseFloat(amount) : 0,

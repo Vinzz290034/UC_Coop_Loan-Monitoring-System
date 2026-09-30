@@ -38,13 +38,13 @@ import {
   ArrowUpDown,
   Filter,
   Eye,
+  RotateCcw,
   AlertTriangle,
   FolderOpen,
   Lock,
   Clock,
   Send,
   Check,
-  RotateCcw,
   Link2,
   GripVertical,
   Unlock
@@ -260,15 +260,32 @@ export interface CvRowItem {
   pairedWithId?: string;
 }
 
+export const formatPayeeName = (name?: string): string => {
+  if (!name || typeof name !== 'string') return name || '';
+  const trimmed = name.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.includes(',')) {
+    const parts = trimmed.split(',');
+    const lastName = parts[0].trim();
+    const firstName = parts.slice(1).join(',').trim();
+    if (firstName && lastName) {
+      return `${firstName} ${lastName}`.replace(/\s+/g, ' ').toUpperCase();
+    }
+  }
+
+  return trimmed.replace(/\s+/g, ' ').toUpperCase();
+};
+
 export const isCreditAccountDesc = (desc?: string): boolean => {
   if (!desc) return false;
-  return /^(cib\b|cash\s*in\s*bank|revolving\s*fund|rf\s*[-#]|petty\s*cash\s*fund)/i.test(desc.trim());
+  return /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc.trim());
 };
 
 export const checkIsCreditRow = (row: { isAutoCredit?: boolean; is_credit?: boolean; description?: string; credit?: any; debit?: any }): boolean => {
   if (row.isAutoCredit === true || row.is_credit === true) return true;
   if (isCreditAccountDesc(row.description)) return true;
-  if (row.credit !== null && row.credit !== undefined && row.credit !== '' && Number(row.credit) > 0 && !row.debit) return true;
+  if (row.credit !== null && row.credit !== undefined && row.credit !== '' && Number(row.credit) > 0 && (!row.debit || Number(row.debit) === 0)) return true;
   return false;
 };
 
@@ -892,6 +909,7 @@ function DisbursementPageContent() {
     approved_by: ''
   });
   const [editCvRows, setEditCvRows] = useState<CvRowItem[]>([]);
+  const [deletedRowsStack, setDeletedRowsStack] = useState<{ isEdit: boolean; row: CvRowItem; index: number }[]>([]);
   const dragRowIdx = useRef<number | null>(null);
   const dragOverRowIdx = useRef<number | null>(null);
   const editModalScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1063,61 +1081,35 @@ function DisbursementPageContent() {
 
   // Calculate live disbursed amount for newly created voucher
   const getNewCvDisbursedAmount = (): number => {
-    for (const r of newCvRows) {
-      const desc = (r.description || '').trim();
-      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
-        const creditVal = parseFloat(String(r.credit || '0')) || 0;
-        if (creditVal > 0) return creditVal;
-        const debitVal = parseFloat(String(r.debit || '0')) || 0;
-        if (debitVal > 0) return debitVal;
-      }
-    }
     let debitTotal = 0;
     let creditTotal = 0;
     for (const r of newCvRows) {
-      debitTotal += parseFloat(String(r.debit || '0')) || 0;
-      creditTotal += parseFloat(String(r.credit || '0')) || 0;
+      const isCred = checkIsCreditRow(r);
+      if (isCred) {
+        creditTotal += parseFloat(String(r.credit || '0')) || 0;
+      } else {
+        debitTotal += parseFloat(String(r.debit || '0')) || 0;
+      }
     }
-    if (debitTotal > 0 && Math.abs(debitTotal - creditTotal) < 0.01) {
-      return debitTotal;
-    }
-    if (creditTotal > 0 && debitTotal > 0 && debitTotal > creditTotal) {
-      return debitTotal - creditTotal;
-    }
-    if (debitTotal > 0) return debitTotal;
     if (creditTotal > 0) return creditTotal;
+    if (debitTotal > 0) return debitTotal;
     return 0;
   };
 
   // Calculate live disbursed amount while editing/modifying voucher
   const getEditCvDisbursedAmount = (): number => {
-    // 1. Look for CIB / Cash In Bank row
-    for (const r of editCvRows) {
-      const desc = (r.description || '').trim();
-      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
-        const creditVal = parseFloat(String(r.credit || '0')) || 0;
-        if (creditVal > 0) return creditVal;
-        const debitVal = parseFloat(String(r.debit || '0')) || 0;
-        if (debitVal > 0) return debitVal;
-      }
-    }
-
-    // 2. If no explicit CIB row, compute net difference or total
     let debitTotal = 0;
     let creditTotal = 0;
     for (const r of editCvRows) {
-      debitTotal += parseFloat(String(r.debit || '0')) || 0;
-      creditTotal += parseFloat(String(r.credit || '0')) || 0;
+      const isCred = checkIsCreditRow(r);
+      if (isCred) {
+        creditTotal += parseFloat(String(r.credit || '0')) || 0;
+      } else {
+        debitTotal += parseFloat(String(r.debit || '0')) || 0;
+      }
     }
-
-    if (debitTotal > 0 && Math.abs(debitTotal - creditTotal) < 0.01) {
-      return debitTotal;
-    }
-    if (creditTotal > 0 && debitTotal > 0 && debitTotal > creditTotal) {
-      return debitTotal - creditTotal;
-    }
-    if (debitTotal > 0) return debitTotal;
     if (creditTotal > 0) return creditTotal;
+    if (debitTotal > 0) return debitTotal;
 
     const baseAmount = parseFloat(selectedCvForModal?.amount || 0);
     return isNaN(baseAmount) ? 0 : baseAmount;
@@ -1539,52 +1531,24 @@ function DisbursementPageContent() {
         return prev.map((r, i) => (i === rowIdx ? updatedRow : r));
       }
 
-      // If this is the credit row and user edits credit or description manually, let it update
       const isCurrentCredit = checkIsCreditRow(currentRow);
-      if (isCurrentCredit && (field === 'credit' || field === 'description')) {
-        return prev.map((r, i) => (i === rowIdx ? updatedRow : r));
-      }
-
-      // If user edits a debit row: update it, then recompute balancing credit
       const nextRows = prev.map((r, i) => (i === rowIdx ? updatedRow : r));
-      let sumDebits = 0;
-      nextRows.forEach(r => {
-        const isCred = checkIsCreditRow(r);
-        if (!isCred) {
-          sumDebits += parseFloat(r.debit || '0') || 0;
-        }
-      });
 
-      // Find the credit rows
-      const creditRows = nextRows.filter(r => checkIsCreditRow(r));
-      const creditRowIdx = nextRows.findIndex(r => checkIsCreditRow(r));
-
-      // If description was edited on a debit row, auto-fill matching category on the credit row!
-      if (field === 'description') {
+      // If description was edited on a debit row, auto-fill matching category on a paired credit row if present
+      if (field === 'description' && !isCurrentCredit) {
         const cat = getCategoryForAccount(val, accountCategoryMap);
         const autoCreditDesc = replenishType === 'stl' ? 'Revolving Fund - STL' : `Revolving Fund - ${cat}`;
         
-        // If there is a paired credit row, or if there's only 1 credit row, update its description (unless it is a CIB bank row)
         const pairedCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
-        const targetCreditIdx = pairedCreditIdx !== -1 ? pairedCreditIdx : (creditRows.length === 1 ? creditRowIdx : -1);
-        if (targetCreditIdx !== -1 && targetCreditIdx !== undefined) {
-          const currentCreditDesc = nextRows[targetCreditIdx]?.description || '';
+        if (pairedCreditIdx !== -1) {
+          const currentCreditDesc = nextRows[pairedCreditIdx]?.description || '';
           if (!/cib\b|cash\s*in\s*bank/i.test(currentCreditDesc)) {
-            nextRows[targetCreditIdx] = {
-              ...nextRows[targetCreditIdx],
+            nextRows[pairedCreditIdx] = {
+              ...nextRows[pairedCreditIdx],
               description: autoCreditDesc
             };
           }
         }
-      }
-
-      // If there is only 1 credit row, auto-balance its credit amount to match total debits
-      if (creditRows.length === 1 && creditRowIdx !== -1) {
-        nextRows[creditRowIdx] = {
-          ...nextRows[creditRowIdx],
-          credit: sumDebits > 0 ? String(sumDebits) : '',
-          debit: ''
-        };
       }
 
       return nextRows;
@@ -1592,27 +1556,37 @@ function DisbursementPageContent() {
   };
 
   const removeCvRow = (isEdit: boolean, rowId: string) => {
+    const currentRows = isEdit ? editCvRows : newCvRows;
+    const idx = currentRows.findIndex(r => r.id === rowId);
+    if (idx !== -1) {
+      const removedRow = currentRows[idx];
+      setDeletedRowsStack(stack => [...stack, { isEdit, row: removedRow, index: idx }]);
+    }
+
+    const setRows = isEdit ? setEditCvRows : setNewCvRows;
+    setRows(prev => prev.filter(r => r.id !== rowId));
+  };
+
+  const handleUndoDeleteRow = (isEdit: boolean) => {
+    const lastIdx = deletedRowsStack.findLastIndex(item => item.isEdit === isEdit);
+    if (lastIdx === -1) return;
+    const target = deletedRowsStack[lastIdx];
+    if (!target || !target.row) return;
+
+    setDeletedRowsStack(prev => prev.filter((_, i) => i !== lastIdx));
+
     const setRows = isEdit ? setEditCvRows : setNewCvRows;
     setRows(prev => {
-      const filtered = prev.filter(r => r.id !== rowId);
-      let sumDebits = 0;
-      filtered.forEach(r => {
-        const isCred = checkIsCreditRow(r);
-        if (!isCred) {
-          sumDebits += parseFloat(r.debit || '0') || 0;
-        }
-      });
-      const creditRows = filtered.filter(r => checkIsCreditRow(r));
-      if (creditRows.length === 1) {
-        return filtered.map(r => {
-          const isCred = checkIsCreditRow(r);
-          if (isCred) {
-            return { ...r, credit: sumDebits > 0 ? String(sumDebits) : '' };
-          }
-          return r;
-        });
-      }
-      return filtered;
+      const copy = [...prev];
+      const restoredRow = {
+        ...target.row,
+        id: target.row.id && !copy.some(r => r.id === target.row.id)
+          ? target.row.id
+          : 'row-restored-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6)
+      };
+      const insertAt = Math.min(target.index, copy.length);
+      copy.splice(insertAt, 0, restoredRow);
+      return copy;
     });
   };
 
@@ -1645,11 +1619,13 @@ function DisbursementPageContent() {
     const setRows = isEdit ? setEditCvRows : setNewCvRows;
     setRows(prev => {
       const copy = [...prev];
-      if (copy.length >= 1) {
-        copy.splice(1, 0, newRow);
+      const cibIdx = copy.findIndex(r => /^(cib\b|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+      if (cibIdx !== -1) {
+        copy.splice(cibIdx, 0, newRow);
         return copy;
       }
-      return [newRow];
+      copy.push(newRow);
+      return copy;
     });
   };
 
@@ -2079,17 +2055,27 @@ function DisbursementPageContent() {
       initialRowsList = rowsToUse.map((r, i) => {
         const rowId = r.id || `edit-row-${i}-${Date.now()}`;
         const isCredit = checkIsCreditRow(r);
-        const creditVal = isCredit
-          ? (r.credit !== null && r.credit !== undefined && r.credit !== '' ? String(r.credit) : (r.debit && isCreditAccountDesc(r.description) ? String(r.debit) : ''))
-          : '';
-        const debitVal = !isCredit
-          ? (r.debit !== null && r.debit !== undefined && r.debit !== '' ? String(r.debit) : '')
-          : '';
+        const rawCredit = r.credit !== null && r.credit !== undefined && r.credit !== '' ? String(r.credit) : '';
+        const rawDebit = r.debit !== null && r.debit !== undefined && r.debit !== '' ? String(r.debit) : '';
+        const rawAmt = typeof r.amount === 'number' ? r.amount : parseFloat(r.amount || 0);
+
+        let creditVal = '';
+        let debitVal = '';
+
+        if (isCredit) {
+          if (rawCredit) creditVal = rawCredit;
+          else if (rawDebit) creditVal = rawDebit;
+          else if (rawAmt !== 0) creditVal = String(Math.abs(rawAmt));
+        } else {
+          if (rawDebit) debitVal = rawDebit;
+          else if (rawAmt > 0) debitVal = String(rawAmt);
+        }
+
         return {
           id: rowId,
           date: r.date || (cv.voucher_date ? cv.voucher_date.split('T')[0] : ''),
           voucher_no: r.voucher_no || cv.voucher_no || '',
-          description: r.description || '',
+          description: r.description || r.book_of_account || '',
           remarks: r.remarks || '',
           debit: debitVal,
           credit: creditVal,
@@ -2287,7 +2273,7 @@ function DisbursementPageContent() {
         date_released: editCvFormData.date_released || null,
         status: editCvFormData.status || undefined,
         check_no: editCvFormData.check_no.trim() || null,
-        payee: editCvFormData.payee.trim(),
+        payee: formatPayeeName(editCvFormData.payee),
         bank: editCvFormData.bank.trim() || null,
         particulars: editCvFormData.particulars.trim() || null,
         folder_name: editCvFormData.folder_name.trim() || null,
@@ -2450,7 +2436,7 @@ function DisbursementPageContent() {
         voucher_date: newCvDate || null,
         date_released: newCvReleasedDate || null,
         check_no: newCvCheckNo.trim() || null,
-        payee: newCvPayee.trim(),
+        payee: formatPayeeName(newCvPayee),
         bank: newCvBankName.trim() || null,
         particulars: newCvParticulars.trim() || `${matchedCat?.label || 'Disbursement'}`,
         folder_name: newCvCategory || 'Loan',
@@ -2943,8 +2929,8 @@ function DisbursementPageContent() {
                           <td className="py-3.5 px-4 font-mono font-bold text-neutral-800 dark:text-neutral-200 whitespace-nowrap">
                             {cv.check_no || '—'}
                           </td>
-                          <td className="py-3.5 px-4 font-semibold text-neutral-900 dark:text-white max-w-[200px] truncate" title={cv.payee}>
-                            {cv.payee || '—'}
+                          <td className="py-3.5 px-4 font-semibold text-neutral-900 dark:text-white max-w-[200px] truncate" title={formatPayeeName(cv.payee)}>
+                            {formatPayeeName(cv.payee) || '—'}
                           </td>
                           <td className="py-3.5 px-4 whitespace-nowrap text-neutral-600 dark:text-neutral-400">
                             {cv.bank ? (
@@ -3334,37 +3320,6 @@ function DisbursementPageContent() {
                               : 'Specify debit and credit entries to match disbursed check amount.'}
                           </span>
                         </div>
-                        {isReplenish ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => addCvRow(false, replenishType, false)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
-                              title="Add an expense debit line item"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Add Debit</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => addCvRow(false, replenishType, true)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
-                              title="Add a credit / replenishment line item"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Add Credit</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => addCvRow(false, null, false)}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add Row</span>
-                          </button>
-                        )}
                       </div>
 
                       <div className="border border-emerald-950/20 dark:border-emerald-800/40 rounded-2xl shadow-xs overflow-visible relative">
@@ -3578,6 +3533,41 @@ function DisbursementPageContent() {
                           </>
                         )}
                       </div>
+
+                      {/* Action Buttons Row below table box */}
+                      {isReplenish && (
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          {deletedRowsStack.some(item => !item.isEdit) && (
+                            <button
+                              type="button"
+                              onClick={() => handleUndoDeleteRow(false)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                              title="Undo last deleted line item"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Undo Delete</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => addCvRow(false, replenishType, false)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
+                            title="Add an expense debit line item"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Debit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addCvRow(false, replenishType, true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
+                            title="Add a credit / replenishment line item"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Credit</span>
+                          </button>
+                        </div>
+                      )}
 
                       {/* Calculated summary row */}
                       <div className="p-3.5 rounded-2xl bg-surface-container-low dark:bg-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border border-outline-variant/40">
@@ -4342,28 +4332,7 @@ function DisbursementPageContent() {
                             : 'Specify debit and credit entries to balance disbursed check amount.'}
                         </span>
                       </div>
-                      {isReplenish ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => addCvRow(true, replenishType, false)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
-                            title="Add an expense debit line item"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add Debit</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => addCvRow(true, replenishType, true)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
-                            title="Add a credit / replenishment line item"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add Credit</span>
-                          </button>
-                        </div>
-                      ) : (
+                      {!isReplenish && (
                         <button
                           type="button"
                           onClick={() => addCvRow(true, null, false)}
@@ -4609,6 +4578,41 @@ function DisbursementPageContent() {
                         </>
                       )}
                     </div>
+
+                    {/* Action Buttons Row below table box */}
+                    {isReplenish && (
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        {deletedRowsStack.some(item => item.isEdit) && (
+                          <button
+                            type="button"
+                            onClick={() => handleUndoDeleteRow(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                            title="Undo last deleted line item"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Undo Delete</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => addCvRow(true, replenishType, false)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
+                          title="Add an expense debit line item"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Debit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addCvRow(true, replenishType, true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
+                          title="Add a credit / replenishment line item"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Credit</span>
+                        </button>
+                      </div>
+                    )}
 
                     {/* Summary row */}
                     <div className="p-3 rounded-xl bg-surface-container-low dark:bg-surface-container flex items-center justify-between text-xs border border-outline-variant/40">

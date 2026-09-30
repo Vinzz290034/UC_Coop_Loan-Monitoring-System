@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { formatPayeeName } from './UnifiedCvLfPrintModal';
 import { createPortal } from 'react-dom';
 import api from '@/lib/api';
 import {
@@ -957,7 +958,7 @@ export default function LoanVouchersTab({
                         {cv.check_no || '—'}
                       </td>
                       <td className="py-3 px-4 font-semibold text-neutral-900 dark:text-white">
-                        {cv.payee || cv.payee_name || '—'}
+                        {formatPayeeName(cv.payee || cv.payee_name || '') || '—'}
                       </td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
