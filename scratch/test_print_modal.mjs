@@ -1,37 +1,35 @@
-import pg from 'pg';
-import dotenv from 'dotenv';
-dotenv.config();
+import pool from '../config/db.js';
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-async function run() {
-  try {
-    const cvRes = await pool.query("SELECT * FROM check_vouchers WHERE voucher_no = '26-274'");
-    const cv = cvRes.rows[0];
-    const rfRes = await pool.query("SELECT * FROM revolving_fund_liquidations WHERE check_voucher_id = $1", [cv.id]);
-    const rf = rfRes.rows[0];
-    console.log("RF row:", rf?.id, rf?.sheet_name, rf?.total_liquidated);
-    if (rf) {
-      const itemsRes = await pool.query("SELECT * FROM rf_liquidation_items WHERE liquidation_id = $1 ORDER BY sort_order ASC", [rf.id]);
-      console.log("RF items count:", itemsRes.rows.length);
-      let sum = 0;
-      itemsRes.rows.forEach(it => {
-        sum += (parseFloat(it.amount) || 0);
-      });
-      console.log("RF items sum:", sum);
+async function testSimulate() {
+  const r = await pool.query("SELECT id, voucher_no, amount, details FROM check_vouchers WHERE voucher_no ILIKE '%26-274%'");
+  const cv = r.rows[0];
+  let details = typeof cv.details === 'string' ? JSON.parse(cv.details) : (cv.details || []);
+  
+  console.log('Original details count:', details.length);
+  
+  let debitSum = 0;
+  let creditSum = 0;
+
+  details.forEach((item, idx) => {
+    const isCreditItem = item.is_credit === true ||
+                         item.isAutoCredit === true ||
+                         /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((item.book_of_account || item.description || '').trim()) ||
+                         (item.amount < 0) ||
+                         (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+                         
+    const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+    const dVal = item.debit ? parseFloat(item.debit) : (rawVal > 0 ? rawVal : 0);
+    const cVal = item.credit ? parseFloat(item.credit) : (rawVal < 0 ? Math.abs(rawVal) : 0);
+
+    if (isCreditItem) {
+      creditSum += cVal || Math.abs(rawVal);
+    } else {
+      debitSum += dVal || rawVal;
     }
-    
-    // Check if any items in cv.details or rf.items have 46 or credit
-    if (rf?.items) {
-      let sum = 0;
-      rf.items.forEach((it, i) => {
-        sum += (Number(it.amount) || 0);
-      });
-      console.log("RF items sum:", sum);
-    }
-  } catch (e) {
-    console.error(e);
-  } finally {
-    await pool.end();
-  }
+  });
+
+  console.log('Simulated debitSum:', debitSum.toFixed(2), 'creditSum:', creditSum.toFixed(2));
+  process.exit(0);
 }
-run();
+
+testSimulate();
