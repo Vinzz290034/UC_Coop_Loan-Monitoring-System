@@ -257,19 +257,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
       debitTotal += amt;
     }
 
-    if (debitTotal > 0) {
-      const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
-      rows.push({
-        date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
-        voucher_no: defaultVNo,
-        description: cibName,
-        remarks: '',
-        debit: null,
-        credit: debitTotal
-      });
-      creditTotal = debitTotal;
-    }
-    return { rows, debitTotal, creditTotal };
+    return { rows, debitTotal, creditTotal: 0 };
   }
 
   if (details.length > 0) {
@@ -324,23 +312,6 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
       }
     }
 
-    // Check if CIB row is present
-    const hasCibRow = rows.some(r => /^(cib\b|cash\s*in\s*bank)/i.test((r.description || '').trim()));
-
-    // If no CIB row exists and debitTotal > creditTotal, add balancing CIB row for the net difference
-    if (!hasCibRow && debitTotal > creditTotal) {
-      const netCib = debitTotal - creditTotal;
-      const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
-      rows.push({
-        date: cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—',
-        voucher_no: (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—',
-        description: cibName,
-        remarks: '',
-        debit: null,
-        credit: netCib
-      });
-      creditTotal += netCib;
-    }
     return { rows, debitTotal, creditTotal };
   }
 
@@ -348,7 +319,6 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
   if (fallbackAmt > 0) {
     const dateStr = cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—';
     const vNo = cv?.voucher_no || '—';
-    const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
     rows.push({
       date: dateStr,
       voucher_no: vNo,
@@ -357,16 +327,8 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
       debit: fallbackAmt,
       credit: null
     });
-    rows.push({
-      date: dateStr,
-      voucher_no: vNo,
-      description: cibName,
-      remarks: '',
-      debit: null,
-      credit: fallbackAmt
-    });
     debitTotal = fallbackAmt;
-    creditTotal = fallbackAmt;
+    creditTotal = 0;
   }
 
   return { rows, debitTotal, creditTotal };
@@ -823,21 +785,26 @@ export default function UnifiedCvLfPrintModal({
   }, [cvViewMode, summaryCvData, detailedCvData]);
 
   const displayedTotalExpense = useMemo(() => {
+    if (netDisbursedAmount > 0) return netDisbursedAmount;
+    if (currentCv?.amount && Number(currentCv.amount) > 0) return Number(currentCv.amount);
     if (activeCvDebitTotal > 0) return activeCvDebitTotal;
     if (totalExpenseAmount > 0) return totalExpenseAmount;
     return getCvDisbursedAmount(currentCv);
-  }, [activeCvDebitTotal, totalExpenseAmount, currentCv]);
+  }, [netDisbursedAmount, activeCvDebitTotal, totalExpenseAmount, currentCv]);
 
   const displayedDisbursedAmount = useMemo(() => {
-    if (activeCvDebitTotal > 0) return activeCvDebitTotal;
     if (netDisbursedAmount > 0) return netDisbursedAmount;
+    if (currentCv?.amount && Number(currentCv.amount) > 0) return Number(currentCv.amount);
+    if (activeCvDebitTotal > 0) return activeCvDebitTotal;
     if (totalExpenseAmount > 0) return totalExpenseAmount;
     return getCvDisbursedAmount(currentCv);
-  }, [activeCvDebitTotal, netDisbursedAmount, totalExpenseAmount, currentCv]);
+  }, [netDisbursedAmount, activeCvDebitTotal, totalExpenseAmount, currentCv]);
 
   const displayedFundBalance = useMemo(() => {
     return authorizedAmount - displayedTotalExpense;
   }, [authorizedAmount, displayedTotalExpense]);
+
+  const cibName = useMemo(() => formatCibAccountName(currentCv?.bank || currentCv?.bank_name), [currentCv]);
 
   const isRevolvingFund = useMemo(() => {
     if (resolvedType === 'stl') return false;
@@ -1198,11 +1165,15 @@ export default function UnifiedCvLfPrintModal({
                                 <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
                                   ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 </td>
-                                <td className="p-2.5 text-right font-mono font-bold text-neutral-400">–</td>
+                                <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
+                                  <span className="text-neutral-400 font-bold">–</span>
+                                </td>
                               </tr>
                               <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-200 text-[10px]">
-                                <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">{formatCibAccountName(currentCv?.bank || currentCv?.bank_name)}:</td>
-                                <td className="p-2.5 text-right font-mono font-bold text-neutral-400 border-r border-neutral-200">–</td>
+                                <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">{cibName}:</td>
+                                <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
+                                  <span className="text-neutral-400 font-bold">–</span>
+                                </td>
                                 <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
                                   ₱{displayedDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 </td>
@@ -1622,12 +1593,16 @@ export default function UnifiedCvLfPrintModal({
                         <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
                           ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#9ca3af' }}>–</td>
+                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
+                          –
+                        </td>
                       </tr>
                       <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #a7f3d0', fontWeight: 'bold', color: '#064e3b' }}>
-                        <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>{formatCibAccountName(currentCv?.bank || currentCv?.bank_name)}:</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0', color: '#9ca3af' }}>–</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace' }}>
+                        <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>{cibName}:</td>
+                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
+                          –
+                        </td>
+                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
                           ₱{displayedDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </td>
                       </tr>

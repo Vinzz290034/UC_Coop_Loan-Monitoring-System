@@ -3333,7 +3333,7 @@ function DisbursementPageContent() {
                             {/* Table Column Header for Replenishment */}
                             <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
                               <div className="text-center">#</div>
-                              <div>RF Voucher #</div>
+                              <div>{replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}</div>
                               <div>Book of Accounts</div>
                               <div>Remarks</div>
                               <div className="text-right">Debit (₱)</div>
@@ -3360,7 +3360,7 @@ function DisbursementPageContent() {
                                     <div>
                                       <input
                                         type="text"
-                                        placeholder="RF Voucher #"
+                                        placeholder={replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}
                                         value={row.voucher_no || ''}
                                         onChange={e => updateCvRowField(false, row.id!, 'voucher_no', e.target.value, replenishType)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -3375,6 +3375,14 @@ function DisbursementPageContent() {
                                           className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-xs font-bold text-emerald-900 dark:text-emerald-200 italic"
                                           placeholder="Credit Account (e.g. CIB-MBTC)"
                                         />
+                                      ) : replenishType === 'stl' ? (
+                                        <input
+                                          type="text"
+                                          value={row.description}
+                                          onChange={e => updateCvRowField(false, row.id!, 'description', e.target.value, replenishType)}
+                                          className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                          placeholder="Book of Accounts"
+                                        />
                                       ) : (
                                         <ReplenishmentAccountDropdown
                                           value={row.description}
@@ -3383,7 +3391,7 @@ function DisbursementPageContent() {
                                           categoryMap={accountCategoryMap}
                                           onAddAccount={handleAddCustomAccount}
                                           onDeleteAccount={handleDeleteCustomAccount}
-                                        />
+                                       />
                                       )}
                                     </div>
                                     <div>
@@ -3825,7 +3833,7 @@ function DisbursementPageContent() {
                           <thead className="bg-[#ecfdf5] dark:bg-emerald-950/40 text-[#064e3b] dark:text-emerald-300 font-extrabold uppercase text-[9px] border-b border-emerald-200 dark:border-emerald-800">
                             <tr>
                               <th className="p-2.5 w-12 text-center border-r border-emerald-200 dark:border-emerald-800">#</th>
-                              <th className="p-2.5 w-28 border-r border-emerald-200 dark:border-emerald-800">RF VOUCHER #</th>
+                              <th className="p-2.5 w-28 border-r border-emerald-200 dark:border-emerald-800">{getReplenishmentType(selectedCvForModal?.folder_name, selectedCvForModal) === 'stl' ? 'LAF NO.' : 'RF VOUCHER #'}</th>
                               <th className="p-2.5 border-r border-emerald-200 dark:border-emerald-800">BOOK OF ACCOUNTS</th>
                               <th className="p-2.5 w-36 text-right border-r border-emerald-200 dark:border-emerald-800">DEBIT (₱)</th>
                               <th className="p-2.5 w-36 text-right">CREDIT (₱)</th>
@@ -4356,7 +4364,7 @@ function DisbursementPageContent() {
                           {/* Table Column Header for Replenishment */}
                           <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
                             <div className="text-center">#</div>
-                            <div>RF Voucher #</div>
+                            <div>{replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}</div>
                             <div>Book of Accounts</div>
                             <div>Remarks</div>
                             <div className="text-right">Debit (₱)</div>
@@ -4394,7 +4402,7 @@ function DisbursementPageContent() {
                                   <div>
                                     <input
                                       type="text"
-                                      placeholder="RF Voucher #"
+                                      placeholder={replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}
                                       value={row.voucher_no || ''}
                                       onChange={e => updateCvRowField(true, row.id!, 'voucher_no', e.target.value, replenishType)}
                                       className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -4410,7 +4418,16 @@ function DisbursementPageContent() {
                                         placeholder="Credit Account (e.g. CIB-MBTC)"
                                       />
                                     ) : (
-                                      <ReplenishmentAccountDropdown
+                                      replenishType === 'stl' ? (
+                                        <input
+                                          type="text"
+                                          value={row.description}
+                                          onChange={e => updateCvRowField(true, row.id!, 'description', e.target.value, replenishType)}
+                                          className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                          placeholder="Book of Accounts"
+                                        />
+                                      ) : (
+                                        <ReplenishmentAccountDropdown
                                         value={row.description}
                                         onChange={val => updateCvRowField(true, row.id!, 'description', val, replenishType)}
                                         options={customAccountOptions}
@@ -4418,6 +4435,7 @@ function DisbursementPageContent() {
                                         onAddAccount={handleAddCustomAccount}
                                         onDeleteAccount={handleDeleteCustomAccount}
                                       />
+                                     )
                                     )}
                                   </div>
                                   <div>
