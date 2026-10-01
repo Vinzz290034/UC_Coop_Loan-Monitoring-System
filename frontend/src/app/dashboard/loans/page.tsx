@@ -378,13 +378,21 @@ function LoansPageContent() {
       }
     }
 
+    // 1. Calculate sum of debit items (gross voucher disbursement amount)
+    let debitSum = 0;
     for (const item of details) {
       const desc = (item.book_of_account || item.description || '').trim();
-      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
-        const val = Math.abs(typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0));
-        if (val > 0) return val;
+      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || item.debit || 0);
+      const isCredit = item.is_credit === true ||
+                       item.isAutoCredit === true ||
+                       /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc) ||
+                       val < 0 ||
+                       (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+      if (!isCredit && val > 0) {
+        debitSum += val;
       }
     }
+    if (debitSum > 0) return debitSum;
 
     return parseFloat(cv.amount || 0);
   };

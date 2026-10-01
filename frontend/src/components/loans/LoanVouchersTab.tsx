@@ -30,7 +30,8 @@ import {
   CreditCard,
   Banknote,
   FileText,
-  ArrowUpDown
+  ArrowUpDown,
+  CheckCircle2
 } from 'lucide-react';
 
 interface SelectOption {
@@ -188,6 +189,11 @@ export default function LoanVouchersTab({
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [isDeletingCv, setIsDeletingCv] = useState(false);
   const [cvActionFeedback, setCvActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [saveSuccessDialog, setSaveSuccessDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message?: string;
+  } | null>(null);
 
   // Edit form state
   const [editCvFormData, setEditCvFormData] = useState({
@@ -290,12 +296,34 @@ export default function LoanVouchersTab({
       }
     }
 
+    // 1. Calculate sum of debit items (gross voucher disbursement amount)
+    let debitSum = 0;
     for (const item of details) {
       const desc = (item.book_of_account || item.description || '').trim();
-      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
-        const val = Math.abs(typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0));
-        if (val > 0) return val;
+      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || item.debit || 0);
+      const isCredit = item.is_credit === true ||
+                       item.isAutoCredit === true ||
+                       /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc) ||
+                       val < 0 ||
+                       (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+      if (!isCredit && val > 0) {
+        debitSum += val;
       }
+    }
+    if (debitSum > 0) return debitSum;
+
+    // Check linked revolving fund items or STL items if details is not yet populated
+    if (Array.isArray(cv.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
+      const rfSum = cv.revolving_fund.items
+        .filter((it: any) => !it.is_cancelled)
+        .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
+      if (rfSum > 0) return rfSum;
+    }
+    if (Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
+      const stlSum = cv.stl_liquidation.items
+        .filter((it: any) => !it.is_cancelled)
+        .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
+      if (stlSum > 0) return stlSum;
     }
 
     return parseFloat(cv.amount || 0);
@@ -555,6 +583,11 @@ export default function LoanVouchersTab({
         setIsEditingCvModal(false);
         setCvActionFeedback({ type: 'success', message: 'Check voucher updated successfully.' });
         setTimeout(() => setCvActionFeedback(null), 3000);
+        loadCheckVouchers(cvPage);
+        setSaveSuccessDialog({
+          isOpen: true,
+          title: 'Changes Saved Successfully'
+        });
       }
     } catch (err: any) {
       console.error('Failed to update check voucher:', err);
@@ -1476,6 +1509,43 @@ export default function LoanVouchersTab({
               >
                 {isDeletingCv ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                 <span>Confirm Bulk Delete</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* SAVED CONFIRMATION MODAL */}
+      {saveSuccessDialog && mounted && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-sm animate-modal-backdrop"
+          onClick={() => setSaveSuccessDialog(null)}
+        >
+          <div
+            className={`bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl p-6 ${saveSuccessDialog.message ? 'max-w-md' : 'max-w-sm'} w-full shadow-2xl space-y-4 animate-modal-pop`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="font-headline font-bold text-base text-neutral-900 dark:text-white">
+                {saveSuccessDialog.title}
+              </h3>
+            </div>
+            {saveSuccessDialog.message ? (
+              <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                {saveSuccessDialog.message}
+              </p>
+            ) : null}
+            <div className="flex items-center justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setSaveSuccessDialog(null)}
+                className="px-5 py-2 text-xs font-bold rounded-full text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer shadow-sm"
+              >
+                Got it
               </button>
             </div>
           </div>

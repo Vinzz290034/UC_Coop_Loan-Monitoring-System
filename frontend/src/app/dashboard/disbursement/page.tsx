@@ -122,6 +122,60 @@ export const DISBURSEMENT_TABS: TabConfig[] = [
 
 export const CATEGORY_TABS: TabConfig[] = DISBURSEMENT_TABS.filter(t => t.id !== 'summary');
 
+export const DISBURSEMENT_CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'Regular Loans', label: 'Regular Loans' },
+  { value: 'STL', label: 'STL Replenishment' },
+  { value: 'Revolving Fund', label: 'Revolving Fund Replenishment' },
+  { value: 'Petty Cash', label: 'Petty Cash Replenishment' },
+  { value: 'Merchandise', label: 'Merchandise Payment' },
+  { value: 'Operation', label: 'Operation Expense' },
+  { value: 'Service', label: 'Services Expense' },
+  { value: 'Others', label: 'Others' }
+];
+
+export const formatCategoryLabel = (folderName?: string, cv?: any): string => {
+  const targetFolder = folderName || cv?.folder_name;
+  if (targetFolder) {
+    const match = DISBURSEMENT_CATEGORY_OPTIONS.find(
+      opt => opt.value.toLowerCase() === targetFolder.toLowerCase() || opt.label.toLowerCase() === targetFolder.toLowerCase()
+    );
+    if (match) return match.label;
+    if (/loan/i.test(targetFolder)) return 'Regular Loans';
+    if (/stl/i.test(targetFolder)) return 'STL Replenishment';
+    if (/revolving/i.test(targetFolder)) return 'Revolving Fund Replenishment';
+    if (/petty/i.test(targetFolder)) return 'Petty Cash Replenishment';
+    if (/merchandise/i.test(targetFolder)) return 'Merchandise Payment';
+    if (/operation/i.test(targetFolder)) return 'Operation Expense';
+    if (/service/i.test(targetFolder)) return 'Services Expense';
+    return targetFolder;
+  }
+
+  // Fallback heuristic if folder is missing
+  if (cv) {
+    const part = (cv.particulars || '').toLowerCase();
+    if (part.includes('stl') || part.includes('short term') || cv.stl_liquidation?.id) return 'STL Replenishment';
+    if (part.includes('rf') || part.includes('revolving') || part.includes('liquidation') || cv.revolving_fund?.id) return 'Revolving Fund Replenishment';
+    if (part.includes('petty cash')) return 'Petty Cash Replenishment';
+    if (
+      part.includes('swimming') ||
+      part.includes('pants') ||
+      part.includes('coverall') ||
+      part.includes('gala') ||
+      part.includes('type a') ||
+      part.includes('type b') ||
+      part.includes('shirt') ||
+      part.includes('uniform') ||
+      part.includes('merchandise')
+    ) {
+      return 'Merchandise Payment';
+    }
+    if (cv.loan_id || part.includes('loan')) return 'Regular Loans';
+    return 'Operation Expense';
+  }
+
+  return 'Regular Loans';
+};
+
 export const DRAW_BANK_OPTIONS: { value: string; label: string }[] = [
   { value: 'BDO', label: 'BDO' },
   { value: 'MBTC', label: 'MBTC' }
@@ -827,7 +881,7 @@ function DisbursementPageContent() {
     isOpen: boolean;
     type?: 'confirm' | 'alert';
     title: string;
-    message: string;
+    message?: string;
     confirmLabel?: string;
     cancelLabel?: string;
     variant?: 'amber' | 'rose' | 'emerald' | 'primary';
@@ -835,13 +889,18 @@ function DisbursementPageContent() {
     onCancel?: () => void;
   } | null>(null);
 
-  const showAppAlert = (title: string, message: string, variant: 'primary' | 'rose' | 'amber' = 'primary') => {
+  const showAppAlert = (
+    title: string,
+    message: string,
+    variant: 'primary' | 'rose' | 'amber' | 'emerald' = 'primary',
+    confirmLabel: string = 'OK'
+  ) => {
     setModalDialog({
       isOpen: true,
       type: 'alert',
       title,
       message,
-      confirmLabel: 'OK',
+      confirmLabel,
       variant,
       onConfirm: () => setModalDialog(null)
     });
@@ -849,6 +908,7 @@ function DisbursementPageContent() {
 
   // View / Edit / Print State
   const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
+  const [modalCvViewMode, setModalCvViewMode] = useState<'summary' | 'detailed'>('detailed');
   const [printingCvBreakdown, setPrintingCvBreakdown] = useState<any | null>(null);
   const [unifiedPrintModal, setUnifiedPrintModal] = useState<{
     isOpen: boolean;
@@ -909,6 +969,7 @@ function DisbursementPageContent() {
     approved_by: ''
   });
   const [editCvRows, setEditCvRows] = useState<CvRowItem[]>([]);
+  const [editCvCibAmount, setEditCvCibAmount] = useState<string>('');
   const [deletedRowsStack, setDeletedRowsStack] = useState<{ isEdit: boolean; row: CvRowItem; index: number }[]>([]);
   const dragRowIdx = useRef<number | null>(null);
   const dragOverRowIdx = useRef<number | null>(null);
@@ -1082,34 +1143,50 @@ function DisbursementPageContent() {
   // Calculate live disbursed amount for newly created voucher
   const getNewCvDisbursedAmount = (): number => {
     let debitTotal = 0;
-    let creditTotal = 0;
+    let nonCibCreditTotal = 0;
+    let cibCreditTotal = 0;
     for (const r of newCvRows) {
       const isCred = checkIsCreditRow(r);
-      if (isCred) {
-        creditTotal += parseFloat(String(r.credit || '0')) || 0;
+      const isCib = /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim());
+      if (isCred || isCib) {
+        const val = parseFloat(String(r.credit || r.debit || '0')) || 0;
+        if (isCib) {
+          cibCreditTotal += val;
+        } else {
+          nonCibCreditTotal += val;
+        }
       } else {
         debitTotal += parseFloat(String(r.debit || '0')) || 0;
       }
     }
-    if (creditTotal > 0) return creditTotal;
-    if (debitTotal > 0) return debitTotal;
+    if (cibCreditTotal > 0) return cibCreditTotal;
+    if (debitTotal > 0) return Math.max(0, debitTotal - nonCibCreditTotal);
     return 0;
   };
 
   // Calculate live disbursed amount while editing/modifying voucher
   const getEditCvDisbursedAmount = (): number => {
     let debitTotal = 0;
-    let creditTotal = 0;
+    let nonCibCreditTotal = 0;
+    let cibCreditTotal = 0;
     for (const r of editCvRows) {
       const isCred = checkIsCreditRow(r);
-      if (isCred) {
-        creditTotal += parseFloat(String(r.credit || '0')) || 0;
+      const isCib = /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim());
+      if (isCred || isCib) {
+        const val = parseFloat(String(r.credit || (isCred && r.debit ? r.debit : '0') || '0')) || 0;
+        if (isCib) {
+          cibCreditTotal += val;
+        } else {
+          nonCibCreditTotal += val;
+        }
       } else {
         debitTotal += parseFloat(String(r.debit || '0')) || 0;
       }
     }
-    if (creditTotal > 0) return creditTotal;
+    const cibVal = parseFloat(editCvCibAmount || '0') || cibCreditTotal;
+    const overallCredit = nonCibCreditTotal + cibVal;
     if (debitTotal > 0) return debitTotal;
+    if (overallCredit > 0) return overallCredit;
 
     const baseAmount = parseFloat(selectedCvForModal?.amount || 0);
     return isNaN(baseAmount) ? 0 : baseAmount;
@@ -1238,13 +1315,36 @@ function DisbursementPageContent() {
       }
     }
 
+    // 1. Calculate sum of debit items (gross voucher disbursement amount)
+    let debitSum = 0;
     for (const item of details) {
       const desc = (item.book_of_account || item.description || '').trim();
-      if (/cib\b|cash\s*in\s*bank/i.test(desc)) {
-        const val = Math.abs(typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0));
-        if (val > 0) return val;
+      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || item.debit || 0);
+      const isCredit = item.is_credit === true ||
+                       item.isAutoCredit === true ||
+                       /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc) ||
+                       val < 0 ||
+                       (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+      if (!isCredit && val > 0) {
+        debitSum += val;
       }
     }
+    if (debitSum > 0) return debitSum;
+
+    // Check linked revolving fund items or STL items if details is not yet populated
+    if (Array.isArray(cv.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
+      const rfSum = cv.revolving_fund.items
+        .filter((it: any) => !it.is_cancelled)
+        .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
+      if (rfSum > 0) return rfSum;
+    }
+    if (Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
+      const stlSum = cv.stl_liquidation.items
+        .filter((it: any) => !it.is_cancelled)
+        .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
+      if (stlSum > 0) return stlSum;
+    }
+
     return parseFloat(cv.amount || 0);
   };
 
@@ -1296,12 +1396,33 @@ function DisbursementPageContent() {
     const cibName = formatCibAccountName(cv.bank_name || cv.bank);
 
     const catMap: Record<string, number> = {};
-    for (const item of details) {
-      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
-      const desc = item.book_of_account || item.description || '';
-      if (val > 0 && !/cib\b|cash\s*in\s*bank/i.test(desc)) {
-        const cat = cleanCategoryName(getCategoryForAccount(desc));
-        catMap[cat] = (catMap[cat] || 0) + val;
+    if (details.length > 0) {
+      for (const item of details) {
+        const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+        const desc = item.book_of_account || item.description || '';
+        if (val > 0 && !/cib\b|cash\s*in\s*bank/i.test(desc)) {
+          const cat = cleanCategoryName(getCategoryForAccount(desc));
+          catMap[cat] = (catMap[cat] || 0) + val;
+        }
+      }
+    } else if (Array.isArray(cv.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
+      for (const it of cv.revolving_fund.items) {
+        if (it.is_cancelled) continue;
+        const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
+        if (val > 0) {
+          const rawCat = it.category || getCategoryForAccount(it.account_name || '') || 'Operation';
+          const cat = cleanCategoryName(rawCat);
+          catMap[cat] = (catMap[cat] || 0) + val;
+        }
+      }
+    } else if (Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
+      for (const it of cv.stl_liquidation.items) {
+        if (it.is_cancelled) continue;
+        const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
+        if (val > 0) {
+          const cat = 'Short Term Loan';
+          catMap[cat] = (catMap[cat] || 0) + val;
+        }
       }
     }
 
@@ -1373,6 +1494,7 @@ function DisbursementPageContent() {
       const item = details[idx];
       const desc = item.book_of_account || item.description || '';
       const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+
       const isCreditItem = item.is_credit === true ||
                            item.isAutoCredit === true ||
                            isCreditAccountDesc(desc) ||
@@ -1391,7 +1513,7 @@ function DisbursementPageContent() {
           id: `item-${idx}`,
           date: dateStr,
           voucher_no: vNo,
-          description: desc || 'Revolving Fund - Operation',
+          description: desc || 'Credit / Deduction',
           remarks: itemRemarks,
           debit: null,
           credit: creditAmt,
@@ -1427,28 +1549,46 @@ function DisbursementPageContent() {
       }
     }
 
-    // Check if CIB row is present
-    const hasCibRow = rows.some(r => /^(cib\b|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+    if (rows.length === 0) {
+      const fallbackAmt = parseFloat(cv?.amount || 0);
+      if (fallbackAmt > 0) {
+        const rawDate = cv?.voucher_date || cv?.date;
+        const dateStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : '') : '';
+        const vNo = (cv?.voucher_no || '').replace(/^CV-?0*/i, '').trim();
+        rows.push({
+          id: 'item-0',
+          date: dateStr,
+          voucher_no: vNo,
+          description: cv?.particulars || 'Disbursement Line',
+          remarks: '',
+          debit: fallbackAmt,
+          credit: null,
+          isAutoCredit: false,
+          is_credit: false
+        });
+        debitTotal = fallbackAmt;
+      }
+    }
 
-    // If no CIB row exists and debitTotal > creditTotal, add balancing CIB row for the net disbursed difference
-    if (!hasCibRow && debitTotal > creditTotal) {
-      const netCibAmount = debitTotal - creditTotal;
-      const rawDate = cv.voucher_date || cv.date;
+    // Auto-balance credit with CIB row if creditTotal is 0 and debitTotal > 0
+    if (debitTotal > 0 && creditTotal === 0) {
+      const rawDate = cv?.voucher_date || cv?.date;
       const dateStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : '') : '';
-      const vNo = (cv.voucher_no || '').replace(/^CV-?0*/i, '').trim();
-      const cibName = formatCibAccountName(cv.bank_name || cv.bank);
+      const vNo = (cv?.voucher_no || '').replace(/^CV-?0*/i, '').trim();
+      const detectedBank = (cv?.bank_name || cv?.bank || 'MBTC').trim();
+      const cibLabel = detectedBank.toUpperCase().startsWith('CIB') ? detectedBank : `CIB - ${detectedBank}`;
       rows.push({
-        id: 'credit-cib',
+        id: 'credit-cib-auto',
         date: dateStr,
         voucher_no: vNo,
-        description: cibName,
+        description: cibLabel,
         remarks: '',
         debit: null,
-        credit: netCibAmount,
+        credit: debitTotal,
         isAutoCredit: true,
         is_credit: true
       });
-      creditTotal += netCibAmount;
+      creditTotal = debitTotal;
     }
 
     return { rows, debitTotal, creditTotal };
@@ -1475,7 +1615,15 @@ function DisbursementPageContent() {
   };
 
   const isStlOrRfTabOrVoucher = (cv: any) => {
-    // Explicit other tabs (Petty Cash, Merchandise, Operation Expense, Audit) must NEVER be affected
+    // If the voucher explicitly has a non-replenishment folder, it is NOT STL or RF!
+    if (cv) {
+      const f = (cv.folder_name || '').toLowerCase();
+      if (f && f !== 'stl' && !f.includes('stl') && !f.includes('revolving')) {
+        return false;
+      }
+      if (isStlVoucher(cv) || isRevolvingVoucher(cv)) return true;
+    }
+
     if (activeTab === 'petty_cash_replenishment' || 
         activeTab === 'merchandise_payment' || 
         activeTab === 'operation_expense' || 
@@ -1483,29 +1631,33 @@ function DisbursementPageContent() {
       return false;
     }
 
-    // Only apply to STL Replenishment and Revolving Fund Replenishment
-    if (activeTab === 'stl_replenishment') return true;
-    if (activeTab === 'revolving_fund_replenishment') return true;
+    if (activeTab === 'stl_replenishment' || activeTab === 'revolving_fund_replenishment') {
+      return true;
+    }
 
-    if (!cv) return false;
-    return isStlVoucher(cv) || isRevolvingVoucher(cv);
+    return false;
   };
 
   const getReplenishmentType = (folderOrCat?: string, cv?: any): 'stl' | 'rf' | null => {
+    const cat = (folderOrCat || cv?.folder_name || '').toLowerCase();
+    if (cat && cat !== 'stl' && !cat.includes('stl') && !cat.includes('revolving')) {
+      return null;
+    }
     if (activeTab === 'petty_cash_replenishment' || 
         activeTab === 'merchandise_payment' || 
         activeTab === 'operation_expense' || 
         activeTab === 'services_expense') {
       return null;
     }
-    const cat = (folderOrCat || cv?.folder_name || '').toLowerCase();
     const part = (cv?.particulars || '').toLowerCase();
-    if (activeTab === 'stl_replenishment' || cat === 'stl' || cat.includes('stl') || part.includes('stl') || Boolean(cv?.stl_liquidation?.id)) {
+    if (cat === 'stl' || cat.includes('stl') || part.includes('stl') || Boolean(cv?.stl_liquidation?.id)) {
       return 'stl';
     }
-    if (activeTab === 'revolving_fund_replenishment' || cat.includes('revolving') || part.includes('revolving') || Boolean(cv?.revolving_fund?.id)) {
+    if (cat.includes('revolving') || part.includes('revolving') || Boolean(cv?.revolving_fund?.id)) {
       return 'rf';
     }
+    if (activeTab === 'stl_replenishment') return 'stl';
+    if (activeTab === 'revolving_fund_replenishment') return 'rf';
     return null;
   };
 
@@ -2096,7 +2248,7 @@ function DisbursementPageContent() {
             id: row0Id,
             date: defaultDate,
             voucher_no: defaultVoucherNo,
-            description: cv.particulars || (isReplenish === 'stl' ? 'Short Term Loan' : 'Operation'),
+            description: cv.particulars || (getReplenishmentType(cv.folder_name, cv) === 'stl' ? 'Short Term Loan' : 'Operation'),
             remarks: '',
             debit: amt > 0 ? String(amt) : '',
             credit: '',
@@ -2120,8 +2272,54 @@ function DisbursementPageContent() {
         ];
       }
     }
+    // Initialize CIB manual input amount ONLY for replenishment vouchers (STL / Revolving Fund)
+    let initialCibVal = '';
+    if (isReplenish) {
+      let rawDetails: any[] = [];
+      if (Array.isArray(cv.details)) rawDetails = cv.details;
+      else if (typeof cv.details === 'string') {
+        try { rawDetails = JSON.parse(cv.details); } catch {}
+      }
+      for (const d of rawDetails) {
+        const desc = (d.book_of_account || d.description || '').toLowerCase();
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc.trim())) {
+          const val = typeof d.amount === 'number' ? Math.abs(d.amount) : parseFloat(d.amount || d.credit || 0);
+          if (val > 0) {
+            initialCibVal = String(val);
+            break;
+          }
+        }
+      }
+
+      // Also check if initialRowsList had any CIB row, extract its value and filter it out from body rows
+      const cibRowInRows = initialRowsList.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+      if (cibRowInRows) {
+        if (!initialCibVal) {
+          initialCibVal = cibRowInRows.credit || cibRowInRows.debit || '';
+        }
+        initialRowsList = initialRowsList.filter(r => !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+      }
+
+      // If still empty and in replenishment mode, calculate difference between debits and credits
+      if (!initialCibVal) {
+        let dSum = 0;
+        let cSum = 0;
+        for (const r of initialRowsList) {
+          const isCred = checkIsCreditRow(r);
+          const dVal = !isCred ? (parseFloat(r.debit || '0') || 0) : 0;
+          const cVal = isCred ? (parseFloat(r.credit || '0') || (r.debit ? parseFloat(r.debit) : 0) || 0) : 0;
+          if (!isCred && dVal > 0) dSum += dVal;
+          if (isCred && cVal > 0) cSum += cVal;
+        }
+        if (dSum > cSum) {
+          initialCibVal = (dSum - cSum).toFixed(2);
+        }
+      }
+    }
+
     setEditCvRows(initialRowsList);
-    setInitialCvEditSnapshot(JSON.stringify({ formData: initialForm, rows: initialRowsList }));
+    setEditCvCibAmount(initialCibVal);
+    setInitialCvEditSnapshot(JSON.stringify({ formData: initialForm, rows: initialRowsList, cibAmount: initialCibVal }));
     setIsEditingCvModal(true);
   };
 
@@ -2189,9 +2387,9 @@ function DisbursementPageContent() {
   // Track if check voucher edit has dirty/unsaved changes
   const isCvEditDirty = useMemo(() => {
     if (!isEditingCvModal || !initialCvEditSnapshot) return false;
-    const current = JSON.stringify({ formData: editCvFormData, rows: editCvRows });
+    const current = JSON.stringify({ formData: editCvFormData, rows: editCvRows, cibAmount: editCvCibAmount });
     return current !== initialCvEditSnapshot;
-  }, [isEditingCvModal, initialCvEditSnapshot, editCvFormData, editCvRows]);
+  }, [isEditingCvModal, initialCvEditSnapshot, editCvFormData, editCvRows, editCvCibAmount]);
 
   const performCloseEditCvModal = useCallback(() => {
     setIsEditingCvModal(false);
@@ -2264,8 +2462,44 @@ function DisbursementPageContent() {
           };
         });
 
+      const activeOriginalCv = editingOriginalCv || selectedCvForModal;
+      const isReplenish = isStlOrRfTabOrVoucher(activeOriginalCv) || Boolean(getReplenishmentType(editCvFormData.folder_name, activeOriginalCv));
+      const cibVal = isReplenish ? (parseFloat(editCvCibAmount || '0') || 0) : 0;
+      // Persist the manual CIB row for replenishment vouchers (STL / Revolving Fund)
+      if (isReplenish) {
+        const existingCibIdx = detailsArray.findIndex(d => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((d.book_of_account || '').trim()));
+        if (cibVal > 0) {
+          const cibName = formatCibAccountName(editCvFormData.bank);
+          if (existingCibIdx >= 0) {
+            detailsArray[existingCibIdx] = {
+              ...detailsArray[existingCibIdx],
+              book_of_account: cibName,
+              amount: -cibVal,
+              credit: cibVal,
+              debit: null,
+              is_credit: true,
+              isAutoCredit: true
+            };
+          } else {
+            detailsArray.push({
+              date: editCvFormData.voucher_date || null,
+              voucher_no: editCvFormData.voucher_no || null,
+              book_of_account: cibName,
+              remarks: null,
+              amount: -cibVal,
+              debit: null,
+              credit: cibVal,
+              is_credit: true,
+              isAutoCredit: true
+            });
+          }
+        } else if (existingCibIdx >= 0) {
+          detailsArray.splice(existingCibIdx, 1);
+        }
+      }
+
       const disbursedAmt = getEditCvDisbursedAmount();
-      const finalAmount = disbursedAmt > 0 ? disbursedAmt : (calculatedAmount > 0 ? calculatedAmount : (selectedCvForModal?.amount || 0));
+      const finalAmount = calculatedAmount > 0 ? calculatedAmount : (disbursedAmt > 0 ? disbursedAmt : (activeOriginalCv?.amount || 0));
 
       const payload = {
         voucher_no: editCvFormData.voucher_no.trim(),
@@ -2287,8 +2521,22 @@ function DisbursementPageContent() {
       };
 
       const res = await api.put(`/accounts/check-vouchers/${editCvFormData.id}`, payload);
-      const updatedCv = res.data?.data || { ...selectedCvForModal, ...payload };
+      // Use server response as authoritative source — it includes all joined relations
+      // (revolving_fund, stl_liquidation). Parse details to an array so row-render
+      // functions (getBalancedCvRows / getSummaryCvRows) always receive fresh data.
+      const serverData = res.data?.data || {};
+      let parsedDetails = serverData.details;
+      if (typeof parsedDetails === 'string') {
+        try { parsedDetails = JSON.parse(parsedDetails); } catch { parsedDetails = detailsArray; }
+      }
+      if (!Array.isArray(parsedDetails)) parsedDetails = detailsArray;
+      const updatedCv = {
+        ...activeOriginalCv,
+        ...serverData,
+        details: parsedDetails,
+      };
       setSelectedCvForModal(updatedCv);
+      setModalCvViewMode(editCvViewMode);
       setIsEditingCvModal(false);
       if (openedFromPrintModal) {
         openUnifiedPrintModalForCv(updatedCv, editCvViewMode);
@@ -2298,6 +2546,28 @@ function DisbursementPageContent() {
       setCheckVouchers(prev => prev.map(cv => (cv.id === editCvFormData.id ? { ...cv, ...updatedCv } : cv)));
       setCvActionFeedback({ type: 'success', message: 'Check Voucher updated successfully!' });
       setTimeout(() => setCvActionFeedback(null), 4000);
+
+      // Immediately refresh live table from database to sync all counts and joined relations
+      loadCheckVouchers(cvPage);
+
+      setModalDialog({
+        isOpen: true,
+        type: 'alert',
+        variant: 'emerald',
+        title: 'Changes Saved Successfully',
+        confirmLabel: 'Got it',
+        onConfirm: () => {
+          setModalDialog(null);
+          // If category changed away from current filtered tab, switch seamlessly to target category tab
+          const targetTab = DISBURSEMENT_TABS.find(t => 
+            t.defaultCategory.toLowerCase() === editCvFormData.folder_name.trim().toLowerCase() ||
+            (t.folderFilter && t.folderFilter.toLowerCase() === editCvFormData.folder_name.trim().toLowerCase())
+          );
+          if (targetTab && activeTab !== 'summary' && activeTab !== targetTab.id) {
+            setActiveTab(targetTab.id);
+          }
+        }
+      });
     } catch (err: any) {
       console.error('Failed to update check voucher:', err);
       setCvActionFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to update check voucher.' });
@@ -2943,6 +3213,13 @@ function DisbursementPageContent() {
                           </td>
                           <td className="py-3.5 px-4 text-neutral-700 dark:text-neutral-300 max-w-[280px]" title={cv.particulars}>
                             <div className="truncate font-medium">{cv.particulars || 'Disbursement voucher'}</div>
+                            {activeTab === 'summary' && (
+                              <div className="mt-1">
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700">
+                                  {formatCategoryLabel(cv.folder_name, cv)}
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 font-headline font-bold text-right text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
                             ₱{amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -3724,55 +4001,30 @@ function DisbursementPageContent() {
                     {selectedCvForModal.voucher_date ? new Date(selectedCvForModal.voucher_date).toLocaleDateString() : '—'}
                   </span>
                 </div>
-                {isStlOrRfTabOrVoucher(selectedCvForModal) ? (
-                  <>
-                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Transaction Type</span>
-                      <span className="text-sm font-bold text-on-surface dark:text-white block mt-0.5">
-                        {isRevolvingVoucher(selectedCvForModal) ? 'Revolving Fund Replenishment' : 'STL Replenishment'}
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Payee</span>
-                      <span className="text-sm font-bold text-on-surface dark:text-white block mt-0.5" title={selectedCvForModal.payee || '—'}>
-                        {selectedCvForModal.payee || '—'}
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
-                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
-                        {selectedCvForModal.bank_name || selectedCvForModal.bank || '—'}
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Check No.</span>
-                      <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
-                        {selectedCvForModal.check_no || '—'}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Payee</span>
-                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5" title={selectedCvForModal.payee || '—'}>
-                        {selectedCvForModal.payee || '—'}
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
-                      <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
-                        {selectedCvForModal.bank_name || selectedCvForModal.bank || '—'}
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
-                      <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Check No.</span>
-                      <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
-                        {selectedCvForModal.check_no || '—'}
-                      </span>
-                    </div>
-                  </>
-                )}
+                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Disbursement Category</span>
+                  <span className="text-sm font-bold text-emerald-800 dark:text-emerald-300 truncate block mt-0.5">
+                    {formatCategoryLabel(selectedCvForModal.folder_name)}
+                  </span>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Payee</span>
+                  <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5" title={selectedCvForModal.payee || '—'}>
+                    {selectedCvForModal.payee || '—'}
+                  </span>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Bank</span>
+                  <span className="text-sm font-bold text-on-surface dark:text-white truncate block mt-0.5">
+                    {selectedCvForModal.bank_name || selectedCvForModal.bank || '—'}
+                  </span>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                  <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Check No.</span>
+                  <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
+                    {selectedCvForModal.check_no || '—'}
+                  </span>
+                </div>
 
                 {/* Date Sealed & Disbursed Card */}
                 {(selectedCvForModal.status === 'filed' || selectedCvForModal.date_released || isStlOrRfTabOrVoucher(selectedCvForModal)) && (
@@ -3817,12 +4069,14 @@ function DisbursementPageContent() {
                 const isReplenish = isStlOrRfTabOrVoucher(selectedCvForModal);
                 const summaryData = getSummaryCvRows(selectedCvForModal);
                 const detailedData = getBalancedCvRows(selectedCvForModal);
-                const { rows, debitTotal, creditTotal } = isReplenish ? summaryData : detailedData;
+                const activeData = isReplenish ? summaryData : detailedData;
+                const { rows, debitTotal, creditTotal } = activeData;
+                const isStl = getReplenishmentType(selectedCvForModal?.folder_name, selectedCvForModal) === 'stl';
 
                 return (
-                  <div className="space-y-4">
-                    {/* Format: 4 Columns (#, BOOK OF ACCOUNTS, DEBIT, CREDIT) matching Image 2 */}
+                  <div className="space-y-3">
                     {isReplenish ? (
+                      /* Replenishment Summary Breakdown Table */
                       <div className="border border-emerald-300 dark:border-emerald-700/60 rounded-2xl overflow-hidden text-[10px] shadow-2xs">
                         <div className="bg-[#064e3b] text-white px-4 py-2 text-center">
                           <span className="font-extrabold uppercase text-[10px] tracking-wider text-white">
@@ -3833,20 +4087,20 @@ function DisbursementPageContent() {
                           <thead className="bg-[#ecfdf5] dark:bg-emerald-950/40 text-[#064e3b] dark:text-emerald-300 font-extrabold uppercase text-[9px] border-b border-emerald-200 dark:border-emerald-800">
                             <tr>
                               <th className="p-2.5 w-12 text-center border-r border-emerald-200 dark:border-emerald-800">#</th>
-                              <th className="p-2.5 w-28 border-r border-emerald-200 dark:border-emerald-800">{getReplenishmentType(selectedCvForModal?.folder_name, selectedCvForModal) === 'stl' ? 'LAF NO.' : 'RF VOUCHER #'}</th>
+                              <th className="p-2.5 w-28 border-r border-emerald-200 dark:border-emerald-800">{isStl ? 'LAF NO.' : 'RF VOUCHER #'}</th>
                               <th className="p-2.5 border-r border-emerald-200 dark:border-emerald-800">BOOK OF ACCOUNTS</th>
                               <th className="p-2.5 w-36 text-right border-r border-emerald-200 dark:border-emerald-800">DEBIT (₱)</th>
                               <th className="p-2.5 w-36 text-right">CREDIT (₱)</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {rows.map((item, idx) => (
+                            {summaryData.rows.map((item, idx) => (
                               <tr key={idx} className="border-b border-neutral-200 dark:border-neutral-800 hover:bg-emerald-50/30">
                                 <td className="p-2.5 text-center font-mono font-medium text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
                                   {idx + 1}
                                 </td>
-                                <td className="p-2.5 border-r border-neutral-200 dark:border-neutral-800 font-mono font-bold text-neutral-800 dark:text-neutral-200">
-                                  {item.voucher_no || '—'}
+                                <td className="p-2.5 font-mono text-[10px] font-bold text-neutral-800 dark:text-neutral-200 border-r border-neutral-200 dark:border-neutral-800">
+                                  {item.voucher_no || selectedCvForModal.voucher_no || '—'}
                                 </td>
                                 <td className="p-2.5 border-r border-neutral-200 dark:border-neutral-800 font-bold text-neutral-900 dark:text-white">
                                   {item.description}
@@ -3862,10 +4116,10 @@ function DisbursementPageContent() {
                             <tr className="bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold border-t border-emerald-300 dark:border-emerald-700 text-[10px]">
                               <td colSpan={3} className="p-2.5 text-right uppercase tracking-wider text-neutral-900 dark:text-white font-extrabold">TOTAL:</td>
                               <td className="p-2.5 text-right font-mono font-extrabold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
-                                ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                ₱{summaryData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </td>
                               <td className="p-2.5 text-right font-mono font-extrabold text-rose-600 dark:text-rose-400">
-                                ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                ₱{summaryData.creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </td>
                             </tr>
                           </tbody>
@@ -3876,7 +4130,7 @@ function DisbursementPageContent() {
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h5 className="text-[11px] font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-                            Transaction Details
+                            TRANSACTION DETAILS
                           </h5>
                         </div>
                         <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
@@ -3900,19 +4154,19 @@ function DisbursementPageContent() {
                                     {item.debit !== null ? `₱${item.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
                                   </td>
                                   <td className="px-4 py-2.5 text-right font-mono font-bold whitespace-nowrap text-rose-600 dark:text-rose-400">
-                                    {item.credit !== null ? `₱${item.credit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
+                                    {item.credit !== null ? `₱${item.credit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : <span className="text-rose-500 font-bold">—</span>}
                                   </td>
                                 </tr>
                               ))}
                             </tbody>
-                            <tfoot className="font-bold bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30">
+                            <tfoot className="font-bold bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30 text-xs">
                               <tr>
-                                <td colSpan={2} className="px-4 py-2.5 font-bold text-right uppercase tracking-wide">Total:</td>
-                                <td className="px-4 py-2.5 text-right font-mono font-bold">
-                                  ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                <td colSpan={2} className="px-4 py-2.5 font-bold text-right uppercase tracking-wide text-neutral-600 dark:text-neutral-300">TOTAL:</td>
+                                <td className="px-4 py-2.5 text-right font-mono font-bold text-neutral-900 dark:text-white">
+                                  {debitTotal > 0 ? `₱${debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
                                 </td>
-                                <td className="px-4 py-2.5 text-right font-mono font-bold text-rose-600">
-                                  ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                <td className="px-4 py-2.5 text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                                  {creditTotal > 0 ? `₱${creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
                                 </td>
                               </tr>
                             </tfoot>
@@ -3925,7 +4179,7 @@ function DisbursementPageContent() {
                     <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex-1">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block mb-1">
-                          Disbursed Amount:
+                          DISBURSED AMOUNT:
                         </span>
                         <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide leading-relaxed">
                           {formatDisbursedInWords(debitTotal || getCvDisbursedAmount(selectedCvForModal))}
@@ -4053,12 +4307,25 @@ function DisbursementPageContent() {
                 {selectedCvForModal.status === 'filed' && isAdmin && (
                   <button
                     type="button"
-                    onClick={() => startEditingCv(selectedCvForModal)}
+                    onClick={() => startEditingCv(selectedCvForModal, modalCvViewMode)}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
                     title="Override lock and edit this filed check voucher"
                   >
                     <Unlock className="w-3.5 h-3.5" />
                     <span>Override &amp; Edit</span>
+                  </button>
+                )}
+
+                {/* Edit Voucher for vouchers in 'edit' status */}
+                {isAdminOrStaff && (!selectedCvForModal.status || selectedCvForModal.status.toLowerCase() === 'edit') && (
+                  <button
+                    type="button"
+                    onClick={() => startEditingCv(selectedCvForModal, modalCvViewMode)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-200 font-bold text-xs transition-all cursor-pointer shadow-xs active:scale-95"
+                    title="Edit check voucher line items and details"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Voucher</span>
                   </button>
                 )}
 
@@ -4278,9 +4545,9 @@ function DisbursementPageContent() {
                     value={editCvFormData.folder_name}
                     onChange={val => setEditCvFormData({ ...editCvFormData, folder_name: val })}
                     options={[
-                      ...CATEGORY_TABS.map(tab => ({ value: tab.defaultCategory, label: tab.label })),
-                      ...(editCvFormData.folder_name && !CATEGORY_TABS.some(t => t.defaultCategory === editCvFormData.folder_name)
-                        ? [{ value: editCvFormData.folder_name, label: `${editCvFormData.folder_name} (Legacy/Custom)` }]
+                      ...DISBURSEMENT_CATEGORY_OPTIONS,
+                      ...(editCvFormData.folder_name && !DISBURSEMENT_CATEGORY_OPTIONS.some(t => t.value.toLowerCase() === editCvFormData.folder_name.toLowerCase())
+                        ? [{ value: editCvFormData.folder_name, label: editCvFormData.folder_name }]
                         : [])
                     ]}
                     buttonClassName="font-medium"
@@ -4497,18 +4764,57 @@ function DisbursementPageContent() {
                             })}
                           </div>
 
-                          {/* Table Total Footer matching Image 2 */}
-                          <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
-                            <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
-                              TOTAL:
+                          {/* 3-Row Footer: TOTAL, CIB (manual input), OVERALL */}
+                          <div className="border-t border-emerald-950/10 bg-[#ecfdf5] dark:bg-emerald-950/40 divide-y divide-emerald-200/60 dark:divide-emerald-800/40 rounded-b-2xl">
+                            {/* Row 1: TOTAL (deductions) */}
+                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 font-bold text-xs">
+                              <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                                TOTAL:
+                              </div>
+                              <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
+                                —
+                              </div>
+                              <div className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                                ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </div>
+                              <div></div>
                             </div>
-                            <div className="text-right font-mono font-bold text-neutral-900 dark:text-white">
-                              ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+
+                            {/* Row 2: CIB Account with manual input for credit column */}
+                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60">
+                              <div className="col-span-4 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
+                                {formatCibAccountName(editCvFormData.bank).replace('-', ':')}:
+                              </div>
+                              <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
+                                —
+                              </div>
+                              <div>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  value={editCvCibAmount}
+                                  onChange={e => setEditCvCibAmount(e.target.value)}
+                                  className="w-full px-2 py-1 rounded-lg border border-emerald-400 dark:border-emerald-600 bg-white dark:bg-neutral-900 font-mono text-right text-xs font-extrabold text-[#064e3b] dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-2xs"
+                                  title={`Manually input ${formatCibAccountName(editCvFormData.bank).replace('-', ':')} credit amount`}
+                                />
+                              </div>
+                              <div></div>
                             </div>
-                            <div className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
-                              ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+
+                            {/* Row 3: OVERALL (balanced) */}
+                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2.5 items-center gap-2 font-extrabold text-xs bg-[#d1fae5]/70 dark:bg-emerald-900/40 rounded-b-2xl">
+                              <div className="col-span-4 text-right pr-4 font-black uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-200">
+                                OVERALL:
+                              </div>
+                              <div className="text-right font-mono font-black text-[#064e3b] dark:text-emerald-200">
+                                ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </div>
+                              <div className="text-right font-mono font-black text-[#064e3b] dark:text-emerald-200">
+                                ₱{(creditTotal + (parseFloat(editCvCibAmount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </div>
+                              <div></div>
                             </div>
-                            <div></div>
                           </div>
                         </>
                       ) : (
@@ -4635,21 +4941,33 @@ function DisbursementPageContent() {
                     )}
 
                     {/* Summary row */}
-                    <div className="p-3 rounded-xl bg-surface-container-low dark:bg-surface-container flex items-center justify-between text-xs border border-outline-variant/40">
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-neutral-600 dark:text-neutral-300">
-                          Total Debit: <span className="font-mono text-neutral-900 dark:text-neutral-100 font-extrabold">₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                        </span>
-                        <span className="font-bold text-neutral-600 dark:text-neutral-300">
-                          Total Credit: <span className="font-mono text-neutral-900 dark:text-neutral-100 font-extrabold">₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                        </span>
-                        {Math.abs(debitTotal - creditTotal) < 0.01 && debitTotal > 0 && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                            <Check className="w-3 h-3" /> Balanced
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                    {(() => {
+                      const cibVal = isReplenish ? (parseFloat(editCvCibAmount || '0') || 0) : 0;
+                      const overallCreditTotal = creditTotal + cibVal;
+                      const isBalanced = Math.abs(debitTotal - overallCreditTotal) < 0.01 && debitTotal > 0;
+                      return (
+                        <div className="p-3 rounded-xl bg-surface-container-low dark:bg-surface-container flex items-center justify-between text-xs border border-outline-variant/40">
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-neutral-600 dark:text-neutral-300">
+                              Total Debit: <span className="font-mono text-neutral-900 dark:text-neutral-100 font-extrabold">₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                            </span>
+                            <span className="font-bold text-neutral-600 dark:text-neutral-300">
+                              Total Credit: <span className="font-mono text-neutral-900 dark:text-neutral-100 font-extrabold">₱{overallCreditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                            </span>
+                            {isBalanced && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                <Check className="w-3 h-3" /> Balanced
+                              </span>
+                            )}
+                            {!isBalanced && debitTotal > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                                Difference: ₱{Math.abs(debitTotal - overallCreditTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}
@@ -4859,14 +5177,14 @@ function DisbursementPageContent() {
       {/* UNIFIED CUSTOM ALERT & CONFIRM MODAL */}
       {modalDialog && mounted && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-sm animate-modal-backdrop"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-sm animate-modal-backdrop"
           onClick={() => {
             if (modalDialog.onCancel) modalDialog.onCancel();
             setModalDialog(null);
           }}
         >
           <div
-            className="bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-modal-pop"
+            className={`bg-surface-container-lowest dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl p-6 ${modalDialog.message ? 'max-w-md' : 'max-w-sm'} w-full shadow-2xl space-y-4 animate-modal-pop`}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center gap-3">
@@ -4898,9 +5216,11 @@ function DisbursementPageContent() {
               </div>
             </div>
 
-            <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
-              {modalDialog.message}
-            </p>
+            {modalDialog.message ? (
+              <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                {modalDialog.message}
+              </p>
+            ) : null}
 
             <div className="flex items-center justify-end gap-2.5 pt-2">
               {modalDialog.type === 'confirm' && (

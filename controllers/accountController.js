@@ -1114,10 +1114,54 @@ export const updateCheckVoucher = async (req, res, next) => {
       ]
     );
 
+    const fullUpdatedCvRes = await query(
+      `SELECT id, loan_id, voucher_no, voucher_date, check_no, payee, bank, particulars,
+              amount, managers_approval_date, date_released, folder_name, box_name, details, signatories,
+              COALESCE(status, 'edit') AS status, created_at, updated_at,
+              (
+                SELECT JSON_BUILD_OBJECT(
+                  'id', rf.id,
+                  'lf_no', rf.lf_no,
+                  'sheet_name', rf.sheet_name,
+                  'custodian_name', rf.custodian_name,
+                  'total_liquidated', rf.total_liquidated,
+                  'status', rf.status
+                )
+                FROM revolving_fund_liquidations rf
+                WHERE rf.check_voucher_id = check_vouchers.id 
+                   OR rf.voucher_no = check_vouchers.voucher_no
+                   OR (rf.lf_no IS NOT NULL AND (check_vouchers.particulars ILIKE '%' || rf.lf_no || '%' OR check_vouchers.particulars ILIKE '%#' || rf.lf_no || '%'))
+                LIMIT 1
+              ) AS revolving_fund,
+              (
+                SELECT JSON_BUILD_OBJECT(
+                  'id', stl.id,
+                  'lf_no', stl.lf_no,
+                  'voucher_no', stl.voucher_no,
+                  'authorized_amount', stl.authorized_amount,
+                  'total_expense', stl.total_expense,
+                  'cash_on_hand', stl.cash_on_hand,
+                  'status', stl.status,
+                  'prepared_by', stl.prepared_by,
+                  'approved_by', stl.approved_by,
+                  'date_submitted', stl.date_submitted,
+                  'date_approved', stl.date_approved
+                )
+                FROM stl_liquidations stl
+                WHERE stl.check_voucher_id = check_vouchers.id 
+                   OR stl.voucher_no = check_vouchers.voucher_no
+                   OR (stl.lf_no IS NOT NULL AND (check_vouchers.particulars ILIKE '%' || stl.lf_no || '%' OR check_vouchers.particulars ILIKE '%#' || stl.lf_no || '%'))
+                LIMIT 1
+              ) AS stl_liquidation
+       FROM check_vouchers
+       WHERE id = $1`,
+      [id]
+    );
+
     res.status(200).json({
       success: true,
       message: 'Check voucher updated successfully',
-      data: result.rows[0]
+      data: fullUpdatedCvRes.rows[0] || result.rows[0]
     });
   } catch (error) {
     next(error);
