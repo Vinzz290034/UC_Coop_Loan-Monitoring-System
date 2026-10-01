@@ -877,6 +877,13 @@ async function recalculateLfTotal(liquidationId) {
 // @access  Protected (Admin, Staff)
 export const getRevolvingFundAccounts = async (req, res, next) => {
   try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS rf_deleted_accounts (
+        name VARCHAR(150) PRIMARY KEY,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `).catch(() => {});
+
     const customRes = await query('SELECT name, category FROM rf_custom_accounts ORDER BY name ASC');
     const itemsRes = await query(`
       SELECT DISTINCT account_name, category 
@@ -884,6 +891,8 @@ export const getRevolvingFundAccounts = async (req, res, next) => {
       WHERE account_name IS NOT NULL AND TRIM(account_name) != ''
       ORDER BY account_name ASC
     `);
+    const deletedRes = await query('SELECT name FROM rf_deleted_accounts').catch(() => ({ rows: [] }));
+    const deletedSet = new Set((deletedRes.rows || []).map(r => r.name.trim().toLowerCase()));
 
     // Combine unique account names
     const accountMap = new Map();
@@ -892,7 +901,9 @@ export const getRevolvingFundAccounts = async (req, res, next) => {
     for (const row of itemsRes.rows) {
       if (row.account_name && row.account_name.trim()) {
         const clean = row.account_name.trim();
-        accountMap.set(clean.toLowerCase(), { name: clean, category: row.category || 'Operation' });
+        if (!deletedSet.has(clean.toLowerCase())) {
+          accountMap.set(clean.toLowerCase(), { name: clean, category: row.category || 'Operation' });
+        }
       }
     }
 
@@ -900,13 +911,16 @@ export const getRevolvingFundAccounts = async (req, res, next) => {
     for (const row of customRes.rows) {
       if (row.name && row.name.trim()) {
         const clean = row.name.trim();
-        accountMap.set(clean.toLowerCase(), { name: clean, category: row.category || 'Operation' });
+        if (!deletedSet.has(clean.toLowerCase())) {
+          accountMap.set(clean.toLowerCase(), { name: clean, category: row.category || 'Operation' });
+        }
       }
     }
 
     res.status(200).json({
       success: true,
-      data: Array.from(accountMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+      data: Array.from(accountMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      deleted: Array.from(deletedSet)
     });
   } catch (error) {
     next(error);
@@ -925,6 +939,16 @@ export const saveRevolvingFundAccount = async (req, res, next) => {
 
     const cleanName = name.trim();
     const cleanCat = (category || 'Operation').trim();
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS rf_deleted_accounts (
+        name VARCHAR(150) PRIMARY KEY,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `).catch(() => {});
+
+    // Remove from deleted blacklist if previously deleted
+    await query('DELETE FROM rf_deleted_accounts WHERE LOWER(name) = LOWER($1)', [cleanName]).catch(() => {});
 
     await query(`
       INSERT INTO rf_custom_accounts (name, category)
@@ -951,7 +975,17 @@ export const deleteRevolvingFundAccount = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Account name is required' });
     }
 
-    await query('DELETE FROM rf_custom_accounts WHERE LOWER(name) = LOWER($1)', [decodeURIComponent(name).trim()]);
+    const cleanName = decodeURIComponent(name).trim();
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS rf_deleted_accounts (
+        name VARCHAR(150) PRIMARY KEY,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `).catch(() => {});
+
+    await query('DELETE FROM rf_custom_accounts WHERE LOWER(name) = LOWER($1)', [cleanName]);
+    await query('INSERT INTO rf_deleted_accounts (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [cleanName]).catch(() => {});
 
     res.status(200).json({
       success: true,

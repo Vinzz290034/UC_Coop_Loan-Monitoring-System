@@ -183,6 +183,38 @@ export const getCategoryForAccount = (acct: string): string => {
   return 'Operation';
 };
 
+const getRfDeletedAccountsSet = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const saved = localStorage.getItem('rf_deleted_accounts');
+    if (saved) {
+      const arr = JSON.parse(saved);
+      if (Array.isArray(arr)) {
+        return new Set(arr.map((s: string) => String(s).trim().toLowerCase()));
+      }
+    }
+  } catch {}
+  return new Set();
+};
+
+const saveRfDeletedAccount = (name: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const set = getRfDeletedAccountsSet();
+    set.add(name.trim().toLowerCase());
+    localStorage.setItem('rf_deleted_accounts', JSON.stringify(Array.from(set)));
+  } catch {}
+};
+
+const restoreRfDeletedAccount = (name: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const set = getRfDeletedAccountsSet();
+    set.delete(name.trim().toLowerCase());
+    localStorage.setItem('rf_deleted_accounts', JSON.stringify(Array.from(set)));
+  } catch {}
+};
+
 export default function RevolvingFundsTab({
   isAdminOrManager,
   onViewCheckVoucher,
@@ -266,20 +298,22 @@ export default function RevolvingFundsTab({
 
   // Book of Accounts state with localStorage and backend synchronization
   const [accountOptions, setAccountOptions] = useState<string[]>(() => {
+    const deleted = getRfDeletedAccountsSet();
+    let base = ACCOUNT_OPTIONS;
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('rf_custom_accounts');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            return Array.from(new Set([...ACCOUNT_OPTIONS, ...parsed])).sort((a, b) => a.localeCompare(b));
+            base = Array.from(new Set([...ACCOUNT_OPTIONS, ...parsed]));
           }
         }
       } catch {
         // ignore fallback
       }
     }
-    return [...ACCOUNT_OPTIONS].sort((a, b) => a.localeCompare(b));
+    return base.filter(a => !deleted.has(a.trim().toLowerCase())).sort((a, b) => a.localeCompare(b));
   });
 
   const [accountCategoryMap, setAccountCategoryMap] = useState<Record<string, string>>(() => {
@@ -310,8 +344,23 @@ export default function RevolvingFundsTab({
           }
         }
 
+        // Also sync server-side deleted accounts if provided
+        if (Array.isArray(res.data.deleted) && typeof window !== 'undefined') {
+          try {
+            const localDeleted = getRfDeletedAccountsSet();
+            for (const d of res.data.deleted) {
+              if (d) localDeleted.add(String(d).trim().toLowerCase());
+            }
+            localStorage.setItem('rf_deleted_accounts', JSON.stringify(Array.from(localDeleted)));
+          } catch {}
+        }
+
+        const deleted = getRfDeletedAccountsSet();
+
         setAccountOptions(prev => {
-          const merged = Array.from(new Set([...ACCOUNT_OPTIONS, ...prev, ...serverNames])).sort((a, b) => a.localeCompare(b));
+          const merged = Array.from(new Set([...ACCOUNT_OPTIONS, ...prev, ...serverNames]))
+            .filter(a => !deleted.has(a.trim().toLowerCase()))
+            .sort((a, b) => a.localeCompare(b));
           try {
             localStorage.setItem('rf_custom_accounts', JSON.stringify(merged));
           } catch {
@@ -368,6 +417,8 @@ export default function RevolvingFundsTab({
       });
     }
 
+    restoreRfDeletedAccount(trimmed);
+
     // Check if it already exists in the dropdown options
     const exists = accountOptions.some(a => a.toLowerCase() === trimmed.toLowerCase());
     if (!exists) {
@@ -393,7 +444,12 @@ export default function RevolvingFundsTab({
 
   const handleDeleteAccountOption = async (e: React.MouseEvent, acctName: string) => {
     e.stopPropagation();
-    const filtered = accountOptions.filter(a => a !== acctName);
+    const trimmed = acctName.trim();
+    if (!trimmed) return;
+
+    saveRfDeletedAccount(trimmed);
+
+    const filtered = accountOptions.filter(a => a.toLowerCase() !== trimmed.toLowerCase());
     setAccountOptions(filtered);
     try {
       localStorage.setItem('rf_custom_accounts', JSON.stringify(filtered));
@@ -403,7 +459,7 @@ export default function RevolvingFundsTab({
 
     setAccountCategoryMap(prev => {
       const nextMap = { ...prev };
-      delete nextMap[acctName.toLowerCase()];
+      delete nextMap[trimmed.toLowerCase()];
       try {
         localStorage.setItem('rf_account_categories', JSON.stringify(nextMap));
       } catch (e) {
@@ -413,9 +469,9 @@ export default function RevolvingFundsTab({
     });
 
     try {
-      await api.delete(`/revolving-funds/accounts/${encodeURIComponent(acctName)}`);
+      await api.delete(`/revolving-funds/accounts/${encodeURIComponent(trimmed)}`);
     } catch (err) {
-      console.error('Failed to remove custom account:', err);
+      console.error('Failed to remove account:', err);
     }
   };
 
@@ -2096,16 +2152,14 @@ export default function RevolvingFundsTab({
                                                     }`}>
                                                     {autoCat}
                                                   </span>
-                                                  {isCustom && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={(e) => handleDeleteAccountOption(e, acct)}
-                                                      className="opacity-0 group-hover:opacity-100 p-0.5 text-neutral-400 hover:text-rose-600 transition-opacity cursor-pointer"
-                                                      title="Remove from custom accounts"
-                                                    >
-                                                      <X className="w-3 h-3" />
-                                                    </button>
-                                                  )}
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => handleDeleteAccountOption(e, acct)}
+                                                    className="opacity-0 group-hover:opacity-100 p-0.5 text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 transition-all cursor-pointer"
+                                                    title="Delete account option"
+                                                  >
+                                                    <Trash2 className="w-3 h-3" />
+                                                  </button>
                                                 </div>
                                               </div>
                                             );

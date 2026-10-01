@@ -408,6 +408,39 @@ export const REPLENISHMENT_ACCOUNT_OPTIONS = [
   'Short Term Loan'
 ];
 
+export const getRfDeletedAccountsSet = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const saved = localStorage.getItem('rf_deleted_accounts');
+    if (saved) {
+      const arr = JSON.parse(saved);
+      if (Array.isArray(arr)) {
+        return new Set(arr.map((s: string) => String(s).trim().toLowerCase()));
+      }
+    }
+  } catch {}
+  return new Set();
+};
+
+export const saveRfDeletedAccount = (name: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const set = getRfDeletedAccountsSet();
+    set.add(name.trim().toLowerCase());
+    localStorage.setItem('rf_deleted_accounts', JSON.stringify(Array.from(set)));
+  } catch {}
+};
+
+export const restoreRfDeletedAccount = (name: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const set = getRfDeletedAccountsSet();
+    set.delete(name.trim().toLowerCase());
+    localStorage.setItem('rf_deleted_accounts', JSON.stringify(Array.from(set)));
+  } catch {}
+};
+
+
 export const ACCOUNT_CATEGORIES = [
   { value: 'Operation', label: 'Operation', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border-blue-300 dark:border-blue-700' },
   { value: 'Merchandise', label: 'Merchandise', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700' },
@@ -755,17 +788,17 @@ function ReplenishmentAccountDropdown({
                           >
                             {cat}
                           </span>
-                          {isCustom && onDeleteAccount && (
+                          {onDeleteAccount && (
                             <button
                               type="button"
                               onClick={e => {
                                 e.stopPropagation();
                                 onDeleteAccount(acct);
                               }}
-                              className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-rose-500 p-0.5 rounded transition-opacity cursor-pointer"
-                              title="Delete custom account"
+                              className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 p-0.5 rounded transition-all cursor-pointer"
+                              title="Delete account option"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
@@ -1014,20 +1047,22 @@ function DisbursementPageContent() {
 
   // Custom Accounts & Categories state for Book of Accounts dropdown
   const [customAccountOptions, setCustomAccountOptions] = useState<string[]>(() => {
+    const deleted = getRfDeletedAccountsSet();
+    let base = REPLENISHMENT_ACCOUNT_OPTIONS;
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('rf_custom_accounts');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            return Array.from(new Set([...REPLENISHMENT_ACCOUNT_OPTIONS, ...parsed])).sort((a, b) => a.localeCompare(b));
+            base = Array.from(new Set([...REPLENISHMENT_ACCOUNT_OPTIONS, ...parsed]));
           }
         }
       } catch {
         // ignore
       }
     }
-    return REPLENISHMENT_ACCOUNT_OPTIONS;
+    return base.filter(a => !deleted.has(a.trim().toLowerCase())).sort((a, b) => a.localeCompare(b));
   });
 
   const [accountCategoryMap, setAccountCategoryMap] = useState<Record<string, string>>(() => {
@@ -1057,8 +1092,24 @@ function DisbursementPageContent() {
             if (cat) serverCatMap[name.toLowerCase()] = cat;
           }
         }
+
+        // Also sync server-side deleted accounts if provided
+        if (Array.isArray(res.data.deleted) && typeof window !== 'undefined') {
+          try {
+            const localDeleted = getRfDeletedAccountsSet();
+            for (const d of res.data.deleted) {
+              if (d) localDeleted.add(String(d).trim().toLowerCase());
+            }
+            localStorage.setItem('rf_deleted_accounts', JSON.stringify(Array.from(localDeleted)));
+          } catch {}
+        }
+
+        const deleted = getRfDeletedAccountsSet();
+
         setCustomAccountOptions(prev => {
-          const merged = Array.from(new Set([...REPLENISHMENT_ACCOUNT_OPTIONS, ...prev, ...serverNames])).sort((a, b) => a.localeCompare(b));
+          const merged = Array.from(new Set([...REPLENISHMENT_ACCOUNT_OPTIONS, ...prev, ...serverNames]))
+            .filter(a => !deleted.has(a.trim().toLowerCase()))
+            .sort((a, b) => a.localeCompare(b));
           try {
             localStorage.setItem('rf_custom_accounts', JSON.stringify(merged));
           } catch {}
@@ -1085,6 +1136,8 @@ function DisbursementPageContent() {
     const trimmed = name.trim();
     if (!trimmed) return;
     const catToUse = category.trim() || 'Operation';
+
+    restoreRfDeletedAccount(trimmed);
 
     // 1. Update category map in state & localStorage
     setAccountCategoryMap(prev => {
@@ -1115,6 +1168,8 @@ function DisbursementPageContent() {
   const handleDeleteCustomAccount = async (name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
+
+    saveRfDeletedAccount(trimmed);
 
     setCustomAccountOptions(prev => {
       const filtered = prev.filter(a => a.toLowerCase() !== trimmed.toLowerCase());
