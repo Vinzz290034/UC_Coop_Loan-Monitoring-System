@@ -384,7 +384,8 @@ function formatCibAccountName(bankName?: string): string {
 function getSummaryCvRows(
   cv: any,
   resolvedType: 'stl' | 'rf',
-  categoryBreakdown: { list: { name: string; amount: number; percent: string }[]; total: number }
+  categoryBreakdown: { list: { name: string; amount: number; percent: string }[]; total: number },
+  detailedRows?: { description: string; debit: number | null; credit: number | null }[]
 ) {
   const rows: { description: string; debit: number | null; credit: number | null }[] = [];
   let debitTotal = 0;
@@ -392,6 +393,137 @@ function getSummaryCvRows(
 
   const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
 
+  // STL Replenishment: Group into Loans Receivable, Service Fee, Insurance Payable, other deductions, and CIB
+  if (resolvedType === 'stl') {
+    let sourceRows: { description: string; debit: number | null; credit: number | null }[] = [];
+    if (detailedRows && detailedRows.length > 0) {
+      sourceRows = detailedRows;
+    } else {
+      let rawDetails: any[] = [];
+      if (Array.isArray(cv?.details)) {
+        rawDetails = cv.details;
+      } else if (typeof cv?.details === 'string') {
+        try {
+          const parsed = JSON.parse(cv.details);
+          if (Array.isArray(parsed)) rawDetails = parsed;
+        } catch {}
+      }
+      if (rawDetails.length > 0) {
+        for (const item of rawDetails) {
+          const desc = item.book_of_account || item.description || '';
+          const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+          const isCred = item.is_credit === true || item.isAutoCredit === true || val < 0;
+          if (isCred) {
+            sourceRows.push({ description: desc, debit: null, credit: Math.abs(val) || Number(item.credit) || 0 });
+          } else {
+            sourceRows.push({ description: desc, debit: val || Number(item.debit) || 0, credit: null });
+          }
+        }
+      } else if (Array.isArray(cv?.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
+        for (const it of cv.stl_liquidation.items) {
+          if (it.is_cancelled) continue;
+          const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
+          if (val > 0) {
+            sourceRows.push({ description: it.particulars || 'Loans Receivable', debit: val, credit: null });
+          }
+        }
+      }
+    }
+
+    const debitMap: Record<string, number> = {};
+    const creditMap: Record<string, number> = {};
+
+    for (const r of sourceRows) {
+      const desc = (r.description || '').trim();
+      if (!desc) continue;
+      // Skip CIB in detailed rows because CIB is added as balancing row
+      if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+
+      const dVal = r.debit !== null && r.debit !== undefined ? Number(r.debit) : 0;
+      const cVal = r.credit !== null && r.credit !== undefined ? Number(r.credit) : 0;
+
+      if (dVal > 0) {
+        let acct = 'Loans Receivable';
+        if (/loans?\s*receivable/i.test(desc) || /short\s*term\s*loan|stl/i.test(desc)) {
+          acct = 'Loans Receivable';
+        } else {
+          acct = desc.replace(/;.*$/, '').trim() || 'Loans Receivable';
+        }
+        debitMap[acct] = (debitMap[acct] || 0) + dVal;
+      }
+
+      if (cVal > 0) {
+        let acct = 'Other Deductions';
+        if (/service\s*fee/i.test(desc)) {
+          acct = 'Service Fee';
+        } else if (/insurance/i.test(desc)) {
+          acct = 'Insurance Payable';
+        } else if (/interest/i.test(desc)) {
+          acct = 'Interest Receive';
+        } else if (/loans?\s*receivable/i.test(desc)) {
+          acct = 'Loans Receivable';
+        } else {
+          acct = desc.replace(/;.*$/, '').trim() || 'Other Deductions';
+        }
+        creditMap[acct] = (creditMap[acct] || 0) + cVal;
+      }
+    }
+
+    if (Object.keys(debitMap).length === 0) {
+      const fallbackAmt = parseFloat(cv?.amount || 0);
+      if (fallbackAmt > 0) {
+        debitMap['Loans Receivable'] = fallbackAmt;
+      }
+    }
+
+    for (const [name, amt] of Object.entries(debitMap)) {
+      if (amt > 0) {
+        rows.push({
+          description: name,
+          debit: amt,
+          credit: null
+        });
+        debitTotal += amt;
+      }
+    }
+
+    const preferredOrder = ['Service Fee', 'Insurance Payable', 'Interest Receive', 'Loans Receivable'];
+    const sortedCreditKeys = Object.keys(creditMap).sort((a, b) => {
+      const idxA = preferredOrder.indexOf(a);
+      const idxB = preferredOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+
+    for (const name of sortedCreditKeys) {
+      const amt = creditMap[name];
+      if (amt > 0) {
+        rows.push({
+          description: name,
+          debit: null,
+          credit: amt
+        });
+        creditTotal += amt;
+      }
+    }
+
+    const balancingCib = Math.max(0, debitTotal - creditTotal);
+    if (balancingCib > 0 || creditTotal === 0) {
+      const cibAmount = balancingCib > 0 ? balancingCib : (cv?.amount ? parseFloat(cv.amount) : 0);
+      rows.push({
+        description: cibName,
+        debit: null,
+        credit: cibAmount
+      });
+      creditTotal += cibAmount;
+    }
+
+    return { rows, debitTotal, creditTotal };
+  }
+
+  // Revolving Fund (resolvedType === 'rf')
   if (categoryBreakdown.list.length > 0) {
     for (const cat of categoryBreakdown.list) {
       const cleanName = cleanCategoryName(cat.name);
@@ -436,15 +568,6 @@ function getSummaryCvRows(
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
-    } else if (Array.isArray(cv?.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
-      for (const it of cv.stl_liquidation.items) {
-        if (it.is_cancelled) continue;
-        const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
-        if (val > 0) {
-          const cat = 'Short Term Loan';
-          catMap[cat] = (catMap[cat] || 0) + val;
-        }
-      }
     }
 
     if (Object.keys(catMap).length > 0) {
@@ -460,7 +583,7 @@ function getSummaryCvRows(
       const fallbackAmt = parseFloat(cv?.amount || 0);
       if (fallbackAmt > 0) {
         rows.push({
-          description: resolvedType === 'stl' ? 'Short Term Loan' : 'Operation',
+          description: 'Operation',
           debit: fallbackAmt,
           credit: null
         });
@@ -822,7 +945,7 @@ export default function UnifiedCvLfPrintModal({
     return authorizedAmount - totalExpenseAmount;
   }, [authorizedAmount, totalExpenseAmount]);
 
-  const summaryCvData = useMemo(() => getSummaryCvRows(currentCv, resolvedType, categoryBreakdown), [currentCv, resolvedType, categoryBreakdown]);
+  const summaryCvData = useMemo(() => getSummaryCvRows(currentCv, resolvedType, categoryBreakdown, detailedCvData.rows), [currentCv, resolvedType, categoryBreakdown, detailedCvData.rows]);
   const activeCvDebitTotal = cvViewMode === 'summary' ? summaryCvData.debitTotal : detailedCvData.debitTotal;
 
   const cibName = useMemo(() => formatCibAccountName(currentCv?.bank || currentCv?.bank_name), [currentCv]);

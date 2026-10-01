@@ -1480,6 +1480,114 @@ function DisbursementPageContent() {
     const dateStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : '') : '';
     const vNo = (cv.voucher_no || '').replace(/^CV-?0*/i, '').trim();
     const cibName = formatCibAccountName(cv.bank_name || cv.bank);
+    const replenishType = getReplenishmentType(cv.folder_name, cv);
+
+    if (replenishType === 'stl') {
+      const debitMap: Record<string, number> = {};
+      const creditMap: Record<string, number> = {};
+
+      if (details.length > 0) {
+        for (const item of details) {
+          const desc = (item.book_of_account || item.description || '').trim();
+          if (!desc || /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+          const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+          const isCred = item.is_credit === true || item.isAutoCredit === true || val < 0;
+
+          if (isCred) {
+            const cVal = Math.abs(val) || Number(item.credit) || 0;
+            if (cVal > 0) {
+              let acct = 'Other Deductions';
+              if (/service\s*fee/i.test(desc)) acct = 'Service Fee';
+              else if (/insurance/i.test(desc)) acct = 'Insurance Payable';
+              else if (/interest/i.test(desc)) acct = 'Interest Receive';
+              else if (/loans?\s*receivable/i.test(desc)) acct = 'Loans Receivable';
+              else acct = desc.replace(/;.*$/, '').trim() || 'Other Deductions';
+              creditMap[acct] = (creditMap[acct] || 0) + cVal;
+            }
+          } else {
+            const dVal = val || Number(item.debit) || 0;
+            if (dVal > 0) {
+              let acct = 'Loans Receivable';
+              if (/loans?\s*receivable/i.test(desc) || /short\s*term\s*loan|stl/i.test(desc)) acct = 'Loans Receivable';
+              else acct = desc.replace(/;.*$/, '').trim() || 'Loans Receivable';
+              debitMap[acct] = (debitMap[acct] || 0) + dVal;
+            }
+          }
+        }
+      } else if (Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
+        for (const it of cv.stl_liquidation.items) {
+          if (it.is_cancelled) continue;
+          const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
+          if (val > 0) {
+            debitMap['Loans Receivable'] = (debitMap['Loans Receivable'] || 0) + val;
+          }
+        }
+      }
+
+      if (Object.keys(debitMap).length === 0) {
+        const fallbackAmt = parseFloat(cv.amount || 0);
+        if (fallbackAmt > 0) debitMap['Loans Receivable'] = fallbackAmt;
+      }
+
+      let rowIdx = 0;
+      for (const [name, amt] of Object.entries(debitMap)) {
+        if (amt > 0) {
+          rows.push({
+            id: `cat-${rowIdx++}`,
+            date: dateStr,
+            voucher_no: vNo,
+            description: name,
+            remarks: '',
+            debit: amt,
+            credit: null
+          });
+          debitTotal += amt;
+        }
+      }
+
+      const preferredOrder = ['Service Fee', 'Insurance Payable', 'Interest Receive', 'Loans Receivable'];
+      const sortedCreditKeys = Object.keys(creditMap).sort((a, b) => {
+        const idxA = preferredOrder.indexOf(a);
+        const idxB = preferredOrder.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.localeCompare(b);
+      });
+
+      for (const name of sortedCreditKeys) {
+        const amt = creditMap[name];
+        if (amt > 0) {
+          rows.push({
+            id: `cat-${rowIdx++}`,
+            date: dateStr,
+            voucher_no: vNo,
+            description: name,
+            remarks: '',
+            debit: null,
+            credit: amt
+          });
+          creditTotal += amt;
+        }
+      }
+
+      const balancingCib = Math.max(0, debitTotal - creditTotal);
+      if (balancingCib > 0 || creditTotal === 0) {
+        const cibAmount = balancingCib > 0 ? balancingCib : (cv.amount ? parseFloat(cv.amount) : 0);
+        rows.push({
+          id: 'credit-cib',
+          date: dateStr,
+          voucher_no: vNo,
+          description: cibName,
+          remarks: '',
+          debit: null,
+          credit: cibAmount
+        });
+        creditTotal += cibAmount;
+      }
+
+      return { rows, debitTotal, creditTotal };
+    }
 
     const catMap: Record<string, number> = {};
     if (details.length > 0) {
@@ -1498,15 +1606,6 @@ function DisbursementPageContent() {
         if (val > 0) {
           const rawCat = it.category || getCategoryForAccount(it.account_name || '') || 'Operation';
           const cat = cleanCategoryName(rawCat);
-          catMap[cat] = (catMap[cat] || 0) + val;
-        }
-      }
-    } else if (Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
-      for (const it of cv.stl_liquidation.items) {
-        if (it.is_cancelled) continue;
-        const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
-        if (val > 0) {
-          const cat = 'Short Term Loan';
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
