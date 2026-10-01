@@ -1221,6 +1221,15 @@ function DisbursementPageContent() {
 
   // Calculate live disbursed amount while editing/modifying voucher
   const getEditCvDisbursedAmount = (): number => {
+    const activeCv = editingOriginalCv || selectedCvForModal;
+    const replenishType = getReplenishmentType(editCvFormData.folder_name, activeCv);
+    if (replenishType === 'stl') {
+      const cibVal = parseFloat(editCvCibAmount || '0') || 0;
+      if (cibVal > 0) return cibVal;
+      if (activeCv?.cib_amount && parseFloat(activeCv.cib_amount) > 0) return parseFloat(activeCv.cib_amount);
+      if (activeCv?.amount && parseFloat(activeCv.amount) > 0) return parseFloat(activeCv.amount);
+    }
+
     let debitTotal = 0;
     let nonCibCreditTotal = 0;
     let cibCreditTotal = 0;
@@ -1358,6 +1367,28 @@ function DisbursementPageContent() {
 
   const getCvDisbursedAmount = (cv: any): number => {
     if (!cv) return 0;
+    const isStl = getReplenishmentType(cv.folder_name, cv) === 'stl';
+    if (isStl) {
+      if (cv.cib_amount && parseFloat(cv.cib_amount) > 0) {
+        return parseFloat(cv.cib_amount);
+      }
+      if (cv.amount && parseFloat(cv.amount) > 0) {
+        return parseFloat(cv.amount);
+      }
+      let rawDetails: any[] = [];
+      if (Array.isArray(cv.details)) rawDetails = cv.details;
+      else if (typeof cv.details === 'string') {
+        try { rawDetails = JSON.parse(cv.details); } catch {}
+      }
+      for (const item of rawDetails) {
+        const desc = (item.book_of_account || item.description || '').trim();
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) {
+          const val = typeof item.amount === 'number' ? Math.abs(item.amount) : parseFloat(item.amount || item.credit || 0);
+          if (val > 0) return val;
+        }
+      }
+    }
+
     let details: any[] = [];
     if (Array.isArray(cv.details)) {
       details = cv.details;
@@ -2329,6 +2360,7 @@ function DisbursementPageContent() {
     }
     // Initialize CIB manual input amount ONLY for replenishment vouchers (STL / Revolving Fund)
     let initialCibVal = '';
+    const replenishType = getReplenishmentType(cv.folder_name, cv);
     if (isReplenish) {
       let rawDetails: any[] = [];
       if (Array.isArray(cv.details)) rawDetails = cv.details;
@@ -2355,8 +2387,21 @@ function DisbursementPageContent() {
         initialRowsList = initialRowsList.filter(r => !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
       }
 
-      // If still empty and in replenishment mode, calculate difference between debits and credits
-      if (!initialCibVal) {
+      // For Revolving Fund replenishment: CIB amount is always the full disbursed/debit total
+      if (replenishType !== 'stl') {
+        let dSum = 0;
+        for (const r of initialRowsList) {
+          const isCred = checkIsCreditRow(r);
+          const dVal = !isCred ? (parseFloat(r.debit || '0') || 0) : 0;
+          if (!isCred && dVal > 0) dSum += dVal;
+        }
+        if (dSum > 0) {
+          initialCibVal = dSum.toFixed(2);
+        } else if (cv.amount && parseFloat(cv.amount) > 0) {
+          initialCibVal = parseFloat(cv.amount).toFixed(2);
+        }
+      } else if (!initialCibVal) {
+        // If STL and still empty, calculate difference between debits and credits
         let dSum = 0;
         let cSum = 0;
         for (const r of initialRowsList) {
@@ -2519,7 +2564,20 @@ function DisbursementPageContent() {
 
       const activeOriginalCv = editingOriginalCv || selectedCvForModal;
       const isReplenish = isStlOrRfTabOrVoucher(activeOriginalCv) || Boolean(getReplenishmentType(editCvFormData.folder_name, activeOriginalCv));
-      const cibVal = isReplenish ? (parseFloat(editCvCibAmount || '0') || 0) : 0;
+      const replenishType = getReplenishmentType(editCvFormData.folder_name, activeOriginalCv);
+      const isStl = replenishType === 'stl';
+      let creditRowsSum = 0;
+      let debitRowsSum = 0;
+      for (const r of editCvRows) {
+        if (checkIsCreditRow(r)) {
+          creditRowsSum += parseFloat(r.credit || (r.debit ? r.debit : '0') || '0') || 0;
+        } else {
+          debitRowsSum += parseFloat(r.debit || '0') || 0;
+        }
+      }
+      const cibVal = isReplenish
+        ? (isStl ? (parseFloat(editCvCibAmount || '0') || 0) : (creditRowsSum > 0 ? creditRowsSum : debitRowsSum))
+        : 0;
       // Persist the manual CIB row for replenishment vouchers (STL / Revolving Fund)
       if (isReplenish) {
         const existingCibIdx = detailsArray.findIndex(d => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((d.book_of_account || '').trim()));
@@ -4819,57 +4877,91 @@ function DisbursementPageContent() {
                             })}
                           </div>
 
-                          {/* 3-Row Footer: TOTAL, CIB (manual input), OVERALL */}
+                          {/* Footer: 3-row for STL Replenishment only, 2-row (TOTAL & CIB only) for Revolving Check Voucher */}
                           <div className="border-t border-emerald-950/10 bg-[#ecfdf5] dark:bg-emerald-950/40 divide-y divide-emerald-200/60 dark:divide-emerald-800/40 rounded-b-2xl">
-                            {/* Row 1: TOTAL (deductions) */}
-                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 font-bold text-xs">
-                              <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
-                                TOTAL:
-                              </div>
-                              <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
-                                —
-                              </div>
-                              <div className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
-                                ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                              </div>
-                              <div></div>
-                            </div>
+                            {replenishType === 'stl' ? (
+                              <>
+                                {/* Row 1: TOTAL (deductions) */}
+                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 font-bold text-xs">
+                                  <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                                    TOTAL:
+                                  </div>
+                                  <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
+                                    —
+                                  </div>
+                                  <div className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                                    ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                  </div>
+                                  <div></div>
+                                </div>
 
-                            {/* Row 2: CIB Account with manual input for credit column */}
-                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60">
-                              <div className="col-span-4 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
-                                {formatCibAccountName(editCvFormData.bank).replace('-', ':')}:
-                              </div>
-                              <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
-                                —
-                              </div>
-                              <div>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  value={editCvCibAmount}
-                                  onChange={e => setEditCvCibAmount(e.target.value)}
-                                  className="w-full px-2 py-1 rounded-lg border border-emerald-400 dark:border-emerald-600 bg-white dark:bg-neutral-900 font-mono text-right text-xs font-extrabold text-[#064e3b] dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-2xs"
-                                  title={`Manually input ${formatCibAccountName(editCvFormData.bank).replace('-', ':')} credit amount`}
-                                />
-                              </div>
-                              <div></div>
-                            </div>
+                                {/* Row 2: CIB Account with manual input for credit column */}
+                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60">
+                                  <div className="col-span-4 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
+                                    {formatCibAccountName(editCvFormData.bank).replace('-', ':')}:
+                                  </div>
+                                  <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
+                                    —
+                                  </div>
+                                  <div>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="0.00"
+                                      value={editCvCibAmount}
+                                      onChange={e => setEditCvCibAmount(e.target.value)}
+                                      className="w-full px-2 py-1 rounded-lg border border-emerald-400 dark:border-emerald-600 bg-white dark:bg-neutral-900 font-mono text-right text-xs font-extrabold text-[#064e3b] dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-2xs"
+                                      title={`Manually input ${formatCibAccountName(editCvFormData.bank).replace('-', ':')} credit amount`}
+                                    />
+                                  </div>
+                                  <div></div>
+                                </div>
 
-                            {/* Row 3: OVERALL (balanced) */}
-                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2.5 items-center gap-2 font-extrabold text-xs bg-[#d1fae5]/70 dark:bg-emerald-900/40 rounded-b-2xl">
-                              <div className="col-span-4 text-right pr-4 font-black uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-200">
-                                OVERALL:
-                              </div>
-                              <div className="text-right font-mono font-black text-[#064e3b] dark:text-emerald-200">
-                                ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                              </div>
-                              <div className="text-right font-mono font-black text-[#064e3b] dark:text-emerald-200">
-                                ₱{(creditTotal + (parseFloat(editCvCibAmount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                              </div>
-                              <div></div>
-                            </div>
+                                {/* Row 3: OVERALL (balanced) */}
+                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2.5 items-center gap-2 font-extrabold text-xs bg-[#d1fae5]/70 dark:bg-emerald-900/40 rounded-b-2xl">
+                                  <div className="col-span-4 text-right pr-4 font-black uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-200">
+                                    OVERALL:
+                                  </div>
+                                  <div className="text-right font-mono font-black text-[#064e3b] dark:text-emerald-200">
+                                    ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                  </div>
+                                  <div className="text-right font-mono font-black text-[#064e3b] dark:text-emerald-200">
+                                    ₱{(creditTotal + (parseFloat(editCvCibAmount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                  </div>
+                                  <div></div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {/* Row 1: TOTAL for Revolving: Debit has total, Credit is — */}
+                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 font-bold text-xs">
+                                  <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                                    TOTAL:
+                                  </div>
+                                  <div className="text-right font-mono font-bold text-neutral-900 dark:text-white">
+                                    ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                  </div>
+                                  <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
+                                    —
+                                  </div>
+                                  <div></div>
+                                </div>
+
+                                {/* Row 2: CIB Account for Revolving: Debit is —, Credit has CIB check amount */}
+                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60 rounded-b-2xl">
+                                  <div className="col-span-4 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
+                                    {formatCibAccountName(editCvFormData.bank).replace('-', ':')}:
+                                  </div>
+                                  <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
+                                    —
+                                  </div>
+                                  <div className="text-right font-mono font-extrabold text-[#064e3b] dark:text-emerald-300 pr-1">
+                                    ₱{(creditTotal > 0 ? creditTotal : (parseFloat(editCvCibAmount || '0') || debitTotal)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                  </div>
+                                  <div></div>
+                                </div>
+                              </>
+                            )}
                           </div>
                         </>
                       ) : (
@@ -4997,8 +5089,11 @@ function DisbursementPageContent() {
 
                     {/* Summary row */}
                     {(() => {
+                      const isStl = replenishType === 'stl';
                       const cibVal = isReplenish ? (parseFloat(editCvCibAmount || '0') || 0) : 0;
-                      const overallCreditTotal = creditTotal + cibVal;
+                      const overallCreditTotal = isStl
+                        ? creditTotal + cibVal
+                        : (creditTotal > 0 ? creditTotal : (cibVal > 0 ? cibVal : debitTotal));
                       const isBalanced = Math.abs(debitTotal - overallCreditTotal) < 0.01 && debitTotal > 0;
                       return (
                         <div className="p-3 rounded-xl bg-surface-container-low dark:bg-surface-container flex items-center justify-between text-xs border border-outline-variant/40">

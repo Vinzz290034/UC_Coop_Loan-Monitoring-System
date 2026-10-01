@@ -828,6 +828,22 @@ export default function UnifiedCvLfPrintModal({
   const cibName = useMemo(() => formatCibAccountName(currentCv?.bank || currentCv?.bank_name), [currentCv]);
 
   const cibDetailedAmount = useMemo(() => {
+    // For Revolving Fund (non-STL):
+    // CIB-MBTC is always the full replenishment check / disbursed amount (debitTotal)
+    if (resolvedType !== 'stl') {
+      if (detailedCvData.debitTotal > 0) {
+        return detailedCvData.debitTotal;
+      }
+      if (currentCv?.amount && Number(currentCv.amount) > 0) {
+        return Number(currentCv.amount);
+      }
+      if (totalExpenseAmount > 0) {
+        return totalExpenseAmount;
+      }
+      return getCvDisbursedAmount(currentCv);
+    }
+
+    // For STL Replenishment:
     // 1. Check if currentCv.details explicitly defines a CIB row
     let rawDetails: any[] = [];
     if (Array.isArray(currentCv?.details)) {
@@ -856,13 +872,16 @@ export default function UnifiedCvLfPrintModal({
       return Math.max(0, detailedCvData.debitTotal - detailedCvData.creditTotal);
     }
     return 0;
-  }, [currentCv, detailedCvData]);
+  }, [resolvedType, currentCv, detailedCvData, totalExpenseAmount]);
 
   // Overall credit amount:
   // In detailed mode: overall credit is the sum of expense deductions + CIB amount (= debitTotal)
   // In summary mode: overall credit is summaryCvData.creditTotal (= debitTotal)
   const overallCreditAmount = useMemo(() => {
     if (cvViewMode === 'detailed') {
+      if (resolvedType !== 'stl') {
+        if (detailedCvData.debitTotal > 0) return detailedCvData.debitTotal;
+      }
       const totalCredit = detailedCvData.creditTotal + cibDetailedAmount;
       if (totalCredit > 0) return totalCredit;
       if (detailedCvData.debitTotal > 0) return detailedCvData.debitTotal;
@@ -873,15 +892,25 @@ export default function UnifiedCvLfPrintModal({
     if (currentCv?.amount && Number(currentCv.amount) > 0) return Number(currentCv.amount);
     if (totalExpenseAmount > 0) return totalExpenseAmount;
     return getCvDisbursedAmount(currentCv);
-  }, [cvViewMode, detailedCvData, cibDetailedAmount, summaryCvData, currentCv, totalExpenseAmount]);
+  }, [cvViewMode, resolvedType, detailedCvData, cibDetailedAmount, summaryCvData, currentCv, totalExpenseAmount]);
 
   const displayedTotalExpense = useMemo(() => {
+    if (resolvedType === 'stl') {
+      if (cibDetailedAmount > 0) return cibDetailedAmount;
+      if (currentCv?.cib_amount && parseFloat(currentCv.cib_amount) > 0) return parseFloat(currentCv.cib_amount);
+      if (currentCv?.amount && Number(currentCv.amount) > 0) return Number(currentCv.amount);
+    }
     return overallCreditAmount;
-  }, [overallCreditAmount]);
+  }, [resolvedType, cibDetailedAmount, currentCv, overallCreditAmount]);
 
   const displayedDisbursedAmount = useMemo(() => {
+    if (resolvedType === 'stl') {
+      if (cibDetailedAmount > 0) return cibDetailedAmount;
+      if (currentCv?.cib_amount && parseFloat(currentCv.cib_amount) > 0) return parseFloat(currentCv.cib_amount);
+      if (currentCv?.amount && Number(currentCv.amount) > 0) return Number(currentCv.amount);
+    }
     return overallCreditAmount;
-  }, [overallCreditAmount]);
+  }, [resolvedType, cibDetailedAmount, currentCv, overallCreditAmount]);
 
   const displayedFundBalance = useMemo(() => {
     return authorizedAmount - displayedTotalExpense;
@@ -1243,34 +1272,59 @@ export default function UnifiedCvLfPrintModal({
                                   </td>
                                 </tr>
                               ))}
-                              {/* 3-ROW FOOTER MATCHING DETAILED CV SPEC */}
-                              <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-300 text-[10px]">
-                                <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">TOTAL:</td>
-                                <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
-                                  <span className="text-neutral-400 font-bold">–</span>
-                                </td>
-                                <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
-                                  {detailedCvData.creditTotal > 0 ? `₱${detailedCvData.creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : <span className="text-neutral-400 font-bold">–</span>}
-                                </td>
-                              </tr>
-                              <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-200 text-[10px]">
-                                <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">{cibName}:</td>
-                                <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
-                                  <span className="text-neutral-400 font-bold">–</span>
-                                </td>
-                                <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
-                                  ₱{cibDetailedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                </td>
-                              </tr>
-                              <tr className="bg-[#ecfdf5] font-bold border-t-2 border-emerald-400 text-[10px]">
-                                <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">Overall:</td>
-                                <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
-                                  ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                </td>
-                                <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
-                                  ₱{(detailedCvData.creditTotal + cibDetailedAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                </td>
-                              </tr>
+                              {/* 3-ROW FOOTER MATCHING DETAILED CV SPEC FOR STL ONLY; 2-ROW FOOTER FOR REVOLVING */}
+                              {resolvedType === 'stl' ? (
+                                <>
+                                  <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-300 text-[10px]">
+                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">TOTAL:</td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
+                                      <span className="text-neutral-400 font-bold">–</span>
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
+                                      {detailedCvData.creditTotal > 0 ? `₱${detailedCvData.creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : <span className="text-neutral-400 font-bold">–</span>}
+                                    </td>
+                                  </tr>
+                                  <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-200 text-[10px]">
+                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">{cibName}:</td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
+                                      <span className="text-neutral-400 font-bold">–</span>
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
+                                      ₱{cibDetailedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                    </td>
+                                  </tr>
+                                  <tr className="bg-[#ecfdf5] font-bold border-t-2 border-emerald-400 text-[10px]">
+                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">Overall:</td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
+                                      ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
+                                      ₱{(detailedCvData.creditTotal + cibDetailedAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                    </td>
+                                  </tr>
+                                </>
+                              ) : (
+                                <>
+                                  <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-300 text-[10px]">
+                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">TOTAL:</td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
+                                      ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
+                                      <span className="text-neutral-400 font-bold">–</span>
+                                    </td>
+                                  </tr>
+                                  <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-200 text-[10px]">
+                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">{cibName}:</td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
+                                      <span className="text-neutral-400 font-bold">–</span>
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
+                                      ₱{cibDetailedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                    </td>
+                                  </tr>
+                                </>
+                              )}
                             </tbody>
                           </table>
                         </div>
@@ -1681,34 +1735,59 @@ export default function UnifiedCvLfPrintModal({
                           </td>
                         </tr>
                       ))}
-                      {/* 3-ROW FOOTER MATCHING DETAILED CV SPEC */}
-                      <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #6ee7b7', fontWeight: 'bold', color: '#064e3b' }}>
-                        <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>TOTAL:</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
-                          –
-                        </td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
-                          {detailedCvData.creditTotal > 0 ? `₱${detailedCvData.creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '–'}
-                        </td>
-                      </tr>
-                      <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #a7f3d0', fontWeight: 'bold', color: '#064e3b' }}>
-                        <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>{cibName}:</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
-                          –
-                        </td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
-                          ₱{cibDetailedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                      <tr style={{ backgroundColor: '#ecfdf5', borderTop: '2px solid #34d399', fontWeight: 'bold', color: '#064e3b' }}>
-                        <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>Overall:</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
-                          ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
-                          ₱{(detailedCvData.creditTotal + cibDetailedAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
+                      {/* 3-ROW FOOTER FOR STL; 2-ROW FOOTER (TOTAL & CIB ONLY) FOR REVOLVING */}
+                      {resolvedType === 'stl' ? (
+                        <>
+                          <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #6ee7b7', fontWeight: 'bold', color: '#064e3b' }}>
+                            <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>TOTAL:</td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
+                              –
+                            </td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
+                              {detailedCvData.creditTotal > 0 ? `₱${detailedCvData.creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '–'}
+                            </td>
+                          </tr>
+                          <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #a7f3d0', fontWeight: 'bold', color: '#064e3b' }}>
+                            <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>{cibName}:</td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
+                              –
+                            </td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
+                              ₱{cibDetailedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                          <tr style={{ backgroundColor: '#ecfdf5', borderTop: '2px solid #34d399', fontWeight: 'bold', color: '#064e3b' }}>
+                            <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>Overall:</td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
+                              ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
+                              ₱{(detailedCvData.creditTotal + cibDetailedAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        </>
+                      ) : (
+                        <>
+                          <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #6ee7b7', fontWeight: 'bold', color: '#064e3b' }}>
+                            <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>TOTAL:</td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
+                              ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
+                              –
+                            </td>
+                          </tr>
+                          <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #a7f3d0', fontWeight: 'bold', color: '#064e3b' }}>
+                            <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>{cibName}:</td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
+                              –
+                            </td>
+                            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', color: '#064e3b' }}>
+                              ₱{cibDetailedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        </>
+                      )}
                     </tbody>
                   </table>
                 </div>
