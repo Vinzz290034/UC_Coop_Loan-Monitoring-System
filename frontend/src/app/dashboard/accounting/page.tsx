@@ -2709,7 +2709,7 @@ export default function AccountingPage() {
                         <thead>
                           <tr className="bg-emerald-900 text-white text-[9.5px] uppercase tracking-wider font-bold">
                             <th className="py-2 px-3 w-8 text-center">#</th>
-                            <th className="py-2 px-3">Particulars / Accounting Breakdown</th>
+                            <th className="py-2 px-3">Description / Accounting Breakdown</th>
                             <th className="py-2 px-3 w-28 text-center">Reference</th>
                             <th className="py-2 px-3 text-right w-36">Amount (₱)</th>
                           </tr>
@@ -2901,7 +2901,7 @@ export default function AccountingPage() {
                       <thead>
                         <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold', fontSize: '9.5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                           <th style={{ padding: '9px 14px', width: '36px', textAlign: 'center' }}>#</th>
-                          <th style={{ padding: '9px 14px' }}>Particulars / Ledger Description</th>
+                          <th style={{ padding: '9px 14px' }}>Description / Ledger Description</th>
                           <th style={{ padding: '9px 14px', width: '120px', textAlign: 'center' }}>Reference</th>
                           <th style={{ padding: '9px 14px', textAlign: 'right', width: '150px' }}>Amount (₱)</th>
                         </tr>

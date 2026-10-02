@@ -1298,7 +1298,7 @@ export default function UnifiedCvLfPrintModal({
                       </div>
                     ) : (
                       <div className="text-xs bg-neutral-50 dark:bg-neutral-900/60 p-2.5 rounded border border-neutral-200 dark:border-neutral-800">
-                        <strong className="text-neutral-700 dark:text-neutral-300 uppercase text-[10px] tracking-wide">Particulars:</strong>{' '}
+                        <strong className="text-neutral-700 dark:text-neutral-300 uppercase text-[10px] tracking-wide">Description:</strong>{' '}
                         <span className="italic text-neutral-800 dark:text-neutral-200 font-medium">
                           {currentCv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment Disbursement' : 'Revolving Fund Replenishment')}
                         </span>
@@ -1765,7 +1765,7 @@ export default function UnifiedCvLfPrintModal({
               </div>
             ) : (
               <div style={{ backgroundColor: '#f9fafb', padding: '5px 8px', borderRadius: '4px', border: '1px solid #e5e7eb', fontSize: '9px' }}>
-                <strong style={{ color: '#374151' }}>PARTICULARS:</strong>{' '}
+                <strong style={{ color: '#374151' }}>DESCRIPTION:</strong>{' '}
                 <span style={{ color: '#1f2937', fontStyle: 'italic' }}>
                   {currentCv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment Disbursement' : 'Revolving Fund Replenishment')}
                 </span>

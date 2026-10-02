@@ -3217,8 +3217,8 @@ function DisbursementPageContent() {
                   onChange={e => setCvSearch(e.target.value)}
                   placeholder={
                     currentTabConfig.id === 'summary'
-                      ? 'Search all check vouchers by voucher #, check #, payee, or particulars...'
-                      : `Search ${currentTabConfig.label} by voucher #, check #, payee, or particulars...`
+                      ? 'Search all check vouchers by voucher #, check #, payee, or description...'
+                      : `Search ${currentTabConfig.label} by voucher #, check #, payee, or description...`
                   }
                   className="w-full pl-10 pr-10 py-2.5 text-xs font-medium rounded-2xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all text-neutral-900 dark:text-white placeholder:text-neutral-400"
                 />
@@ -3337,7 +3337,7 @@ function DisbursementPageContent() {
                     <th className="py-3.5 px-4 font-bold">Check No.</th>
                     <th className="py-3.5 px-4 font-bold">Payee / Entity</th>
                     <th className="py-3.5 px-4 font-bold">Bank</th>
-                    <th className="py-3.5 px-4 font-bold">Particulars / Details</th>
+                    <th className="py-3.5 px-4 font-bold">Description / Details</th>
                     <th className="py-3.5 px-4 font-bold text-right">Disbursed Amount</th>
                     <th className="py-3.5 px-4 font-bold text-center">Status</th>
                     <th className="py-3.5 px-4 font-bold text-center">Actions</th>
@@ -3748,10 +3748,10 @@ function DisbursementPageContent() {
                   </div>
                 </div>
 
-                {/* Particulars */}
+                {/* Description */}
                 <div>
                   <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
-                    Particulars / Transaction Description
+                    Description
                   </label>
                   <textarea
                     rows={2}
@@ -4651,7 +4651,7 @@ function DisbursementPageContent() {
                     <div>
                       <span className="font-bold text-xs block">Override Mode (Filed Voucher)</span>
                       <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
-                        You are modifying a sealed &amp; filed check voucher. Any changes to amounts, particulars, dates, or line items will be updated.
+                        You are modifying a sealed &amp; filed check voucher. Any changes to amounts, description, dates, or line items will be updated.
                       </p>
                     </div>
                   </div>
@@ -4787,7 +4787,7 @@ function DisbursementPageContent() {
 
               <div>
                 <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
-                  Particulars
+                  Description
                 </label>
                 <textarea
                   rows={2}

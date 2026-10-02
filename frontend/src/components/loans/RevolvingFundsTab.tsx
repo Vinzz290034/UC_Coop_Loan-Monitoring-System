@@ -1484,7 +1484,7 @@ export default function RevolvingFundsTab({
                                     <thead className="bg-neutral-100/90 dark:bg-neutral-800/90 border-b border-outline-variant/40 text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
                                       <tr>
                                         <th className="px-3 py-2.5">Date</th>
-                                        <th className="px-3 py-2.5">Particulars / Voucher #</th>
+                                        <th className="px-3 py-2.5">Description / Voucher #</th>
                                         <th className="px-4 py-2.5 text-right">Amount</th>
                                         <th className="px-3 py-2.5">Account</th>
                                         <th className="px-3 py-2.5">Category</th>
@@ -1662,7 +1662,7 @@ export default function RevolvingFundsTab({
                   type="text"
                   value={cvSearch}
                   onChange={e => setCvSearch(e.target.value)}
-                  placeholder="Filter by voucher #, payee, or particulars..."
+                  placeholder="Filter by voucher #, payee, or description..."
                   className="w-full pl-9 pr-3 py-2 text-xs bg-neutral-100 dark:bg-neutral-800 border border-outline-variant/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -1901,7 +1901,7 @@ export default function RevolvingFundsTab({
                     <table className="w-full text-xs min-w-[860px]">
                       <thead className="sticky top-0 z-10">
                         <tr className="bg-neutral-100 dark:bg-neutral-800 border-b border-outline-variant/40 text-neutral-600 dark:text-neutral-300 font-bold uppercase tracking-wide text-[10px]">
-                          <th className="px-3 py-2.5 text-left w-44">Particulars / Voucher #</th>
+                          <th className="px-3 py-2.5 text-left w-44">Description / Voucher #</th>
                           <th className="px-3 py-2.5 text-left w-32">Date</th>
                           <th className="px-3 py-2.5 text-right w-28">Amount (₱)</th>
                           <th className="px-3 py-2.5 text-left">Account</th>
@@ -2552,7 +2552,7 @@ export default function RevolvingFundsTab({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5px', marginBottom: '8px' }}>
             <thead>
               <tr style={{ backgroundColor: '#f3f4f6', borderTop: '1.5px solid #111827', borderBottom: '1.5px solid #111827' }}>
-                <th style={{ padding: '4px 6px', textAlign: 'left', width: '140px', borderRight: '1px solid #d1d5db' }}>Particulars / Voucher #</th>
+                <th style={{ padding: '4px 6px', textAlign: 'left', width: '140px', borderRight: '1px solid #d1d5db' }}>Description / Voucher #</th>
                 <th style={{ padding: '4px 6px', textAlign: 'left', width: '85px', borderRight: '1px solid #d1d5db' }}>Date</th>
                 <th style={{ padding: '4px 6px', textAlign: 'right', width: '95px', borderRight: '1px solid #d1d5db' }}>Amount (₱)</th>
                 <th style={{ padding: '4px 6px', textAlign: 'left', borderRight: '1px solid #d1d5db' }}>Account</th>

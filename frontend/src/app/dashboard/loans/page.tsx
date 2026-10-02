@@ -5841,7 +5841,7 @@ function LoansPageContent() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-neutral-600 dark:text-neutral-400 text-[11px]">Description / Particulars</label>
+                <label className="font-semibold text-neutral-600 dark:text-neutral-400 text-[11px]">Description</label>
                 <input
                   type="text"
                   value={voucherDescription}

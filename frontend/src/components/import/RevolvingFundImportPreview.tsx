@@ -255,7 +255,7 @@ export default function RevolvingFundImportPreview({
               <tr>
                 <th className="px-4 py-3">#</th>
                 <th className="px-4 py-3">Purchase / Release Date</th>
-                <th className="px-4 py-3">Particulars</th>
+                <th className="px-4 py-3">Description</th>
                 <th className="px-4 py-3">Account</th>
                 <th className="px-4 py-3">Remarks / Category</th>
                 <th className="px-4 py-3">Notes / Purpose</th>

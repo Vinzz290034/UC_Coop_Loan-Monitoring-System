@@ -1608,7 +1608,7 @@ export default function ImportPage() {
                       <th className="px-3 py-3">Check No.</th>
                       <th className="px-4 py-3">Payee</th>
                       <th className="px-3 py-3">Bank</th>
-                      <th className="px-4 py-3">Particulars</th>
+                      <th className="px-4 py-3">Description</th>
                       <th className="px-4 py-3 text-right">Disbursed Amount</th>
                       <th className="px-3 py-3">Approval Date</th>
                       <th className="px-3 py-3">Date Released</th>

@@ -648,7 +648,7 @@ export default function StlLiquidationsTab({
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search by LF no., LAF no., particulars, remarks, staff..."
+              placeholder="Search by LF no., LAF no., description, remarks, staff..."
               className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 focus:outline-none focus:border-primary text-neutral-900 dark:text-white placeholder:text-neutral-400"
             />
           </div>
@@ -946,7 +946,7 @@ export default function StlLiquidationsTab({
                                     <thead>
                                       <tr className="border-b border-outline-variant/60 bg-neutral-100 dark:bg-neutral-700/50 font-bold uppercase tracking-wider text-[10px] text-neutral-600 dark:text-neutral-300">
                                         <th className="px-4 py-2.5 text-center w-28">Release Date</th>
-                                        <th className="px-4 py-2.5 text-left">Particulars</th>
+                                        <th className="px-4 py-2.5 text-left">Description</th>
                                         <th className="px-4 py-2.5 text-right w-36">Amount</th>
                                         <th className="px-4 py-2.5 text-left w-48">Remarks</th>
                                       </tr>
@@ -1069,7 +1069,7 @@ export default function StlLiquidationsTab({
                   )}
                 </h3>
                 <p className="text-[11px] text-neutral-500">
-                  Fill in the liquidation header and add disbursed short-term loan particulars.
+                  Fill in the liquidation header and add disbursed short-term loan descriptions.
                 </p>
               </div>
               <button
@@ -1191,10 +1191,10 @@ export default function StlLiquidationsTab({
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="font-bold uppercase tracking-wider text-[11px] text-neutral-900 dark:text-white">
-                      Disbursement Entries (Particulars &amp; Amounts)
+                      Disbursement Entries (Description &amp; Amounts)
                     </span>
                     <span className="block text-[10px] text-neutral-500">
-                      Matches Release Date, Particulars (LAF #), Amount, and Remarks from the official form.
+                      Matches Release Date, Description (LAF #), Amount, and Remarks from the official form.
                     </span>
                   </div>
                   <button
@@ -1239,7 +1239,7 @@ export default function StlLiquidationsTab({
                   <div className="grid grid-cols-12 px-3 py-2.5 bg-surface-container-low dark:bg-surface-container font-bold text-[10px] uppercase tracking-wider text-neutral-500 border-b border-outline-variant/60">
                     <div className="col-span-1 text-center">#</div>
                     <div className="col-span-3">Release Date</div>
-                    <div className="col-span-4">Particulars (LAF no.)</div>
+                    <div className="col-span-4">Description (LAF no.)</div>
                     <div className="col-span-2 text-right">Amount (₱)</div>
                     <div className="col-span-2 text-center">Remarks</div>
                   </div>
@@ -1800,7 +1800,7 @@ export default function StlLiquidationsTab({
                   Release Date
                 </th>
                 <th style={{ borderRight: '1px solid #000', padding: '6px 8px', textAlign: 'center', width: '38%', fontWeight: 'bold' }}>
-                  Particulars
+                  Description
                 </th>
                 <th style={{ borderRight: '1px solid #000', padding: '6px 8px', textAlign: 'center', width: '22%', fontWeight: 'bold' }}>
                   Amount

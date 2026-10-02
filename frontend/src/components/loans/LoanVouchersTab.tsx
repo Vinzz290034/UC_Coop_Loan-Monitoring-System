@@ -931,7 +931,7 @@ export default function LoanVouchersTab({
                 <th className="py-3.5 px-4">Check No.</th>
                 <th className="py-3.5 px-4">Payee / Entity</th>
                 <th className="py-3.5 px-4">Bank</th>
-                <th className="py-3.5 px-4">Particulars / Details</th>
+                <th className="py-3.5 px-4">Description / Details</th>
                 <th className="py-3.5 px-4 text-right">Disbursed Amount</th>
                 <th className="py-3.5 px-4 text-center">Status</th>
                 <th className="py-3.5 px-4 text-center">Actions</th>
@@ -1135,9 +1135,9 @@ export default function LoanVouchersTab({
                 </div>
               </div>
 
-              {/* Particulars */}
+              {/* Description */}
               <div>
-                <span className="text-[10px] font-bold text-neutral-400 uppercase block mb-1">Particulars</span>
+                <span className="text-[10px] font-bold text-neutral-400 uppercase block mb-1">Description</span>
                 <p className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/60 text-neutral-800 dark:text-neutral-200">
                   {formatVoucherDescription(selectedCvForModal.particulars, selectedCvForModal.payee)}
                 </p>
@@ -1346,7 +1346,7 @@ export default function LoanVouchersTab({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Particulars</label>
+                <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Description</label>
                 <textarea
                   rows={2}
                   value={editCvFormData.particulars}
@@ -1640,7 +1640,7 @@ export default function LoanVouchersTab({
             {/* Particulars */}
             <div>
               <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
-                Particulars / Details:
+                Description / Details:
               </span>
               <div style={{ padding: '8px 12px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '11px', color: '#111827' }}>
                 {formatVoucherDescription(printingCvBreakdown.particulars, printingCvBreakdown.payee)}
