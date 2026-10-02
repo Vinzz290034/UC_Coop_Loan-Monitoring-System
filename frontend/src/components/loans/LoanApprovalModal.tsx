@@ -16,7 +16,9 @@ import {
   CreditCard,
   ChevronDown,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Plus,
+  Trash2
 } from 'lucide-react';
 
 interface LoanApprovalModalProps {
@@ -53,14 +55,20 @@ export default function LoanApprovalModal({
   const [applyInsurance, setApplyInsurance] = useState<string>('11');
   const [applyFixedDeposit, setApplyFixedDeposit] = useState<string>('0');
   const [applyOtherCharges, setApplyOtherCharges] = useState<string>('0');
-  const [applyPrevBalance, setApplyPrevBalance] = useState<string>('0');
 
-  // Previous Active Loan selection
+  // Multi-Previous Active Loan selection
+  interface PrevLoanDeductionItem {
+    id: string;
+    loanId: string;
+    amount: string;
+  }
   const [memberActiveLoans, setMemberActiveLoans] = useState<any[]>([]);
-  const [selectedPrevLoanId, setSelectedPrevLoanId] = useState<string>('');
+  const [prevLoanDeductions, setPrevLoanDeductions] = useState<PrevLoanDeductionItem[]>([
+    { id: 'pld-1', loanId: '', amount: '0' }
+  ]);
   const [loadingMemberLoans, setLoadingMemberLoans] = useState(false);
-  const [isPrevLoanDropdownOpen, setIsPrevLoanDropdownOpen] = useState(false);
-  const prevLoanDropdownRef = useRef<HTMLDivElement>(null);
+  const [openPrevLoanDropdownId, setOpenPrevLoanDropdownId] = useState<string | null>(null);
+  const prevLoanSectionRef = useRef<HTMLDivElement>(null);
 
   // Custom Monthly Payment Schedule
   const [applyScheduleAmounts, setApplyScheduleAmounts] = useState<Record<number, string>>({});
@@ -72,17 +80,15 @@ export default function LoanApprovalModal({
   // Close dropdown on outside click
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
-      if (prevLoanDropdownRef.current && !prevLoanDropdownRef.current.contains(e.target as Node)) {
-        setIsPrevLoanDropdownOpen(false);
+      if (prevLoanSectionRef.current && !prevLoanSectionRef.current.contains(e.target as Node)) {
+        setOpenPrevLoanDropdownId(null);
       }
     };
-    if (isPrevLoanDropdownOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
+    document.addEventListener('mousedown', handleOutsideClick);
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
     };
-  }, [isPrevLoanDropdownOpen]);
+  }, []);
 
   // Fetch active loans of the borrower for the previous loan deduction dropdown
   useEffect(() => {
@@ -158,8 +164,18 @@ export default function LoanApprovalModal({
     const othersItem = deds.find((d) => d.name?.toLowerCase().includes('other'));
     setApplyOtherCharges(othersItem ? String(othersItem.amount) : '0');
 
-    const prevBalItem = deds.find((d) => d.name?.toLowerCase().includes('previous loan balance'));
-    setApplyPrevBalance(prevBalItem ? String(prevBalItem.amount) : '0');
+    const prevBalItems = deds.filter((d) => d.name?.toLowerCase().includes('previous loan balance'));
+    if (prevBalItems.length > 0) {
+      setPrevLoanDeductions(
+        prevBalItems.map((pb, idx) => ({
+          id: `pld-init-${idx}-${Date.now()}`,
+          loanId: '',
+          amount: String(pb.amount || 0)
+        }))
+      );
+    } else {
+      setPrevLoanDeductions([{ id: 'pld-1', loanId: '', amount: '0' }]);
+    }
 
     // Parse custom schedule
     let sched: any[] = [];
@@ -186,6 +202,23 @@ export default function LoanApprovalModal({
     setErrorMessage(null);
   }, [loan]);
 
+  // Auto-match prevLoanDeductions to memberActiveLoans when memberActiveLoans load
+  useEffect(() => {
+    if (memberActiveLoans.length === 0) return;
+    setPrevLoanDeductions((prev) =>
+      prev.map((p) => {
+        if (p.loanId) return p;
+        const matched = memberActiveLoans.find(
+          (al) => Math.abs(parseFloat(al.remaining_balance || 0) - (parseFloat(p.amount) || 0)) < 0.01
+        );
+        if (matched) {
+          return { ...p, loanId: String(matched.id) };
+        }
+        return p;
+      })
+    );
+  }, [memberActiveLoans]);
+
   // Auto-generate next sequential LAF number
   const fetchNextLafNo = async () => {
     try {
@@ -201,41 +234,80 @@ export default function LoanApprovalModal({
     }
   };
 
-  // Select previous loan for deduction
-  const handlePrevLoanSelect = (prevId: string) => {
-    setSelectedPrevLoanId(prevId);
-    if (!prevId) {
-      setApplyPrevBalance('0');
-      setApplyOtherCharges('0');
-      return;
-    }
-    const found = memberActiveLoans.find((l) => String(l.id) === String(prevId));
-    if (found) {
-      setApplyPrevBalance(String(found.remaining_balance || 0));
-      const fines = parseFloat(found.total_fines || 0);
-      const interest = parseFloat(found.remaining_interest || 0);
-      if (fines > 0) {
-        setApplyOtherCharges(String(fines));
-      } else if (interest > 0) {
-        setApplyOtherCharges(String(interest));
-      } else {
-        setApplyOtherCharges('0');
+  // Handlers for previous active loan deductions list
+  const handleAddPrevLoanDeduction = () => {
+    const unselected = memberActiveLoans.find(
+      (l) => !prevLoanDeductions.some((p) => String(p.loanId) === String(l.id))
+    );
+    const newLoanId = unselected ? String(unselected.id) : '';
+    const newAmount = unselected ? String(unselected.remaining_balance ?? unselected.principal_amount ?? 0) : '0';
+    setPrevLoanDeductions((prev) => [
+      ...prev,
+      {
+        id: `pld-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        loanId: newLoanId,
+        amount: newAmount
       }
-    }
+    ]);
   };
 
+  const handleRemovePrevLoanDeduction = (id: string) => {
+    setPrevLoanDeductions((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      return updated.length > 0 ? updated : [{ id: `pld-${Date.now()}`, loanId: '', amount: '0' }];
+    });
+  };
+
+  const handlePrevLoanSelect = (rowId: string, loanId: string) => {
+    setPrevLoanDeductions((prev) =>
+      prev.map((item) => {
+        if (item.id !== rowId) return item;
+        if (!loanId) {
+          return { ...item, loanId: '', amount: '0' };
+        }
+        const found = memberActiveLoans.find((l) => String(l.id) === String(loanId));
+        const bal = found ? (found.remaining_balance ?? found.principal_amount ?? 0) : 0;
+        return {
+          ...item,
+          loanId,
+          amount: String(!isNaN(bal) ? bal : 0)
+        };
+      })
+    );
+    setOpenPrevLoanDropdownId(null);
+  };
+
+  const handlePrevLoanAmountChange = (rowId: string, amount: string) => {
+    setPrevLoanDeductions((prev) =>
+      prev.map((item) => (item.id === rowId ? { ...item, amount } : item))
+    );
+  };
+
+  const totalPrevBalanceCalc = useMemo(() => {
+    return prevLoanDeductions.reduce((sum, item) => sum + (parseFloat(String(item.amount)) || 0), 0);
+  }, [prevLoanDeductions]);
+
   const selectedPrevLoanObj = useMemo(() => {
-    if (!selectedPrevLoanId) return null;
-    return memberActiveLoans.find((l) => String(l.id) === String(selectedPrevLoanId)) || null;
-  }, [memberActiveLoans, selectedPrevLoanId]);
+    const first = prevLoanDeductions.find((p) => p.loanId);
+    if (!first) return null;
+    return memberActiveLoans.find((l: any) => String(l.id) === String(first.loanId)) || null;
+  }, [memberActiveLoans, prevLoanDeductions]);
 
   const prevLoanFines = useMemo(() => {
-    return parseFloat(selectedPrevLoanObj?.total_fines || 0);
-  }, [selectedPrevLoanObj]);
+    return prevLoanDeductions.reduce((sum, item) => {
+      if (!item.loanId) return sum;
+      const found = memberActiveLoans.find((l: any) => String(l.id) === String(item.loanId));
+      return sum + parseFloat(found?.total_fines || 0);
+    }, 0);
+  }, [memberActiveLoans, prevLoanDeductions]);
 
   const prevLoanInterest = useMemo(() => {
-    return parseFloat(selectedPrevLoanObj?.remaining_interest || 0);
-  }, [selectedPrevLoanObj]);
+    return prevLoanDeductions.reduce((sum, item) => {
+      if (!item.loanId) return sum;
+      const found = memberActiveLoans.find((l: any) => String(l.id) === String(item.loanId));
+      return sum + parseFloat(found?.remaining_interest || 0);
+    }, 0);
+  }, [memberActiveLoans, prevLoanDeductions]);
 
   // Calculations
   const totalDeductionsCalc = useMemo(() => {
@@ -243,10 +315,10 @@ export default function LoanApprovalModal({
       (parseFloat(String(applyServiceFee)) || 0) +
       (parseFloat(String(applyInsurance)) || 0) +
       (parseFloat(String(applyFixedDeposit)) || 0) +
-      (parseFloat(String(applyPrevBalance)) || 0) +
+      totalPrevBalanceCalc +
       (parseFloat(String(applyOtherCharges)) || 0)
     );
-  }, [applyServiceFee, applyInsurance, applyFixedDeposit, applyPrevBalance, applyOtherCharges]);
+  }, [applyServiceFee, applyInsurance, applyFixedDeposit, totalPrevBalanceCalc, applyOtherCharges]);
 
   const netProceedsCalc = useMemo(() => {
     return Math.max(0, (applyAmount || 0) - totalDeductionsCalc);
@@ -317,31 +389,35 @@ export default function LoanApprovalModal({
       return;
     }
 
-    const prevLoanLabel = selectedPrevLoanObj
-      ? `Previous Loan Balance (${selectedPrevLoanObj.laf_no ? `LAF: ${selectedPrevLoanObj.laf_no}` : selectedPrevLoanObj.product_name || 'Active Loan'})`
-      : 'Previous Loan Balance';
-
     let othersLabel = 'Others';
-    if (selectedPrevLoanObj) {
-      const finesVal = parseFloat(selectedPrevLoanObj.total_fines || 0);
-      const intVal = parseFloat(selectedPrevLoanObj.remaining_interest || 0);
-      const curOther = parseFloat(String(applyOtherCharges)) || 0;
-      if (curOther > 0) {
-        if (finesVal > 0 && Math.abs(curOther - finesVal) < 0.01) {
-          othersLabel = 'Others (Fines)';
-        } else if (intVal > 0 && Math.abs(curOther - intVal) < 0.01) {
-          othersLabel = 'Others (Interest)';
-        } else if (finesVal > 0 && intVal > 0 && Math.abs(curOther - (finesVal + intVal)) < 0.01) {
-          othersLabel = 'Others (Fines + Interest)';
-        }
+    const curOther = parseFloat(String(applyOtherCharges)) || 0;
+    if (curOther > 0) {
+      if (prevLoanFines > 0 && Math.abs(curOther - prevLoanFines) < 0.01) {
+        othersLabel = 'Others (Fines)';
+      } else if (prevLoanInterest > 0 && Math.abs(curOther - prevLoanInterest) < 0.01) {
+        othersLabel = 'Others (Interest)';
+      } else if (prevLoanFines > 0 && prevLoanInterest > 0 && Math.abs(curOther - (prevLoanFines + prevLoanInterest)) < 0.01) {
+        othersLabel = 'Others (Fines + Interest)';
       }
     }
+
+    const prevLoanDeductionItems = prevLoanDeductions
+      .map((item) => {
+        const amt = parseFloat(String(item.amount)) || 0;
+        if (amt <= 0) return null;
+        const found = memberActiveLoans.find((l: any) => String(l.id) === String(item.loanId));
+        const label = found
+          ? `Previous Loan Balance (${found.laf_no ? `LAF: ${found.laf_no}` : found.product_name || 'Active Loan'})`
+          : 'Previous Loan Balance';
+        return { name: label, amount: amt };
+      })
+      .filter((d): d is { name: string; amount: number } => d !== null);
 
     const deductionsPayload = [
       { name: 'Service Fee', amount: parseFloat(String(applyServiceFee)) || 0 },
       { name: 'Insurance', amount: parseFloat(String(applyInsurance)) || 0 },
       { name: 'Fixed Deposit', amount: parseFloat(String(applyFixedDeposit)) || 0 },
-      { name: prevLoanLabel, amount: parseFloat(String(applyPrevBalance)) || 0 },
+      ...prevLoanDeductionItems,
       { name: othersLabel, amount: parseFloat(String(applyOtherCharges)) || 0 },
     ].filter((d) => d.amount > 0);
 
@@ -760,159 +836,257 @@ export default function LoanApprovalModal({
             </div>
 
             {/* Previous Loan Balance Deduction */}
-            <div className="p-3 bg-white dark:bg-surface-container-high/40 rounded-xl border border-outline-variant/60 space-y-2">
+            <div className="p-3 bg-white dark:bg-surface-container-high/40 rounded-xl border border-outline-variant/60 space-y-3" ref={prevLoanSectionRef}>
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5 uppercase tracking-wider">
                   <ReceiptText className="w-3.5 h-3.5 text-primary" />
                   Previous Loan Balance Deduction
+                  {prevLoanDeductions.filter((p) => p.loanId).length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary dark:text-secondary text-[9px] font-bold">
+                      {prevLoanDeductions.filter((p) => p.loanId).length}
+                    </span>
+                  )}
                 </label>
-                {selectedPrevLoanId && selectedPrevLoanObj && (
-                  <span className="text-[10px] text-primary dark:text-secondary font-semibold">
-                    Current Balance: ₱{Number(selectedPrevLoanObj.remaining_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {totalPrevBalanceCalc > 0 && (
+                  <span className="text-[10px] text-primary dark:text-secondary font-semibold font-mono">
+                    Total Deducted: ₱{totalPrevBalanceCalc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2 space-y-1 relative" ref={prevLoanDropdownRef}>
-                  <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">
-                    Select Active Loan to Deduct
-                  </label>
+              {/* List of Previous Loan Deductions */}
+              <div className="space-y-2.5">
+                {prevLoanDeductions.map((item, idx) => {
+                  const selectedLoan = memberActiveLoans.find((l: any) => String(l.id) === String(item.loanId));
+                  const isDropdownOpen = openPrevLoanDropdownId === item.id;
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!loadingMemberLoans && memberActiveLoans.length > 0) {
-                        setIsPrevLoanDropdownOpen((prev) => !prev);
-                      }
-                    }}
-                    disabled={loadingMemberLoans || memberActiveLoans.length === 0}
-                    className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer bg-white dark:bg-surface-container-high/60 ${
-                      isPrevLoanDropdownOpen
-                        ? 'border-primary ring-2 ring-primary/20 shadow-sm'
-                        : 'border-outline-variant hover:border-primary/40'
-                    } ${loadingMemberLoans || memberActiveLoans.length === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <CreditCard
-                        className={`w-3.5 h-3.5 shrink-0 ${
-                          selectedPrevLoanObj
-                            ? 'text-primary dark:text-secondary'
-                            : 'text-neutral-400'
-                        }`}
-                      />
-                      <span
-                        className={`truncate ${
-                          selectedPrevLoanObj
-                            ? 'text-on-surface dark:text-white font-semibold'
-                            : 'text-neutral-500 font-normal'
-                        }`}
-                      >
-                        {loadingMemberLoans
-                          ? "Loading member's active loans..."
-                          : memberActiveLoans.length === 0
-                          ? 'No other active loans found'
-                          : selectedPrevLoanObj
-                          ? `${selectedPrevLoanObj.laf_no ? `[${selectedPrevLoanObj.laf_no}] ` : ''}${selectedPrevLoanObj.product_name || 'Loan'} — Bal: ₱${Number(selectedPrevLoanObj.remaining_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                          : '-- None / No previous loan deduction --'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {loadingMemberLoans && (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />
-                      )}
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-200 ${
-                          isPrevLoanDropdownOpen
-                            ? 'rotate-180 text-primary dark:text-secondary'
-                            : ''
-                        }`}
-                      />
-                    </div>
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {isPrevLoanDropdownOpen && (
-                    <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-white dark:bg-surface-container-high border border-outline-variant/70 rounded-2xl shadow-2xl overflow-hidden p-1 max-h-56 overflow-y-auto">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handlePrevLoanSelect('');
-                          setIsPrevLoanDropdownOpen(false);
-                        }}
-                        className={`w-full px-3 py-2 text-left text-xs rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
-                          !selectedPrevLoanId
-                            ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
-                            : 'hover:bg-neutral-100 dark:hover:bg-surface-container-highest text-neutral-600 dark:text-neutral-300'
-                        }`}
-                      >
-                        <span className="italic">-- None / No previous loan deduction --</span>
-                        {!selectedPrevLoanId && (
-                          <CheckCircle2 className="w-4 h-4 text-primary dark:text-secondary shrink-0" />
-                        )}
-                      </button>
-
-                      {memberActiveLoans.map((l: any) => {
-                        const isSelected = String(l.id) === String(selectedPrevLoanId);
-                        return (
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-2.5 rounded-xl border border-outline-variant/60 bg-neutral-50/70 dark:bg-surface-container-high/30 space-y-2 relative"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-1.5 py-0.5 rounded-md bg-neutral-200 dark:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-700 dark:text-neutral-300">
+                            #{idx + 1}
+                          </span>
+                          {selectedLoan ? (
+                            <span className="text-[10px] font-semibold text-primary dark:text-secondary">
+                              Current Bal: ₱{Number(selectedLoan.remaining_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-neutral-400 italic">
+                              Select a loan to deduct
+                            </span>
+                          )}
+                        </div>
+                        {prevLoanDeductions.length > 1 && (
                           <button
-                            key={l.id}
+                            type="button"
+                            onClick={() => handleRemovePrevLoanDeduction(item.id)}
+                            className="text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                            title="Remove this deduction row"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {/* Loan Selector Dropdown */}
+                        <div className="sm:col-span-2 space-y-1 relative">
+                          <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">
+                            Select Active Loan to Deduct
+                          </label>
+
+                          <button
                             type="button"
                             onClick={() => {
-                              handlePrevLoanSelect(String(l.id));
-                              setIsPrevLoanDropdownOpen(false);
+                              if (!loadingMemberLoans && memberActiveLoans.length > 0) {
+                                setOpenPrevLoanDropdownId(isDropdownOpen ? null : item.id);
+                              }
                             }}
-                            className={`w-full px-3 py-2 text-left rounded-xl flex items-center justify-between gap-3 transition-colors cursor-pointer ${
-                              isSelected
-                                ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
-                                : 'hover:bg-neutral-100 dark:hover:bg-surface-container-highest text-neutral-800 dark:text-neutral-200'
-                            }`}
+                            disabled={loadingMemberLoans || memberActiveLoans.length === 0}
+                            className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer bg-white dark:bg-surface-container-high/60 ${
+                              isDropdownOpen
+                                ? 'border-primary ring-2 ring-primary/20 shadow-sm'
+                                : 'border-outline-variant hover:border-primary/40'
+                            } ${loadingMemberLoans || memberActiveLoans.length === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
                           >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {l.laf_no && (
-                                  <span className="px-1.5 py-0.5 rounded-md bg-neutral-200 dark:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-700 dark:text-neutral-300">
-                                    {l.laf_no}
-                                  </span>
-                                )}
-                                <span className="text-xs font-semibold truncate">
-                                  {l.product_name || 'Loan'}
-                                </span>
-                              </div>
-                              <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                <span>Status: <span className="capitalize">{l.status}</span></span>
-                                {parseFloat(l.remaining_interest || 0) > 0 && (
-                                  <span className="text-amber-600 dark:text-amber-400 font-semibold">• Int: ₱{Number(l.remaining_interest).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                )}
-                                {parseFloat(l.total_fines || 0) > 0 && (
-                                  <span className="text-rose-600 dark:text-rose-400 font-semibold">• Fines: ₱{Number(l.total_fines).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                )}
-                              </div>
+                            <div className="flex items-center gap-2 truncate">
+                              <CreditCard
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  selectedLoan ? 'text-primary dark:text-secondary' : 'text-neutral-400'
+                                }`}
+                              />
+                              <span
+                                className={`truncate ${
+                                  selectedLoan
+                                    ? 'text-on-surface dark:text-white font-semibold'
+                                    : 'text-neutral-500 font-normal'
+                                }`}
+                              >
+                                {loadingMemberLoans
+                                  ? "Loading member's active loans..."
+                                  : memberActiveLoans.length === 0
+                                  ? 'No other active loans found'
+                                  : selectedLoan
+                                  ? `${selectedLoan.laf_no ? `[${selectedLoan.laf_no}] ` : ''}${selectedLoan.product_name || 'Loan'} — Bal: ₱${Number(selectedLoan.remaining_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                  : '-- None / No previous loan deduction --'}
+                              </span>
                             </div>
-                            <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
-                              ₱{Number(l.remaining_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {loadingMemberLoans && (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />
+                              )}
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-200 ${
+                                  isDropdownOpen ? 'rotate-180 text-primary dark:text-secondary' : ''
+                                }`}
+                              />
+                            </div>
                           </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">
-                    Prev. Loan Balance (₱)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={applyPrevBalance}
-                    onChange={(e) => setApplyPrevBalance(e.target.value)}
-                    placeholder="0"
-                    className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-bold text-primary dark:text-secondary focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
+                          {/* Dropdown Popover */}
+                          {isDropdownOpen && (
+                            <div
+                              className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-white dark:bg-surface-container-high border border-outline-variant/70 rounded-2xl shadow-2xl overflow-hidden p-1 max-h-56 overflow-y-auto"
+                              style={{
+                                boxShadow: '0 12px 36px -4px rgba(0, 0, 0, 0.3), 0 4px 16px -2px rgba(0, 0, 0, 0.2)'
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handlePrevLoanSelect(item.id, '')}
+                                className={`w-full px-3 py-2 text-left text-xs rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+                                  !item.loanId
+                                    ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                    : 'hover:bg-neutral-100 dark:hover:bg-surface-container-highest text-neutral-600 dark:text-neutral-300'
+                                }`}
+                              >
+                                <span className="italic">-- None / No previous loan deduction --</span>
+                                {!item.loanId && <CheckCircle2 className="w-4 h-4 text-primary dark:text-secondary shrink-0" />}
+                              </button>
+
+                              {memberActiveLoans.map((l: any) => {
+                                const isCurrentSelected = String(l.id) === String(item.loanId);
+                                const isSelectedInOtherRow = prevLoanDeductions.some(
+                                  (p) => p.id !== item.id && String(p.loanId) === String(l.id)
+                                );
+
+                                return (
+                                  <button
+                                    key={l.id}
+                                    type="button"
+                                    disabled={isSelectedInOtherRow}
+                                    onClick={() => handlePrevLoanSelect(item.id, String(l.id))}
+                                    className={`w-full px-3 py-2 text-left rounded-xl flex items-center justify-between gap-3 transition-colors ${
+                                      isSelectedInOtherRow
+                                        ? 'opacity-40 cursor-not-allowed bg-neutral-100/50 dark:bg-neutral-900/30'
+                                        : isCurrentSelected
+                                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold cursor-pointer'
+                                        : 'hover:bg-neutral-100 dark:hover:bg-surface-container-highest text-neutral-800 dark:text-neutral-200 cursor-pointer'
+                                    }`}
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {l.laf_no && (
+                                          <span className="px-1.5 py-0.5 rounded-md bg-neutral-200 dark:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-700 dark:text-neutral-300">
+                                            {l.laf_no}
+                                          </span>
+                                        )}
+                                        <span className="text-xs font-semibold truncate">{l.product_name || 'Loan'}</span>
+                                        {isSelectedInOtherRow && (
+                                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-bold">
+                                            Already added
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                        <span>Status: <span className="capitalize">{l.status}</span></span>
+                                        {parseFloat(l.remaining_interest || 0) > 0 && (
+                                          <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                                            • Int: ₱{Number(l.remaining_interest).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          </span>
+                                        )}
+                                        {parseFloat(l.total_fines || 0) > 0 && (
+                                          <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                                            • Fines: ₱{Number(l.total_fines).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0 flex items-center gap-2">
+                                      <div>
+                                        <span className="text-[9px] block text-neutral-400 uppercase font-medium">Bal</span>
+                                        <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                          ₱{Number(l.remaining_balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                      </div>
+                                      {isCurrentSelected && <CheckCircle2 className="w-4 h-4 text-primary dark:text-secondary shrink-0" />}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Prev Loan Amount Input */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 flex items-center justify-between">
+                            <span>Prev. Loan Balance (₱)</span>
+                            {selectedLoan && (
+                              <button
+                                type="button"
+                                onClick={() => handlePrevLoanAmountChange(item.id, String(selectedLoan.remaining_balance ?? selectedLoan.principal_amount ?? 0))}
+                                className="text-[9px] text-primary dark:text-secondary hover:underline cursor-pointer"
+                                title="Reset to full balance"
+                              >
+                                Full Bal
+                              </button>
+                            )}
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={item.amount}
+                            onChange={(e) => handlePrevLoanAmountChange(item.id, e.target.value)}
+                            placeholder="0"
+                            className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-bold text-primary dark:text-secondary focus:outline-none focus:ring-1 focus:ring-primary"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* Add Another Previous Loan Button */}
+              {memberActiveLoans.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleAddPrevLoanDeduction}
+                  disabled={prevLoanDeductions.length >= memberActiveLoans.length}
+                  className={`w-full py-2 px-3 rounded-xl border-2 border-dashed text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    prevLoanDeductions.length >= memberActiveLoans.length
+                      ? 'border-neutral-200 dark:border-neutral-800 text-neutral-400 opacity-60 cursor-not-allowed'
+                      : 'border-primary/40 hover:border-primary/70 dark:border-primary/50 dark:hover:border-primary/90 bg-primary/5 hover:bg-primary/10 text-primary dark:text-emerald-300'
+                  }`}
+                  title={
+                    prevLoanDeductions.length >= memberActiveLoans.length
+                      ? 'All active loans for this member have already been added'
+                      : 'Add another active loan to deduct'
+                  }
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>
+                    {prevLoanDeductions.length >= memberActiveLoans.length
+                      ? 'All Active Loans Added'
+                      : '+ Add Another Previous Loan Balance'}
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* Summary of Charges & Net Proceeds */}
