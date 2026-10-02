@@ -3995,7 +3995,7 @@ function DisbursementPageContent() {
                         ) : (
                           <>
                             {/* Standard Column Header */}
-                            <div className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 bg-surface-container-low dark:bg-surface-container font-bold text-[10px] uppercase tracking-wider text-neutral-500 items-center gap-2">
+                            <div className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 items-center gap-2 border-b border-emerald-950/10">
                               <div className="text-center font-bold">#</div>
                               <div>Book of Account / Item Description</div>
                               <div>Remarks</div>
@@ -4493,19 +4493,19 @@ function DisbursementPageContent() {
                             TRANSACTION DETAILS
                           </h5>
                         </div>
-                        <div className="border border-outline-variant/50 rounded-2xl overflow-hidden">
+                        <div className="border border-emerald-200 dark:border-emerald-800/60 rounded-2xl overflow-hidden shadow-2xs">
                           <table className="w-full text-xs">
                             <thead>
-                              <tr className="bg-neutral-100/70 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-300 font-bold border-b border-outline-variant/40">
-                                <th className="px-4 py-2.5 text-left w-12">#</th>
-                                <th className="px-4 py-2.5 text-left">Book of Accounts</th>
-                                <th className="px-4 py-2.5 text-right w-36">Debit</th>
-                                <th className="px-4 py-2.5 text-right w-36">Credit</th>
+                              <tr className="bg-[#ecfdf5] dark:bg-emerald-950/40 text-[#064e3b] dark:text-emerald-300 font-bold uppercase text-[10px] tracking-wider border-b border-emerald-200 dark:border-emerald-800/60">
+                                <th className="px-4 py-2.5 text-left w-12 font-bold">#</th>
+                                <th className="px-4 py-2.5 text-left font-bold">Book of Accounts</th>
+                                <th className="px-4 py-2.5 text-right w-36 font-bold">Debit</th>
+                                <th className="px-4 py-2.5 text-right w-36 font-bold">Credit</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-outline-variant/20">
+                            <tbody className="divide-y divide-outline-variant/20 bg-white dark:bg-surface-container-lowest">
                               {rows.map((item, idx) => (
-                                <tr key={idx} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
+                                <tr key={idx} className="hover:bg-emerald-50/20 dark:hover:bg-neutral-800/40 transition-colors">
                                   <td className="px-4 py-2.5 text-neutral-400 font-mono">{idx + 1}</td>
                                   <td className="px-4 py-2.5 font-medium text-on-surface dark:text-white">
                                     {item.description}
@@ -4519,9 +4519,9 @@ function DisbursementPageContent() {
                                 </tr>
                               ))}
                             </tbody>
-                            <tfoot className="font-bold bg-neutral-100/70 dark:bg-neutral-800/70 border-t border-outline-variant/30 text-xs">
+                            <tfoot className="font-bold bg-[#ecfdf5]/60 dark:bg-emerald-950/30 border-t border-emerald-200 dark:border-emerald-800/60 text-xs">
                               <tr>
-                                <td colSpan={2} className="px-4 py-2.5 font-bold text-right uppercase tracking-wide text-neutral-600 dark:text-neutral-300">TOTAL:</td>
+                                <td colSpan={2} className="px-4 py-2.5 font-bold text-right uppercase tracking-wide text-neutral-700 dark:text-neutral-200">TOTAL:</td>
                                 <td className="px-4 py-2.5 text-right font-mono font-bold text-neutral-900 dark:text-white">
                                   {debitTotal > 0 ? `₱${debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '—'}
                                 </td>
@@ -5215,7 +5215,7 @@ function DisbursementPageContent() {
                       ) : (
                         <>
                           {/* Standard Column Header */}
-                          <div className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 bg-neutral-100/70 dark:bg-neutral-800/60 text-[10px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 items-center gap-2">
+                          <div className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 text-[10px] font-bold uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 items-center gap-2 border-b border-emerald-950/10">
                             <div className="text-center font-bold">#</div>
                             <div>Book of Account</div>
                             <div>Remarks</div>

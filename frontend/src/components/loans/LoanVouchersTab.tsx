@@ -1149,18 +1149,18 @@ export default function LoanVouchersTab({
                 {(() => {
                   const { rows, debitTotal, creditTotal } = getBalancedCvRows(selectedCvForModal);
                   return (
-                    <div className="rounded-xl border border-outline-variant/60 overflow-hidden">
+                    <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/60 overflow-hidden shadow-2xs">
                       <table className="w-full text-left text-xs">
                         <thead>
-                          <tr className="bg-neutral-100/70 dark:bg-neutral-800/70 text-[10px] font-bold uppercase text-neutral-500">
+                          <tr className="bg-[#ecfdf5] dark:bg-emerald-950/40 text-[10px] font-bold uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 border-b border-emerald-200 dark:border-emerald-800/60">
                             <th className="py-2.5 px-3">Book of Account</th>
                             <th className="py-2.5 px-3 text-right">Debit (₱)</th>
                             <th className="py-2.5 px-3 text-right">Credit (₱)</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-outline-variant/40">
+                        <tbody className="divide-y divide-outline-variant/40 bg-white dark:bg-surface-container-lowest">
                           {rows.map((r, idx) => (
-                            <tr key={idx}>
+                            <tr key={idx} className="hover:bg-emerald-50/20 dark:hover:bg-neutral-800/40 transition-colors">
                               <td className="py-2 px-3 font-medium text-neutral-800 dark:text-neutral-200">
                                 {r.description}
                               </td>
@@ -1174,8 +1174,8 @@ export default function LoanVouchersTab({
                           ))}
                         </tbody>
                         <tfoot>
-                          <tr className="bg-neutral-50 dark:bg-neutral-800/50 font-bold border-t border-outline-variant/60">
-                            <td className="py-2 px-3 uppercase text-[10px]">Total Balance</td>
+                          <tr className="bg-[#ecfdf5]/60 dark:bg-emerald-950/30 font-bold border-t border-emerald-200 dark:border-emerald-800/60">
+                            <td className="py-2 px-3 uppercase text-[10px] text-neutral-700 dark:text-neutral-200">Total Balance</td>
                             <td className="py-2 px-3 text-right font-mono">
                               ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </td>
@@ -1653,10 +1653,10 @@ export default function LoanVouchersTab({
               const printAmt = debitTotal || getCvDisbursedAmount(printingCvBreakdown);
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ border: '1px solid #d1d5db', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ border: '1px solid #a7f3d0', borderRadius: '8px', overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10.5px' }}>
                       <thead>
-                        <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '1px solid #d1d5db' }}>
+                        <tr style={{ backgroundColor: '#ecfdf5', color: '#064e3b', borderBottom: '1px solid #a7f3d0' }}>
                           <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 'bold' }}>Book of Accounts</th>
                           <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'bold', width: '130px' }}>Debit (₱)</th>
                           <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'bold', width: '130px' }}>Credit (₱)</th>
@@ -1676,7 +1676,7 @@ export default function LoanVouchersTab({
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr style={{ backgroundColor: '#f9fafb', fontWeight: 'bold', borderTop: '2px solid #111827' }}>
+                        <tr style={{ backgroundColor: '#ecfdf5', fontWeight: 'bold', borderTop: '2px solid #047857' }}>
                           <td style={{ padding: '8px 12px', textAlign: 'right', textTransform: 'uppercase', fontSize: '9px' }}>Total</td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
                             ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
