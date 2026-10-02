@@ -41,6 +41,24 @@ function cleanCvNumber(vNo?: string): string {
   return String(vNo).replace(/^CV\s*#?/i, '').trim();
 }
 
+export function getSignatoryTitle(name: string, fallback: string = ''): string {
+  if (!name) return '';
+  const n = name.trim().toLowerCase();
+  if (n.includes('pable') || n.includes('michelle')) {
+    return 'Manager';
+  }
+  if (n.includes('tatoy') || n.includes('candilario')) {
+    return 'Chairman';
+  }
+  if (n.includes('lariosa') || n.includes('marilou')) {
+    return 'Bookkeeper';
+  }
+  if (n.includes('lamoste') || n.includes('chinnette')) {
+    return 'Cashier';
+  }
+  return fallback;
+}
+
 function formatRawDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
   try {
@@ -662,6 +680,25 @@ export default function UnifiedCvLfPrintModal({
   const [isPrinting, setIsPrinting] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  // Detailed Check Voucher Signatories
+  const [isEditingDetailedSignatories, setIsEditingDetailedSignatories] = useState(false);
+  const [detailedLiquidatedBy, setDetailedLiquidatedBy] = useState('MICHELLE M. PABLE');
+  const [detailedApprovedBy, setDetailedApprovedBy] = useState('CANDILARIO N. TATOY');
+  const [isSavingSignatories, setIsSavingSignatories] = useState(false);
+
+  // Sync signatories when currentCv or currentLf updates
+  useEffect(() => {
+    if (currentCv || currentLf) {
+      const liq = currentCv?.signatories?.liquidated_by || currentLf?.custodian_name || 'MICHELLE M. PABLE';
+      const app = currentCv?.signatories?.detailed_approved_by || currentCv?.signatories?.approved_by || currentLf?.approved_by || 'CANDILARIO N. TATOY';
+      setDetailedLiquidatedBy(liq);
+      setDetailedApprovedBy(app);
+    }
+  }, [currentCv, currentLf]);
+
+  const liquidatedByTitle = useMemo(() => getSignatoryTitle(detailedLiquidatedBy), [detailedLiquidatedBy]);
+  const approvedByTitle = useMemo(() => getSignatoryTitle(detailedApprovedBy), [detailedApprovedBy]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -809,6 +846,7 @@ export default function UnifiedCvLfPrintModal({
       setLfItems([]);
       setIsPrinting(false);
       setSelectedLinkTargetId('');
+      setIsEditingDetailedSignatories(false);
     }
   }, [isOpen, loadFullData]);
 
@@ -842,6 +880,40 @@ export default function UnifiedCvLfPrintModal({
       alert(err.response?.data?.error?.message || 'Failed to attach schedule.');
     } finally {
       setLinkingAction(false);
+    }
+  };
+
+  // Save Detailed Check Voucher Signatories
+  const handleSaveDetailedSignatories = async () => {
+    try {
+      setIsSavingSignatories(true);
+      const updatedSignatories = {
+        ...(currentCv?.signatories || {}),
+        liquidated_by: detailedLiquidatedBy.trim(),
+        detailed_approved_by: detailedApprovedBy.trim(),
+        approved_by: detailedApprovedBy.trim()
+      };
+
+      if (currentCv?.id) {
+        await api.put(`/accounts/check-vouchers/${currentCv.id}`, {
+          signatories: updatedSignatories
+        });
+      }
+
+      setCurrentCv((prev: any) => prev ? {
+        ...prev,
+        signatories: updatedSignatories
+      } : prev);
+
+      if (onLinkSuccess) {
+        onLinkSuccess();
+      }
+      setIsEditingDetailedSignatories(false);
+    } catch (err: any) {
+      console.error('Failed to save signatories:', err);
+      alert(err.response?.data?.error?.message || 'Failed to save signatories.');
+    } finally {
+      setIsSavingSignatories(false);
     }
   };
 
@@ -1570,25 +1642,134 @@ export default function UnifiedCvLfPrintModal({
                         </div>
                       </div>
                     ) : (
-                      <div className="pt-3 border-t border-neutral-200 grid grid-cols-2 gap-8 text-[9px] text-neutral-700">
-                        <div>
-                          <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">LIQUIDATED BY:</span>
-                          <div className="h-4"></div>
-                          <p className="font-bold text-neutral-900 uppercase text-[9.5px] m-0">
-                            MICHELLE M. PABLE
-                          </p>
-                          <div className="border-b border-neutral-800 mt-0.5" style={{ width: '180px' }}></div>
-                          <span className="text-[7.5px] text-neutral-500 block mt-0.5">Manager</span>
+                      <div className="pt-3 border-t border-neutral-200 text-[9px] text-neutral-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-bold uppercase text-[7.5px] text-neutral-400 tracking-wider">
+                            Official Signatures
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingDetailedSignatories(prev => !prev)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold border border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all cursor-pointer"
+                            title="Edit signatories for this voucher"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            <span>{isEditingDetailedSignatories ? 'Close Edit' : 'Edit Signatories'}</span>
+                          </button>
                         </div>
 
-                        <div>
-                          <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">APPROVED BY:</span>
-                          <div className="h-4"></div>
-                          <p className="font-bold text-neutral-900 uppercase text-[9.5px] m-0">
-                            CANDILARIO N. TATOY
-                          </p>
-                          <div className="border-b border-neutral-800 mt-0.5" style={{ width: '180px' }}></div>
-                          <span className="text-[7.5px] text-neutral-500 block mt-0.5">Chairman</span>
+                        {/* Interactive Signatories Edit Box */}
+                        {isEditingDetailedSignatories && (
+                          <div className="p-3 mb-3 rounded-xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {/* Liquidated By */}
+                              <div className="space-y-1">
+                                <label className="text-[8px] font-bold uppercase text-neutral-600 dark:text-neutral-300 block">
+                                  Liquidated By:
+                                </label>
+                                <input
+                                  type="text"
+                                  value={detailedLiquidatedBy}
+                                  onChange={e => setDetailedLiquidatedBy(e.target.value)}
+                                  placeholder="e.g. MICHELLE M. PABLE"
+                                  className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"
+                                />
+                                <div className="flex items-center justify-between text-[8px] text-neutral-500 pt-0.5">
+                                  <span>Role displayed: <strong className="text-emerald-700 dark:text-emerald-300 font-bold">{liquidatedByTitle || 'None (no title)'}</strong></span>
+                                  <div className="flex gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailedLiquidatedBy('MICHELLE M. PABLE')}
+                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 dark:bg-neutral-800 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+                                    >
+                                      Pable (Manager)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailedLiquidatedBy('CANDILARIO N. TATOY')}
+                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 dark:bg-neutral-800 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+                                    >
+                                      Tatoy (Chairman)
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Approved By */}
+                              <div className="space-y-1">
+                                <label className="text-[8px] font-bold uppercase text-neutral-600 dark:text-neutral-300 block">
+                                  Approved By:
+                                </label>
+                                <input
+                                  type="text"
+                                  value={detailedApprovedBy}
+                                  onChange={e => setDetailedApprovedBy(e.target.value)}
+                                  placeholder="e.g. CANDILARIO N. TATOY"
+                                  className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"
+                                />
+                                <div className="flex items-center justify-between text-[8px] text-neutral-500 pt-0.5">
+                                  <span>Role displayed: <strong className="text-emerald-700 dark:text-emerald-300 font-bold">{approvedByTitle || 'None (no title)'}</strong></span>
+                                  <div className="flex gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailedApprovedBy('CANDILARIO N. TATOY')}
+                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 dark:bg-neutral-800 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+                                    >
+                                      Tatoy (Chairman)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailedApprovedBy('MICHELLE M. PABLE')}
+                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 dark:bg-neutral-800 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+                                    >
+                                      Pable (Manager)
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 pt-1 border-t border-neutral-200 dark:border-neutral-800">
+                              <button
+                                type="button"
+                                onClick={() => setIsEditingDetailedSignatories(false)}
+                                className="px-2.5 py-0.5 text-[9px] font-semibold rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleSaveDetailedSignatories}
+                                disabled={isSavingSignatories}
+                                className="px-3 py-0.5 text-[9px] font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1 cursor-pointer"
+                              >
+                                {isSavingSignatories ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                                <span>Save Signatories</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-8">
+                          <div>
+                            <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">LIQUIDATED BY:</span>
+                            <div className="h-4"></div>
+                            <p className="font-bold text-neutral-900 uppercase text-[9.5px] m-0">
+                              {detailedLiquidatedBy || 'MICHELLE M. PABLE'}
+                            </p>
+                            <div className="border-b border-neutral-800 mt-0.5" style={{ width: '180px' }}></div>
+                            <span className="text-[7.5px] text-neutral-500 block mt-0.5 min-h-[11px]">{liquidatedByTitle || ''}</span>
+                          </div>
+
+                          <div>
+                            <span className="font-bold uppercase text-[7.5px] text-neutral-500 block">APPROVED BY:</span>
+                            <div className="h-4"></div>
+                            <p className="font-bold text-neutral-900 uppercase text-[9.5px] m-0">
+                              {detailedApprovedBy || 'CANDILARIO N. TATOY'}
+                            </p>
+                            <div className="border-b border-neutral-800 mt-0.5" style={{ width: '180px' }}></div>
+                            <span className="text-[7.5px] text-neutral-500 block mt-0.5 min-h-[11px]">{approvedByTitle || ''}</span>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2028,11 +2209,11 @@ export default function UnifiedCvLfPrintModal({
                   </span>
                   <div style={{ height: '12px' }}></div>
                   <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9px', color: '#111827' }}>
-                    MICHELLE M. PABLE
+                    {detailedLiquidatedBy || 'MICHELLE M. PABLE'}
                   </p>
                   <div style={{ borderBottom: '1px solid #111827', marginTop: '1px', width: '180px' }}></div>
-                  <span style={{ fontSize: '7px', color: '#6b7280', display: 'block' }}>
-                    Manager
+                  <span style={{ fontSize: '7px', color: '#6b7280', display: 'block', minHeight: '10px' }}>
+                    {liquidatedByTitle || ''}
                   </span>
                 </div>
 
@@ -2042,11 +2223,11 @@ export default function UnifiedCvLfPrintModal({
                   </span>
                   <div style={{ height: '12px' }}></div>
                   <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9px', color: '#111827' }}>
-                    CANDILARIO N. TATOY
+                    {detailedApprovedBy || 'CANDILARIO N. TATOY'}
                   </p>
                   <div style={{ borderBottom: '1px solid #111827', marginTop: '1px', width: '180px' }}></div>
-                  <span style={{ fontSize: '7px', color: '#6b7280', display: 'block' }}>
-                    Chairman
+                  <span style={{ fontSize: '7px', color: '#6b7280', display: 'block', minHeight: '10px' }}>
+                    {approvedByTitle || ''}
                   </span>
                 </div>
               </div>

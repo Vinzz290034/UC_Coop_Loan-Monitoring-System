@@ -8,7 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { Skeleton } from '@/components/ui/Skeleton';
-import UnifiedCvLfPrintModal from '@/components/loans/UnifiedCvLfPrintModal';
+import UnifiedCvLfPrintModal, { getSignatoryTitle } from '@/components/loans/UnifiedCvLfPrintModal';
 import {
   FileText,
   Search,
@@ -999,7 +999,9 @@ function DisbursementPageContent() {
     folder_name: '',
     prepared_by: '',
     checked_by: '',
-    approved_by: ''
+    approved_by: '',
+    liquidated_by: '',
+    detailed_approved_by: ''
   });
   const [editCvRows, setEditCvRows] = useState<CvRowItem[]>([]);
   const [editCvCibAmount, setEditCvCibAmount] = useState<string>('');
@@ -2383,7 +2385,9 @@ function DisbursementPageContent() {
       folder_name: cv.folder_name || currentTabConfig.defaultCategory,
       prepared_by: cv.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.',
       checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
-      approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE'
+      approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE',
+      liquidated_by: cv.signatories?.liquidated_by || cv.revolving_fund?.custodian_name || 'MICHELLE M. PABLE',
+      detailed_approved_by: cv.signatories?.detailed_approved_by || cv.signatories?.approved_by || 'CANDILARIO N. TATOY'
     };
     setEditCvFormData(initialForm);
 
@@ -2728,7 +2732,9 @@ function DisbursementPageContent() {
         signatories: {
           prepared_by: editCvFormData.prepared_by.trim(),
           checked_by: editCvFormData.checked_by.trim(),
-          approved_by: editCvFormData.approved_by.trim()
+          approved_by: editCvFormData.approved_by.trim(),
+          liquidated_by: (editCvFormData.liquidated_by || 'MICHELLE M. PABLE').trim(),
+          detailed_approved_by: (editCvFormData.detailed_approved_by || 'CANDILARIO N. TATOY').trim()
         }
       };
 
@@ -5264,13 +5270,85 @@ function DisbursementPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Approved By</label>
+                  <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Approved By (Summary)</label>
                   <input
                     type="text"
                     value={editCvFormData.approved_by}
                     onChange={e => setEditCvFormData({ ...editCvFormData, approved_by: e.target.value })}
                     className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold"
                   />
+                </div>
+              </div>
+
+              {/* Detailed Check Voucher Signatories */}
+              <div className="pt-2 border-t border-outline-variant/40">
+                <span className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2">
+                  Detailed Check Voucher Signatories
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-bold text-neutral-500 uppercase">Liquidated By</label>
+                      <span className="text-[9px] text-neutral-400">
+                        Title below: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{getSignatoryTitle(editCvFormData.liquidated_by) || 'None'}</strong>
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={editCvFormData.liquidated_by}
+                      onChange={e => setEditCvFormData({ ...editCvFormData, liquidated_by: e.target.value })}
+                      placeholder="e.g. MICHELLE M. PABLE"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold uppercase"
+                    />
+                    <div className="flex gap-1 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditCvFormData({ ...editCvFormData, liquidated_by: 'MICHELLE M. PABLE' })}
+                        className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                      >
+                        Pable (Manager)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditCvFormData({ ...editCvFormData, liquidated_by: 'CANDILARIO N. TATOY' })}
+                        className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                      >
+                        Tatoy (Chairman)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-bold text-neutral-500 uppercase">Approved By (Detailed)</label>
+                      <span className="text-[9px] text-neutral-400">
+                        Title below: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{getSignatoryTitle(editCvFormData.detailed_approved_by) || 'None'}</strong>
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={editCvFormData.detailed_approved_by}
+                      onChange={e => setEditCvFormData({ ...editCvFormData, detailed_approved_by: e.target.value })}
+                      placeholder="e.g. CANDILARIO N. TATOY"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold uppercase"
+                    />
+                    <div className="flex gap-1 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditCvFormData({ ...editCvFormData, detailed_approved_by: 'CANDILARIO N. TATOY' })}
+                        className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                      >
+                        Tatoy (Chairman)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditCvFormData({ ...editCvFormData, detailed_approved_by: 'MICHELLE M. PABLE' })}
+                        className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                      >
+                        Pable (Manager)
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
