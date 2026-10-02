@@ -265,7 +265,7 @@ function getCategoryForAccount(acct: string): string {
 }
 
 function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf') {
-  const rows: { date: string; voucher_no: string; description: string; remarks: string; debit: number | null; credit: number | null }[] = [];
+  const rows: { date: string; voucher_no: string; description: string; remarks: string; debit: number | null; credit: number | null; category?: string }[] = [];
   let debitTotal = 0;
   let creditTotal = 0;
 
@@ -317,7 +317,8 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         description: expAccount,
         remarks: it.remarks || '',
         debit: amt,
-        credit: null
+        credit: null,
+        category: it.category
       });
       debitTotal += amt;
     }
@@ -356,13 +357,20 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         });
         if (creditVal) creditTotal += creditVal;
       } else if (rawVal > 0) {
+        const vKey = vNo ? String(vNo).replace(/^CV-?0*/i, '').trim() : '';
+        const matchLf = activeItems.find((l: any) =>
+          ((vKey && l.voucher_no && String(l.voucher_no).replace(/^CV-?0*/i, '').trim() === vKey) ||
+           (vKey && l.particulars && l.particulars.includes(vKey)) ||
+           (item.remarks && l.remarks && item.remarks.trim() === l.remarks.trim()))
+        );
         rows.push({
           date: dateStr,
           voucher_no: vNo,
           description: desc || 'Disbursement Line',
           remarks: item.remarks || '',
           debit: rawVal,
-          credit: null
+          credit: null,
+          category: item.category || matchLf?.category
         });
         debitTotal += rawVal;
       } else if (desc) {
@@ -596,7 +604,8 @@ function getSummaryCvRows(
         const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
         const desc = item.book_of_account || item.description || '';
         if (val > 0 && !/cib\b|cash\s*in\s*bank/i.test(desc)) {
-          const cat = cleanCategoryName(getCategoryForAccount(desc));
+          const rawCat = item.category || getCategoryForAccount(desc);
+          const cat = cleanCategoryName(rawCat);
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
@@ -984,7 +993,14 @@ export default function UnifiedCvLfPrintModal({
       for (const it of cvDebitItems) {
         const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
         const desc = (it.book_of_account || it.description || '').trim();
-        const rawCat = it.category || getCategoryForAccount(desc);
+        const vKey = it.voucher_no ? String(it.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
+        const matchLf = (lfItems || []).find((l: any) =>
+          !l.is_cancelled &&
+          ((vKey && l.voucher_no && String(l.voucher_no).replace(/^CV-?0*/i, '').trim() === vKey) ||
+           (vKey && l.particulars && l.particulars.includes(vKey)) ||
+           (it.remarks && l.remarks && it.remarks.trim() === l.remarks.trim()))
+        );
+        const rawCat = it.category || matchLf?.category || getCategoryForAccount(desc);
         const cat = cleanCategoryName(rawCat);
         map[cat] = (map[cat] || 0) + amt;
         total += amt;
@@ -1157,7 +1173,14 @@ export default function UnifiedCvLfPrintModal({
       for (const r of nonCibRows) {
         const amt = Number(r.debit) || 0;
         if (amt > 0) {
-          const rawCat = (r as any).category || getCategoryForAccount(r.description || '');
+          const vKey = r.voucher_no ? String(r.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
+          const matchLf = (lfItems || []).find((l: any) =>
+            !l.is_cancelled &&
+            ((vKey && l.voucher_no && String(l.voucher_no).replace(/^CV-?0*/i, '').trim() === vKey) ||
+             (vKey && l.particulars && l.particulars.includes(vKey)) ||
+             (r.remarks && l.remarks && r.remarks.trim() === l.remarks.trim()))
+          );
+          const rawCat = (r as any).category || matchLf?.category || getCategoryForAccount(r.description || '');
           const cat = cleanCategoryName(rawCat);
           catMap[cat] = (catMap[cat] || 0) + amt;
         }

@@ -1625,7 +1625,8 @@ function DisbursementPageContent() {
         const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
         const desc = item.book_of_account || item.description || '';
         if (val > 0 && !/cib\b|cash\s*in\s*bank/i.test(desc)) {
-          const cat = cleanCategoryName(getCategoryForAccount(desc));
+          const rawCat = item.category || getCategoryForAccount(desc);
+          const cat = cleanCategoryName(rawCat);
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
