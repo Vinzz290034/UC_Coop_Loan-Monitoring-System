@@ -1350,7 +1350,7 @@ export default function UnifiedCvLfPrintModal({
 
                     {/* Particulars / Breakdown */}
                     {isRevolvingFund && cvViewMode === 'detailed' && rfDetailedCategoryBreakdown.length > 0 ? (
-                      <div className="bg-gradient-to-r from-emerald-50 via-teal-50/70 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40 p-2.5 rounded-xl border border-emerald-200/90 dark:border-emerald-800/60 shadow-2xs">
+                      <div className="bg-gradient-to-r from-emerald-50 via-teal-50/70 to-emerald-50 p-2.5 rounded-xl border border-emerald-200/90 shadow-2xs">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="px-2.5 py-0.5 rounded-md bg-[#064e3b] text-white font-extrabold text-[9.5px] uppercase tracking-wider shadow-2xs">
                             Breakdown
@@ -1359,19 +1359,19 @@ export default function UnifiedCvLfPrintModal({
                             {rfDetailedCategoryBreakdown.map((cat) => (
                               <span
                                 key={cat.name}
-                                className="inline-flex items-center gap-1.5 bg-white/95 dark:bg-neutral-900/90 px-2.5 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-700/60 shadow-2xs"
+                                className="inline-flex items-center gap-1.5 bg-white/95 px-2.5 py-0.5 rounded-lg border border-emerald-200 shadow-2xs"
                               >
-                                <span className="text-[#065f46] dark:text-emerald-400 font-bold text-[11px]">{cat.name}:</span>
-                                <span className="font-mono font-bold text-neutral-900 dark:text-neutral-100 text-[11.5px]">{cat.formatted}</span>
+                                <span className="text-[#065f46] font-bold text-[11px]">{cat.name}:</span>
+                                <span className="font-mono font-bold text-neutral-900 text-[11.5px]">{cat.formatted}</span>
                               </span>
                             ))}
                           </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="text-xs bg-neutral-50 dark:bg-neutral-900/60 p-2.5 rounded border border-neutral-200 dark:border-neutral-800">
-                        <strong className="text-neutral-700 dark:text-neutral-300 uppercase text-[10px] tracking-wide">Description:</strong>{' '}
-                        <span className="italic text-neutral-800 dark:text-neutral-200 font-medium">
+                      <div className="text-xs bg-neutral-50 p-2.5 rounded border border-neutral-200">
+                        <strong className="text-neutral-700 uppercase text-[10px] tracking-wide">Description:</strong>{' '}
+                        <span className="italic text-neutral-800 font-medium">
                           {currentCv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment Disbursement' : 'Revolving Fund Replenishment')}
                         </span>
                       </div>
@@ -1380,7 +1380,7 @@ export default function UnifiedCvLfPrintModal({
                     {/* TRANSACTION DETAILS */}
                     {cvViewMode === 'summary' ? (
                       <div className="space-y-3">
-                        <div className="border border-emerald-300 dark:border-emerald-700/60 rounded-2xl overflow-hidden text-[10px] shadow-2xs">
+                        <div className="border border-emerald-300 rounded-2xl overflow-hidden text-[10px] shadow-2xs">
                           <div className="bg-[#064e3b] text-white px-4 py-2 text-center">
                             <span className="font-extrabold uppercase text-[10px] tracking-wider text-white">
                               TRANSACTION DETAILS
@@ -1432,7 +1432,7 @@ export default function UnifiedCvLfPrintModal({
                             TRANSACTION DETAILS
                           </span>
                         </div>
-                        <div className="border border-emerald-300 dark:border-emerald-700/60 rounded-2xl overflow-hidden text-[10px] shadow-2xs">
+                        <div className="border border-emerald-300 rounded-2xl overflow-hidden text-[10px] shadow-2xs">
                           <table className="w-full text-left border-collapse">
                             <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] border-b border-emerald-800">
                               <tr>
@@ -1650,7 +1650,7 @@ export default function UnifiedCvLfPrintModal({
                           <button
                             type="button"
                             onClick={() => setIsEditingDetailedSignatories(prev => !prev)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold border border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold border border-emerald-600/40 text-emerald-700 hover:bg-emerald-50 transition-all cursor-pointer"
                             title="Edit signatories for this voucher"
                           >
                             <Edit3 className="w-3 h-3" />
@@ -1660,11 +1660,11 @@ export default function UnifiedCvLfPrintModal({
 
                         {/* Interactive Signatories Edit Box */}
                         {isEditingDetailedSignatories && (
-                          <div className="p-3 mb-3 rounded-xl bg-neutral-50 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 space-y-3">
+                          <div className="p-3 mb-3 rounded-xl bg-neutral-50 border border-neutral-300 space-y-3 shadow-xs">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               {/* Liquidated By */}
                               <div className="space-y-1">
-                                <label className="text-[8px] font-bold uppercase text-neutral-600 dark:text-neutral-300 block">
+                                <label className="text-[8px] font-bold uppercase text-neutral-600 block">
                                   Liquidated By:
                                 </label>
                                 <input
@@ -1672,22 +1672,22 @@ export default function UnifiedCvLfPrintModal({
                                   value={detailedLiquidatedBy}
                                   onChange={e => setDetailedLiquidatedBy(e.target.value)}
                                   placeholder="e.g. MICHELLE M. PABLE"
-                                  className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"
+                                  className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 bg-white text-neutral-900 focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
                                 />
                                 <div className="flex items-center justify-between text-[8px] text-neutral-500 pt-0.5">
-                                  <span>Role displayed: <strong className="text-emerald-700 dark:text-emerald-300 font-bold">{liquidatedByTitle || 'None (no title)'}</strong></span>
+                                  <span>Role displayed: <strong className="text-emerald-700 font-bold">{liquidatedByTitle || 'None (no title)'}</strong></span>
                                   <div className="flex gap-1">
                                     <button
                                       type="button"
                                       onClick={() => setDetailedLiquidatedBy('MICHELLE M. PABLE')}
-                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 dark:bg-neutral-800 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 hover:bg-emerald-100 text-neutral-700 hover:text-emerald-800 transition-colors"
                                     >
                                       Pable (Manager)
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setDetailedLiquidatedBy('CANDILARIO N. TATOY')}
-                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 dark:bg-neutral-800 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 hover:bg-emerald-100 text-neutral-700 hover:text-emerald-800 transition-colors"
                                     >
                                       Tatoy (Chairman)
                                     </button>
@@ -1697,7 +1697,7 @@ export default function UnifiedCvLfPrintModal({
 
                               {/* Approved By */}
                               <div className="space-y-1">
-                                <label className="text-[8px] font-bold uppercase text-neutral-600 dark:text-neutral-300 block">
+                                <label className="text-[8px] font-bold uppercase text-neutral-600 block">
                                   Approved By:
                                 </label>
                                 <input
@@ -1705,22 +1705,22 @@ export default function UnifiedCvLfPrintModal({
                                   value={detailedApprovedBy}
                                   onChange={e => setDetailedApprovedBy(e.target.value)}
                                   placeholder="e.g. CANDILARIO N. TATOY"
-                                  className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"
+                                  className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 bg-white text-neutral-900 focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
                                 />
                                 <div className="flex items-center justify-between text-[8px] text-neutral-500 pt-0.5">
-                                  <span>Role displayed: <strong className="text-emerald-700 dark:text-emerald-300 font-bold">{approvedByTitle || 'None (no title)'}</strong></span>
+                                  <span>Role displayed: <strong className="text-emerald-700 font-bold">{approvedByTitle || 'None (no title)'}</strong></span>
                                   <div className="flex gap-1">
                                     <button
                                       type="button"
                                       onClick={() => setDetailedApprovedBy('CANDILARIO N. TATOY')}
-                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 dark:bg-neutral-800 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 hover:bg-emerald-100 text-neutral-700 hover:text-emerald-800 transition-colors"
                                     >
                                       Tatoy (Chairman)
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setDetailedApprovedBy('MICHELLE M. PABLE')}
-                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 dark:bg-neutral-800 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 hover:bg-emerald-100 text-neutral-700 hover:text-emerald-800 transition-colors"
                                     >
                                       Pable (Manager)
                                     </button>
@@ -1729,11 +1729,11 @@ export default function UnifiedCvLfPrintModal({
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-end gap-2 pt-1 border-t border-neutral-200 dark:border-neutral-800">
+                            <div className="flex items-center justify-end gap-2 pt-1 border-t border-neutral-200">
                               <button
                                 type="button"
                                 onClick={() => setIsEditingDetailedSignatories(false)}
-                                className="px-2.5 py-0.5 text-[9px] font-semibold rounded border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                className="px-2.5 py-0.5 text-[9px] font-semibold rounded border border-neutral-300 hover:bg-neutral-100 text-neutral-700 transition-colors cursor-pointer"
                               >
                                 Cancel
                               </button>
@@ -1741,7 +1741,7 @@ export default function UnifiedCvLfPrintModal({
                                 type="button"
                                 onClick={handleSaveDetailedSignatories}
                                 disabled={isSavingSignatories}
-                                className="px-3 py-0.5 text-[9px] font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1 cursor-pointer"
+                                className="px-3 py-0.5 text-[9px] font-bold rounded bg-emerald-700 hover:bg-emerald-800 text-white flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
                               >
                                 {isSavingSignatories ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                                 <span>Save Signatories</span>

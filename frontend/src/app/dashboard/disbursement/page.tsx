@@ -981,6 +981,8 @@ function DisbursementPageContent() {
   const [newCvPreparedBy, setNewCvPreparedBy] = useState('LAMOSTE, CHINNETTE A.');
   const [newCvCheckedBy, setNewCvCheckedBy] = useState('MARILOU LARIOSA');
   const [newCvApprovedBy, setNewCvApprovedBy] = useState('MICHELLE M. PABLE');
+  const [newCvLiquidatedBy, setNewCvLiquidatedBy] = useState('MICHELLE M. PABLE');
+  const [newCvDetailedApprovedBy, setNewCvDetailedApprovedBy] = useState('CANDILARIO N. TATOY');
   const [newCvRows, setNewCvRows] = useState<CvRowItem[]>([
     { id: 'new-row-1', date: '', voucher_no: '', description: '', remarks: '', debit: '', credit: '' }
   ]);
@@ -1009,6 +1011,7 @@ function DisbursementPageContent() {
   const dragRowIdx = useRef<number | null>(null);
   const dragOverRowIdx = useRef<number | null>(null);
   const editModalScrollRef = useRef<HTMLDivElement | null>(null);
+  const createModalScrollRef = useRef<HTMLDivElement | null>(null);
 
   // Dedicated modal for editing Date Sealed & Disbursed (or setting date when sealing)
   const [disbursedDateModal, setDisbursedDateModal] = useState<{
@@ -1023,20 +1026,29 @@ function DisbursementPageContent() {
     isSealingAction: false
   });
 
-  const reorderCvRows = useCallback((fromIdx: number, toIdx: number) => {
+  const reorderCvRows = useCallback((fromIdx: number, toIdx: number, isEdit: boolean = true) => {
     if (fromIdx === toIdx) return;
-    setEditCvRows(prev => {
-      const updated = [...prev];
-      const [moved] = updated.splice(fromIdx, 1);
-      updated.splice(toIdx, 0, moved);
-      return updated;
-    });
+    if (isEdit) {
+      setEditCvRows(prev => {
+        const updated = [...prev];
+        const [moved] = updated.splice(fromIdx, 1);
+        updated.splice(toIdx, 0, moved);
+        return updated;
+      });
+    } else {
+      setNewCvRows(prev => {
+        const updated = [...prev];
+        const [moved] = updated.splice(fromIdx, 1);
+        updated.splice(toIdx, 0, moved);
+        return updated;
+      });
+    }
   }, []);
 
-  const handleRowDragOver = useCallback((e: React.DragEvent, toIdx: number) => {
+  const handleRowDragOver = useCallback((e: React.DragEvent, toIdx: number, isEdit: boolean = true) => {
     e.preventDefault();
     dragOverRowIdx.current = toIdx;
-    const container = editModalScrollRef.current;
+    const container = isEdit ? editModalScrollRef.current : createModalScrollRef.current;
     if (!container) return;
     const { top, bottom } = container.getBoundingClientRect();
     const threshold = 80;
@@ -1827,7 +1839,9 @@ function DisbursementPageContent() {
 
   const getReplenishmentType = (folderOrCat?: string, cv?: any): 'stl' | 'rf' | null => {
     const cat = (folderOrCat || cv?.folder_name || '').toLowerCase();
-    if (cat && cat !== 'stl' && !cat.includes('stl') && !cat.includes('revolving')) {
+    if (cat) {
+      if (cat === 'stl' || cat.includes('stl')) return 'stl';
+      if (cat.includes('revolving')) return 'rf';
       return null;
     }
     if (activeTab === 'petty_cash_replenishment' || 
@@ -1837,10 +1851,10 @@ function DisbursementPageContent() {
       return null;
     }
     const part = (cv?.particulars || '').toLowerCase();
-    if (cat === 'stl' || cat.includes('stl') || part.includes('stl') || Boolean(cv?.stl_liquidation?.id)) {
+    if (part.includes('stl') || Boolean(cv?.stl_liquidation?.id)) {
       return 'stl';
     }
-    if (cat.includes('revolving') || part.includes('revolving') || Boolean(cv?.revolving_fund?.id)) {
+    if (part.includes('revolving') || Boolean(cv?.revolving_fund?.id)) {
       return 'rf';
     }
     if (activeTab === 'stl_replenishment') return 'stl';
@@ -2852,6 +2866,8 @@ function DisbursementPageContent() {
     setNewCvPreparedBy('LAMOSTE, CHINNETTE A.');
     setNewCvCheckedBy('MARILOU LARIOSA');
     setNewCvApprovedBy('MICHELLE M. PABLE');
+    setNewCvLiquidatedBy('MICHELLE M. PABLE');
+    setNewCvDetailedApprovedBy('CANDILARIO N. TATOY');
 
     const isReplenish = getReplenishmentType(defaultCat);
     const row0Id = `new-row-0-${Date.now()}`;
@@ -2934,7 +2950,9 @@ function DisbursementPageContent() {
         signatories: {
           prepared_by: newCvPreparedBy.trim(),
           checked_by: newCvCheckedBy.trim(),
-          approved_by: newCvApprovedBy.trim()
+          approved_by: newCvApprovedBy.trim(),
+          liquidated_by: (newCvLiquidatedBy || 'MICHELLE M. PABLE').trim(),
+          detailed_approved_by: (newCvDetailedApprovedBy || 'CANDILARIO N. TATOY').trim()
         }
       };
 
@@ -3600,7 +3618,7 @@ function DisbursementPageContent() {
             </div>
 
             <form onSubmit={handleCreateCheckVoucher} className="flex flex-col flex-1 overflow-hidden">
-              <div className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5 text-xs custom-scrollbar">
+              <div ref={createModalScrollRef} className="overflow-y-auto flex-1 p-5 sm:p-6 space-y-5 text-xs custom-scrollbar">
                 {/* Top Row: Category, Voucher No, Date, Draw Bank */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
@@ -3842,15 +3860,27 @@ function DisbursementPageContent() {
                                 return (
                                   <div
                                     key={row.id || idx}
+                                    draggable
+                                    onDragStart={() => { dragRowIdx.current = idx; }}
+                                    onDragOver={e => handleRowDragOver(e, idx, false)}
+                                    onDrop={() => {
+                                      if (dragRowIdx.current !== null && dragOverRowIdx.current !== null) {
+                                        reorderCvRows(dragRowIdx.current, dragOverRowIdx.current, false);
+                                      }
+                                      dragRowIdx.current = null;
+                                      dragOverRowIdx.current = null;
+                                    }}
+                                    onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
                                     style={{ zIndex: newCvRows.length - idx + 10 }}
-                                    className={`relative grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 transition-colors ${
+                                    className={`relative grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
                                       isCreditRow
                                         ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                         : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
                                     }`}
                                   >
-                                    <div className="text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400">
-                                      {idx + 1}
+                                    <div className="text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400 flex items-center justify-center gap-0.5 cursor-grab" title="Drag to reorder row">
+                                      <GripVertical className="w-3 h-3 text-neutral-400 shrink-0 opacity-60" />
+                                      <span>{idx + 1}</span>
                                     </div>
                                     <div>
                                       <input
@@ -3976,9 +4006,24 @@ function DisbursementPageContent() {
 
                             <div className="divide-y divide-outline-variant/20 bg-white dark:bg-surface-container-lowest">
                               {newCvRows.map((row, idx) => (
-                                <div key={row.id || idx} className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 items-center gap-2">
-                                  <div className="text-center font-mono font-medium text-xs text-neutral-500">
-                                    {idx + 1}
+                                <div
+                                  key={row.id || idx}
+                                  draggable
+                                  onDragStart={() => { dragRowIdx.current = idx; }}
+                                  onDragOver={e => handleRowDragOver(e, idx, false)}
+                                  onDrop={() => {
+                                    if (dragRowIdx.current !== null && dragOverRowIdx.current !== null) {
+                                      reorderCvRows(dragRowIdx.current, dragOverRowIdx.current, false);
+                                    }
+                                    dragRowIdx.current = null;
+                                    dragOverRowIdx.current = null;
+                                  }}
+                                  onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
+                                  className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 select-none transition-colors"
+                                >
+                                  <div className="text-center font-mono font-medium text-xs text-neutral-500 flex items-center justify-center gap-0.5 cursor-grab" title="Drag to reorder row">
+                                    <GripVertical className="w-3 h-3 text-neutral-400 shrink-0 opacity-60" />
+                                    <span>{idx + 1}</span>
                                   </div>
                                   <div>
                                     <input
@@ -4100,36 +4145,133 @@ function DisbursementPageContent() {
                   );
                 })()}
 
-                {/* Signatories */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-outline-variant/60">
-                  <div>
-                    <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Prepared By</label>
-                    <input
-                      type="text"
-                      value={newCvPreparedBy}
-                      onChange={e => setNewCvPreparedBy(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Checked By</label>
-                    <input
-                      type="text"
-                      value={newCvCheckedBy}
-                      onChange={e => setNewCvCheckedBy(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Approved By</label>
-                    <input
-                      type="text"
-                      value={newCvApprovedBy}
-                      onChange={e => setNewCvApprovedBy(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold"
-                    />
-                  </div>
-                </div>
+                {/* Signatories Section */}
+                {(() => {
+                  const isReplenish = Boolean(getReplenishmentType(newCvCategory));
+                  return (
+                    <div className="space-y-4 pt-2 border-t border-outline-variant/60">
+                      {/* Summary Check Voucher Signatories */}
+                      <div className="p-3.5 rounded-2xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/40 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-600 dark:text-neutral-300 flex items-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                            Summary Voucher Signatories
+                          </span>
+                          <span className="text-[9px] font-semibold text-neutral-400">Used for Summary Check Voucher printouts</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Prepared By</label>
+                            <input
+                              type="text"
+                              value={newCvPreparedBy}
+                              onChange={e => setNewCvPreparedBy(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-800 text-xs font-semibold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Checked By</label>
+                            <input
+                              type="text"
+                              value={newCvCheckedBy}
+                              onChange={e => setNewCvCheckedBy(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-800 text-xs font-semibold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
+                              {isReplenish ? 'Approved By (Summary)' : 'Approved By'}
+                            </label>
+                            <input
+                              type="text"
+                              value={newCvApprovedBy}
+                              onChange={e => setNewCvApprovedBy(e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-800 text-xs font-semibold"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Detailed Check Voucher Signatories */}
+                      {isReplenish && (
+                        <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-500/30 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                              <Layers className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              Detailed Check Voucher Signatories (Replenishment / Liquidation)
+                            </span>
+                            <span className="text-[9px] font-semibold text-emerald-700/80 dark:text-emerald-400/80">Used on Detailed Check Voucher page</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-300 uppercase">Liquidated By</label>
+                                <span className="text-[9px] text-neutral-400">
+                                  Title: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{getSignatoryTitle(newCvLiquidatedBy) || 'None'}</strong>
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                value={newCvLiquidatedBy}
+                                onChange={e => setNewCvLiquidatedBy(e.target.value)}
+                                placeholder="e.g. MICHELLE M. PABLE"
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800/60 bg-white dark:bg-neutral-800 text-xs font-semibold uppercase"
+                              />
+                              <div className="flex gap-1 mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setNewCvLiquidatedBy('MICHELLE M. PABLE')}
+                                  className="px-1.5 py-0.5 rounded text-[9px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer font-medium"
+                                >
+                                  Pable (Manager)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNewCvLiquidatedBy('CANDILARIO N. TATOY')}
+                                  className="px-1.5 py-0.5 rounded text-[9px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer font-medium"
+                                >
+                                  Tatoy (Chairman)
+                                </button>
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-300 uppercase">Approved By (Detailed)</label>
+                                <span className="text-[9px] text-neutral-400">
+                                  Title: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{getSignatoryTitle(newCvDetailedApprovedBy) || 'None'}</strong>
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                value={newCvDetailedApprovedBy}
+                                onChange={e => setNewCvDetailedApprovedBy(e.target.value)}
+                                placeholder="e.g. CANDILARIO N. TATOY"
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800/60 bg-white dark:bg-neutral-800 text-xs font-semibold uppercase"
+                              />
+                              <div className="flex gap-1 mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setNewCvDetailedApprovedBy('CANDILARIO N. TATOY')}
+                                  className="px-1.5 py-0.5 rounded text-[9px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer font-medium"
+                                >
+                                  Tatoy (Chairman)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNewCvDetailedApprovedBy('MICHELLE M. PABLE')}
+                                  className="px-1.5 py-0.5 rounded text-[9px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer font-medium"
+                                >
+                                  Pable (Manager)
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Modal Actions */}
@@ -4881,8 +5023,9 @@ function DisbursementPageContent() {
                                       : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
                                   }`}
                                 >
-                                  <div className="text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400">
-                                    {idx + 1}
+                                  <div className="flex items-center justify-center gap-0.5 text-neutral-400 group-hover:text-neutral-600">
+                                    <GripVertical className="w-3 h-3 cursor-grab opacity-60" />
+                                    <span className="font-mono text-xs font-medium text-neutral-600 dark:text-neutral-400">{idx + 1}</span>
                                   </div>
                                   <div>
                                     <input
@@ -5098,8 +5241,9 @@ function DisbursementPageContent() {
                                 onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
                                 className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors select-none"
                               >
-                                <div className="text-center font-mono font-medium text-xs text-neutral-500">
-                                  {idx + 1}
+                                <div className="flex items-center justify-center gap-0.5 text-neutral-400 group-hover:text-neutral-600">
+                                  <GripVertical className="w-3 h-3 cursor-grab opacity-60" />
+                                  <span className="font-mono text-xs font-medium text-neutral-500">{idx + 1}</span>
                                 </div>
                                 <div>
                                   <input
@@ -5270,7 +5414,9 @@ function DisbursementPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">Approved By (Summary)</label>
+                  <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
+                    {Boolean(getReplenishmentType(editCvFormData.folder_name, selectedCvForModal)) ? 'Approved By (Summary)' : 'Approved By'}
+                  </label>
                   <input
                     type="text"
                     value={editCvFormData.approved_by}
@@ -5280,77 +5426,79 @@ function DisbursementPageContent() {
                 </div>
               </div>
 
-              {/* Detailed Check Voucher Signatories */}
-              <div className="pt-2 border-t border-outline-variant/40">
-                <span className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2">
-                  Detailed Check Voucher Signatories
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-bold text-neutral-500 uppercase">Liquidated By</label>
-                      <span className="text-[9px] text-neutral-400">
-                        Title below: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{getSignatoryTitle(editCvFormData.liquidated_by) || 'None'}</strong>
-                      </span>
+              {/* Detailed Check Voucher Signatories (only for replenishments) */}
+              {Boolean(getReplenishmentType(editCvFormData.folder_name, selectedCvForModal)) && (
+                <div className="pt-2 border-t border-outline-variant/40">
+                  <span className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2">
+                    Detailed Check Voucher Signatories
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-bold text-neutral-500 uppercase">Liquidated By</label>
+                        <span className="text-[9px] text-neutral-400">
+                          Title below: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{getSignatoryTitle(editCvFormData.liquidated_by) || 'None'}</strong>
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={editCvFormData.liquidated_by}
+                        onChange={e => setEditCvFormData({ ...editCvFormData, liquidated_by: e.target.value })}
+                        placeholder="e.g. MICHELLE M. PABLE"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold uppercase"
+                      />
+                      <div className="flex gap-1 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditCvFormData({ ...editCvFormData, liquidated_by: 'MICHELLE M. PABLE' })}
+                          className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                        >
+                          Pable (Manager)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditCvFormData({ ...editCvFormData, liquidated_by: 'CANDILARIO N. TATOY' })}
+                          className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                        >
+                          Tatoy (Chairman)
+                        </button>
+                      </div>
                     </div>
-                    <input
-                      type="text"
-                      value={editCvFormData.liquidated_by}
-                      onChange={e => setEditCvFormData({ ...editCvFormData, liquidated_by: e.target.value })}
-                      placeholder="e.g. MICHELLE M. PABLE"
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold uppercase"
-                    />
-                    <div className="flex gap-1 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => setEditCvFormData({ ...editCvFormData, liquidated_by: 'MICHELLE M. PABLE' })}
-                        className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
-                      >
-                        Pable (Manager)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditCvFormData({ ...editCvFormData, liquidated_by: 'CANDILARIO N. TATOY' })}
-                        className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
-                      >
-                        Tatoy (Chairman)
-                      </button>
-                    </div>
-                  </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-bold text-neutral-500 uppercase">Approved By (Detailed)</label>
-                      <span className="text-[9px] text-neutral-400">
-                        Title below: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{getSignatoryTitle(editCvFormData.detailed_approved_by) || 'None'}</strong>
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      value={editCvFormData.detailed_approved_by}
-                      onChange={e => setEditCvFormData({ ...editCvFormData, detailed_approved_by: e.target.value })}
-                      placeholder="e.g. CANDILARIO N. TATOY"
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold uppercase"
-                    />
-                    <div className="flex gap-1 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => setEditCvFormData({ ...editCvFormData, detailed_approved_by: 'CANDILARIO N. TATOY' })}
-                        className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
-                      >
-                        Tatoy (Chairman)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditCvFormData({ ...editCvFormData, detailed_approved_by: 'MICHELLE M. PABLE' })}
-                        className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
-                      >
-                        Pable (Manager)
-                      </button>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-bold text-neutral-500 uppercase">Approved By (Detailed)</label>
+                        <span className="text-[9px] text-neutral-400">
+                          Title below: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{getSignatoryTitle(editCvFormData.detailed_approved_by) || 'None'}</strong>
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={editCvFormData.detailed_approved_by}
+                        onChange={e => setEditCvFormData({ ...editCvFormData, detailed_approved_by: e.target.value })}
+                        placeholder="e.g. CANDILARIO N. TATOY"
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold uppercase"
+                      />
+                      <div className="flex gap-1 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditCvFormData({ ...editCvFormData, detailed_approved_by: 'CANDILARIO N. TATOY' })}
+                          className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                        >
+                          Tatoy (Chairman)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditCvFormData({ ...editCvFormData, detailed_approved_by: 'MICHELLE M. PABLE' })}
+                          className="px-1.5 py-0.5 rounded text-[9px] bg-neutral-100 dark:bg-neutral-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                        >
+                          Pable (Manager)
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Pinned Footer */}

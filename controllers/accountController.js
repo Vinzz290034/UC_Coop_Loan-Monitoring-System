@@ -1285,7 +1285,9 @@ export const createCheckVoucher = async (req, res, next) => {
     const defaultSignatories = {
       prepared_by: 'LAMOSTE, CHINNETTE A.',
       checked_by: 'MARILOU LARIOSA',
-      approved_by: 'MICHELLE M. PABLE'
+      approved_by: 'MICHELLE M. PABLE',
+      liquidated_by: 'MICHELLE M. PABLE',
+      detailed_approved_by: 'CANDILARIO N. TATOY'
     };
 
     const initialStatus = (status || 'edit').toLowerCase();
@@ -1345,7 +1347,7 @@ export const createCheckVoucher = async (req, res, next) => {
         status,
         details,
         signatories
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         loan_id || null,
@@ -1361,7 +1363,7 @@ export const createCheckVoucher = async (req, res, next) => {
         folder_name || null,
         initialStatus,
         details ? JSON.stringify(details) : '[]',
-        JSON.stringify(signatories || defaultSignatories)
+        JSON.stringify(signatories ? { ...defaultSignatories, ...signatories } : defaultSignatories)
       ]
     );
 
