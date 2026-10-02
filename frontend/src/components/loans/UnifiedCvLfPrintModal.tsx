@@ -135,6 +135,30 @@ function getCvDisbursedAmount(cv: any): number {
     }
   }
 
+  const isStl = (cv?.folder_name || '').toLowerCase().includes('stl') || Boolean(cv?.stl_liquidation);
+  if (isStl) {
+    if (cv.cib_amount && parseFloat(cv.cib_amount) > 0) return parseFloat(cv.cib_amount);
+    for (const item of details) {
+      const desc = (item.book_of_account || item.description || '').trim();
+      if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) {
+        const val = typeof item.amount === 'number' ? Math.abs(item.amount) : parseFloat(item.amount || item.credit || 0);
+        if (val > 0) return val;
+      }
+    }
+    let dSum = 0;
+    let cSum = 0;
+    for (const item of details) {
+      const desc = (item.book_of_account || item.description || '').trim();
+      if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      const isCredit = item.is_credit === true || item.isAutoCredit === true || val < 0;
+      if (isCredit) cSum += Math.abs(val);
+      else if (val > 0) dSum += val;
+    }
+    if (dSum > 0 && cSum > 0 && dSum > cSum) return dSum - cSum;
+    if (cv.amount && parseFloat(cv.amount) > 0) return parseFloat(cv.amount);
+  }
+
   // 1. Calculate sum of debit items (gross voucher disbursement amount)
   let debitSum = 0;
   for (const item of details) {
@@ -149,24 +173,24 @@ function getCvDisbursedAmount(cv: any): number {
       debitSum += val;
     }
   }
-    if (debitSum > 0) return debitSum;
+  if (debitSum > 0) return debitSum;
 
-    // Check linked revolving fund items or STL items if details is not yet populated
-    if (Array.isArray(cv.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
-      const rfSum = cv.revolving_fund.items
-        .filter((it: any) => !it.is_cancelled)
-        .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
-      if (rfSum > 0) return rfSum;
-    }
-    if (Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
-      const stlSum = cv.stl_liquidation.items
-        .filter((it: any) => !it.is_cancelled)
-        .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
-      if (stlSum > 0) return stlSum;
-    }
+  // Check linked revolving fund items or STL items if details is not yet populated
+  if (Array.isArray(cv.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
+    const rfSum = cv.revolving_fund.items
+      .filter((it: any) => !it.is_cancelled)
+      .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
+    if (rfSum > 0) return rfSum;
+  }
+  if (Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
+    const stlSum = cv.stl_liquidation.items
+      .filter((it: any) => !it.is_cancelled)
+      .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
+    if (stlSum > 0) return stlSum;
+  }
 
-    return parseFloat(cv.amount || 0);
-  };
+  return parseFloat(cv.amount || 0);
+}
 
 export function formatPayeeName(name?: string): string {
   if (!name || typeof name !== 'string') return name || '';

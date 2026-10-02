@@ -1386,9 +1386,6 @@ function DisbursementPageContent() {
       if (cv.cib_amount && parseFloat(cv.cib_amount) > 0) {
         return parseFloat(cv.cib_amount);
       }
-      if (cv.amount && parseFloat(cv.amount) > 0) {
-        return parseFloat(cv.amount);
-      }
       let rawDetails: any[] = [];
       if (Array.isArray(cv.details)) rawDetails = cv.details;
       else if (typeof cv.details === 'string') {
@@ -1400,6 +1397,25 @@ function DisbursementPageContent() {
           const val = typeof item.amount === 'number' ? Math.abs(item.amount) : parseFloat(item.amount || item.credit || 0);
           if (val > 0) return val;
         }
+      }
+      let dSum = 0;
+      let cSum = 0;
+      for (const item of rawDetails) {
+        const desc = (item.book_of_account || item.description || '').trim();
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+        const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+        const isCredit = item.is_credit === true || item.isAutoCredit === true || val < 0;
+        if (isCredit) {
+          cSum += Math.abs(val);
+        } else if (val > 0) {
+          dSum += val;
+        }
+      }
+      if (dSum > 0 && cSum > 0 && dSum > cSum) {
+        return dSum - cSum;
+      }
+      if (cv.amount && parseFloat(cv.amount) > 0) {
+        return parseFloat(cv.amount);
       }
     }
 
@@ -4432,6 +4448,10 @@ function DisbursementPageContent() {
                 const activeData = isReplenish ? summaryData : detailedData;
                 const { rows, debitTotal, creditTotal } = activeData;
                 const isStl = getReplenishmentType(selectedCvForModal?.folder_name, selectedCvForModal) === 'stl';
+                const cibRow = rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+                const actualDisbursedAmount = (cibRow && cibRow.credit !== null && cibRow.credit !== undefined && Number(cibRow.credit) > 0)
+                  ? Number(cibRow.credit)
+                  : (getCvDisbursedAmount(selectedCvForModal) || debitTotal);
 
                 return (
                   <div className="space-y-3">
@@ -4542,12 +4562,12 @@ function DisbursementPageContent() {
                           DISBURSED AMOUNT:
                         </span>
                         <p className="text-xs font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wide leading-relaxed">
-                          {formatDisbursedInWords(debitTotal || getCvDisbursedAmount(selectedCvForModal))}
+                          {formatDisbursedInWords(actualDisbursedAmount)}
                         </p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <span className="font-mono font-extrabold text-base text-emerald-700 dark:text-emerald-300">
-                          ₱{(debitTotal || getCvDisbursedAmount(selectedCvForModal)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₱{actualDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
@@ -5827,6 +5847,10 @@ function DisbursementPageContent() {
               const summaryData = getSummaryCvRows(printingCvBreakdown);
               const detailedData = getBalancedCvRows(printingCvBreakdown);
               const { rows, debitTotal, creditTotal } = isReplenish ? summaryData : detailedData;
+              const cibRow = rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+              const actualPrintDisbursedAmount = (cibRow && cibRow.credit !== null && cibRow.credit !== undefined && Number(cibRow.credit) > 0)
+                ? Number(cibRow.credit)
+                : (getCvDisbursedAmount(printingCvBreakdown) || debitTotal);
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{ border: '1px solid #6ee7b7', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
@@ -5890,12 +5914,12 @@ function DisbursementPageContent() {
                         Disbursed Amount:
                       </span>
                       <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#111827', margin: 0, textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.4 }}>
-                        {formatDisbursedInWords(debitTotal || getCvDisbursedAmount(printingCvBreakdown))}
+                        {formatDisbursedInWords(actualPrintDisbursedAmount)}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <span style={{ fontSize: '15px', fontFamily: 'monospace', fontWeight: '800', color: '#064e3b' }}>
-                        ₱{(debitTotal || getCvDisbursedAmount(printingCvBreakdown)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₱{actualPrintDisbursedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
