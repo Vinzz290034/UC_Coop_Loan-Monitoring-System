@@ -96,6 +96,7 @@ function DashboardLayoutContent({
 
   // Navigation Links based on role
   const isAdminOrStaff = user.role === 'admin' || user.role === 'staff';
+  const isMember = user.role === 'member';
 
   const menuItems = [
     {
@@ -164,13 +165,19 @@ function DashboardLayoutContent({
       name: 'Schedule',
       path: '/dashboard/calendar',
       icon: CalendarClock,
-      allowed: true,
+      allowed: isAdminOrStaff,
     },
     {
       name: 'Inbox',
       path: '/dashboard/messages',
       icon: Inbox,
-      allowed: true,
+      allowed: isAdminOrStaff,
+    },
+    {
+      name: 'Notification',
+      path: '/dashboard/notifications',
+      icon: Bell,
+      allowed: isMember,
     },
     {
       name: 'Announcements',
@@ -324,6 +331,12 @@ function DashboardLayoutContent({
             const isActive =
               pathname === item.path ||
               (item.path !== '/dashboard' && pathname.startsWith(item.path)) ||
+              (item.path === '/dashboard/notifications' && (
+                pathname.startsWith('/dashboard/notifications') ||
+                pathname.startsWith('/dashboard/messages') ||
+                pathname.startsWith('/dashboard/calendar') ||
+                pathname.startsWith('/dashboard/appointments')
+              )) ||
               (item.path === '/dashboard/messages' && pathname.startsWith('/dashboard/notifications')) ||
               (item.path === '/dashboard/calendar' && pathname.startsWith('/dashboard/appointments'));
             return (
@@ -459,7 +472,7 @@ function DashboardLayoutContent({
                         calendar: 'Schedule',
                         appointments: 'Schedule',
                         messages: 'Inbox',
-                        notifications: 'Inbox',
+                        notifications: isMember ? 'Notification' : 'Inbox',
                       };
                       return breadcrumbLabels[segment] || staticOverrides[segment] || segment;
                     })

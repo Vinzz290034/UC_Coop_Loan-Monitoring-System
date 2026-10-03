@@ -22,15 +22,21 @@ function MessagesPageContent() {
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
-  // Synchronize active tab with URL query parameter
+  // Synchronize active tab with URL query parameter & redirect member accounts
   useEffect(() => {
+    if (user?.role === 'member') {
+      const subtab = tabParam === 'notifications' ? '&subtab=alerts' : '';
+      router.replace(`/dashboard/notifications?tab=messages${subtab}`);
+      return;
+    }
+
     if (tabParam === 'notifications') {
       setActiveTab('notifications');
     } else {
       setActiveTab('messages');
     }
     setBreadcrumbLabel('messages', 'Inbox');
-  }, [tabParam, setBreadcrumbLabel]);
+  }, [user, tabParam, router, setBreadcrumbLabel]);
 
   const handleTabChange = (tab: 'messages' | 'notifications') => {
     setActiveTab(tab);

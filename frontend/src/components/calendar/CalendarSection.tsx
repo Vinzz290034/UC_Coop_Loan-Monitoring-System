@@ -1,11 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useBreadcrumb } from '@/context/BreadcrumbContext';
-import BackButton from '@/components/BackButton';
-import AppointmentsSection from '@/components/calendar/AppointmentsSection';
 import api from '@/lib/api';
 import {
   ChevronLeft,
@@ -15,20 +11,17 @@ import {
   Calendar as CalendarIcon,
   Filter,
   AlertCircle,
-  Clock,
   Briefcase,
   Megaphone,
   CreditCard,
   X,
   Loader2,
   CalendarDays,
-  CalendarClock,
   Sparkles,
-  CalendarCheck,
   PlusCircle,
 } from 'lucide-react';
 
-interface CalendarEvent {
+export interface CalendarEvent {
   id: string;
   title: string;
   description: string;
@@ -39,44 +32,16 @@ interface CalendarEvent {
   is_system: boolean;
 }
 
-function CalendarPageContent() {
+interface CalendarSectionProps {
+  onBookAppointment?: () => void;
+  hideHeaderActions?: boolean;
+}
+
+export default function CalendarSection({
+  onBookAppointment,
+  hideHeaderActions = false,
+}: CalendarSectionProps) {
   const { user } = useAuth();
-  const { setBreadcrumbLabel } = useBreadcrumb();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
-  const tabParam = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState<'calendar' | 'appointments'>(
-    tabParam === 'appointments' ? 'appointments' : 'calendar'
-  );
-  const [pendingAppointmentsCount, setPendingAppointmentsCount] = useState(0);
-
-  // Synchronize active tab with URL query parameter & redirect member accounts
-  useEffect(() => {
-    if (user?.role === 'member') {
-      const tab = tabParam === 'appointments' ? 'appointment' : 'calendar';
-      const bookQuery = searchParams.get('book') ? '&book=true' : '';
-      router.replace(`/dashboard/notifications?tab=${tab}${bookQuery}`);
-      return;
-    }
-
-    if (tabParam === 'appointments') {
-      setActiveTab('appointments');
-      setBreadcrumbLabel('calendar', 'Schedule');
-    } else {
-      setActiveTab('calendar');
-      setBreadcrumbLabel('calendar', 'Schedule');
-    }
-  }, [user, tabParam, searchParams, router, setBreadcrumbLabel]);
-
-  const handleTabChange = (tab: 'calendar' | 'appointments') => {
-    setActiveTab(tab);
-    if (tab === 'appointments') {
-      router.replace('/dashboard/calendar?tab=appointments');
-    } else {
-      router.replace('/dashboard/calendar');
-    }
-  };
 
   // Calendar Date Navigation States
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -364,291 +329,237 @@ function CalendarPageContent() {
   }
 
   return (
-    <div className="space-y-6 animate-micro-elevate">
-      <div>
-        <BackButton href="/dashboard">Back to Overview</BackButton>
-      </div>
+    <div className="space-y-6">
+      {/* Calendar Controls Bar */}
+      {!hideHeaderActions && (
+        <div className="flex items-center justify-between flex-wrap gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/60 shadow-xs">
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="w-5 h-5 text-primary dark:text-secondary" />
+            <span className="font-headline font-bold text-sm text-on-surface dark:text-white">
+              Interactive Coop Schedule
+            </span>
+          </div>
 
-      {/* Top Combined Module Tab Switcher & Month Navigation Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-outline-variant/50 gap-3">
-        <div className="flex overflow-x-auto custom-scrollbar">
-          <button
-            type="button"
-            onClick={() => handleTabChange('calendar')}
-            className={`px-6 py-3 font-headline text-sm font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === 'calendar'
-                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-            }`}
-          >
-            <CalendarIcon className="w-4 h-4" />
-            <span>Interactive Calendar</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleTabChange('appointments')}
-            className={`px-6 py-3 font-headline text-sm font-bold whitespace-nowrap border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === 'appointments'
-                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>Appointments & Schedules</span>
-            {pendingAppointmentsCount > 0 && (
-              <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                activeTab === 'appointments'
-                  ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
-                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
-              }`}>
-                {pendingAppointmentsCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Right side: Actions container (Today & Month Switcher on calendar tab, or Appointment actions) */}
-        <div id="calendar-header-actions" className="flex items-center gap-2 self-end sm:self-center mb-2 sm:mb-0">
-          {activeTab === 'calendar' && (
-            <>
-              {user?.role === 'member' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleTabChange('appointments');
-                    router.replace('/dashboard/calendar?tab=appointments&book=true');
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl hover:shadow-lg transition-all active:scale-95 cursor-pointer shadow-xs"
-                >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Book Appointment</span>
-                </button>
-              )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {user?.role === 'member' && onBookAppointment && (
               <button
-                onClick={resetToToday}
-                className="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-outline-variant/60 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-800 dark:text-neutral-200 transition-colors cursor-pointer"
+                type="button"
+                onClick={onBookAppointment}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl hover:shadow-lg transition-all active:scale-95 cursor-pointer shadow-xs"
               >
-                Today
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>Book Appointment</span>
               </button>
-              <div className="flex items-center rounded-xl border border-outline-variant/60 overflow-hidden bg-white dark:bg-surface-container-low shadow-xs">
-                <button
-                  onClick={prevMonth}
-                  className="p-2 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
-                  title="Previous Month"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <div className="px-3 text-xs font-black text-on-surface dark:text-white min-w-[115px] text-center bg-neutral/5 dark:bg-neutral/15 font-headline">
-                  {monthNames[month]} {year}
-                </div>
-                <button
-                  onClick={nextMonth}
-                  className="p-2 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
-                  title="Next Month"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+            )}
+            <button
+              onClick={resetToToday}
+              className="px-3.5 py-1.5 text-xs font-bold rounded-xl border border-outline-variant/60 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-800 dark:text-neutral-200 transition-colors cursor-pointer"
+            >
+              Today
+            </button>
+            <div className="flex items-center rounded-xl border border-outline-variant/60 overflow-hidden bg-white dark:bg-surface-container-low shadow-xs">
+              <button
+                onClick={prevMonth}
+                className="p-2 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
+                title="Previous Month"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <div className="px-3 text-xs font-black text-on-surface dark:text-white min-w-[115px] text-center bg-neutral/5 dark:bg-neutral/15 font-headline">
+                {monthNames[month]} {year}
               </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* TAB 1: APPOINTMENTS SECTION */}
-      {activeTab === 'appointments' && (
-        <AppointmentsSection
-          onPendingCountChange={setPendingAppointmentsCount}
-          initialOpenCreate={searchParams.get('book') === 'true'}
-        />
-      )}
-
-      {/* TAB 2: CALENDAR SECTION */}
-      {activeTab === 'calendar' && (
-        <div className="space-y-6">
-
-          {/* Main Grid + Filter Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Filters Panel */}
-            <div className="lg:col-span-1 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm h-fit space-y-6">
-              <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2 pb-3 border-b border-outline-variant/45">
-                <Filter className="w-4 h-4 text-primary dark:text-secondary" />
-                Event Categories
-              </h3>
-
-              <div className="space-y-3.5">
-                <label className="flex items-center gap-3 cursor-pointer group select-none">
-                  <input
-                    type="checkbox"
-                    checked={filters.announcement}
-                    onChange={(e) => setFilters({ ...filters, announcement: e.target.checked })}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-outline-variant accent-blue-600 cursor-pointer"
-                  />
-                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                    Announcements
-                  </span>
-                </label>
-
-                <label className="flex items-center gap-3 cursor-pointer group select-none">
-                  <input
-                    type="checkbox"
-                    checked={filters.payment_deadline}
-                    onChange={(e) => setFilters({ ...filters, payment_deadline: e.target.checked })}
-                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-outline-variant accent-amber-500 cursor-pointer"
-                  />
-                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    Payment Deadlines
-                  </span>
-                </label>
-
-                <label className="flex items-center gap-3 cursor-pointer group select-none">
-                  <input
-                    type="checkbox"
-                    checked={filters.office_duty}
-                    onChange={(e) => setFilters({ ...filters, office_duty: e.target.checked })}
-                    className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 border-outline-variant accent-emerald-500 cursor-pointer"
-                  />
-                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    Office Operations
-                  </span>
-                </label>
-
-                <label className="flex items-center gap-3 cursor-pointer group select-none">
-                  <input
-                    type="checkbox"
-                    checked={filters.holiday}
-                    onChange={(e) => setFilters({ ...filters, holiday: e.target.checked })}
-                    className="w-4 h-4 rounded text-rose-500 focus:ring-rose-500 border-outline-variant accent-rose-500 cursor-pointer"
-                  />
-                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                    Holidays / Closed
-                  </span>
-                </label>
-
-                <label className="flex items-center gap-3 cursor-pointer group select-none">
-                  <input
-                    type="checkbox"
-                    checked={filters.special_schedule}
-                    onChange={(e) => setFilters({ ...filters, special_schedule: e.target.checked })}
-                    className="w-4 h-4 rounded text-purple-500 focus:ring-purple-500 border-outline-variant accent-purple-500 cursor-pointer"
-                  />
-                  <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                    Special Schedules
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            {/* Calendar Grid Container */}
-            <div className="lg:col-span-3 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm transition-all">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-32 space-y-3">
-                  <Loader2 className="w-10 h-10 text-primary dark:text-secondary animate-spin" />
-                  <p className="text-xs font-bold text-neutral-600 dark:text-neutral-400">Loading events...</p>
-                </div>
-              ) : error ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center space-y-2.5">
-                  <AlertCircle className="w-12 h-12 text-tertiary" />
-                  <p className="text-sm font-bold text-on-surface dark:text-white">{error}</p>
-                  <button
-                    onClick={fetchEvents}
-                    className="px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs rounded-xl"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : (
-                <div className="overflow-x-auto custom-scrollbar pb-1">
-                  <div className="min-w-[540px] sm:min-w-0 space-y-4">
-                  {/* Days of Week Header */}
-                  <div className="grid grid-cols-7 gap-1.5 text-center">
-                    {daysOfWeek.map((day, idx) => (
-                      <div
-                        key={day}
-                        className={`text-xs font-black uppercase tracking-wider py-2 font-headline ${
-                          idx === 0 || idx === 6
-                            ? 'text-rose-500/80 dark:text-rose-400/80'
-                            : 'text-neutral-500 dark:text-neutral-400'
-                        }`}
-                      >
-                        {day}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 6x7 Grid of Days */}
-                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-                    {calendarCells.map((cell, idx) => {
-                      const dayEvents = getFilteredEventsForDate(cell.dateStr);
-                      const hasEvents = dayEvents.length > 0;
-
-                      return (
-                        <div
-                          key={idx}
-                          onClick={() => handleDayClick(cell.dayNum)}
-                          className={`min-h-[75px] sm:min-h-[90px] p-2 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group select-none relative overflow-hidden ${
-                            cell.isToday
-                              ? 'bg-primary/5 dark:bg-secondary/10 border-primary/40 dark:border-secondary/40 shadow-xs'
-                              : cell.isCurrentMonth
-                                ? 'bg-neutral-50/50 dark:bg-neutral-800/30 border-outline-variant/35 hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-white dark:hover:bg-neutral-800/60'
-                                : 'bg-transparent border-transparent opacity-30 cursor-not-allowed pointer-events-none'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span
-                              className={`text-xs font-bold leading-none ${
-                                cell.isToday
-                                  ? 'w-6 h-6 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 flex items-center justify-center font-black shadow-xs'
-                                  : 'text-on-surface dark:text-neutral-200'
-                              }`}
-                            >
-                              {cell.dayNum}
-                            </span>
-
-                            {hasEvents && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
-                                {dayEvents.length}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Event Indicators */}
-                          <div className="space-y-1 mt-1">
-                            {dayEvents.slice(0, 2).map((evt) => (
-                              <div
-                                key={evt.id}
-                                className={`text-[10px] font-semibold truncate px-1.5 py-0.5 rounded-md border flex items-center gap-1 ${getEventBadgeStyle(
-                                  evt.type
-                                )}`}
-                                title={evt.title}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getEventDotColor(evt.type)}`} />
-                                <span className="truncate">{evt.title}</span>
-                              </div>
-                            ))}
-
-                            {dayEvents.length > 2 && (
-                              <div className="text-[9px] font-bold text-neutral-400 pl-1">
-                                +{dayEvents.length - 2} more
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                </div>
-              )}
+              <button
+                onClick={nextMonth}
+                className="p-2 hover:bg-neutral/5 dark:hover:bg-neutral/10 text-neutral-700 dark:text-neutral-300 transition-colors cursor-pointer"
+                title="Next Month"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Main Grid + Filter Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Filters Panel */}
+        <div className="lg:col-span-1 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm h-fit space-y-6">
+          <h3 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2 pb-3 border-b border-outline-variant/45">
+            <Filter className="w-4 h-4 text-primary dark:text-secondary" />
+            Event Categories
+          </h3>
+
+          <div className="space-y-3.5">
+            <label className="flex items-center gap-3 cursor-pointer group select-none">
+              <input
+                type="checkbox"
+                checked={filters.announcement}
+                onChange={(e) => setFilters({ ...filters, announcement: e.target.checked })}
+                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-outline-variant accent-blue-600 cursor-pointer"
+              />
+              <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                Announcements
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer group select-none">
+              <input
+                type="checkbox"
+                checked={filters.payment_deadline}
+                onChange={(e) => setFilters({ ...filters, payment_deadline: e.target.checked })}
+                className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-outline-variant accent-amber-500 cursor-pointer"
+              />
+              <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                Payment Deadlines
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer group select-none">
+              <input
+                type="checkbox"
+                checked={filters.office_duty}
+                onChange={(e) => setFilters({ ...filters, office_duty: e.target.checked })}
+                className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 border-outline-variant accent-emerald-500 cursor-pointer"
+              />
+              <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                Office Operations
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer group select-none">
+              <input
+                type="checkbox"
+                checked={filters.holiday}
+                onChange={(e) => setFilters({ ...filters, holiday: e.target.checked })}
+                className="w-4 h-4 rounded text-rose-500 focus:ring-rose-500 border-outline-variant accent-rose-500 cursor-pointer"
+              />
+              <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                Holidays / Closed
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer group select-none">
+              <input
+                type="checkbox"
+                checked={filters.special_schedule}
+                onChange={(e) => setFilters({ ...filters, special_schedule: e.target.checked })}
+                className="w-4 h-4 rounded text-purple-500 focus:ring-purple-500 border-outline-variant accent-purple-500 cursor-pointer"
+              />
+              <span className="flex items-center gap-2 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                Special Schedules
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {/* Calendar Grid Container */}
+        <div className="lg:col-span-3 bg-white dark:bg-surface-container-low p-6 rounded-3xl border border-outline-variant/50 shadow-sm transition-all">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-32 space-y-3">
+              <Loader2 className="w-10 h-10 text-primary dark:text-secondary animate-spin" />
+              <p className="text-xs font-bold text-neutral-600 dark:text-neutral-400">Loading events...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center space-y-2.5">
+              <AlertCircle className="w-12 h-12 text-tertiary" />
+              <p className="text-sm font-bold text-on-surface dark:text-white">{error}</p>
+              <button
+                onClick={fetchEvents}
+                className="px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto custom-scrollbar pb-1">
+              <div className="min-w-[540px] sm:min-w-0 space-y-4">
+                {/* Days of Week Header */}
+                <div className="grid grid-cols-7 gap-1.5 text-center">
+                  {daysOfWeek.map((day, idx) => (
+                    <div
+                      key={day}
+                      className={`text-xs font-black uppercase tracking-wider py-2 font-headline ${
+                        idx === 0 || idx === 6
+                          ? 'text-rose-500/80 dark:text-rose-400/80'
+                          : 'text-neutral-500 dark:text-neutral-400'
+                      }`}
+                    >
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                {/* 6x7 Grid of Days */}
+                <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                  {calendarCells.map((cell, idx) => {
+                    const dayEvents = getFilteredEventsForDate(cell.dateStr);
+                    const hasEvents = dayEvents.length > 0;
+
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => handleDayClick(cell.dayNum)}
+                        className={`min-h-[75px] sm:min-h-[90px] p-2 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between group select-none relative overflow-hidden ${
+                          cell.isToday
+                            ? 'bg-primary/5 dark:bg-secondary/10 border-primary/40 dark:border-secondary/40 shadow-xs'
+                            : cell.isCurrentMonth
+                              ? 'bg-neutral-50/50 dark:bg-neutral-800/30 border-outline-variant/35 hover:border-primary/40 dark:hover:border-secondary/40 hover:bg-white dark:hover:bg-neutral-800/60'
+                              : 'bg-transparent border-transparent opacity-30 cursor-not-allowed pointer-events-none'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-xs font-bold leading-none ${
+                              cell.isToday
+                                ? 'w-6 h-6 rounded-full bg-primary dark:bg-secondary text-white dark:text-neutral-950 flex items-center justify-center font-black shadow-xs'
+                                : 'text-on-surface dark:text-neutral-200'
+                            }`}
+                          >
+                            {cell.dayNum}
+                          </span>
+
+                          {hasEvents && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary">
+                              {dayEvents.length}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Event Indicators */}
+                        <div className="space-y-1 mt-1">
+                          {dayEvents.slice(0, 2).map((evt) => (
+                            <div
+                              key={evt.id}
+                              className={`text-[10px] font-semibold truncate px-1.5 py-0.5 rounded-md border flex items-center gap-1 ${getEventBadgeStyle(
+                                evt.type
+                              )}`}
+                              title={evt.title}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getEventDotColor(evt.type)}`} />
+                              <span className="truncate">{evt.title}</span>
+                            </div>
+                          ))}
+
+                          {dayEvents.length > 2 && (
+                            <div className="text-[9px] font-bold text-neutral-400 pl-1">
+                              +{dayEvents.length - 2} more
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Day Events Drawer / Modal */}
       {showDayModal && (
@@ -734,34 +645,28 @@ function CalendarPageContent() {
                 </div>
               )}
 
-              {/* Event Creation Form (Admin only) */}
+              {/* Admin/Staff Add Event trigger */}
               {isAdminOrManager && !isManaging && (
                 <button
-                  onClick={() => {
-                    setIsManaging(true);
-                    setEditingEventId(null);
-                    setFormFields({
-                      title: '',
-                      description: '',
-                      type: 'announcement',
-                      status: 'open',
-                      event_date: selectedDateStr || '',
-                    });
-                  }}
-                  className="w-full py-2.5 rounded-xl border border-dashed border-primary/50 text-primary dark:text-secondary text-xs font-bold hover:bg-primary/5 dark:hover:bg-secondary/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  onClick={() => setIsManaging(true)}
+                  className="w-full py-2.5 border-2 border-dashed border-primary/40 dark:border-secondary/40 text-primary dark:text-secondary rounded-2xl text-xs font-bold hover:bg-primary/5 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-2"
                 >
                   <Plus className="w-4 h-4" />
-                  Add Event on this Day
+                  Add Event to this Day
                 </button>
               )}
 
+              {/* Admin/Staff Form to Add or Edit */}
               {isAdminOrManager && isManaging && (
-                <form onSubmit={handleSaveEvent} className="p-4 rounded-2xl border border-primary/30 bg-primary/5 dark:bg-secondary/5 space-y-3">
-                  <h4 className="text-xs font-bold text-primary dark:text-secondary">
+                <form
+                  onSubmit={handleSaveEvent}
+                  className="p-4 rounded-2xl bg-neutral-100 dark:bg-surface-container-high/60 border border-outline-variant/60 space-y-3.5 mt-2 animate-fade-in"
+                >
+                  <h4 className="font-headline text-xs font-black uppercase tracking-wider text-on-surface dark:text-white">
                     {editingEventId ? 'Edit Event Details' : 'Create New Event'}
                   </h4>
 
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     <div>
                       <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-300">
                         Event Title *
@@ -771,8 +676,8 @@ function CalendarPageContent() {
                         required
                         value={formFields.title}
                         onChange={(e) => setFormFields((prev) => ({ ...prev, title: e.target.value }))}
-                        placeholder="e.g. Loan Payment Due Date"
                         className="w-full px-3 py-2 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 text-xs font-semibold text-on-surface dark:text-white"
+                        placeholder="e.g. Coop General Assembly"
                       />
                     </div>
 
@@ -784,23 +689,20 @@ function CalendarPageContent() {
                         rows={2}
                         value={formFields.description}
                         onChange={(e) => setFormFields((prev) => ({ ...prev, description: e.target.value }))}
-                        placeholder="Optional details or instructions..."
-                        className="w-full px-3 py-2 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 text-xs font-semibold text-on-surface dark:text-white resize-none"
+                        className="w-full px-3 py-2 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 text-xs font-semibold text-on-surface dark:text-white"
+                        placeholder="Details or agenda notes..."
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-300">
-                          Event Category
+                          Category Type
                         </label>
                         <select
                           value={formFields.type}
                           onChange={(e) =>
-                            setFormFields((prev) => ({
-                              ...prev,
-                              type: e.target.value as CalendarEvent['type'],
-                            }))
+                            setFormFields((prev) => ({ ...prev, type: e.target.value as CalendarEvent['type'] }))
                           }
                           className="w-full px-3 py-2 bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant/80 dark:border-outline-variant/40 text-xs font-semibold text-on-surface dark:text-white"
                         >
@@ -878,20 +780,5 @@ function CalendarPageContent() {
         </div>
       )}
     </div>
-  );
-}
-
-export default function CalendarPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex flex-col items-center justify-center py-32 space-y-3">
-          <Loader2 className="w-10 h-10 text-primary dark:text-secondary animate-spin" />
-          <p className="text-xs font-bold text-neutral-600 dark:text-neutral-400">Loading Calendar & Appointments...</p>
-        </div>
-      }
-    >
-      <CalendarPageContent />
-    </Suspense>
   );
 }
