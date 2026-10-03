@@ -72,6 +72,7 @@ export default function AccountingPage() {
   const [savingsPage, setSavingsPage] = useState(1);
   const [savingsPageSize, setSavingsPageSize] = useState(10);
   const [viewingPassbookMember, setViewingPassbookMember] = useState<any | null>(null);
+  const [savingsTxFilter, setSavingsTxFilter] = useState<'all' | 'deposits' | 'withdrawals'>('all');
 
   // Modal target member ID (for depositing or withdrawing)
   const [modalMemberId, setModalMemberId] = useState<string>('');
@@ -774,27 +775,15 @@ export default function AccountingPage() {
           }`}
         >
           <WalletCards className="w-4 h-4" />
-          <span>Savings Account (Passbook)</span>
-          {isAdminOrManager ? (
-            savingsSummary?.total_accounts !== undefined ? (
-              <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold font-mono ${
-                activeTab === 'savings'
-                  ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
-                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
-              }`}>
-                {savingsSummary.total_accounts} Accounts
-              </span>
-            ) : null
-          ) : (
-            savingsData?.account?.balance !== undefined && (
-              <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold font-mono ${
-                activeTab === 'savings'
-                  ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
-                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
-              }`}>
-                ₱{parseFloat(savingsData.account.balance || 0).toLocaleString()}
-              </span>
-            )
+          <span>Savings Account</span>
+          {isAdminOrManager && savingsSummary?.total_accounts !== undefined && (
+            <span className={`ml-1 px-2 py-0.5 text-[10px] rounded-full font-extrabold font-mono ${
+              activeTab === 'savings'
+                ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+            }`}>
+              {savingsSummary.total_accounts} Accounts
+            </span>
           )}
         </button>
 
@@ -1249,7 +1238,13 @@ export default function AccountingPage() {
                   </p>
                 </div>
 
-                <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
+                <div 
+                  onClick={() => setSavingsTxFilter(savingsTxFilter === 'deposits' ? 'all' : 'deposits')}
+                  className={`p-5 bg-white dark:bg-surface-container-low border rounded-3xl shadow-xs cursor-pointer transition-all hover:border-primary/60 ${
+                    savingsTxFilter === 'deposits' ? 'ring-2 ring-primary border-transparent' : 'border-outline-variant/65'
+                  }`}
+                  title="Click to filter Deposit History"
+                >
                   <div className="flex items-center justify-between text-neutral-500">
                     <span className="text-[10px] uppercase font-bold tracking-wider font-label">Total Deposits</span>
                     <TrendingUp className="w-4 h-4 text-primary" />
@@ -1264,7 +1259,13 @@ export default function AccountingPage() {
                   <p className="text-[10px] text-neutral-400 mt-1">Cumulative cash/check inflows</p>
                 </div>
 
-                <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs">
+                <div 
+                  onClick={() => setSavingsTxFilter(savingsTxFilter === 'withdrawals' ? 'all' : 'withdrawals')}
+                  className={`p-5 bg-white dark:bg-surface-container-low border rounded-3xl shadow-xs cursor-pointer transition-all hover:border-tertiary/60 ${
+                    savingsTxFilter === 'withdrawals' ? 'ring-2 ring-tertiary border-transparent' : 'border-outline-variant/65'
+                  }`}
+                  title="Click to filter Withdrawal History"
+                >
                   <div className="flex items-center justify-between text-neutral-500">
                     <span className="text-[10px] uppercase font-bold tracking-wider font-label">Total Withdrawals</span>
                     <TrendingDown className="w-4 h-4 text-tertiary" />
@@ -1282,56 +1283,132 @@ export default function AccountingPage() {
 
               {/* Transactions Ledger Table */}
               <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
-                <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between flex-wrap gap-2">
-                  <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
-                    <History className="w-4 h-4 text-emerald-600" /> Savings Passbook & Transaction Ledger
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setIsSavingsDepositModalOpen(true)}
-                      className="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Deposit
-                    </button>
-                    {isAdminOrManager && (
-                      <button
-                        onClick={() => setIsSavingsWithdrawModalOpen(true)}
-                        className="px-3 py-1.5 text-xs font-bold bg-tertiary/10 hover:bg-tertiary/20 text-tertiary rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
-                      >
-                        <TrendingDown className="w-3.5 h-3.5" /> Withdraw
-                      </button>
-                    )}
-                  </div>
-                </div>
+                {(() => {
+                  const allTxs = savingsData.transactions || [];
+                  const depositTxs = allTxs.filter((tx: any) => tx.transaction_type === 'deposit');
+                  const withdrawalTxs = allTxs.filter((tx: any) => tx.transaction_type === 'withdrawal' || tx.transaction_type === 'loan_offset');
+                  const filteredTxs = savingsTxFilter === 'deposits'
+                    ? depositTxs
+                    : savingsTxFilter === 'withdrawals'
+                    ? withdrawalTxs
+                    : allTxs;
 
-                <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Tx Date</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Type</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Ref #</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amount</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Balance After</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Performed By</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Remarks</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
-                      {(() => {
-                        const txs = savingsData.transactions || [];
-                        if (txs.length === 0) {
-                          return (
-                            <tr>
-                              <td colSpan={8} className="px-6 py-8 text-center text-neutral-500 italic">
-                                No savings transactions recorded yet.
-                              </td>
+                  return (
+                    <>
+                      <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between flex-wrap gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
+                            <History className="w-4 h-4 text-emerald-600" /> Savings Transaction Ledger
+                          </h4>
+
+                          {/* Filter Tabs: All / Deposits / Withdrawal History */}
+                          <div className="flex items-center bg-surface-container-low dark:bg-surface-container-high/60 p-1 rounded-xl border border-outline-variant/50 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setSavingsTxFilter('all')}
+                              className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                savingsTxFilter === 'all'
+                                  ? 'bg-white dark:bg-surface-container-highest text-primary dark:text-secondary shadow-xs'
+                                  : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                              }`}
+                            >
+                              <span>All</span>
+                              <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-mono font-bold ${
+                                savingsTxFilter === 'all'
+                                  ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary'
+                                  : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                              }`}>
+                                {allTxs.length}
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSavingsTxFilter('deposits')}
+                              className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                savingsTxFilter === 'deposits'
+                                  ? 'bg-white dark:bg-surface-container-highest text-emerald-700 dark:text-emerald-300 shadow-xs'
+                                  : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                              }`}
+                            >
+                              <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Deposits</span>
+                              <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-mono font-bold ${
+                                savingsTxFilter === 'deposits'
+                                  ? 'bg-emerald-600/10 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-300'
+                                  : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                              }`}>
+                                {depositTxs.length}
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSavingsTxFilter('withdrawals')}
+                              className={`px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                                savingsTxFilter === 'withdrawals'
+                                  ? 'bg-white dark:bg-surface-container-highest text-tertiary shadow-xs'
+                                  : 'text-neutral-500 hover:text-on-surface dark:hover:text-white'
+                              }`}
+                            >
+                              <TrendingDown className="w-3.5 h-3.5 text-tertiary" />
+                              <span>Withdrawal History</span>
+                              <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-mono font-bold ${
+                                savingsTxFilter === 'withdrawals'
+                                  ? 'bg-tertiary/10 text-tertiary dark:bg-tertiary/20'
+                                  : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                              }`}>
+                                {withdrawalTxs.length}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setIsSavingsDepositModalOpen(true)}
+                            className="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Deposit
+                          </button>
+                          {isAdminOrManager && (
+                            <button
+                              onClick={() => setIsSavingsWithdrawModalOpen(true)}
+                              className="px-3 py-1.5 text-xs font-bold bg-tertiary/10 hover:bg-tertiary/20 text-tertiary rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                            >
+                              <TrendingDown className="w-3.5 h-3.5" /> Withdraw
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
+                              <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Tx Date</th>
+                              <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Type</th>
+                              <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Ref #</th>
+                              <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amount</th>
+                              <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Balance After</th>
+                              <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Performed By</th>
+                              <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden lg:table-cell">Remarks</th>
+                              <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Action</th>
                             </tr>
-                          );
-                        }
-
-                        return txs.map((tx: any) => (
+                          </thead>
+                          <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
+                            {filteredTxs.length === 0 ? (
+                              <tr>
+                                <td colSpan={8} className="px-6 py-8 text-center text-neutral-500 italic">
+                                  {savingsTxFilter === 'withdrawals'
+                                    ? 'No savings withdrawal transactions recorded yet.'
+                                    : savingsTxFilter === 'deposits'
+                                    ? 'No savings deposit transactions recorded yet.'
+                                    : 'No savings transactions recorded yet.'}
+                                </td>
+                              </tr>
+                            ) : (
+                              filteredTxs.map((tx: any) => (
                           <tr key={tx.id} className="hover:bg-neutral-500/5 transition-colors">
                             <td className="px-4 sm:px-6 py-3 font-mono">{new Date(tx.transaction_date).toLocaleDateString()}</td>
                             <td className="px-4 sm:px-6 py-3">
@@ -1381,12 +1458,15 @@ export default function AccountingPage() {
                               </button>
                             </td>
                           </tr>
-                        ));
-                      })()}
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </>
+            );
+          })()}
+        </div>
             </div>
           )}
 

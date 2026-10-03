@@ -1603,7 +1603,7 @@ function LoansPageContent() {
 
   // Excel Export Functions
   const exportLoansToExcel = () => {
-    if (!loans || loans.length === 0) return;
+    if (!isAdminOrManager || !loans || loans.length === 0) return;
 
     const excelData = loans.map((l) => ({
       'Loan ID': `#${l.id}`,
@@ -2361,10 +2361,7 @@ function LoansPageContent() {
   };
 
   const openApplyModal = () => {
-    if (!isAdminOrManager && !isVerified) {
-      setIsUnverifiedModalOpen(true);
-      return;
-    }
+    if (!isAdminOrManager) return;
     setWizardStep(1);
     setSelectedProduct(null);
     setSelectedLoanCategory(LOAN_CATEGORIES.REGULAR);
@@ -2631,36 +2628,25 @@ function LoansPageContent() {
           <div>
             <BackButton href="/dashboard">Back to Overview</BackButton>
           </div>
-          <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
-            <button
-              onClick={exportLoansToExcel}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-full hover:shadow-md transition-all cursor-pointer"
-            >
-              <Download className="w-4 h-4" />
-              Export Ledger (.xlsx)
-            </button>
-            <button
-              onClick={openApplyModal}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4" />
-              Apply for Loan
-              {!isVerified && !isAdminOrManager && <Lock className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
-            </button>
-          </div>
+          {isAdminOrManager && (
+            <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
+              <button
+                onClick={exportLoansToExcel}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-full hover:shadow-md transition-all cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                Export Ledger (.xlsx)
+              </button>
+              <button
+                onClick={openApplyModal}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Apply for Loan
+              </button>
+            </div>
+          )}
         </div>
-
-        {!isAdminOrManager && !isVerified && (
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-2xl text-xs font-medium space-y-1">
-            <p className="font-bold flex items-center gap-2 text-amber-900 dark:text-amber-200">
-              <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-              Profile Verification & Approval Required
-            </p>
-            <p>
-              You cannot apply for a loan until your profile verification has been completed and approved by an administrator. Please visit your <a href="/dashboard/profile" className="underline font-bold hover:text-primary dark:hover:text-secondary">Profile Page</a> to submit your profile verification details.
-            </p>
-          </div>
-        )}
 
         {/* Dynamic Dashboard KPI Cards */}
         {metricsLoading ? (
@@ -4277,7 +4263,7 @@ function LoansPageContent() {
       )}
 
       {/* MODAL 2: APPLY FOR LOAN */}
-      {isApplyModalOpen && (
+      {isApplyModalOpen && isAdminOrManager && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className={`bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full ${wizardStep === 3 ? 'max-w-md' : (wizardStep === 1 ? 'max-w-3xl' : 'max-w-5xl')
             } shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative animate-modal-pop`}>
