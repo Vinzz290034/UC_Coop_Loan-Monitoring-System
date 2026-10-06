@@ -1488,6 +1488,75 @@ function DisbursementPageContent() {
     return `CIB-${b.replace(/\s*BANK\b/i, '').trim()}`;
   };
 
+  const resolveItemCategory = (it: any, cvDetails?: any[], lfItems?: any[]): string => {
+    if (!it) return 'Operation';
+
+    // 1. Explicit category directly on the item
+    if (it.category) {
+      const cleaned = cleanCategoryName(it.category);
+      if (cleaned) return cleaned;
+    }
+
+    const vKey = it.voucher_no ? String(it.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
+
+    // 2. Look for paired credit row in cvDetails with matching voucher_no or adjacent index
+    if (Array.isArray(cvDetails) && cvDetails.length > 0) {
+      if (vKey) {
+        const pairedCredit = cvDetails.find((c: any) => {
+          const isCredit = c.is_credit === true || c.isAutoCredit === true || (c.credit !== null && c.credit !== undefined && Number(c.credit) > 0);
+          if (!isCredit) return false;
+          const cVKey = c.voucher_no ? String(c.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
+          return cVKey && cVKey.toLowerCase() === vKey.toLowerCase() && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(c.book_of_account || c.description || '');
+        });
+
+        if (pairedCredit) {
+          const creditAcct = (pairedCredit.book_of_account || pairedCredit.description || '').trim();
+          const cleaned = cleanCategoryName(creditAcct);
+          if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) {
+            return cleaned;
+          }
+        }
+      }
+
+      const itIdx = cvDetails.indexOf(it);
+      if (itIdx !== -1) {
+        const candidates = [cvDetails[itIdx + 1], cvDetails[itIdx - 1]].filter(Boolean);
+        for (const cand of candidates) {
+          const isCredit = cand.is_credit === true || cand.isAutoCredit === true || (cand.credit !== null && cand.credit !== undefined && Number(cand.credit) > 0);
+          if (isCredit && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(cand.book_of_account || cand.description || '')) {
+            const creditAcct = (cand.book_of_account || cand.description || '').trim();
+            const cleaned = cleanCategoryName(creditAcct);
+            if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) {
+              return cleaned;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Matched liquidation schedule item
+    if (Array.isArray(lfItems) && lfItems.length > 0) {
+      const matchLf = lfItems.find((l: any) =>
+        !l.is_cancelled &&
+        ((vKey && l.voucher_no && String(l.voucher_no).replace(/^CV-?0*/i, '').trim() === vKey) ||
+         (vKey && l.particulars && String(l.particulars).includes(vKey)) ||
+         (it.remarks && l.remarks && String(it.remarks).trim() === String(l.remarks).trim()))
+      );
+      if (matchLf?.category) {
+        return cleanCategoryName(matchLf.category);
+      }
+    }
+
+    // 4. Remarks or description explicit mentions of category
+    const textToCheck = `${it.remarks || ''} ${it.book_of_account || ''} ${it.description || ''}`.toLowerCase();
+    if (/\bcdf\b/.test(textToCheck)) return 'CDF';
+    if (/\bcetf\b/.test(textToCheck)) return 'CETF';
+
+    // 5. Account heuristic fallback
+    const desc = (it.book_of_account || it.description || '').trim();
+    return cleanCategoryName(getCategoryForAccount(desc, accountCategoryMap));
+  };
+
   const getSummaryCvRows = (cv: any) => {
     if (!cv) return { rows: [], debitTotal: 0, creditTotal: 0 };
     let details: any[] = [];
@@ -1625,8 +1694,7 @@ function DisbursementPageContent() {
         const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
         const desc = item.book_of_account || item.description || '';
         if (val > 0 && !/cib\b|cash\s*in\s*bank/i.test(desc)) {
-          const rawCat = item.category || getCategoryForAccount(desc);
-          const cat = cleanCategoryName(rawCat);
+          const cat = resolveItemCategory(item, details);
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
@@ -1635,16 +1703,26 @@ function DisbursementPageContent() {
         if (it.is_cancelled) continue;
         const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
         if (val > 0) {
-          const rawCat = it.category || getCategoryForAccount(it.account_name || '') || 'Operation';
-          const cat = cleanCategoryName(rawCat);
+          const cat = resolveItemCategory(it, [], cv.revolving_fund.items);
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
     }
 
-    if (Object.keys(catMap).length > 0) {
+    const preferredOrder = ['Operation', 'CDF', 'Service', 'Merchandise', 'CETF'];
+    const sortedCats = Object.keys(catMap).sort((a, b) => {
+      const idxA = preferredOrder.indexOf(a);
+      const idxB = preferredOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return catMap[b] - catMap[a];
+    });
+
+    if (sortedCats.length > 0) {
       let idx = 0;
-      for (const [cat, amt] of Object.entries(catMap)) {
+      for (const cat of sortedCats) {
+        const amt = catMap[cat];
         rows.push({
           id: `cat-${idx++}`,
           date: dateStr,
