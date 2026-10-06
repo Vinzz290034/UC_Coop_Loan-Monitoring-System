@@ -285,8 +285,8 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
 
   const isBroadCategoryDesc = (desc: string) => {
     const d = (desc || '').trim().toLowerCase();
-    return ['operation', 'service', 'services', 'merchandise', 'stl', 'short term loan', 'revolving fund', 'loan', 'petty cash'].includes(d) ||
-           /^(revolving\s*fund|stl|short\s*term\s*loan)\s*-\s*(operation|service|services|stl)$/i.test(d);
+    return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'revolving fund', 'loan', 'petty cash'].includes(d) ||
+           /^(revolving\s*fund|stl|short\s*term\s*loan)\s*-\s*(operation|operations|service|services|stl|cdf|cetf|merchandise)$/i.test(d);
   };
 
   const debitDetails = details.filter(d => {
