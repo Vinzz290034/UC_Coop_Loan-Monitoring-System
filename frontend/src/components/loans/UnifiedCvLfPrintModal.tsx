@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import api from '@/lib/api';
 import {
@@ -298,8 +298,10 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
 
   const detailsAreOnlyCategories = debitDetails.length > 0 && debitDetails.every(d => isBroadCategoryDesc(d.book_of_account || d.description || ''));
 
-  // Prioritize activeItems from attached liquidation schedule ONLY when cv details is empty
-  const shouldUseActiveItems = activeItems.length > 0 && debitDetails.length === 0;
+  // Prioritize activeItems from attached liquidation schedule when:
+  // 1. cv details is empty, OR
+  // 2. stored details only contain broad category labels (Operation/Service/etc.) — treat those as summary-level, not truly detailed
+  const shouldUseActiveItems = activeItems.length > 0 && (debitDetails.length === 0 || detailsAreOnlyCategories);
 
   if (shouldUseActiveItems) {
     const defaultVNo = (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—';
@@ -697,11 +699,15 @@ export default function UnifiedCvLfPrintModal({
 
   // View mode: 'summary' (categorized 4-row summary) | 'detailed' (detailed itemized schedule)
   const [cvViewMode, setCvViewMode] = useState<'summary' | 'detailed'>(initialMode || 'summary');
+  // Track whether modal was already open to avoid resetting view mode mid-session
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (isOpen && initialMode) {
-      setCvViewMode(initialMode);
+    if (isOpen && !wasOpenRef.current) {
+      // Only reset view mode when modal first opens, not while it stays open
+      setCvViewMode(initialMode || 'detailed');
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, initialMode]);
 
   // Available options for linking when unlinked
@@ -938,9 +944,10 @@ export default function UnifiedCvLfPrintModal({
         signatories: updatedSignatories
       } : prev);
 
-      if (onLinkSuccess) {
-        onLinkSuccess();
-      }
+      // Do NOT call onLinkSuccess here — that would trigger a full parent reload
+      // (loadCheckVouchers) which changes the initialCv prop, re-runs loadFullData,
+      // and resets cvViewMode back to 'summary'. The local setCurrentCv update above
+      // is sufficient; the DB is already persisted.
       setIsEditingDetailedSignatories(false);
     } catch (err: any) {
       console.error('Failed to save signatories:', err);
