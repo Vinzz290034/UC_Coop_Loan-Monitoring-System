@@ -2677,7 +2677,7 @@ export default function OverviewPage() {
                                 <div className="flex justify-between text-xs">
                                   <span className="text-neutral-600 dark:text-neutral-400">Interest Rate</span>
                                   <span className="font-semibold">
-                                    {loanTerm === 36 ? '15.0% monthly' : '2.0% monthly'}
+                                    {selectedProduct?.interest_rate ? `${(parseFloat(selectedProduct.interest_rate) * 100).toFixed(1)}% monthly` : '2.0% monthly'}
                                   </span>
                                 </div>
                                 <div className="flex justify-between pt-2 border-t border-outline-variant/20 font-bold text-base text-primary dark:text-secondary">
@@ -2685,7 +2685,7 @@ export default function OverviewPage() {
                                   <span>
                                     {formatCurrency(
                                       (() => {
-                                        const rate = loanTerm === 36 ? 0.15 : 0.02;
+                                        const rate = selectedProduct?.interest_rate ? parseFloat(selectedProduct.interest_rate) : 0.02;
                                         if (selectedProduct.amortization_type === 'flat_rate') {
                                           return (currentLoanAmount + (currentLoanAmount * rate * loanTerm)) / loanTerm;
                                         } else {

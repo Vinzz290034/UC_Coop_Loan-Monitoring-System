@@ -1724,11 +1724,7 @@ function LoansPageContent() {
     let runningBal = parseFloat(loanDetailsObj.principal_amount);
     const scheduleRows = loanDetailsObj.schedule.map((sch: any) => {
       const schTotalDue = parseFloat(sch.principal_due) + parseFloat(sch.interest_due);
-      if (loanDetailsObj.amortization_type === 'diminishing_balance') {
-        runningBal = Math.round((runningBal - schTotalDue) * 100) / 100;
-      } else {
-        runningBal = Math.round((runningBal - parseFloat(sch.principal_due)) * 100) / 100;
-      }
+      runningBal = Math.round((runningBal - parseFloat(sch.principal_due)) * 100) / 100;
       return {
         'Month': sch.installment_number,
         'Principal Due (PHP)': parseFloat(sch.principal_due),
@@ -2218,7 +2214,7 @@ function LoansPageContent() {
     const principal = applyAmount || 0;
     const terms = applyTermMonths || 1;
     if (principal <= 0 || terms <= 0) return [];
-    const rate = terms === 36 ? 0.15 : 0.02; // 2% monthly or 15% for 36mo
+    const rate = selectedProduct?.interest_rate ? parseFloat(selectedProduct.interest_rate) : 0.02;
     const monthlyPrincipal = principal / terms;
     const schedule: { monthLabel: string; payment: number }[] = [];
     
@@ -3436,7 +3432,7 @@ function LoansPageContent() {
                                                             totalInterestPaid += parseFloat(sch.interest_paid) || 0;
 
                                                             if (loanDetails.amortization_type === 'diminishing_balance') {
-                                                              runningBalance = Math.round((runningBalance - schTotalDue) * 100) / 100;
+                                                              runningBalance = Math.round((runningBalance - pDue) * 100) / 100;
                                                             } else {
                                                               runningBalance = Math.round((runningBalance - pDue) * 100) / 100;
                                                             }
@@ -5602,7 +5598,7 @@ function LoansPageContent() {
                             <span>
                               {formatCurrency(
                                 (() => {
-                                  const rate = applyTermMonths === 36 ? 0.15 : 0.02;
+                                  const rate = selectedProduct?.interest_rate ? parseFloat(selectedProduct.interest_rate) : 0.02;
                                   if (selectedProduct.amortization_type === 'flat_rate') {
                                     return (currentAmountValue + (currentAmountValue * rate * applyTermMonths)) / applyTermMonths;
                                   } else {
@@ -6993,7 +6989,7 @@ function LoansPageContent() {
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Principal Amount</span>
                   <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{formatCurrency(parseFloat(printLoan.principal_amount))}</p>
-                  <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Interest: {(parseFloat(printLoan.interest_rate) * 100).toFixed(1)}% p.a.</p>
+                  <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Interest: {parseFloat(printLoan.interest_rate) <= 0.05 ? `${(parseFloat(printLoan.interest_rate) * 100).toFixed(1)}% / mo` : `${(parseFloat(printLoan.interest_rate) * 100).toFixed(1)}% p.a.`}</p>
                 </div>
                 <div style={{ textAlign: 'right', flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Monthly Payment Due</span>
@@ -7035,11 +7031,7 @@ function LoansPageContent() {
                         totalPrincipalDue += pDue;
                         totalInterestDue += iDue;
                         totalDueSum += schTotal;
-                        if (printLoan.amortization_type === 'diminishing_balance') {
-                          printBalance = Math.max(0, Math.round((printBalance - schTotal) * 100) / 100);
-                        } else {
-                          printBalance = Math.max(0, Math.round((printBalance - pDue) * 100) / 100);
-                        }
+                        printBalance = Math.max(0, Math.round((printBalance - pDue) * 100) / 100);
                         return (
                           <tr key={sch.id} style={{ borderBottom: '1px solid rgba(6, 78, 59, 0.05)' }}>
                             <td style={{ padding: '6px 12px', borderRight: '1px solid rgba(6, 78, 59, 0.05)', fontFamily: 'sans-serif', color: '#4b5563', fontWeight: 'bold' }}>{sch.installment_number}</td>

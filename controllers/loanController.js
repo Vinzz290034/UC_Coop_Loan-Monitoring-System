@@ -540,8 +540,8 @@ export const applyForLoan = async (req, res, next) => {
       finalTermMonths = parsedTerm;
     }
 
-    // Dynamic interest rate: 15% if 36 months, otherwise 2% (0.02)
-    const finalInterestRate = finalTermMonths === 36 ? 0.1500 : parseFloat(p.interest_rate);
+    // Product standard interest rate (e.g. 0.02 for 2% monthly)
+    const finalInterestRate = parseFloat(p.interest_rate) || 0.02;
 
     // Validate or auto-generate LAF No. (Only staff and admin can specify LAF No.)
     let finalLafNo = null;

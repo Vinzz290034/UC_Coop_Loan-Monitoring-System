@@ -125,12 +125,12 @@ export const calculateDiminishingBalance = (principal, annualRate, termMonths, s
     
     let principalDue = monthlyPrincipal;
     if (i === term || remainingPrincipal < monthlyPrincipal) {
-      principalDue = remainingPrincipal;
+      principalDue = Math.round(remainingPrincipal * 100) / 100;
     }
 
     const totalDue = Math.round((principalDue + interestDue) * 100) / 100;
 
-    remainingPrincipal = Math.round((remainingPrincipal - totalDue) * 100) / 100;
+    remainingPrincipal = Math.max(0, Math.round((remainingPrincipal - principalDue) * 100) / 100);
     principalPaidAccumulator += principalDue;
 
     schedule.push({

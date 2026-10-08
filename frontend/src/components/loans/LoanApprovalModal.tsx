@@ -322,21 +322,23 @@ export default function LoanApprovalModal({
     return Math.max(0, (applyAmount || 0) - totalDeductionsCalc);
   }, [applyAmount, totalDeductionsCalc]);
 
+  // Compute effective interest rate (defaults to product 2% monthly; filters legacy corrupted 15% monthly)
+  const effectiveRate = useMemo(() => {
+    const parsedRate = parseFloat(String(loan?.interest_rate || 0.02));
+    return parsedRate > 1
+      ? parsedRate / 100
+      : (parsedRate > 0 && parsedRate <= 0.08)
+      ? parsedRate
+      : 0.02;
+  }, [loan?.interest_rate]);
+
   // Compute monthly payment schedule preview
   const monthlySchedulePreview = useMemo(() => {
     const principal = applyAmount || 0;
     const terms = applyTermMonths || 1;
     if (principal <= 0 || terms <= 0) return [];
 
-    const parsedRate = parseFloat(String(loan?.interest_rate || 0.02));
-    const rate =
-      parsedRate > 1
-        ? parsedRate / 100
-        : parsedRate > 0
-        ? parsedRate
-        : terms === 36
-        ? 0.15
-        : 0.02;
+    const rate = effectiveRate;
 
     const monthlyPrincipal = principal / terms;
     const schedule: { monthLabel: string; payment: number }[] = [];
@@ -439,6 +441,7 @@ export default function LoanApprovalModal({
 
     const payload = {
       principal_amount: applyAmount,
+      interest_rate: effectiveRate,
       laf_no: applyLafNo.trim() || undefined,
       term_months: applyTermMonths,
       application_date: applyDate || undefined,
@@ -686,7 +689,7 @@ export default function LoanApprovalModal({
                   <button
                     key={m}
                     type="button"
-                    onClick={() => setApplyTermMonths(m)}
+                    onClick={() => { setApplyTermMonths(m); setApplyScheduleAmounts({}); }}
                     className={`py-2 px-3 rounded-xl border text-center transition-all cursor-pointer font-bold text-xs ${
                       applyTermMonths === m
                         ? 'bg-primary text-white dark:bg-secondary dark:text-neutral-950 border-primary dark:border-secondary shadow-xs'
@@ -701,7 +704,7 @@ export default function LoanApprovalModal({
                     type="number"
                     min="1"
                     value={applyTermMonths}
-                    onChange={(e) => setApplyTermMonths(parseInt(e.target.value, 10) || 1)}
+                    onChange={(e) => { setApplyTermMonths(parseInt(e.target.value, 10) || 1); setApplyScheduleAmounts({}); }}
                     placeholder="Months"
                     className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-bold text-center text-on-surface dark:text-white"
                   />
