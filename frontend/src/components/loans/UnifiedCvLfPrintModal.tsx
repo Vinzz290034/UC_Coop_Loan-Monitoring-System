@@ -61,28 +61,39 @@ export function getSignatoryTitle(name: string, fallback: string = ''): string {
 
 function formatRawDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
+  const str = String(dateStr).trim();
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  if (match) {
+    const monthIdx = parseInt(match[2], 10) - 1;
+    const day = match[3];
+    return `${day}-${months[monthIdx] || match[2]}`;
+  }
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return String(dateStr);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str;
     const day = String(d.getDate()).padStart(2, '0');
     return `${day}-${months[d.getMonth()]}`;
   } catch {
-    return String(dateStr);
+    return str;
   }
 }
 
 function formatIsoDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
+  const str = String(dateStr).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str.slice(0, 10);
+  }
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return String(dateStr).split('T')[0];
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return str.split('T')[0];
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   } catch {
-    return String(dateStr);
+    return str;
   }
 }
 
@@ -1565,7 +1576,17 @@ export default function UnifiedCvLfPrintModal({
                             <tbody>
                               {detailedCvData.rows.map((r, i) => (
                                 <tr key={i} className="border-b border-neutral-200 hover:bg-emerald-50/30">
-                                  <td className="p-2.5 font-mono text-[9.5px] text-neutral-600 border-r border-neutral-200 whitespace-nowrap">
+                                  <td
+                                    className="p-2.5 font-mono text-[9.5px] text-neutral-600 border-r border-neutral-200 whitespace-nowrap cursor-pointer hover:bg-emerald-100/70 hover:text-emerald-900 transition-colors"
+                                    title="Click to edit date"
+                                    onClick={() => {
+                                      if (onEdit && (currentCv || initialCv)) {
+                                        const activeCv = currentCv || initialCv;
+                                        const rowsToPass = cvViewMode === 'detailed' ? detailedCvData.rows : summaryCvData.rows;
+                                        onEdit(activeCv, cvViewMode, rowsToPass);
+                                      }
+                                    }}
+                                  >
                                     {r.date}
                                   </td>
                                   <td className="p-2.5 font-mono text-[10px] font-bold text-neutral-800 border-r border-neutral-200">

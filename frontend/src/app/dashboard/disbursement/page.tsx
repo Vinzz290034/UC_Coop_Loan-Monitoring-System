@@ -1999,6 +1999,60 @@ function DisbursementPageContent() {
         }
       }
 
+      // If date was edited, sync paired credit/parent row if present
+      if (field === 'date') {
+        const pairedCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
+        if (pairedCreditIdx !== -1) {
+          nextRows[pairedCreditIdx] = {
+            ...nextRows[pairedCreditIdx],
+            date: val
+          };
+        } else if (currentRow.pairedWithId) {
+          const parentIdx = nextRows.findIndex(r => r.id === currentRow.pairedWithId);
+          if (parentIdx !== -1) {
+            nextRows[parentIdx] = {
+              ...nextRows[parentIdx],
+              date: val
+            };
+          }
+        } else if (!isCurrentCredit && currentRow.voucher_no && rowIdx + 1 < nextRows.length) {
+          const nextRow = nextRows[rowIdx + 1];
+          if (checkIsCreditRow(nextRow) && nextRow.voucher_no === currentRow.voucher_no) {
+            nextRows[rowIdx + 1] = {
+              ...nextRows[rowIdx + 1],
+              date: val
+            };
+          }
+        }
+      }
+
+      // If voucher_no was edited, sync paired credit/parent row if present
+      if (field === 'voucher_no') {
+        const pairedCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
+        if (pairedCreditIdx !== -1) {
+          nextRows[pairedCreditIdx] = {
+            ...nextRows[pairedCreditIdx],
+            voucher_no: val
+          };
+        } else if (currentRow.pairedWithId) {
+          const parentIdx = nextRows.findIndex(r => r.id === currentRow.pairedWithId);
+          if (parentIdx !== -1) {
+            nextRows[parentIdx] = {
+              ...nextRows[parentIdx],
+              voucher_no: val
+            };
+          }
+        } else if (!isCurrentCredit && rowIdx + 1 < nextRows.length) {
+          const nextRow = nextRows[rowIdx + 1];
+          if (checkIsCreditRow(nextRow) && (!nextRow.voucher_no || nextRow.voucher_no === currentRow.voucher_no)) {
+            nextRows[rowIdx + 1] = {
+              ...nextRows[rowIdx + 1],
+              voucher_no: val
+            };
+          }
+        }
+      }
+
       return nextRows;
     });
   };
@@ -2521,9 +2575,12 @@ function DisbursementPageContent() {
           else if (rawAmt > 0) debitVal = String(rawAmt);
         }
 
+        const rawRowDate = (r.date && r.date !== '—') ? String(r.date) : (cv.voucher_date ? String(cv.voucher_date).split('T')[0] : '');
+        const rowDate = rawRowDate.includes('T') ? rawRowDate.split('T')[0] : rawRowDate;
+
         return {
           id: rowId,
-          date: r.date || (cv.voucher_date ? cv.voucher_date.split('T')[0] : ''),
+          date: rowDate,
           voucher_no: r.voucher_no || cv.voucher_no || '',
           description: r.description || r.book_of_account || '',
           remarks: r.remarks || '',
@@ -3939,8 +3996,9 @@ function DisbursementPageContent() {
                             </div>
 
                             {/* Table Column Header for Replenishment */}
-                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
+                            <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
                               <div className="text-center">#</div>
+                              <div>Date</div>
                               <div>{replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}</div>
                               <div>Book of Accounts</div>
                               <div>Remarks</div>
@@ -3967,7 +4025,7 @@ function DisbursementPageContent() {
                                     }}
                                     onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
                                     style={{ zIndex: newCvRows.length - idx + 10 }}
-                                    className={`relative grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
+                                    className={`relative grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
                                       isCreditRow
                                         ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                         : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
@@ -3976,6 +4034,15 @@ function DisbursementPageContent() {
                                     <div className="text-center font-mono font-medium text-xs text-neutral-600 dark:text-neutral-400 flex items-center justify-center gap-0.5 cursor-grab" title="Drag to reorder row">
                                       <GripVertical className="w-3 h-3 text-neutral-400 shrink-0 opacity-60" />
                                       <span>{idx + 1}</span>
+                                    </div>
+                                    <div>
+                                      <input
+                                        type="date"
+                                        value={row.date ? (row.date.includes('T') ? row.date.split('T')[0] : row.date) : ''}
+                                        onChange={e => updateCvRowField(false, row.id!, 'date', e.target.value, replenishType)}
+                                        className="w-full px-1.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-[11px] text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                        title="Transaction Date"
+                                      />
                                     </div>
                                     <div>
                                       <input
@@ -4074,8 +4141,8 @@ function DisbursementPageContent() {
                             </div>
 
                             {/* Table Total Footer matching Image 2 */}
-                            <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
-                              <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                            <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
+                              <div className="col-span-5 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
                                 TOTAL:
                               </div>
                               <div className="text-right font-mono font-bold text-neutral-900 dark:text-white">
@@ -4090,8 +4157,9 @@ function DisbursementPageContent() {
                         ) : (
                           <>
                             {/* Standard Column Header */}
-                            <div className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 items-center gap-2 border-b border-emerald-950/10">
+                            <div className="grid grid-cols-[32px_115px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 items-center gap-2 border-b border-emerald-950/10">
                               <div className="text-center font-bold">#</div>
+                              <div>Date</div>
                               <div>Book of Account / Item Description</div>
                               <div>Remarks</div>
                               <div className="text-right">Debit (₱)</div>
@@ -4114,11 +4182,20 @@ function DisbursementPageContent() {
                                     dragOverRowIdx.current = null;
                                   }}
                                   onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
-                                  className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 select-none transition-colors"
+                                  className="grid grid-cols-[32px_115px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 select-none transition-colors"
                                 >
                                   <div className="text-center font-mono font-medium text-xs text-neutral-500 flex items-center justify-center gap-0.5 cursor-grab" title="Drag to reorder row">
                                     <GripVertical className="w-3 h-3 text-neutral-400 shrink-0 opacity-60" />
                                     <span>{idx + 1}</span>
+                                  </div>
+                                  <div>
+                                    <input
+                                      type="date"
+                                      value={row.date ? (row.date.includes('T') ? row.date.split('T')[0] : row.date) : ''}
+                                      onChange={e => updateCvRowField(false, row.id!, 'date', e.target.value, null)}
+                                      className="w-full px-1.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-[11px] text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                      title="Transaction Date"
+                                    />
                                   </div>
                                   <div>
                                     <input
@@ -5088,8 +5165,9 @@ function DisbursementPageContent() {
                           </div>
 
                           {/* Table Column Header for Replenishment */}
-                          <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
+                          <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
                             <div className="text-center">#</div>
+                            <div>Date</div>
                             <div>{replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}</div>
                             <div>Book of Accounts</div>
                             <div>Remarks</div>
@@ -5116,7 +5194,7 @@ function DisbursementPageContent() {
                                   }}
                                   onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
                                   style={{ zIndex: editCvRows.length - idx + 10 }}
-                                  className={`relative grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
+                                  className={`relative grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
                                     isCreditRow
                                       ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                       : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
@@ -5125,6 +5203,15 @@ function DisbursementPageContent() {
                                   <div className="flex items-center justify-center gap-0.5 text-neutral-400 group-hover:text-neutral-600">
                                     <GripVertical className="w-3 h-3 cursor-grab opacity-60" />
                                     <span className="font-mono text-xs font-medium text-neutral-600 dark:text-neutral-400">{idx + 1}</span>
+                                  </div>
+                                  <div>
+                                    <input
+                                      type="date"
+                                      value={row.date ? (row.date.includes('T') ? row.date.split('T')[0] : row.date) : ''}
+                                      onChange={e => updateCvRowField(true, row.id!, 'date', e.target.value, replenishType)}
+                                      className="w-full px-1.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-[11px] text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                      title="Transaction Date"
+                                    />
                                   </div>
                                   <div>
                                     <input
@@ -5229,8 +5316,8 @@ function DisbursementPageContent() {
                             {replenishType === 'stl' ? (
                               <>
                                 {/* Row 1: TOTAL (deductions) */}
-                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 font-bold text-xs">
-                                  <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 font-bold text-xs">
+                                  <div className="col-span-5 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
                                     TOTAL:
                                   </div>
                                   <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
@@ -5243,8 +5330,8 @@ function DisbursementPageContent() {
                                 </div>
 
                                 {/* Row 2: CIB Account with manual input for credit column */}
-                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60">
-                                  <div className="col-span-4 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
+                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60">
+                                  <div className="col-span-5 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
                                     {formatCibAccountName(editCvFormData.bank).replace('-', ':')}:
                                   </div>
                                   <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
@@ -5265,8 +5352,8 @@ function DisbursementPageContent() {
                                 </div>
 
                                 {/* Row 3: OVERALL (balanced) */}
-                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2.5 items-center gap-2 font-extrabold text-xs bg-[#d1fae5]/70 dark:bg-emerald-900/40 rounded-b-2xl">
-                                  <div className="col-span-4 text-right pr-4 font-black uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-200">
+                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2.5 items-center gap-2 font-extrabold text-xs bg-[#d1fae5]/70 dark:bg-emerald-900/40 rounded-b-2xl">
+                                  <div className="col-span-5 text-right pr-4 font-black uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-200">
                                     OVERALL:
                                   </div>
                                   <div className="text-right font-mono font-black text-[#064e3b] dark:text-emerald-200">
@@ -5281,8 +5368,8 @@ function DisbursementPageContent() {
                             ) : (
                               <>
                                 {/* Row 1: TOTAL for Revolving: Debit has total, Credit is — */}
-                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-2 items-center gap-2 font-bold text-xs">
-                                  <div className="col-span-4 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 font-bold text-xs">
+                                  <div className="col-span-5 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
                                     TOTAL:
                                   </div>
                                   <div className="text-right font-mono font-bold text-neutral-900 dark:text-white">
@@ -5295,8 +5382,8 @@ function DisbursementPageContent() {
                                 </div>
 
                                 {/* Row 2: CIB Account for Revolving: Debit is —, Credit has CIB check amount */}
-                                <div className="grid grid-cols-[36px_110px_1.5fr_1.2fr_105px_105px_36px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60 rounded-b-2xl">
-                                  <div className="col-span-4 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
+                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60 rounded-b-2xl">
+                                  <div className="col-span-5 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
                                     {formatCibAccountName(editCvFormData.bank).replace('-', ':')}:
                                   </div>
                                   <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
@@ -5314,8 +5401,9 @@ function DisbursementPageContent() {
                       ) : (
                         <>
                           {/* Standard Column Header */}
-                          <div className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 text-[10px] font-bold uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 items-center gap-2 border-b border-emerald-950/10">
+                          <div className="grid grid-cols-[32px_115px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 text-[10px] font-bold uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 items-center gap-2 border-b border-emerald-950/10">
                             <div className="text-center font-bold">#</div>
+                            <div>Date</div>
                             <div>Book of Account</div>
                             <div>Remarks</div>
                             <div className="text-right">Debit (₱)</div>
@@ -5338,11 +5426,20 @@ function DisbursementPageContent() {
                                   dragOverRowIdx.current = null;
                                 }}
                                 onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
-                                className="grid grid-cols-[36px_1.5fr_1.2fr_110px_110px_36px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors select-none"
+                                className="grid grid-cols-[32px_115px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors select-none"
                               >
                                 <div className="flex items-center justify-center gap-0.5 text-neutral-400 group-hover:text-neutral-600">
                                   <GripVertical className="w-3 h-3 cursor-grab opacity-60" />
                                   <span className="font-mono text-xs font-medium text-neutral-500">{idx + 1}</span>
+                                </div>
+                                <div>
+                                  <input
+                                    type="date"
+                                    value={row.date ? (row.date.includes('T') ? row.date.split('T')[0] : row.date) : ''}
+                                    onChange={e => updateCvRowField(true, row.id!, 'date', e.target.value, null)}
+                                    className="w-full px-1.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-[11px] text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                    title="Transaction Date"
+                                  />
                                 </div>
                                 <div>
                                   <input
