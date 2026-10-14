@@ -2090,11 +2090,17 @@ function DisbursementPageContent() {
       : (newCvDate || new Date().toISOString().split('T')[0]);
     const defaultVoucherNo = isEdit ? editCvFormData.voucher_no : newCvVoucherNo;
 
-    let defaultDesc = 'Operation';
+    let defaultDesc = '';
     if (isCredit) {
-      defaultDesc = replenishType === 'stl' ? 'Revolving Fund - STL' : 'Revolving Fund - Operation';
+      defaultDesc = replenishType === 'stl' 
+        ? 'Revolving Fund - STL' 
+        : (replenishType === 'rf' ? 'Revolving Fund - Operation' : '');
     } else if (replenishType === 'stl') {
       defaultDesc = 'Short Term Loan';
+    } else if (replenishType === 'rf') {
+      defaultDesc = 'Operation';
+    } else {
+      defaultDesc = '';
     }
 
     const newRow: CvRowItem = {
@@ -2112,7 +2118,8 @@ function DisbursementPageContent() {
     const setRows = isEdit ? setEditCvRows : setNewCvRows;
     setRows(prev => {
       const copy = [...prev];
-      const cibIdx = copy.findIndex(r => /^(cib\b|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+      // Keep CIB balancing row at the bottom by inserting before it
+      const cibIdx = copy.findIndex(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
       if (cibIdx !== -1) {
         copy.splice(cibIdx, 0, newRow);
         return copy;
@@ -4173,7 +4180,11 @@ function DisbursementPageContent() {
                                     dragOverRowIdx.current = null;
                                   }}
                                   onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
-                                  className="grid grid-cols-[32px_115px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-neutral-50 dark:hover:bg-neutral-800/40 select-none transition-colors"
+                                  className={`grid grid-cols-[32px_115px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing select-none transition-colors ${
+                                    row.is_credit || checkIsCreditRow(row)
+                                      ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
+                                      : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
+                                  }`}
                                 >
                                   <div className="text-center font-mono font-medium text-xs text-neutral-500 flex items-center justify-center gap-0.5 cursor-grab" title="Drag to reorder row">
                                     <GripVertical className="w-3 h-3 text-neutral-400 shrink-0 opacity-60" />
@@ -4191,10 +4202,12 @@ function DisbursementPageContent() {
                                   <div>
                                     <input
                                       type="text"
-                                      placeholder={`Line item #${idx + 1}`}
+                                      placeholder={row.is_credit ? "Credit Account / Deduction (e.g. Common Share)" : "Book of Account / Item Description"}
                                       value={row.description}
                                       onChange={e => updateCvRowField(false, row.id!, 'description', e.target.value, null)}
-                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs"
+                                      className={`w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs ${
+                                        row.is_credit ? 'font-bold text-emerald-900 dark:text-emerald-200' : ''
+                                      }`}
                                     />
                                   </div>
                                   <div>
@@ -4223,7 +4236,11 @@ function DisbursementPageContent() {
                                       placeholder="Credit"
                                       value={row.credit}
                                       onChange={e => updateCvRowField(false, row.id!, 'credit', e.target.value, null)}
-                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs"
+                                      className={`w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs ${
+                                        row.is_credit || checkIsCreditRow(row) || (row.credit !== '' && row.credit !== null && Number(row.credit) > 0)
+                                          ? 'font-bold text-rose-600 dark:text-rose-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30'
+                                          : ''
+                                      }`}
                                     />
                                   </div>
                                   <div className="text-center">
@@ -4245,40 +4262,38 @@ function DisbursementPageContent() {
                         )}
                       </div>
 
-                      {/* Action Buttons Row below table box */}
-                      {isReplenish && (
-                        <div className="flex items-center justify-end gap-2 pt-1">
-                          {deletedRowsStack.some(item => !item.isEdit) && (
-                            <button
-                              type="button"
-                              onClick={() => handleUndoDeleteRow(false)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                              title="Undo last deleted line item"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              <span>Undo Delete</span>
-                            </button>
-                          )}
+                      {/* Action Buttons Row below table box - enabled for all categories */}
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        {deletedRowsStack.some(item => !item.isEdit) && (
                           <button
                             type="button"
-                            onClick={() => addCvRow(false, replenishType, false)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
-                            title="Add an expense debit line item"
+                            onClick={() => handleUndoDeleteRow(false)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                            title="Undo last deleted line item"
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add Debit</span>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Undo Delete</span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => addCvRow(false, replenishType, true)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
-                            title="Add a credit / replenishment line item"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Add Credit</span>
-                          </button>
-                        </div>
-                      )}
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => addCvRow(false, replenishType, false)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
+                          title="Add an expense debit line item"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Debit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addCvRow(false, replenishType, true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
+                          title="Add a credit / replenishment line item"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Credit</span>
+                        </button>
+                      </div>
 
                       {/* Calculated summary row */}
                       <div className="p-3.5 rounded-2xl bg-surface-container-low dark:bg-surface-container flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border border-outline-variant/40">
@@ -5136,15 +5151,6 @@ function DisbursementPageContent() {
                             : 'Specify debit and credit entries to balance disbursed check amount.'}
                         </span>
                       </div>
-                      {!isReplenish && (
-                        <button
-                          type="button"
-                          onClick={() => addCvRow(true, null, false)}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary dark:text-secondary hover:underline cursor-pointer"
-                        >
-                          <Plus className="w-3 h-3" /> Add Row
-                        </button>
-                      )}
                     </div>
 
                     <div className="border border-emerald-950/20 dark:border-emerald-800/40 rounded-2xl shadow-xs overflow-visible relative">
@@ -5488,40 +5494,38 @@ function DisbursementPageContent() {
                       )}
                     </div>
 
-                    {/* Action Buttons Row below table box */}
-                    {isReplenish && (
-                      <div className="flex items-center justify-end gap-2 pt-1">
-                        {deletedRowsStack.some(item => item.isEdit) && (
-                          <button
-                            type="button"
-                            onClick={() => handleUndoDeleteRow(true)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                            title="Undo last deleted line item"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Undo Delete</span>
-                          </button>
-                        )}
+                    {/* Action Buttons Row below table box - enabled for all categories */}
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      {deletedRowsStack.some(item => item.isEdit) && (
                         <button
                           type="button"
-                          onClick={() => addCvRow(true, replenishType, false)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
-                          title="Add an expense debit line item"
+                          onClick={() => handleUndoDeleteRow(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                          title="Undo last deleted line item"
                         >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add Debit</span>
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Undo Delete</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => addCvRow(true, replenishType, true)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
-                          title="Add a credit / replenishment line item"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add Credit</span>
-                        </button>
-                      </div>
-                    )}
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => addCvRow(true, replenishType, false)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 text-xs font-bold transition-all cursor-pointer"
+                        title="Add an expense debit line item"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Debit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addCvRow(true, replenishType, true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600/20 dark:hover:bg-emerald-400/20 text-xs font-bold transition-all cursor-pointer"
+                        title="Add a credit / replenishment line item"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Credit</span>
+                      </button>
+                    </div>
 
                     {/* Summary row */}
                     {(() => {
