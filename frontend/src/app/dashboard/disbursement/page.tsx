@@ -1786,6 +1786,76 @@ function DisbursementPageContent() {
       }
     }
 
+    const isBroadCategoryDesc = (desc: string) => {
+      const d = (desc || '').trim().toLowerCase();
+      return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'revolving fund', 'loan', 'petty cash'].includes(d) ||
+             /^(revolving\s*fund|stl|short\s*term\s*loan)\s*-\s*(operation|operations|service|services|stl|cdf|cetf|merchandise)$/i.test(d);
+    };
+
+    const debitDetails = details.filter(d => {
+      const val = typeof d.amount === 'number' ? d.amount : parseFloat(d.amount || d.debit || 0);
+      const desc = d.book_of_account || d.description || '';
+      const isCredit = d.is_credit === true || /^(cib\b|cash\s*in\s*bank)/i.test(desc) || val < 0;
+      return !isCredit && val > 0;
+    });
+
+    const detailsAreOnlyCategories = debitDetails.length > 0 && debitDetails.every(d => isBroadCategoryDesc(d.book_of_account || d.description || ''));
+
+    const rfItems = Array.isArray(cv.revolving_fund?.items) ? cv.revolving_fund.items.filter((it: any) => !it.is_cancelled) : [];
+    const stlItems = Array.isArray(cv.stl_liquidation?.items) ? cv.stl_liquidation.items.filter((it: any) => !it.is_cancelled) : [];
+    const activeAttachedItems = rfItems.length > 0 ? rfItems : stlItems;
+
+    if (activeAttachedItems.length > 0 && (debitDetails.length === 0 || detailsAreOnlyCategories)) {
+      const rows: { id: string; date: string; voucher_no: string; description: string; remarks: string; debit: number | null; credit: number | null; isAutoCredit?: boolean; is_credit?: boolean }[] = [];
+      let debitTotal = 0;
+      let creditTotal = 0;
+      const defaultVNo = (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '';
+
+      for (let idx = 0; idx < activeAttachedItems.length; idx++) {
+        const it = activeAttachedItems[idx];
+        const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
+        if (amt <= 0) continue;
+        const rawDate = it.item_date || it.item_date_raw || it.release_date || it.release_date_raw;
+        const dateStr = rawDate ? String(rawDate).split('T')[0] : (cv?.voucher_date ? String(cv.voucher_date).split('T')[0] : '');
+        const vNo = it.voucher_no || defaultVNo || it.particulars || '';
+        const expAccount = it.account_name || it.particulars || 'Expense';
+
+        rows.push({
+          id: `item-${idx}`,
+          date: dateStr,
+          voucher_no: vNo,
+          description: expAccount,
+          remarks: it.remarks || '',
+          debit: amt,
+          credit: null,
+          isAutoCredit: false,
+          is_credit: false
+        });
+        debitTotal += amt;
+      }
+
+      if (debitTotal > 0) {
+        const rawDate = cv?.voucher_date || cv?.date;
+        const dateStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : '') : '';
+        const detectedBank = (cv?.bank_name || cv?.bank || 'MBTC').trim();
+        const cibLabel = detectedBank.toUpperCase().startsWith('CIB') ? detectedBank : `CIB - ${detectedBank}`;
+        rows.push({
+          id: 'credit-cib-auto',
+          date: dateStr,
+          voucher_no: defaultVNo,
+          description: cibLabel,
+          remarks: '',
+          debit: null,
+          credit: debitTotal,
+          isAutoCredit: true,
+          is_credit: true
+        });
+        creditTotal = debitTotal;
+      }
+
+      return { rows, debitTotal, creditTotal };
+    }
+
     const rows: { id: string; date: string; voucher_no: string; description: string; remarks: string; debit: number | null; credit: number | null; isAutoCredit?: boolean; is_credit?: boolean }[] = [];
     let debitTotal = 0;
     let creditTotal = 0;
@@ -2505,16 +2575,36 @@ function DisbursementPageContent() {
     const isReplenish = isStlOrRfTabOrVoucher(cv) || Boolean(getReplenishmentType(cv.folder_name, cv));
 
     // Determine the rows to edit:
-    // 1. If explicit passedRows are provided from the print modal (e.g. from Detailed Check Voucher view), prioritize them!
-    // 2. If mode === 'summary', use summary category rows.
-    // 3. Otherwise, use getBalancedCvRows(cv) which preserves the detailed itemized book of accounts stored on the voucher!
+    // Check if the voucher has detailed itemized transactions (not just category totals)
+    const isCategoryOnlyRows = (rows: any[]) => {
+      const debitRows = (rows || []).filter(r => {
+        const val = parseFloat(r.debit || r.amount || 0);
+        const desc = (r.description || r.book_of_account || '').toLowerCase();
+        return val > 0 && !/^(cib\b|cash\s*in\s*bank)/i.test(desc);
+      });
+      return debitRows.length > 0 && debitRows.every(r => {
+        const d = (r.description || r.book_of_account || '').trim().toLowerCase();
+        return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'revolving fund', 'loan', 'petty cash'].includes(d);
+      });
+    };
+
+    const balanced = getBalancedCvRows(cv);
+    const balancedHasDetailedItems = balanced.rows.length > 0 && !isCategoryOnlyRows(balanced.rows);
+
     let rowsToUse: any[] = [];
-    if (passedRows && passedRows.length > 0) {
+    if (balancedHasDetailedItems) {
+      // 1. If CV has itemized transactions, ALWAYS preserve them to avoid wiping detailed records on save!
+      rowsToUse = balanced.rows;
+    } else if (passedRows && passedRows.length > 0 && !isCategoryOnlyRows(passedRows)) {
+      // 2. If detailed rows were passed from modal, use them
       rowsToUse = passedRows;
+    } else if (passedRows && passedRows.length > 0 && mode !== 'summary') {
+      rowsToUse = passedRows;
+    } else if (balanced.rows.length > 0) {
+      rowsToUse = balanced.rows;
     } else if (mode === 'summary') {
       rowsToUse = getSummaryCvRows(cv).rows;
     } else {
-      const balanced = getBalancedCvRows(cv);
       rowsToUse = balanced.rows;
     }
 

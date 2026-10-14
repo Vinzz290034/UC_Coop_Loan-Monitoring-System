@@ -872,12 +872,18 @@ export default function UnifiedCvLfPrintModal({
         if (!linkedLfId) {
           try {
             if (detectedType === 'stl') {
-              const resStl = await api.get('/stl-liquidations', { params: { search: cvObj.voucher_no, limit: 5 } });
-              const found = resStl.data?.data?.find((f: any) => f.check_voucher_id === cvObj.id || f.voucher_no === cvObj.voucher_no);
+              const resStl = await api.get('/stl-liquidations', { params: { search: cvObj.voucher_no, limit: 25 } });
+              let found = resStl.data?.data?.find((f: any) => f.check_voucher_id === cvObj.id || f.voucher_no === cvObj.voucher_no);
+              if (!found && cvObj.amount) {
+                found = resStl.data?.data?.find((f: any) => Math.abs(parseFloat(f.total_expense || f.total_liquidated || 0) - parseFloat(cvObj.amount)) < 0.01);
+              }
               if (found) linkedLfId = found.id;
             } else {
-              const resRf = await api.get('/revolving-funds', { params: { search: cvObj.voucher_no, limit: 5 } });
-              const found = resRf.data?.data?.find((f: any) => f.check_voucher_id === cvObj.id || f.voucher_no === cvObj.voucher_no);
+              const resRf = await api.get('/revolving-funds', { params: { search: cvObj.voucher_no, limit: 25 } });
+              let found = resRf.data?.data?.find((f: any) => f.check_voucher_id === cvObj.id || f.voucher_no === cvObj.voucher_no);
+              if (!found && cvObj.amount) {
+                found = resRf.data?.data?.find((f: any) => Math.abs(parseFloat(f.total_liquidated || 0) - parseFloat(cvObj.amount)) < 0.01);
+              }
               if (found) linkedLfId = found.id;
             }
           } catch (e) {
@@ -1399,7 +1405,7 @@ export default function UnifiedCvLfPrintModal({
                         type="button"
                         onClick={() => {
                           const activeCv = currentCv || initialCv;
-                          const rowsToPass = cvViewMode === 'detailed' ? detailedCvData.rows : summaryCvData.rows;
+                          const rowsToPass = detailedCvData.rows && detailedCvData.rows.length > 0 ? detailedCvData.rows : summaryCvData.rows;
                           onEdit(activeCv, cvViewMode, rowsToPass);
                         }}
                         className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-all active:scale-95 cursor-pointer ml-1"
@@ -1587,7 +1593,7 @@ export default function UnifiedCvLfPrintModal({
                                     onClick={() => {
                                       if (onEdit && (currentCv || initialCv)) {
                                         const activeCv = currentCv || initialCv;
-                                        const rowsToPass = cvViewMode === 'detailed' ? detailedCvData.rows : summaryCvData.rows;
+                                        const rowsToPass = detailedCvData.rows && detailedCvData.rows.length > 0 ? detailedCvData.rows : summaryCvData.rows;
                                         onEdit(activeCv, cvViewMode, rowsToPass);
                                       }
                                     }}
