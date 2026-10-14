@@ -4843,29 +4843,29 @@ function DisbursementPageContent() {
 
 
                     {/* Signatures Block matching physical document */}
-                    <div className="pt-4 border-t border-outline-variant/30 space-y-4 text-xs">
+                    <div className="pt-4 border-t border-outline-variant/30 space-y-4">
                       {/* Row 1: Prepared By, Checked By, Approved By */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
-                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">PREPARED BY:</span>
-                          <div className="h-5"></div>
-                          <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
+                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">PREPARED BY:</span>
+                          <div className="h-4"></div>
+                          <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide">
                             {formatSignatoryName(selectedCvForModal.signatories?.prepared_by, 'CHINNETTE A. LAMOSTE')}
                           </p>
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">CHECKED BY:</span>
-                          <div className="h-5"></div>
-                          <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
+                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">CHECKED BY:</span>
+                          <div className="h-4"></div>
+                          <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide">
                             {selectedCvForModal.signatories?.checked_by || 'MARILOU LARIOSA'}
                           </p>
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">APPROVED BY:</span>
-                          <div className="h-5"></div>
-                          <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
+                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">APPROVED BY:</span>
+                          <div className="h-4"></div>
+                          <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide">
                             {selectedCvForModal.signatories?.approved_by || 'MICHELLE M. PABLE'}
                           </p>
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
@@ -6186,37 +6186,37 @@ function DisbursementPageContent() {
             })()}
 
             {/* Signature Block matching physical document */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px', paddingTop: '22px', fontSize: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingTop: '20px', fontSize: '9px' }}>
               {/* Row 1: Prepared By, Checked By, Approved By */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px' }}>
                 <div>
-                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#4b5563', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
                     PREPARED BY:
                   </span>
-                  <div style={{ height: '24px' }}></div>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                  <div style={{ height: '22px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em' }}>
                     {formatSignatoryName(printingCvBreakdown.signatories?.prepared_by, 'CHINNETTE A. LAMOSTE')}
                   </p>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                 </div>
 
                 <div>
-                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#4b5563', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
                     CHECKED BY:
                   </span>
-                  <div style={{ height: '24px' }}></div>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                  <div style={{ height: '22px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em' }}>
                     {printingCvBreakdown.signatories?.checked_by || 'MARILOU LARIOSA'}
                   </p>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                 </div>
 
                 <div>
-                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#4b5563', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
                     APPROVED BY:
                   </span>
-                  <div style={{ height: '24px' }}></div>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                  <div style={{ height: '22px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em' }}>
                     {printingCvBreakdown.signatories?.approved_by || 'MICHELLE M. PABLE'}
                   </p>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>

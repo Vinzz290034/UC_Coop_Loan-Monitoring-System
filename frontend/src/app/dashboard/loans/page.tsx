@@ -6663,24 +6663,24 @@ function LoansPageContent() {
               </div>
 
               {/* Signatures Block */}
-              <div className="pt-3 space-y-5 text-xs">
+              <div className="pt-3 space-y-4">
                 <div className="grid grid-cols-3 gap-6">
                   <div>
-                    <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">PREPARED BY:</span>
+                    <span className="text-[9px] font-bold text-neutral-600 uppercase tracking-wider block">PREPARED BY:</span>
                     <div className="h-4"></div>
-                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{formatSignatoryFullName(preparedBy, 'prepared')}</p>
+                    <p className="text-[10.5px] font-bold text-neutral-900 uppercase tracking-wide m-0 mb-1">{formatSignatoryFullName(preparedBy, 'prepared')}</p>
                     <div className="border-b-[1.5px] border-neutral-900"></div>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">CHECKED BY:</span>
+                    <span className="text-[9px] font-bold text-neutral-600 uppercase tracking-wider block">CHECKED BY:</span>
                     <div className="h-4"></div>
-                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{formatSignatoryFullName(checkedBy, 'checked')}</p>
+                    <p className="text-[10.5px] font-bold text-neutral-900 uppercase tracking-wide m-0 mb-1">{formatSignatoryFullName(checkedBy, 'checked')}</p>
                     <div className="border-b-[1.5px] border-neutral-900"></div>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">APPROVED BY:</span>
+                    <span className="text-[9px] font-bold text-neutral-600 uppercase tracking-wider block">APPROVED BY:</span>
                     <div className="h-4"></div>
-                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{formatSignatoryFullName(approvedBy, 'approved')}</p>
+                    <p className="text-[10.5px] font-bold text-neutral-900 uppercase tracking-wide m-0 mb-1">{formatSignatoryFullName(approvedBy, 'approved')}</p>
                     <div className="border-b-[1.5px] border-neutral-900"></div>
                   </div>
                 </div>
@@ -7270,37 +7270,37 @@ function LoansPageContent() {
               </div>
 
               {/* Signature Block matching physical document */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '22px', paddingTop: '22px', fontSize: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingTop: '20px', fontSize: '9px' }}>
                 {/* Row 1: Prepared By, Checked By, Approved By */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px' }}>
                   <div>
-                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#4b5563', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
                       PREPARED BY:
                     </span>
-                    <div style={{ height: '24px' }}></div>
-                    <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                    <div style={{ height: '22px' }}></div>
+                    <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em' }}>
                       {formatSignatoryFullName(preparedBy, 'prepared')}
                     </p>
                     <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                   </div>
 
                   <div>
-                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#4b5563', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
                       CHECKED BY:
                     </span>
-                    <div style={{ height: '24px' }}></div>
-                    <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                    <div style={{ height: '22px' }}></div>
+                    <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em' }}>
                       {formatSignatoryFullName(checkedBy, 'checked')}
                     </p>
                     <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                   </div>
 
                   <div>
-                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
+                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#4b5563', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
                       APPROVED BY:
                     </span>
-                    <div style={{ height: '24px' }}></div>
-                    <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
+                    <div style={{ height: '22px' }}></div>
+                    <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em' }}>
                       {formatSignatoryFullName(approvedBy, 'approved')}
                     </p>
                     <div style={{ borderBottom: '1.5px solid #111827' }}></div>
