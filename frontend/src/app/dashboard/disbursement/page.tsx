@@ -1335,11 +1335,87 @@ function DisbursementPageContent() {
     return Array.from(banks);
   }, [checkVouchers]);
 
+  function getCvDisbursedAmount(cv: any): number {
+    if (!cv) return 0;
+
+    // 1. Explicit cib_amount field on voucher
+    if (cv.cib_amount && parseFloat(String(cv.cib_amount).replace(/,/g, '')) > 0) {
+      return parseFloat(String(cv.cib_amount).replace(/,/g, ''));
+    }
+
+    let details: any[] = [];
+    if (Array.isArray(cv.details)) {
+      details = cv.details;
+    } else if (typeof cv.details === 'string') {
+      try {
+        const parsed = JSON.parse(cv.details);
+        if (Array.isArray(parsed)) details = parsed;
+      } catch {
+        details = [];
+      }
+    }
+
+    if (details.length > 0) {
+      // 2. Search for explicit CIB (Cash In Bank) entry representing actual check disbursed
+      for (const item of details) {
+        const desc = (item.book_of_account || item.description || '').trim();
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) {
+          const creditRaw = item.credit !== null && item.credit !== undefined && item.credit !== '' ? item.credit : null;
+          const amtRaw = item.amount !== null && item.amount !== undefined && item.amount !== '' ? item.amount : null;
+          const val = creditRaw !== null
+            ? parseFloat(String(creditRaw).replace(/,/g, ''))
+            : (typeof amtRaw === 'number' ? Math.abs(amtRaw) : Math.abs(parseFloat(String(amtRaw || item.debit || 0).replace(/,/g, ''))));
+          if (!isNaN(val) && val > 0) return val;
+        }
+      }
+
+      // 3. If no explicit CIB row, compute net disbursed: Total Debits minus deductions (other credits)
+      let dSum = 0;
+      let cSum = 0;
+      for (const item of details) {
+        const desc = (item.book_of_account || item.description || '').trim();
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+        const val = typeof item.amount === 'number' ? item.amount : parseFloat(String(item.amount || item.debit || 0).replace(/,/g, ''));
+        const isCredit = item.is_credit === true ||
+                         item.isAutoCredit === true ||
+                         /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc) ||
+                         val < 0 ||
+                         (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+        if (isCredit) {
+          const creditVal = val < 0 ? Math.abs(val) : (item.credit !== null && item.credit !== undefined && item.credit !== '' ? parseFloat(String(item.credit).replace(/,/g, '')) : Math.abs(val));
+          if (!isNaN(creditVal)) cSum += creditVal;
+        } else if (!isNaN(val) && val > 0) {
+          dSum += val;
+        }
+      }
+      if (dSum > 0 && cSum > 0 && dSum > cSum) {
+        return dSum - cSum;
+      }
+      if (dSum > 0) return dSum;
+    }
+
+    // Check linked revolving fund items or STL items if details is not yet populated
+    if (Array.isArray(cv.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
+      const rfSum = cv.revolving_fund.items
+        .filter((it: any) => !it.is_cancelled)
+        .reduce((sum: number, it: any) => sum + (parseFloat(String(it.amount || 0).replace(/,/g, '')) || 0), 0);
+      if (rfSum > 0) return rfSum;
+    }
+    if (Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
+      const stlSum = cv.stl_liquidation.items
+        .filter((it: any) => !it.is_cancelled)
+        .reduce((sum: number, it: any) => sum + (parseFloat(String(it.amount || 0).replace(/,/g, '')) || 0), 0);
+      if (stlSum > 0) return stlSum;
+    }
+
+    return parseFloat(String(cv.amount || 0).replace(/,/g, '')) || 0;
+  }
+
   // Tab summary statistics
   const tabStats = useMemo(() => {
-    const totalAmount = checkVouchers.reduce((sum, cv) => sum + (parseFloat(cv.amount) || 0), 0);
+    const totalAmount = checkVouchers.reduce((sum, cv) => sum + (getCvDisbursedAmount(cv) || parseFloat(cv.amount) || 0), 0);
     const avgAmount = checkVouchers.length > 0 ? totalAmount / checkVouchers.length : 0;
-    const maxAmount = checkVouchers.reduce((max, cv) => Math.max(max, parseFloat(cv.amount) || 0), 0);
+    const maxAmount = checkVouchers.reduce((max, cv) => Math.max(max, getCvDisbursedAmount(cv) || parseFloat(cv.amount) || 0), 0);
     return { totalAmount, avgAmount, maxAmount, count: cvTotalCount };
   }, [checkVouchers, cvTotalCount]);
 
@@ -1377,91 +1453,6 @@ function DisbursementPageContent() {
   const cleanCvNumber = (vNo: string) => {
     if (!vNo) return '';
     return vNo.replace(/^CV\s*#?/i, '').trim();
-  };
-
-  const getCvDisbursedAmount = (cv: any): number => {
-    if (!cv) return 0;
-    const isStl = getReplenishmentType(cv.folder_name, cv) === 'stl';
-    if (isStl) {
-      if (cv.cib_amount && parseFloat(cv.cib_amount) > 0) {
-        return parseFloat(cv.cib_amount);
-      }
-      let rawDetails: any[] = [];
-      if (Array.isArray(cv.details)) rawDetails = cv.details;
-      else if (typeof cv.details === 'string') {
-        try { rawDetails = JSON.parse(cv.details); } catch {}
-      }
-      for (const item of rawDetails) {
-        const desc = (item.book_of_account || item.description || '').trim();
-        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) {
-          const val = typeof item.amount === 'number' ? Math.abs(item.amount) : parseFloat(item.amount || item.credit || 0);
-          if (val > 0) return val;
-        }
-      }
-      let dSum = 0;
-      let cSum = 0;
-      for (const item of rawDetails) {
-        const desc = (item.book_of_account || item.description || '').trim();
-        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
-        const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
-        const isCredit = item.is_credit === true || item.isAutoCredit === true || val < 0;
-        if (isCredit) {
-          cSum += Math.abs(val);
-        } else if (val > 0) {
-          dSum += val;
-        }
-      }
-      if (dSum > 0 && cSum > 0 && dSum > cSum) {
-        return dSum - cSum;
-      }
-      if (cv.amount && parseFloat(cv.amount) > 0) {
-        return parseFloat(cv.amount);
-      }
-    }
-
-    let details: any[] = [];
-    if (Array.isArray(cv.details)) {
-      details = cv.details;
-    } else if (typeof cv.details === 'string') {
-      try {
-        const parsed = JSON.parse(cv.details);
-        if (Array.isArray(parsed)) details = parsed;
-      } catch {
-        details = [];
-      }
-    }
-
-    // 1. Calculate sum of debit items (gross voucher disbursement amount)
-    let debitSum = 0;
-    for (const item of details) {
-      const desc = (item.book_of_account || item.description || '').trim();
-      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || item.debit || 0);
-      const isCredit = item.is_credit === true ||
-                       item.isAutoCredit === true ||
-                       /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc) ||
-                       val < 0 ||
-                       (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
-      if (!isCredit && val > 0) {
-        debitSum += val;
-      }
-    }
-    if (debitSum > 0) return debitSum;
-
-    // Check linked revolving fund items or STL items if details is not yet populated
-    if (Array.isArray(cv.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
-      const rfSum = cv.revolving_fund.items
-        .filter((it: any) => !it.is_cancelled)
-        .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
-      if (rfSum > 0) return rfSum;
-    }
-    if (Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.length > 0) {
-      const stlSum = cv.stl_liquidation.items
-        .filter((it: any) => !it.is_cancelled)
-        .reduce((sum: number, it: any) => sum + (parseFloat(it.amount || 0) || 0), 0);
-      if (stlSum > 0) return stlSum;
-    }
-
-    return parseFloat(cv.amount || 0);
   };
 
   const cleanCategoryName = (name: string): string => {

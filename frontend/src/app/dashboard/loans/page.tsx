@@ -366,6 +366,12 @@ function LoansPageContent() {
 
   const getCvDisbursedAmount = (cv: any): number => {
     if (!cv) return 0;
+
+    // 1. Explicit cib_amount field on voucher
+    if (cv.cib_amount && parseFloat(String(cv.cib_amount).replace(/,/g, '')) > 0) {
+      return parseFloat(String(cv.cib_amount).replace(/,/g, ''));
+    }
+
     let details: any[] = [];
     if (Array.isArray(cv.details)) {
       details = cv.details;
@@ -378,23 +384,46 @@ function LoansPageContent() {
       }
     }
 
-    // 1. Calculate sum of debit items (gross voucher disbursement amount)
-    let debitSum = 0;
-    for (const item of details) {
-      const desc = (item.book_of_account || item.description || '').trim();
-      const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || item.debit || 0);
-      const isCredit = item.is_credit === true ||
-                       item.isAutoCredit === true ||
-                       /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc) ||
-                       val < 0 ||
-                       (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
-      if (!isCredit && val > 0) {
-        debitSum += val;
+    if (details.length > 0) {
+      // 2. Search for explicit CIB (Cash In Bank) entry representing actual check disbursed
+      for (const item of details) {
+        const desc = (item.book_of_account || item.description || '').trim();
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) {
+          const creditRaw = item.credit !== null && item.credit !== undefined && item.credit !== '' ? item.credit : null;
+          const amtRaw = item.amount !== null && item.amount !== undefined && item.amount !== '' ? item.amount : null;
+          const val = creditRaw !== null
+            ? parseFloat(String(creditRaw).replace(/,/g, ''))
+            : (typeof amtRaw === 'number' ? Math.abs(amtRaw) : Math.abs(parseFloat(String(amtRaw || item.debit || 0).replace(/,/g, ''))));
+          if (!isNaN(val) && val > 0) return val;
+        }
       }
-    }
-    if (debitSum > 0) return debitSum;
 
-    return parseFloat(cv.amount || 0);
+      // 3. If no explicit CIB row, compute net disbursed: Total Debits minus deductions (other credits)
+      let dSum = 0;
+      let cSum = 0;
+      for (const item of details) {
+        const desc = (item.book_of_account || item.description || '').trim();
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+        const val = typeof item.amount === 'number' ? item.amount : parseFloat(String(item.amount || item.debit || 0).replace(/,/g, ''));
+        const isCredit = item.is_credit === true ||
+                         item.isAutoCredit === true ||
+                         /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc) ||
+                         val < 0 ||
+                         (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+        if (isCredit) {
+          const creditVal = val < 0 ? Math.abs(val) : (item.credit !== null && item.credit !== undefined && item.credit !== '' ? parseFloat(String(item.credit).replace(/,/g, '')) : Math.abs(val));
+          if (!isNaN(creditVal)) cSum += creditVal;
+        } else if (!isNaN(val) && val > 0) {
+          dSum += val;
+        }
+      }
+      if (dSum > 0 && cSum > 0 && dSum > cSum) {
+        return dSum - cSum;
+      }
+      if (dSum > 0) return dSum;
+    }
+
+    return parseFloat(String(cv.amount || 0).replace(/,/g, '')) || 0;
   };
 
   const getBalancedCvRows = (cv: any) => {
