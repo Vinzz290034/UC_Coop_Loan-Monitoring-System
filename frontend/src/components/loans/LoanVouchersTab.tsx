@@ -532,7 +532,7 @@ export default function LoanVouchersTab({
       payee: cv.payee || cv.payee_name || '',
       bank: cv.bank || 'BDO',
       particulars: cv.particulars || '',
-      prepared_by: cv.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.',
+      prepared_by: cv.signatories?.prepared_by || 'CHINNETTE A. LAMOSTE',
       checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
       approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE'
     };
@@ -1747,7 +1747,7 @@ export default function LoanVouchersTab({
                 <span style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Prepared by:</span>
                 <div style={{ height: '24px' }}></div>
                 <p style={{ fontWeight: 'bold', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
-                  {printingCvBreakdown.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
+                  {printingCvBreakdown.signatories?.prepared_by || 'CHINNETTE A. LAMOSTE'}
                 </p>
                 <span style={{ fontSize: '8px', color: '#9ca3af' }}>Bookkeeper / Accounting</span>
               </div>

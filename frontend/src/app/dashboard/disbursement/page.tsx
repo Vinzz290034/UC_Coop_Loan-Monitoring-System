@@ -331,6 +331,15 @@ export const formatPayeeName = (name?: string): string => {
   return trimmed.replace(/\s+/g, ' ').toUpperCase();
 };
 
+export const formatSignatoryName = (name?: string, fallback: string = 'CHINNETTE A. LAMOSTE'): string => {
+  if (!name) return fallback;
+  const trimmed = name.trim();
+  if (/^lamoste,?\s*chinnette(\s*a\.?)?/i.test(trimmed)) {
+    return 'CHINNETTE A. LAMOSTE';
+  }
+  return trimmed;
+};
+
 export const isCreditAccountDesc = (desc?: string): boolean => {
   if (!desc) return false;
   return /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc.trim());
@@ -978,7 +987,7 @@ function DisbursementPageContent() {
   const [newCvParticulars, setNewCvParticulars] = useState('');
   const [newCvFundAmount, setNewCvFundAmount] = useState('');
   const [newCvCategory, setNewCvCategory] = useState('');
-  const [newCvPreparedBy, setNewCvPreparedBy] = useState('LAMOSTE, CHINNETTE A.');
+  const [newCvPreparedBy, setNewCvPreparedBy] = useState('CHINNETTE A. LAMOSTE');
   const [newCvCheckedBy, setNewCvCheckedBy] = useState('MARILOU LARIOSA');
   const [newCvApprovedBy, setNewCvApprovedBy] = useState('MICHELLE M. PABLE');
   const [newCvLiquidatedBy, setNewCvLiquidatedBy] = useState('MICHELLE M. PABLE');
@@ -2544,7 +2553,7 @@ function DisbursementPageContent() {
       bank: detectedBank,
       particulars: cv.particulars || '',
       folder_name: cv.folder_name || currentTabConfig.defaultCategory,
-      prepared_by: cv.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.',
+      prepared_by: formatSignatoryName(cv.signatories?.prepared_by, 'CHINNETTE A. LAMOSTE'),
       checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
       approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE',
       liquidated_by: cv.signatories?.liquidated_by || cv.revolving_fund?.custodian_name || 'MICHELLE M. PABLE',
@@ -3013,7 +3022,7 @@ function DisbursementPageContent() {
     setNewCvFundAmount('');
     const defaultCat = currentTabConfig.defaultCategory || 'Loan';
     setNewCvCategory(defaultCat);
-    setNewCvPreparedBy('LAMOSTE, CHINNETTE A.');
+    setNewCvPreparedBy('CHINNETTE A. LAMOSTE');
     setNewCvCheckedBy('MARILOU LARIOSA');
     setNewCvApprovedBy('MICHELLE M. PABLE');
     setNewCvLiquidatedBy('MICHELLE M. PABLE');
@@ -4743,7 +4752,7 @@ function DisbursementPageContent() {
                           <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">PREPARED BY:</span>
                           <div className="h-5"></div>
                           <p className="text-xs font-bold text-on-surface dark:text-white mb-1 uppercase">
-                            {selectedCvForModal.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
+                            {formatSignatoryName(selectedCvForModal.signatories?.prepared_by, 'CHINNETTE A. LAMOSTE')}
                           </p>
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                         </div>
@@ -6108,7 +6117,7 @@ function DisbursementPageContent() {
                   </span>
                   <div style={{ height: '24px' }}></div>
                   <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
-                    {printingCvBreakdown.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.'}
+                    {formatSignatoryName(printingCvBreakdown.signatories?.prepared_by, 'CHINNETTE A. LAMOSTE')}
                   </p>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                 </div>

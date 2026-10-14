@@ -1283,7 +1283,7 @@ export const createCheckVoucher = async (req, res, next) => {
     }
 
     const defaultSignatories = {
-      prepared_by: 'LAMOSTE, CHINNETTE A.',
+      prepared_by: 'CHINNETTE A. LAMOSTE',
       checked_by: 'MARILOU LARIOSA',
       approved_by: 'MICHELLE M. PABLE',
       liquidated_by: 'MICHELLE M. PABLE',

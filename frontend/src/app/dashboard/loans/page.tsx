@@ -487,7 +487,7 @@ function LoansPageContent() {
     date_released: '',
     particulars: '',
     signatories: {
-      prepared_by: 'LAMOSTE, CHINNETTE A.',
+      prepared_by: 'CHINNETTE A. LAMOSTE',
       checked_by: 'MARILOU LARIOSA',
       approved_by: 'MICHELLE M. PABLE',
       received_by: ''
@@ -507,7 +507,7 @@ function LoansPageContent() {
       date_released: cv.date_released ? String(cv.date_released).split('T')[0] : '',
       particulars: cv.particulars || '',
       signatories: {
-        prepared_by: cv.signatories?.prepared_by || 'LAMOSTE, CHINNETTE A.',
+        prepared_by: cv.signatories?.prepared_by || 'CHINNETTE A. LAMOSTE',
         checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
         approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE',
         received_by: cv.signatories?.received_by || ''
@@ -898,7 +898,7 @@ function LoansPageContent() {
   const [cvBankName, setCvBankName] = useState('BDO');
   const [cvCheckNo, setCvCheckNo] = useState('');
   const [cvRemarks, setCvRemarks] = useState('');
-  const [cvPreparedBy, setCvPreparedBy] = useState('LAMOSTE, CHINNETTE A.');
+  const [cvPreparedBy, setCvPreparedBy] = useState('CHINNETTE A. LAMOSTE');
   const [cvCheckedBy, setCvCheckedBy] = useState('MARILOU LARIOSA');
   const [cvApprovedBy, setCvApprovedBy] = useState('MICHELLE M. PABLE');
   const [cvTransactionRows, setCvTransactionRows] = useState<{ description: string; debit: string; credit: string }[]>([
@@ -949,7 +949,7 @@ function LoansPageContent() {
     setCvBankName('BDO');
     setCvCheckNo('');
     setCvRemarks('');
-    setCvPreparedBy('LAMOSTE, CHINNETTE A.');
+    setCvPreparedBy('CHINNETTE A. LAMOSTE');
     setCvCheckedBy('MARILOU LARIOSA');
     setCvApprovedBy('MICHELLE M. PABLE');
     setCvTransactionRows([
@@ -1048,7 +1048,7 @@ function LoansPageContent() {
         amount: disbursed,
         details: detailsToSave,
         signatories: {
-          prepared_by: cvPreparedBy.trim() || 'LAMOSTE, CHINNETTE A.',
+          prepared_by: cvPreparedBy.trim() || 'CHINNETTE A. LAMOSTE',
           checked_by: cvCheckedBy.trim() || 'MARILOU LARIOSA',
           approved_by: cvApprovedBy.trim() || 'MICHELLE M. PABLE'
         }
