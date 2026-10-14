@@ -6314,21 +6314,6 @@ function LoansPageContent() {
                     <div className="border-b-[1.5px] border-neutral-900"></div>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-3 gap-6">
-                  <div>
-                    <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">RECEIVED BY:</span>
-                    <div className="h-6"></div>
-                    <div className="border-b-[1.5px] border-neutral-900"></div>
-                    <p className="text-[9px] text-neutral-500 mt-1">Signature over Printed Name</p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">DATE:</span>
-                    <div className="h-6"></div>
-                    <div className="border-b-[1.5px] border-neutral-900"></div>
-                  </div>
-                  <div></div>
-                </div>
               </div>
 
               {/* Document Footer */}
@@ -6951,30 +6936,6 @@ function LoansPageContent() {
                     <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                   </div>
                 </div>
-
-                {/* Row 2: Received By, Date */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px' }}>
-                  <div>
-                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
-                      RECEIVED BY:
-                    </span>
-                    <div style={{ height: '36px' }}></div>
-                    <div style={{ borderBottom: '1.5px solid #111827' }}></div>
-                    <p style={{ color: '#4b5563', margin: '4px 0 0 0', fontSize: '9.5px', fontWeight: '500' }}>
-                      Signature over Printed Name
-                    </p>
-                  </div>
-
-                  <div>
-                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
-                      DATE:
-                    </span>
-                    <div style={{ height: '36px' }}></div>
-                    <div style={{ borderBottom: '1.5px solid #111827' }}></div>
-                  </div>
-
-                  <div>{/* Empty cell for column alignment */}</div>
-                </div>
               </div>
 
               {/* Print Footer */}
@@ -7297,13 +7258,15 @@ function LoansPageContent() {
             margin: 0 !important;
             padding: 0 !important;
             background: white !important;
+            height: auto !important;
+            overflow: visible !important;
           }
           /* Hide everything in body EXCEPT the print section portal */
-          body > *:not(#print-section):not(#purchase-cv-print-section):not(#cv-breakdown-print-section):not(#coop-printable-lf-sheet) {
+          body > *:not(#print-section):not(#purchase-cv-print-section):not(#cv-breakdown-print-section):not(#loan-printable-cv-sheet):not(#coop-printable-lf-sheet):not(#stl-printable-lf-sheet):not(#unified-cv-lf-print-section) {
             display: none !important;
           }
           /* Show and size the print section */
-          #print-section, #purchase-cv-print-section, #cv-breakdown-print-section {
+          #print-section, #purchase-cv-print-section, #cv-breakdown-print-section, #loan-printable-cv-sheet {
             display: block !important;
             width: 100% !important;
             height: auto !important;
@@ -7313,7 +7276,7 @@ function LoansPageContent() {
             padding: 0 !important;
             box-sizing: border-box !important;
           }
-          #coop-printable-lf-sheet {
+          #coop-printable-lf-sheet, #stl-printable-lf-sheet, #unified-cv-lf-print-section {
             display: block !important;
             width: 100% !important;
             max-width: 100% !important;

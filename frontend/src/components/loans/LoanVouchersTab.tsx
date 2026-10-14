@@ -507,12 +507,14 @@ export default function LoanVouchersTab({
     setPrintingCvBreakdown(cv);
     const cleanup = () => {
       window.removeEventListener('afterprint', cleanup);
-      setPrintingCvBreakdown(null);
+      setTimeout(() => {
+        setPrintingCvBreakdown(null);
+      }, 300);
     };
     window.addEventListener('afterprint', cleanup);
     setTimeout(() => {
       window.print();
-    }, 150);
+    }, 250);
   };
 
   // Editing Voucher Modal
@@ -1585,7 +1587,7 @@ export default function LoanVouchersTab({
       {/* HIDDEN PRINT-ONLY CONTAINER FOR CHECK VOUCHER */}
       {printingCvBreakdown && typeof document !== 'undefined' && createPortal(
         <div
-          id="loan-printable-cv-sheet"
+          id="cv-breakdown-print-section"
           className="hidden print:block text-black bg-white font-sans"
           style={{ fontFamily: 'sans-serif', color: '#000000', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
         >
@@ -1603,13 +1605,16 @@ export default function LoanVouchersTab({
                 margin: 0 !important;
                 padding: 0 !important;
                 background: white !important;
+                height: auto !important;
+                overflow: visible !important;
               }
-              body > *:not(#loan-printable-cv-sheet) {
+              body > *:not(#cv-breakdown-print-section):not(#loan-printable-cv-sheet) {
                 display: none !important;
               }
-              #loan-printable-cv-sheet {
+              #cv-breakdown-print-section, #loan-printable-cv-sheet {
                 display: block !important;
                 width: 100% !important;
+                height: auto !important;
                 background: white !important;
                 color: black !important;
                 margin: 0 !important;
@@ -1679,7 +1684,7 @@ export default function LoanVouchersTab({
             {/* Accounting Table */}
             {(() => {
               const { rows, debitTotal, creditTotal } = getBalancedCvRows(printingCvBreakdown);
-              const printAmt = debitTotal || getCvDisbursedAmount(printingCvBreakdown);
+              const printAmt = getCvDisbursedAmount(printingCvBreakdown) || debitTotal;
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div style={{ border: '1px solid #a7f3d0', borderRadius: '8px', overflow: 'hidden' }}>
@@ -1742,7 +1747,7 @@ export default function LoanVouchersTab({
             })()}
 
             {/* Signatures */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginTop: '16px', fontSize: '9.5px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginTop: '16px', fontSize: '9.5px' }}>
               <div>
                 <span style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Prepared by:</span>
                 <div style={{ height: '24px' }}></div>
@@ -1766,14 +1771,6 @@ export default function LoanVouchersTab({
                   {printingCvBreakdown.signatories?.approved_by || 'MICHELLE M. PABLE'}
                 </p>
                 <span style={{ fontSize: '8px', color: '#9ca3af' }}>Manager / Treasurer</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Received by:</span>
-                <div style={{ height: '24px' }}></div>
-                <p style={{ fontWeight: 'bold', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
-                  {printingCvBreakdown.payee || printingCvBreakdown.payee_name || 'Borrower'}
-                </p>
-                <span style={{ fontSize: '8px', color: '#9ca3af' }}>Signature over printed name</span>
               </div>
             </div>
 

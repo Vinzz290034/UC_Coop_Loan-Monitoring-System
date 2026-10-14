@@ -1762,27 +1762,7 @@ export default function UnifiedCvLfPrintModal({
                             <div className="border-b border-neutral-300"></div>
                           </div>
 
-                          {/* Row 2 */}
-                          <div>
-                            <span className="font-bold uppercase text-[9.5px] text-neutral-500 tracking-wider block">
-                              RECEIVED BY:
-                            </span>
-                            <div className="h-6"></div>
-                            <div className="border-b border-neutral-300"></div>
-                            <span className="text-[8.5px] text-neutral-500 block mt-1">
-                              Signature over Printed Name
-                            </span>
-                          </div>
-
-                          <div>
-                            <span className="font-bold uppercase text-[9.5px] text-neutral-500 tracking-wider block">
-                              DATE:
-                            </span>
-                            <div className="h-6"></div>
-                            <div className="border-b border-neutral-300"></div>
-                          </div>
-
-                          <div>{/* Blank spacer column */}</div>
+                          
                         </div>
                       </div>
                     ) : (
@@ -2322,27 +2302,7 @@ export default function UnifiedCvLfPrintModal({
                     <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
                   </div>
 
-                  {/* Row 2 */}
-                  <div>
-                    <span style={{ fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', fontSize: '7.5px', display: 'block', letterSpacing: '0.04em' }}>
-                      RECEIVED BY:
-                    </span>
-                    <div style={{ height: '18px' }}></div>
-                    <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
-                    <span style={{ fontSize: '7px', color: '#6b7280', display: 'block', marginTop: '2px' }}>
-                      Signature over Printed Name
-                    </span>
-                  </div>
-
-                  <div>
-                    <span style={{ fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', fontSize: '7.5px', display: 'block', letterSpacing: '0.04em' }}>
-                      DATE:
-                    </span>
-                    <div style={{ height: '18px' }}></div>
-                    <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
-                  </div>
-
-                  <div>{/* Blank spacer column */}</div>
+                  
                 </div>
               </div>
             ) : (

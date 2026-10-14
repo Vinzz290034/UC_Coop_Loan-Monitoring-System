@@ -2320,12 +2320,14 @@ function DisbursementPageContent() {
 
     const cleanup = () => {
       window.removeEventListener('afterprint', cleanup);
-      setPrintingCvBreakdown(null);
+      setTimeout(() => {
+        setPrintingCvBreakdown(null);
+      }, 300);
     };
     window.addEventListener('afterprint', cleanup);
     setTimeout(() => {
       window.print();
-    }, 150);
+    }, 250);
   };
 
   // Advance to 'on process'
@@ -4773,28 +4775,6 @@ function DisbursementPageContent() {
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                         </div>
                       </div>
-
-                      {/* Row 2: Received By, Date */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div>
-                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">RECEIVED BY:</span>
-                          <div className="h-8"></div>
-                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
-                          <p className="text-[9px] text-neutral-500 mt-1">Signature over Printed Name</p>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">DATE:</span>
-                          <div className="h-8 flex items-center">
-                            {selectedCvForModal.date_released ? (
-                              <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200 font-mono">
-                                {new Date(selectedCvForModal.date_released).toLocaleDateString('en-GB')}
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
-                        </div>
-                        <div></div>
-                      </div>
                     </div>
                   </div>
                 );
@@ -5950,8 +5930,10 @@ function DisbursementPageContent() {
                 margin: 0 !important;
                 padding: 0 !important;
                 background: white !important;
+                height: auto !important;
+                overflow: visible !important;
               }
-              body > *:not(#cv-breakdown-print-section):not(#coop-printable-lf-sheet):not(#stl-printable-lf-sheet) {
+              body > *:not(#cv-breakdown-print-section):not(#loan-printable-cv-sheet):not(#coop-printable-lf-sheet):not(#stl-printable-lf-sheet):not(#unified-cv-lf-print-section) {
                 display: none !important;
               }
               #cv-breakdown-print-section {
@@ -6143,32 +6125,6 @@ function DisbursementPageContent() {
                   </p>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                 </div>
-              </div>
-
-              {/* Row 2: Received By, Date */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px' }}>
-                <div>
-                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
-                    RECEIVED BY:
-                  </span>
-                  <div style={{ height: '36px' }}></div>
-                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
-                  <p style={{ color: '#4b5563', margin: '4px 0 0 0', fontSize: '9.5px', fontWeight: '500' }}>
-                    Signature over Printed Name
-                  </p>
-                </div>
-
-                <div>
-                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#374151', fontSize: '10px', display: 'block', letterSpacing: '0.04em' }}>
-                    DATE:
-                  </span>
-                  <div style={{ height: '36px', display: 'flex', alignItems: 'flex-end', paddingBottom: '3px', fontWeight: 'bold', fontSize: '11px', color: '#111827', fontFamily: 'monospace' }}>
-                    {printingCvBreakdown.date_released ? new Date(printingCvBreakdown.date_released).toLocaleDateString('en-GB') : ''}
-                  </div>
-                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
-                </div>
-
-                <div>{/* Empty cell for column alignment */}</div>
               </div>
             </div>
 
