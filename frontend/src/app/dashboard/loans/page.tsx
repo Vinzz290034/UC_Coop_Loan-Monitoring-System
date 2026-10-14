@@ -340,6 +340,32 @@ function LoansPageContent() {
     return p;
   };
 
+  const formatSignatoryFullName = (name?: string, role: 'prepared' | 'checked' | 'approved' = 'prepared') => {
+    const raw = (name || '').trim();
+    if (!raw) {
+      if (role === 'prepared') return 'CHINNETTE A. LAMOSTE';
+      if (role === 'checked') return 'MARILOU LARIOSA';
+      if (role === 'approved') return 'MICHELLE M. PABLE';
+    }
+    const upper = raw.toUpperCase();
+    if (role === 'prepared') {
+      if (upper === 'LAMOSTE' || upper === 'LAMOSTE, CHINNETTE A.' || upper === 'CHINNETTE LAMOSTE') {
+        return 'CHINNETTE A. LAMOSTE';
+      }
+    }
+    if (role === 'approved') {
+      if (upper === 'MICHELLE' || upper === 'MICHELLE PABLE' || upper === 'PABLE, MICHELLE M.') {
+        return 'MICHELLE M. PABLE';
+      }
+    }
+    if (role === 'checked') {
+      if (upper === 'LARIOSA' || upper === 'MARILOU' || upper === 'LARIOSA, MARILOU') {
+        return 'MARILOU LARIOSA';
+      }
+    }
+    return raw;
+  };
+
   const formatDisbursedInWords = (amount: number): string => {
     if (!amount || isNaN(amount) || amount <= 0) return 'ZERO PESOS ONLY';
     const ones = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE',
@@ -507,9 +533,9 @@ function LoansPageContent() {
       date_released: cv.date_released ? String(cv.date_released).split('T')[0] : '',
       particulars: cv.particulars || '',
       signatories: {
-        prepared_by: cv.signatories?.prepared_by || 'CHINNETTE A. LAMOSTE',
-        checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
-        approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE',
+        prepared_by: formatSignatoryFullName(cv.signatories?.prepared_by, 'prepared'),
+        checked_by: formatSignatoryFullName(cv.signatories?.checked_by, 'checked'),
+        approved_by: formatSignatoryFullName(cv.signatories?.approved_by, 'approved'),
         received_by: cv.signatories?.received_by || ''
       },
       rows: rows.length > 0 ? rows.map(r => ({
@@ -1325,9 +1351,9 @@ function LoansPageContent() {
   const [checkNo, setCheckNo] = useState('');
   const [payeeName, setPayeeName] = useState('');
   const [voucherDescription, setVoucherDescription] = useState('');
-  const [preparedBy, setPreparedBy] = useState('LAMOSTE');
+  const [preparedBy, setPreparedBy] = useState('CHINNETTE A. LAMOSTE');
   const [checkedBy, setCheckedBy] = useState('MARILOU LARIOSA');
-  const [approvedBy, setApprovedBy] = useState('MICHELLE');
+  const [approvedBy, setApprovedBy] = useState('MICHELLE M. PABLE');
   const [releasedBy, setReleasedBy] = useState('Michelle Pable');
   const [voucherId, setVoucherId] = useState<string | null>(null);
   const [isSavingVoucherModal, setIsSavingVoucherModal] = useState(false);
@@ -1426,9 +1452,9 @@ function LoansPageContent() {
       : `Loan Proceeds for ${loanObj.product_name || 'Loan'} (LAF #${loanObj.laf_no || String(loanObj.id).slice(0, 8)})`;
     setVoucherDescription(defaultDesc);
     const initialBookOfAccount = 'Accounts Payable';
-    setPreparedBy('LAMOSTE');
+    setPreparedBy('CHINNETTE A. LAMOSTE');
     setCheckedBy('MARILOU LARIOSA');
-    setApprovedBy('MICHELLE');
+    setApprovedBy('MICHELLE M. PABLE');
 
     let deds: any[] = [];
     if (loanObj.deductions_breakdown) {
@@ -1493,9 +1519,9 @@ function LoansPageContent() {
           }
           if (match.signatories) {
             const sigs = typeof match.signatories === 'string' ? JSON.parse(match.signatories) : match.signatories;
-            if (sigs.prepared_by) setPreparedBy(sigs.prepared_by);
-            if (sigs.checked_by) setCheckedBy(sigs.checked_by);
-            if (sigs.approved_by) setApprovedBy(sigs.approved_by);
+            if (sigs.prepared_by) setPreparedBy(formatSignatoryFullName(sigs.prepared_by, 'prepared'));
+            if (sigs.checked_by) setCheckedBy(formatSignatoryFullName(sigs.checked_by, 'checked'));
+            if (sigs.approved_by) setApprovedBy(formatSignatoryFullName(sigs.approved_by, 'approved'));
           }
           if (match.details) {
             const dets = typeof match.details === 'string' ? JSON.parse(match.details) : match.details;
@@ -1564,9 +1590,9 @@ function LoansPageContent() {
         status: printLoan?.status === 'disbursed' || printLoan?.status === 'fully_paid' ? 'filed' : 'for release',
         details: detailsToSave,
         signatories: {
-          prepared_by: preparedBy.trim() || 'LAMOSTE',
-          checked_by: checkedBy.trim() || 'MARILOU LARIOSA',
-          approved_by: approvedBy.trim() || 'MICHELLE'
+          prepared_by: formatSignatoryFullName(preparedBy, 'prepared'),
+          checked_by: formatSignatoryFullName(checkedBy, 'checked'),
+          approved_by: formatSignatoryFullName(approvedBy, 'approved')
         }
       };
 
@@ -6298,19 +6324,19 @@ function LoansPageContent() {
                   <div>
                     <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">PREPARED BY:</span>
                     <div className="h-4"></div>
-                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{preparedBy || 'LAMOSTE'}</p>
+                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{formatSignatoryFullName(preparedBy, 'prepared')}</p>
                     <div className="border-b-[1.5px] border-neutral-900"></div>
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">CHECKED BY:</span>
                     <div className="h-4"></div>
-                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{checkedBy || 'MARILOU LARIOSA'}</p>
+                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{formatSignatoryFullName(checkedBy, 'checked')}</p>
                     <div className="border-b-[1.5px] border-neutral-900"></div>
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">APPROVED BY:</span>
                     <div className="h-4"></div>
-                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{approvedBy || 'MICHELLE'}</p>
+                    <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider m-0 mb-1">{formatSignatoryFullName(approvedBy, 'approved')}</p>
                     <div className="border-b-[1.5px] border-neutral-900"></div>
                   </div>
                 </div>
@@ -6909,7 +6935,7 @@ function LoansPageContent() {
                     </span>
                     <div style={{ height: '24px' }}></div>
                     <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
-                      {preparedBy || 'LAMOSTE'}
+                      {formatSignatoryFullName(preparedBy, 'prepared')}
                     </p>
                     <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                   </div>
@@ -6920,7 +6946,7 @@ function LoansPageContent() {
                     </span>
                     <div style={{ height: '24px' }}></div>
                     <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
-                      {checkedBy || 'MARILOU LARIOSA'}
+                      {formatSignatoryFullName(checkedBy, 'checked')}
                     </p>
                     <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                   </div>
@@ -6931,7 +6957,7 @@ function LoansPageContent() {
                     </span>
                     <div style={{ height: '24px' }}></div>
                     <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 5px 0', fontSize: '13px', letterSpacing: '0.02em' }}>
-                      {approvedBy || 'MICHELLE'}
+                      {formatSignatoryFullName(approvedBy, 'approved')}
                     </p>
                     <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                   </div>

@@ -334,8 +334,14 @@ export const formatPayeeName = (name?: string): string => {
 export const formatSignatoryName = (name?: string, fallback: string = 'CHINNETTE A. LAMOSTE'): string => {
   if (!name) return fallback;
   const trimmed = name.trim();
-  if (/^lamoste,?\s*chinnette(\s*a\.?)?/i.test(trimmed)) {
+  if (/^(lamoste|lamoste,?\s*chinnette(\s*a\.?)?|chinnette\s*lamoste)$/i.test(trimmed)) {
     return 'CHINNETTE A. LAMOSTE';
+  }
+  if (/^(michelle|michelle\s*pable|pable,?\s*michelle(\s*m\.?)?)$/i.test(trimmed)) {
+    return 'MICHELLE M. PABLE';
+  }
+  if (/^(lariosa|marilou|lariosa,?\s*marilou)$/i.test(trimmed)) {
+    return 'MARILOU LARIOSA';
   }
   return trimmed;
 };
@@ -2556,8 +2562,8 @@ function DisbursementPageContent() {
       particulars: cv.particulars || '',
       folder_name: cv.folder_name || currentTabConfig.defaultCategory,
       prepared_by: formatSignatoryName(cv.signatories?.prepared_by, 'CHINNETTE A. LAMOSTE'),
-      checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
-      approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE',
+      checked_by: formatSignatoryName(cv.signatories?.checked_by, 'MARILOU LARIOSA'),
+      approved_by: formatSignatoryName(cv.signatories?.approved_by, 'MICHELLE M. PABLE'),
       liquidated_by: cv.signatories?.liquidated_by || cv.revolving_fund?.custodian_name || 'MICHELLE M. PABLE',
       detailed_approved_by: cv.signatories?.detailed_approved_by || cv.signatories?.approved_by || 'CANDILARIO N. TATOY'
     };

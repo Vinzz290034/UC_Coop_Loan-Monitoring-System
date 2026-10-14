@@ -227,6 +227,32 @@ export default function LoanVouchersTab({
     return raw;
   };
 
+  const formatSignatoryFullName = (name?: string, role: 'prepared' | 'checked' | 'approved' = 'prepared') => {
+    const raw = (name || '').trim();
+    if (!raw) {
+      if (role === 'prepared') return 'CHINNETTE A. LAMOSTE';
+      if (role === 'checked') return 'MARILOU LARIOSA';
+      if (role === 'approved') return 'MICHELLE M. PABLE';
+    }
+    const upper = raw.toUpperCase();
+    if (role === 'prepared') {
+      if (upper === 'LAMOSTE' || upper === 'LAMOSTE, CHINNETTE A.' || upper === 'CHINNETTE LAMOSTE') {
+        return 'CHINNETTE A. LAMOSTE';
+      }
+    }
+    if (role === 'approved') {
+      if (upper === 'MICHELLE' || upper === 'MICHELLE PABLE' || upper === 'PABLE, MICHELLE M.') {
+        return 'MICHELLE M. PABLE';
+      }
+    }
+    if (role === 'checked') {
+      if (upper === 'LARIOSA' || upper === 'MARILOU' || upper === 'LARIOSA, MARILOU') {
+        return 'MARILOU LARIOSA';
+      }
+    }
+    return raw;
+  };
+
   const formatDisbursedInWords = (amount: number): string => {
     if (isNaN(amount) || amount === 0) return 'ZERO PESOS ONLY';
     const ones = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'];
@@ -534,9 +560,9 @@ export default function LoanVouchersTab({
       payee: cv.payee || cv.payee_name || '',
       bank: cv.bank || 'BDO',
       particulars: cv.particulars || '',
-      prepared_by: cv.signatories?.prepared_by || 'CHINNETTE A. LAMOSTE',
-      checked_by: cv.signatories?.checked_by || 'MARILOU LARIOSA',
-      approved_by: cv.signatories?.approved_by || 'MICHELLE M. PABLE'
+      prepared_by: formatSignatoryFullName(cv.signatories?.prepared_by, 'prepared'),
+      checked_by: formatSignatoryFullName(cv.signatories?.checked_by, 'checked'),
+      approved_by: formatSignatoryFullName(cv.signatories?.approved_by, 'approved')
     };
     setEditCvFormData(initialForm);
     const initialRowsList = formattedRows.length > 0 ? formattedRows : [{ description: 'Regular Loan Principal', debit: '', credit: '' }];
@@ -1752,7 +1778,7 @@ export default function LoanVouchersTab({
                 <span style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Prepared by:</span>
                 <div style={{ height: '24px' }}></div>
                 <p style={{ fontWeight: 'bold', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
-                  {printingCvBreakdown.signatories?.prepared_by || 'CHINNETTE A. LAMOSTE'}
+                  {formatSignatoryFullName(printingCvBreakdown.signatories?.prepared_by, 'prepared')}
                 </p>
                 <span style={{ fontSize: '8px', color: '#9ca3af' }}>Bookkeeper / Accounting</span>
               </div>
@@ -1760,7 +1786,7 @@ export default function LoanVouchersTab({
                 <span style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Checked by:</span>
                 <div style={{ height: '24px' }}></div>
                 <p style={{ fontWeight: 'bold', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
-                  {printingCvBreakdown.signatories?.checked_by || 'MARILOU LARIOSA'}
+                  {formatSignatoryFullName(printingCvBreakdown.signatories?.checked_by, 'checked')}
                 </p>
                 <span style={{ fontSize: '8px', color: '#9ca3af' }}>Audit Committee</span>
               </div>
@@ -1768,7 +1794,7 @@ export default function LoanVouchersTab({
                 <span style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Approved by:</span>
                 <div style={{ height: '24px' }}></div>
                 <p style={{ fontWeight: 'bold', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
-                  {printingCvBreakdown.signatories?.approved_by || 'MICHELLE M. PABLE'}
+                  {formatSignatoryFullName(printingCvBreakdown.signatories?.approved_by, 'approved')}
                 </p>
                 <span style={{ fontSize: '8px', color: '#9ca3af' }}>Manager / Treasurer</span>
               </div>
