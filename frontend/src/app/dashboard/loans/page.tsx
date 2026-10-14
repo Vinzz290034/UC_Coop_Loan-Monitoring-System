@@ -1192,14 +1192,17 @@ function LoansPageContent() {
   const prevLoanSectionRef = useRef<HTMLDivElement>(null);
   const [memberActiveLoans, setMemberActiveLoans] = useState<any[]>([]);
   const [loadingMemberActiveLoans, setLoadingMemberActiveLoans] = useState<boolean>(false);
-  const [applyFines, setApplyFines] = useState<string>('0');
-  const [applyInterest, setApplyInterest] = useState<string>('0');
-  const [finesLoanId, setFinesLoanId] = useState<string>('');
-  const [interestLoanId, setInterestLoanId] = useState<string>('');
-  const [openFinesDropdown, setOpenFinesDropdown] = useState(false);
-  const [openInterestDropdown, setOpenInterestDropdown] = useState(false);
-  const finesDropdownRef = useRef<HTMLDivElement>(null);
-  const interestDropdownRef = useRef<HTMLDivElement>(null);
+  // Multi-Loan Fines & Interest selection (3-5 rows supported)
+  const [finesDeductions, setFinesDeductions] = useState<Array<{ id: string; loanId: string; amount: string }>>([
+    { id: 'fines-1', loanId: '', amount: '0' }
+  ]);
+  const [interestDeductions, setInterestDeductions] = useState<Array<{ id: string; loanId: string; amount: string }>>([
+    { id: 'int-1', loanId: '', amount: '0' }
+  ]);
+  const [openFinesDropdownId, setOpenFinesDropdownId] = useState<string | null>(null);
+  const [openInterestDropdownId, setOpenInterestDropdownId] = useState<string | null>(null);
+  const finesSectionRef = useRef<HTMLDivElement>(null);
+  const interestSectionRef = useRef<HTMLDivElement>(null);
   const [applyScheduleAmounts, setApplyScheduleAmounts] = useState<Record<number, string>>({});
 
   // Animated Member Selector Dropdown State
@@ -2121,10 +2124,8 @@ function LoansPageContent() {
         setSelectedPrevLoanId('');
         setApplyPrevBalance('0');
         setPrevLoanDeductions([{ id: 'pld-1', loanId: '', amount: '0' }]);
-        setApplyFines('0');
-        setApplyInterest('0');
-        setFinesLoanId('');
-        setInterestLoanId('');
+        setFinesDeductions([{ id: 'fines-1', loanId: '', amount: '0' }]);
+        setInterestDeductions([{ id: 'int-1', loanId: '', amount: '0' }]);
         return;
       }
       try {
@@ -2148,20 +2149,29 @@ function LoansPageContent() {
             { id: 'pld-1', loanId: String(firstLoan.id), amount: String(!isNaN(balance) ? balance : 0) }
           ]);
 
-          const fines = parseFloat(firstLoan.total_fines || 0);
-          const interest = parseFloat(firstLoan.remaining_interest || 0);
-          setApplyFines(fines > 0 ? String(fines) : '0');
-          setInterestLoanId(fines > 0 ? '' : (interest > 0 ? String(firstLoan.id) : ''));
-          setApplyInterest(interest > 0 ? String(interest) : '0');
-          setFinesLoanId(fines > 0 ? String(firstLoan.id) : '');
+          // Initialize fines and interest rows (default to only one row first)
+          const loansWithFines = activeLoans.filter((l: any) => parseFloat(l.total_fines || 0) > 0);
+          if (loansWithFines.length > 0) {
+            const firstLoanWithFines = loansWithFines[0];
+            setFinesDeductions([
+              {
+                id: 'fines-1',
+                loanId: String(firstLoanWithFines.id),
+                amount: String(parseFloat(firstLoanWithFines.total_fines || 0) || 0)
+              }
+            ]);
+          } else {
+            setFinesDeductions([{ id: 'fines-1', loanId: '', amount: '0' }]);
+          }
+
+          // Interest defaults to only one row (optional / manual entry)
+          setInterestDeductions([{ id: 'int-1', loanId: '', amount: '0' }]);
         } else {
           setSelectedPrevLoanId('');
           setApplyPrevBalance('0');
           setPrevLoanDeductions([{ id: 'pld-1', loanId: '', amount: '0' }]);
-          setApplyFines('0');
-          setApplyInterest('0');
-          setFinesLoanId('');
-          setInterestLoanId('');
+          setFinesDeductions([{ id: 'fines-1', loanId: '', amount: '0' }]);
+          setInterestDeductions([{ id: 'int-1', loanId: '', amount: '0' }]);
         }
       } catch (err) {
         console.error('Error fetching member loans for deductions:', err);
@@ -2179,11 +2189,11 @@ function LoansPageContent() {
       if (prevLoanSectionRef.current && !prevLoanSectionRef.current.contains(event.target as Node)) {
         setOpenPrevLoanDropdownId(null);
       }
-      if (finesDropdownRef.current && !finesDropdownRef.current.contains(event.target as Node)) {
-        setOpenFinesDropdown(false);
+      if (finesSectionRef.current && !finesSectionRef.current.contains(event.target as Node)) {
+        setOpenFinesDropdownId(null);
       }
-      if (interestDropdownRef.current && !interestDropdownRef.current.contains(event.target as Node)) {
-        setOpenInterestDropdown(false);
+      if (interestSectionRef.current && !interestSectionRef.current.contains(event.target as Node)) {
+        setOpenInterestDropdownId(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -2247,6 +2257,118 @@ function LoansPageContent() {
   }, [prevLoanDeductions]);
 
 
+  // Handlers for Fines deductions
+  const handleAddFinesDeduction = () => {
+    if (finesDeductions.length >= 5) return;
+    const unselected = memberActiveLoans.find(
+      (l) => !finesDeductions.some((f) => String(f.loanId) === String(l.id)) && parseFloat(l.total_fines || 0) > 0
+    ) || memberActiveLoans.find(
+      (l) => !finesDeductions.some((f) => String(f.loanId) === String(l.id))
+    );
+    const newLoanId = unselected ? String(unselected.id) : '';
+    const newAmount = unselected ? String(parseFloat(unselected.total_fines || 0) || 0) : '0';
+    setFinesDeductions((prev) => [
+      ...prev,
+      {
+        id: `fines-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        loanId: newLoanId,
+        amount: newAmount
+      }
+    ]);
+  };
+
+  const handleRemoveFinesDeduction = (id: string) => {
+    setFinesDeductions((prev) => {
+      const updated = prev.filter((f) => f.id !== id);
+      return updated.length > 0 ? updated : [{ id: `fines-${Date.now()}`, loanId: '', amount: '0' }];
+    });
+  };
+
+  const handleFinesLoanSelect = (rowId: string, loanId: string) => {
+    setFinesDeductions((prev) =>
+      prev.map((item) => {
+        if (item.id !== rowId) return item;
+        if (!loanId) {
+          return { ...item, loanId: '', amount: '0' };
+        }
+        const found = memberActiveLoans.find((l) => String(l.id) === String(loanId));
+        const finesVal = found ? (parseFloat(found.total_fines || 0) || 0) : 0;
+        return {
+          ...item,
+          loanId,
+          amount: String(!isNaN(finesVal) ? finesVal : 0)
+        };
+      })
+    );
+    setOpenFinesDropdownId(null);
+  };
+
+  const handleFinesAmountChange = (rowId: string, amount: string) => {
+    setFinesDeductions((prev) =>
+      prev.map((item) => (item.id === rowId ? { ...item, amount } : item))
+    );
+  };
+
+  // Handlers for Interest deductions
+  const handleAddInterestDeduction = () => {
+    if (interestDeductions.length >= 5) return;
+    const unselected = memberActiveLoans.find(
+      (l) => !interestDeductions.some((i) => String(i.loanId) === String(l.id)) && parseFloat(l.remaining_interest || 0) > 0
+    ) || memberActiveLoans.find(
+      (l) => !interestDeductions.some((i) => String(i.loanId) === String(l.id))
+    );
+    const newLoanId = unselected ? String(unselected.id) : '';
+    const newAmount = unselected ? String(parseFloat(unselected.remaining_interest || 0) || 0) : '0';
+    setInterestDeductions((prev) => [
+      ...prev,
+      {
+        id: `int-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        loanId: newLoanId,
+        amount: newAmount
+      }
+    ]);
+  };
+
+  const handleRemoveInterestDeduction = (id: string) => {
+    setInterestDeductions((prev) => {
+      const updated = prev.filter((i) => i.id !== id);
+      return updated.length > 0 ? updated : [{ id: `int-${Date.now()}`, loanId: '', amount: '0' }];
+    });
+  };
+
+  const handleInterestLoanSelect = (rowId: string, loanId: string) => {
+    setInterestDeductions((prev) =>
+      prev.map((item) => {
+        if (item.id !== rowId) return item;
+        if (!loanId) {
+          return { ...item, loanId: '', amount: '0' };
+        }
+        const found = memberActiveLoans.find((l) => String(l.id) === String(loanId));
+        const intVal = found ? (parseFloat(found.remaining_interest || 0) || 0) : 0;
+        return {
+          ...item,
+          loanId,
+          amount: String(!isNaN(intVal) ? intVal : 0)
+        };
+      })
+    );
+    setOpenInterestDropdownId(null);
+  };
+
+  const handleInterestAmountChange = (rowId: string, amount: string) => {
+    setInterestDeductions((prev) =>
+      prev.map((item) => (item.id === rowId ? { ...item, amount } : item))
+    );
+  };
+
+  const totalFinesCalc = useMemo(() => {
+    return finesDeductions.reduce((sum, item) => sum + (parseFloat(String(item.amount)) || 0), 0);
+  }, [finesDeductions]);
+
+  const totalInterestCalc = useMemo(() => {
+    return interestDeductions.reduce((sum, item) => sum + (parseFloat(String(item.amount)) || 0), 0);
+  }, [interestDeductions]);
+
   // Compute total charges (deductions)
   const totalDeductionsCalc = useMemo(() => {
     return (
@@ -2254,10 +2376,10 @@ function LoansPageContent() {
       (parseFloat(String(applyInsurance)) || 0) +
       (parseFloat(String(applyFixedDeposit)) || 0) +
       totalPrevBalanceCalc +
-      (parseFloat(String(applyFines)) || 0) +
-      (parseFloat(String(applyInterest)) || 0)
+      totalFinesCalc +
+      totalInterestCalc
     );
-  }, [applyServiceFee, applyInsurance, applyFixedDeposit, totalPrevBalanceCalc, applyFines, applyInterest]);
+  }, [applyServiceFee, applyInsurance, applyFixedDeposit, totalPrevBalanceCalc, totalFinesCalc, totalInterestCalc]);
 
   // Compute net proceeds
   const netProceedsCalc = useMemo(() => {
@@ -2426,12 +2548,10 @@ function LoansPageContent() {
     setPrevLoanDeductions([{ id: 'pld-1', loanId: '', amount: '0' }]);
     setOpenPrevLoanDropdownId(null);
     setMemberActiveLoans([]);
-    setApplyFines('0');
-    setApplyInterest('0');
-    setFinesLoanId('');
-    setInterestLoanId('');
-    setOpenFinesDropdown(false);
-    setOpenInterestDropdown(false);
+    setFinesDeductions([{ id: 'fines-1', loanId: '', amount: '0' }]);
+    setInterestDeductions([{ id: 'int-1', loanId: '', amount: '0' }]);
+    setOpenFinesDropdownId(null);
+    setOpenInterestDropdownId(null);
     setApplyScheduleAmounts({});
     setCoMakerName('');
     setCoMakerPhone('');
@@ -2523,29 +2643,39 @@ function LoansPageContent() {
         })
         .filter((d): d is { name: string; amount: number } => d !== null);
 
-      // Build Fines label
-      const finesAmt = parseFloat(String(applyFines)) || 0;
-      let finesLabel = 'Fines';
-      if (finesLoanId) {
-        const fl = memberActiveLoans.find((l: any) => String(l.id) === String(finesLoanId));
-        if (fl) finesLabel = `Fines (${fl.laf_no ? `LAF: ${fl.laf_no}` : fl.product_name || 'Loan'})`;
-      }
+      // Build Fines deduction items
+      const finesDeductionItems = finesDeductions
+        .map((item) => {
+          const amt = parseFloat(String(item.amount)) || 0;
+          if (amt <= 0) return null;
+          const fl = memberActiveLoans.find((l: any) => String(l.id) === String(item.loanId));
+          const label = fl
+            ? `Fines (${fl.laf_no ? `LAF: ${fl.laf_no}` : fl.product_name || 'Loan'})`
+            : 'Fines';
+          return { name: label, amount: amt };
+        })
+        .filter((d): d is { name: string; amount: number } => d !== null);
 
-      // Build Interest label
-      const interestAmt = parseFloat(String(applyInterest)) || 0;
-      let interestLabel = 'Interest';
-      if (interestLoanId) {
-        const il = memberActiveLoans.find((l: any) => String(l.id) === String(interestLoanId));
-        if (il) interestLabel = `Interest (${il.laf_no ? `LAF: ${il.laf_no}` : il.product_name || 'Loan'})`;
-      }
+      // Build Interest deduction items
+      const interestDeductionItems = interestDeductions
+        .map((item) => {
+          const amt = parseFloat(String(item.amount)) || 0;
+          if (amt <= 0) return null;
+          const il = memberActiveLoans.find((l: any) => String(l.id) === String(item.loanId));
+          const label = il
+            ? `Interest (${il.laf_no ? `LAF: ${il.laf_no}` : il.product_name || 'Loan'})`
+            : 'Interest';
+          return { name: label, amount: amt };
+        })
+        .filter((d): d is { name: string; amount: number } => d !== null);
 
       const deductionsPayload = [
         { name: 'Service Fee', amount: parseFloat(String(applyServiceFee)) || 0 },
         { name: 'Insurance', amount: parseFloat(String(applyInsurance)) || 0 },
         { name: 'Fixed Deposit', amount: parseFloat(String(applyFixedDeposit)) || 0 },
         ...prevLoanDeductionItems,
-        { name: finesLabel, amount: finesAmt },
-        { name: interestLabel, amount: interestAmt }
+        ...finesDeductionItems,
+        ...interestDeductionItems
       ].filter(d => d.amount > 0);
 
       const customSchedulePayload = monthlySchedulePreview.map((item, idx) => {
@@ -5075,7 +5205,8 @@ function LoansPageContent() {
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {/* 1. Base Deductions: Service Fee, Insurance, Fixed Deposit */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div className="space-y-1">
                             <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">Service Fee</label>
                             <input
@@ -5111,119 +5242,332 @@ function LoansPageContent() {
                               className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
                             />
                           </div>
+                        </div>
 
-              {/* Fines */}
-                          <div className="space-y-1" ref={finesDropdownRef}>
-                            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">Fines</label>
-                            {memberActiveLoans.length > 0 && (
-                              <div className="relative">
-                                <button
-                                  type="button"
-                                  onClick={() => { setOpenFinesDropdown(v => !v); setOpenInterestDropdown(false); }}
-                                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
-                                >
-                                  <span className={finesLoanId ? 'text-foreground' : 'text-neutral-400'}>
-                                    {finesLoanId
-                                      ? (() => { const l = memberActiveLoans.find((x: any) => String(x.id) === finesLoanId); return l ? `${l.laf_no || l.product_name || 'Loan'} — Fines: ₱${Number(l.total_fines || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Select loan'; })()
-                                      : 'Select loan (optional)'}
+                        {/* 2. Multi-row Fines and Interest Deductions (Side-by-side on wide screens) */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+                          {/* Fines Deductions Card */}
+                          <div className="p-3 bg-white dark:bg-surface-container-high/40 rounded-xl border border-outline-variant/60 space-y-3" ref={finesSectionRef}>
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5 uppercase tracking-wider">
+                                <ReceiptText className="w-3.5 h-3.5 text-rose-500" />
+                                Fines Deductions
+                                {finesDeductions.filter((f) => parseFloat(f.amount) > 0 || f.loanId).length > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[9px] font-bold">
+                                    {finesDeductions.filter((f) => parseFloat(f.amount) > 0 || f.loanId).length}
                                   </span>
-                                  <ChevronDown className="w-3 h-3 text-neutral-400" />
-                                </button>
-                                {openFinesDropdown && (
-                                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-surface-container rounded-xl border border-outline-variant shadow-lg overflow-hidden">
-                                    <button
-                                      type="button"
-                                      onClick={() => { setFinesLoanId(''); setApplyFines('0'); setOpenFinesDropdown(false); }}
-                                      className="w-full text-left px-3 py-2 text-xs text-neutral-400 hover:bg-neutral-50 dark:hover:bg-surface-container-high"
-                                    >
-                                      — None / Manual entry —
-                                    </button>
-                                    {memberActiveLoans.map((l: any) => (
-                                      <button
-                                        key={l.id}
-                                        type="button"
-                                        onClick={() => {
-                                          setFinesLoanId(String(l.id));
-                                          setApplyFines(String(parseFloat(l.total_fines || 0)));
-                                          setOpenFinesDropdown(false);
-                                        }}
-                                        className={`w-full text-left px-3 py-2 text-xs hover:bg-neutral-50 dark:hover:bg-surface-container-high border-t border-outline-variant/30 ${
-                                          String(l.id) === finesLoanId ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground'
-                                        }`}
-                                      >
-                                        <div className="font-semibold">{l.laf_no || l.product_name || `Loan #${l.id}`}</div>
-                                        <div className="text-[10px] text-neutral-500">Fines: ₱{Number(l.total_fines || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                      </button>
-                                    ))}
-                                  </div>
                                 )}
-                              </div>
+                              </label>
+                              {totalFinesCalc > 0 && (
+                                <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold font-mono">
+                                  Total: ₱{totalFinesCalc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="space-y-2.5">
+                              {finesDeductions.map((item, idx) => {
+                                const selectedLoan = memberActiveLoans.find((l: any) => String(l.id) === String(item.loanId));
+                                const isDropdownOpen = openFinesDropdownId === item.id;
+
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="p-2.5 rounded-xl border border-outline-variant/60 bg-neutral-50/70 dark:bg-surface-container-high/30 space-y-2 relative"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="px-1.5 py-0.5 rounded-md bg-neutral-200 dark:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-700 dark:text-neutral-300">
+                                          #{idx + 1}
+                                        </span>
+                                        {selectedLoan ? (
+                                          <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400">
+                                            Loan Fines: ₱{Number(selectedLoan.total_fines || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] text-neutral-400 italic">
+                                            Select loan or enter manually
+                                          </span>
+                                        )}
+                                      </div>
+                                      {finesDeductions.length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveFinesDeduction(item.id)}
+                                          className="text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                          title="Remove this fines row"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                      <div className="sm:col-span-2 space-y-1 relative">
+                                        <label className="text-[9px] font-bold text-neutral-500">Loan</label>
+                                        {memberActiveLoans.length > 0 ? (
+                                          <div className="relative">
+                                            <button
+                                              type="button"
+                                              onClick={() => setOpenFinesDropdownId(isDropdownOpen ? null : item.id)}
+                                              className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary truncate"
+                                            >
+                                              <span className={item.loanId ? 'text-foreground truncate' : 'text-neutral-400 truncate'}>
+                                                {selectedLoan
+                                                  ? `${selectedLoan.laf_no || selectedLoan.product_name || 'Loan'} — Fines: ₱${Number(selectedLoan.total_fines || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                  : 'Select loan (optional)'}
+                                              </span>
+                                              <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+
+                                            {isDropdownOpen && (
+                                              <div className="absolute z-50 left-0 right-0 top-[calc(100%+4px)] bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant shadow-xl overflow-hidden max-h-56 overflow-y-auto p-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleFinesLoanSelect(item.id, '')}
+                                                  className="w-full text-left px-3 py-2 text-xs text-neutral-400 hover:bg-neutral-50 dark:hover:bg-surface-container-highest rounded-lg"
+                                                >
+                                                  — None / Manual entry —
+                                                </button>
+                                                {memberActiveLoans.map((l: any) => {
+                                                  const isCurrent = String(l.id) === item.loanId;
+                                                  const isSelectedOther = finesDeductions.some((f) => f.id !== item.id && String(f.loanId) === String(l.id));
+
+                                                  return (
+                                                    <button
+                                                      key={l.id}
+                                                      type="button"
+                                                      disabled={isSelectedOther}
+                                                      onClick={() => handleFinesLoanSelect(item.id, String(l.id))}
+                                                      className={`w-full text-left px-3 py-2 text-xs rounded-lg border-t border-outline-variant/30 flex items-center justify-between gap-2 ${
+                                                        isSelectedOther
+                                                          ? 'opacity-40 cursor-not-allowed bg-neutral-100/50 dark:bg-neutral-900/30'
+                                                          : isCurrent
+                                                          ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold'
+                                                          : 'hover:bg-neutral-50 dark:hover:bg-surface-container-highest text-foreground cursor-pointer'
+                                                      }`}
+                                                    >
+                                                      <div className="truncate">
+                                                        <div className="font-semibold truncate">{l.laf_no || l.product_name || `Loan #${l.id}`}</div>
+                                                        <div className="text-[10px] text-neutral-500">Fines: ₱{Number(l.total_fines || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                      </div>
+                                                      {isSelectedOther && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 shrink-0">Added</span>
+                                                      )}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <div className="text-[11px] text-neutral-400 py-1.5 px-3 rounded-xl border border-outline-variant/40 bg-neutral-50 dark:bg-surface-container-high/30">
+                                            No active loans
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <label className="text-[9px] font-bold text-neutral-500 flex items-center justify-between">
+                                          <span>Fines (₱)</span>
+                                          {selectedLoan && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleFinesAmountChange(item.id, String(parseFloat(selectedLoan.total_fines || 0) || 0))}
+                                              className="text-[9px] text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                                              title="Reset to full fines"
+                                            >
+                                              Full
+                                            </button>
+                                          )}
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          value={item.amount}
+                                          onChange={(e) => handleFinesAmountChange(item.id, e.target.value)}
+                                          placeholder="0"
+                                          className="w-full px-3 py-1.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-bold text-rose-600 dark:text-rose-400 focus:outline-none focus:ring-1 focus:ring-primary"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {finesDeductions.length < 5 && (
+                              <button
+                                type="button"
+                                onClick={handleAddFinesDeduction}
+                                className="w-full py-1.5 px-3 rounded-xl border-2 border-dashed border-rose-400/40 hover:border-rose-400/70 bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 text-xs font-bold text-rose-700 dark:text-rose-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>+ Add Fines Row ({finesDeductions.length}/5)</span>
+                              </button>
                             )}
-                            <input
-                              type="number"
-                              step="any"
-                              value={applyFines}
-                              onChange={(e) => setApplyFines(e.target.value)}
-                              placeholder="0"
-                              className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
                           </div>
 
-                          {/* Interest */}
-                          <div className="space-y-1" ref={interestDropdownRef}>
-                            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400">Interest</label>
-                            {memberActiveLoans.length > 0 && (
-                              <div className="relative">
-                                <button
-                                  type="button"
-                                  onClick={() => { setOpenInterestDropdown(v => !v); setOpenFinesDropdown(false); }}
-                                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
-                                >
-                                  <span className={interestLoanId ? 'text-foreground' : 'text-neutral-400'}>
-                                    {interestLoanId
-                                      ? (() => { const l = memberActiveLoans.find((x: any) => String(x.id) === interestLoanId); return l ? `${l.laf_no || l.product_name || 'Loan'} — Int: ₱${Number(l.remaining_interest || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Select loan'; })()
-                                      : 'Select loan (optional)'}
+                          {/* Interest Deductions Card */}
+                          <div className="p-3 bg-white dark:bg-surface-container-high/40 rounded-xl border border-outline-variant/60 space-y-3" ref={interestSectionRef}>
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5 uppercase tracking-wider">
+                                <ReceiptText className="w-3.5 h-3.5 text-amber-500" />
+                                Interest Deductions
+                                {interestDeductions.filter((i) => parseFloat(i.amount) > 0 || i.loanId).length > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-bold">
+                                    {interestDeductions.filter((i) => parseFloat(i.amount) > 0 || i.loanId).length}
                                   </span>
-                                  <ChevronDown className="w-3 h-3 text-neutral-400" />
-                                </button>
-                                {openInterestDropdown && (
-                                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-surface-container rounded-xl border border-outline-variant shadow-lg overflow-hidden">
-                                    <button
-                                      type="button"
-                                      onClick={() => { setInterestLoanId(''); setApplyInterest('0'); setOpenInterestDropdown(false); }}
-                                      className="w-full text-left px-3 py-2 text-xs text-neutral-400 hover:bg-neutral-50 dark:hover:bg-surface-container-high"
-                                    >
-                                      — None / Manual entry —
-                                    </button>
-                                    {memberActiveLoans.map((l: any) => (
-                                      <button
-                                        key={l.id}
-                                        type="button"
-                                        onClick={() => {
-                                          setInterestLoanId(String(l.id));
-                                          setApplyInterest(String(parseFloat(l.remaining_interest || 0)));
-                                          setOpenInterestDropdown(false);
-                                        }}
-                                        className={`w-full text-left px-3 py-2 text-xs hover:bg-neutral-50 dark:hover:bg-surface-container-high border-t border-outline-variant/30 ${
-                                          String(l.id) === interestLoanId ? 'bg-primary/10 text-primary font-semibold' : 'text-foreground'
-                                        }`}
-                                      >
-                                        <div className="font-semibold">{l.laf_no || l.product_name || `Loan #${l.id}`}</div>
-                                        <div className="text-[10px] text-neutral-500">Remaining Interest: ₱{Number(l.remaining_interest || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                      </button>
-                                    ))}
-                                  </div>
                                 )}
-                              </div>
+                              </label>
+                              {totalInterestCalc > 0 && (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold font-mono">
+                                  Total: ₱{totalInterestCalc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="space-y-2.5">
+                              {interestDeductions.map((item, idx) => {
+                                const selectedLoan = memberActiveLoans.find((l: any) => String(l.id) === String(item.loanId));
+                                const isDropdownOpen = openInterestDropdownId === item.id;
+
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="p-2.5 rounded-xl border border-outline-variant/60 bg-neutral-50/70 dark:bg-surface-container-high/30 space-y-2 relative"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="px-1.5 py-0.5 rounded-md bg-neutral-200 dark:bg-neutral-800 text-[10px] font-mono font-bold text-neutral-700 dark:text-neutral-300">
+                                          #{idx + 1}
+                                        </span>
+                                        {selectedLoan ? (
+                                          <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                                            Loan Int: ₱{Number(selectedLoan.remaining_interest || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] text-neutral-400 italic">
+                                            Select loan or enter manually
+                                          </span>
+                                        )}
+                                      </div>
+                                      {interestDeductions.length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveInterestDeduction(item.id)}
+                                          className="text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                          title="Remove this interest row"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                      <div className="sm:col-span-2 space-y-1 relative">
+                                        <label className="text-[9px] font-bold text-neutral-500">Loan</label>
+                                        {memberActiveLoans.length > 0 ? (
+                                          <div className="relative">
+                                            <button
+                                              type="button"
+                                              onClick={() => setOpenInterestDropdownId(isDropdownOpen ? null : item.id)}
+                                              className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary truncate"
+                                            >
+                                              <span className={item.loanId ? 'text-foreground truncate' : 'text-neutral-400 truncate'}>
+                                                {selectedLoan
+                                                  ? `${selectedLoan.laf_no || selectedLoan.product_name || 'Loan'} — Int: ₱${Number(selectedLoan.remaining_interest || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                  : 'Select loan (optional)'}
+                                              </span>
+                                              <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+
+                                            {isDropdownOpen && (
+                                              <div className="absolute z-50 left-0 right-0 top-[calc(100%+4px)] bg-white dark:bg-surface-container-high rounded-xl border border-outline-variant shadow-xl overflow-hidden max-h-56 overflow-y-auto p-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleInterestLoanSelect(item.id, '')}
+                                                  className="w-full text-left px-3 py-2 text-xs text-neutral-400 hover:bg-neutral-50 dark:hover:bg-surface-container-highest rounded-lg"
+                                                >
+                                                  — None / Manual entry —
+                                                </button>
+                                                {memberActiveLoans.map((l: any) => {
+                                                  const isCurrent = String(l.id) === item.loanId;
+                                                  const isSelectedOther = interestDeductions.some((i) => i.id !== item.id && String(i.loanId) === String(l.id));
+
+                                                  return (
+                                                    <button
+                                                      key={l.id}
+                                                      type="button"
+                                                      disabled={isSelectedOther}
+                                                      onClick={() => handleInterestLoanSelect(item.id, String(l.id))}
+                                                      className={`w-full text-left px-3 py-2 text-xs rounded-lg border-t border-outline-variant/30 flex items-center justify-between gap-2 ${
+                                                        isSelectedOther
+                                                          ? 'opacity-40 cursor-not-allowed bg-neutral-100/50 dark:bg-neutral-900/30'
+                                                          : isCurrent
+                                                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold'
+                                                          : 'hover:bg-neutral-50 dark:hover:bg-surface-container-highest text-foreground cursor-pointer'
+                                                      }`}
+                                                    >
+                                                      <div className="truncate">
+                                                        <div className="font-semibold truncate">{l.laf_no || l.product_name || `Loan #${l.id}`}</div>
+                                                        <div className="text-[10px] text-neutral-500">Remaining Interest: ₱{Number(l.remaining_interest || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                      </div>
+                                                      {isSelectedOther && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 shrink-0">Added</span>
+                                                      )}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <div className="text-[11px] text-neutral-400 py-1.5 px-3 rounded-xl border border-outline-variant/40 bg-neutral-50 dark:bg-surface-container-high/30">
+                                            No active loans
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <label className="text-[9px] font-bold text-neutral-500 flex items-center justify-between">
+                                          <span>Interest (₱)</span>
+                                          {selectedLoan && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleInterestAmountChange(item.id, String(parseFloat(selectedLoan.remaining_interest || 0) || 0))}
+                                              className="text-[9px] text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                                              title="Reset to full interest"
+                                            >
+                                              Full
+                                            </button>
+                                          )}
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          value={item.amount}
+                                          onChange={(e) => handleInterestAmountChange(item.id, e.target.value)}
+                                          placeholder="0"
+                                          className="w-full px-3 py-1.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-bold text-amber-600 dark:text-amber-400 focus:outline-none focus:ring-1 focus:ring-primary"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {interestDeductions.length < 5 && (
+                              <button
+                                type="button"
+                                onClick={handleAddInterestDeduction}
+                                className="w-full py-1.5 px-3 rounded-xl border-2 border-dashed border-amber-400/40 hover:border-amber-400/70 bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/20 text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>+ Add Interest Row ({interestDeductions.length}/5)</span>
+                              </button>
                             )}
-                            <input
-                              type="number"
-                              step="any"
-                              value={applyInterest}
-                              onChange={(e) => setApplyInterest(e.target.value)}
-                              placeholder="0"
-                              className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
                           </div>
                         </div>
 
