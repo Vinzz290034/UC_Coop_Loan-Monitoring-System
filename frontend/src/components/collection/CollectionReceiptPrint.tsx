@@ -227,6 +227,7 @@ function ReceiptCopy({ item, copyLabel }: { item: CollectionItem; copyLabel?: st
             {PAYMENT_METHODS.map(m => {
               const isSelected = item.payment_method === m || (m === 'Cheque' && item.payment_method === 'Check');
               const showRef = isSelected && item.reference_no && (m === 'GCash' || m === 'Bank Transfer');
+              const showCheque = isSelected && m === 'Cheque' && (item.reference_no || item.bank_name);
               return (
                 <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <span style={{
@@ -235,7 +236,11 @@ function ReceiptCopy({ item, copyLabel }: { item: CollectionItem; copyLabel?: st
                   }}>
                     {isSelected ? '✓' : ''}
                   </span>
-                  <span>{m}{showRef ? ` (${m === 'GCash' ? `Ref: ****${item.reference_no}` : `Ref: ${item.reference_no}`})` : ''}</span>
+                  <span>
+                    {m}
+                    {showRef ? ` (${m === 'GCash' ? `Ref: ****${item.reference_no}` : `Ref: ${item.reference_no}`})` : ''}
+                    {showCheque ? ` (${item.bank_name ? `${item.bank_name} ` : ''}Chk #: ${item.reference_no})` : ''}
+                  </span>
                 </span>
               );
             })}

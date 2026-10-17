@@ -42,6 +42,7 @@ function formatCollectionRow(row) {
     amount: parseFloat(row.amount || 0),
     payment_method: row.payment_method || 'Cash',
     reference_no: row.reference_no || undefined,
+    bank_name: row.bank_name || undefined,
     status: row.status || 'completed',
     remarks: row.remarks || undefined,
     collected_by: row.collected_by || 'CHINNETTE A. LAMOSTE',
@@ -86,6 +87,8 @@ export async function getCollections(req, res) {
         LOWER(COALESCE(item_name, '')) LIKE $${params.length} OR
         LOWER(COALESCE(service_type, '')) LIKE $${params.length} OR
         LOWER(COALESCE(particulars, '')) LIKE $${params.length} OR
+        LOWER(COALESCE(bank_name, '')) LIKE $${params.length} OR
+        LOWER(COALESCE(reference_no, '')) LIKE $${params.length} OR
         LOWER(COALESCE(remarks, '')) LIKE $${params.length}
       )`;
     }
@@ -144,6 +147,7 @@ export async function createCollection(req, res) {
     const amount = item.amount || 0;
     const payment_method = item.payment_method || 'Cash';
     const reference_no = item.reference_no || null;
+    const bank_name = item.bank_name || null;
     const status = item.status || 'completed';
     const remarks = item.remarks || null;
     const collected_by = item.collected_by || 'CHINNETTE A. LAMOSTE';
@@ -156,7 +160,7 @@ export async function createCollection(req, res) {
         item_name, item_category, quantity, unit_price,
         service_type, service_copies, service_rate,
         particulars, other_category,
-        amount, payment_method, reference_no, status, remarks, collected_by
+        amount, payment_method, reference_no, bank_name, status, remarks, collected_by
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7::jsonb, $8, $9, $10, $11,
@@ -164,7 +168,7 @@ export async function createCollection(req, res) {
         $15, $16, $17, $18,
         $19, $20, $21,
         $22, $23,
-        $24, $25, $26, $27, $28, $29
+        $24, $25, $26, $27, $28, $29, $30
       )
       RETURNING *;
     `;
@@ -176,7 +180,7 @@ export async function createCollection(req, res) {
       item_name, item_category, quantity, unit_price,
       service_type, service_copies, service_rate,
       particulars, other_category,
-      amount, payment_method, reference_no, status, remarks, collected_by
+      amount, payment_method, reference_no, bank_name, status, remarks, collected_by
     ];
 
     const result = await pool.query(insertQuery, values);
@@ -228,7 +232,7 @@ export async function bulkImportCollections(req, res) {
         item_name, item_category, quantity, unit_price,
         service_type, service_copies, service_rate,
         particulars, other_category,
-        amount, payment_method, reference_no, status, remarks, collected_by
+        amount, payment_method, reference_no, bank_name, status, remarks, collected_by
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7::jsonb, $8, $9, $10, $11,
@@ -236,7 +240,7 @@ export async function bulkImportCollections(req, res) {
         $15, $16, $17, $18,
         $19, $20, $21,
         $22, $23,
-        $24, $25, $26, $27, $28, $29
+        $24, $25, $26, $27, $28, $29, $30
       )
       ON CONFLICT (id) DO UPDATE SET
         tab = EXCLUDED.tab,
@@ -264,6 +268,7 @@ export async function bulkImportCollections(req, res) {
         amount = EXCLUDED.amount,
         payment_method = EXCLUDED.payment_method,
         reference_no = EXCLUDED.reference_no,
+        bank_name = EXCLUDED.bank_name,
         status = EXCLUDED.status,
         remarks = EXCLUDED.remarks,
         collected_by = EXCLUDED.collected_by,
@@ -298,6 +303,7 @@ export async function bulkImportCollections(req, res) {
       const amount = item.amount || 0;
       const payment_method = item.payment_method || 'Cash';
       const reference_no = item.reference_no || null;
+      const bank_name = item.bank_name || null;
       const status = item.status || 'completed';
       const remarks = item.remarks || null;
       const collected_by = item.collected_by || 'CHINNETTE A. LAMOSTE';
@@ -309,7 +315,7 @@ export async function bulkImportCollections(req, res) {
         item_name, item_category, quantity, unit_price,
         service_type, service_copies, service_rate,
         particulars, other_category,
-        amount, payment_method, reference_no, status, remarks, collected_by
+        amount, payment_method, reference_no, bank_name, status, remarks, collected_by
       ];
 
       const resRow = await client.query(insertSql, values);

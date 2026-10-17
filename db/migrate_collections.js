@@ -37,12 +37,18 @@ export async function migrateCollections() {
         amount NUMERIC(15, 2) NOT NULL DEFAULT 0,
         payment_method VARCHAR(50) NOT NULL DEFAULT 'Cash',
         reference_no VARCHAR(100),
+        bank_name VARCHAR(100),
         status VARCHAR(50) NOT NULL DEFAULT 'completed',
         remarks TEXT,
         collected_by VARCHAR(255) NOT NULL DEFAULT 'CHINNETTE A. LAMOSTE',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // Ensure bank_name column exists if table was already created
+    await client.query(`
+      ALTER TABLE collections ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100);
     `);
 
     await client.query(`

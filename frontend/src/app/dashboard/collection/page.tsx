@@ -102,12 +102,31 @@ export interface CollectionItem {
   amount: number;
   payment_method: PaymentMethod;
   reference_no?: string;
+  bank_name?: string;
   status?: 'completed' | 'on process';
   remarks?: string;
   collected_by: string;
 }
 
 export type PaymentMethod = 'Cash' | 'GCash' | 'Bank Transfer' | 'Cheque' | 'Cash in Vault' | 'Check' | 'Payroll Deduction';
+
+export const BANK_OPTIONS: SelectOption[] = [
+  { value: 'BDO Unibank', label: 'BDO Unibank' },
+  { value: 'Bank of the Philippine Islands (BPI)', label: 'Bank of the Philippine Islands (BPI)' },
+  { value: 'Metrobank', label: 'Metrobank' },
+  { value: 'Land Bank of the Philippines (LBP)', label: 'Land Bank of the Philippines (LBP)' },
+  { value: 'Philippine National Bank (PNB)', label: 'Philippine National Bank (PNB)' },
+  { value: 'China Banking Corporation', label: 'China Banking Corporation' },
+  { value: 'Security Bank', label: 'Security Bank' },
+  { value: 'Rizal Commercial Banking Corp (RCBC)', label: 'Rizal Commercial Banking Corp (RCBC)' },
+  { value: 'Union Bank of the Philippines', label: 'Union Bank of the Philippines' },
+  { value: 'Development Bank of the Philippines (DBP)', label: 'Development Bank of the Philippines (DBP)' },
+  { value: 'EastWest Bank', label: 'EastWest Bank' },
+  { value: 'PSBank', label: 'PSBank' },
+  { value: 'Asia United Bank (AUB)', label: 'Asia United Bank (AUB)' },
+  { value: 'Robinsons Bank', label: 'Robinsons Bank' },
+  { value: 'Other Bank', label: 'Other Bank (Specify...)' },
+];
 
 export const CASHIER_OPTIONS: SelectOption[] = [
   { value: 'CHINNETTE A. LAMOSTE', label: 'CHINNETTE A. LAMOSTE' },
@@ -383,6 +402,7 @@ export default function CollectionPage() {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isCustomBank, setIsCustomBank] = useState(false);
 
   // Selected item for detail view modal
   const [selectedItemForModal, setSelectedItemForModal] = useState<CollectionItem | null>(null);
@@ -517,6 +537,7 @@ export default function CollectionPage() {
     amount: '',
     payment_method: 'Cash' as PaymentMethod,
     reference_no: '',
+    bank_name: '',
     status: 'completed' as 'completed' | 'on process',
     remarks: '',
     collected_by: 'CHINNETTE A. LAMOSTE'
@@ -747,10 +768,12 @@ export default function CollectionPage() {
       amount: '',
       payment_method: 'Cash',
       reference_no: '',
+      bank_name: '',
       status: 'completed',
       remarks: '',
       collected_by: 'CHINNETTE A. LAMOSTE'
     });
+    setIsCustomBank(false);
     setIsAddModalOpen(true);
   };
 
@@ -824,13 +847,27 @@ export default function CollectionPage() {
       other_category: undefined,
       amount: calculatedAmount,
       payment_method: formData.payment_method,
-      reference_no: (formData.payment_method === 'GCash' || formData.payment_method === 'Bank Transfer')
+      reference_no: (formData.payment_method === 'GCash' || formData.payment_method === 'Bank Transfer' || formData.payment_method === 'Cheque')
         ? formData.reference_no.trim() || undefined
         : undefined,
+      bank_name: formData.payment_method === 'Cheque' ? formData.bank_name.trim() || undefined : undefined,
       status: 'completed',
       remarks: formData.remarks.trim() || undefined,
       collected_by: formData.collected_by.trim() || 'CHINNETTE A. LAMOSTE'
     };
+
+    if (formData.payment_method === 'Cheque') {
+      if (!formData.reference_no.trim()) {
+        setActionFeedback({ type: 'error', message: 'Cheque number is required for Cheque payments.' });
+        setTimeout(() => setActionFeedback(null), 4000);
+        return;
+      }
+      if (!formData.bank_name.trim() || formData.bank_name === 'Other Bank') {
+        setActionFeedback({ type: 'error', message: 'Please select or specify the issuing bank.' });
+        setTimeout(() => setActionFeedback(null), 4000);
+        return;
+      }
+    }
 
     try {
       const res = await api.post('/collections', newItem);
@@ -914,7 +951,9 @@ export default function CollectionPage() {
         desc,
         item.amount.toFixed(2),
         item.payment_method,
-        item.reference_no || '',
+        item.payment_method === 'Cheque'
+          ? `${item.bank_name ? `${item.bank_name} ` : ''}Chk #${item.reference_no || ''}`
+          : (item.reference_no || ''),
         item.status || 'completed',
         item.collected_by,
         item.remarks || ''
@@ -1395,11 +1434,15 @@ export default function CollectionPage() {
                           <span className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 font-mono text-[11px] font-bold">
                             {item.payment_method}
                           </span>
-                          {item.reference_no && (
+                          {item.payment_method === 'Cheque' ? (
+                            <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono font-semibold mt-0.5">
+                              {item.bank_name ? `${item.bank_name} ` : ''}Chk #{item.reference_no || '—'}
+                            </div>
+                          ) : item.reference_no ? (
                             <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono font-semibold mt-0.5">
                               {item.payment_method === 'GCash' ? `****${item.reference_no}` : item.reference_no}
                             </div>
-                          )}
+                          ) : null}
                         </td>
                         <td className="py-3 px-3 text-neutral-700 dark:text-neutral-300" title={primaryDesc}>
                           <div className="truncate font-medium">{primaryDesc}</div>
@@ -1936,11 +1979,11 @@ export default function CollectionPage() {
                   </div>
                 </div>
 
-                {/* Conditional Reference No for GCash or Bank Transfer */}
+                {/* Conditional Reference No for GCash, Bank Transfer, or Cheque */}
                 {formData.payment_method === 'GCash' && (
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
-                      GCash Reference (Last 4 Digits)
+                      GCash Reference (Last 4 Digits) <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -1959,7 +2002,7 @@ export default function CollectionPage() {
                 {formData.payment_method === 'Bank Transfer' && (
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
-                      Bank Transfer Reference (Full)
+                      Bank Transfer Reference (Full) <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -1968,6 +2011,76 @@ export default function CollectionPage() {
                       className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-neutral-900 dark:text-white"
                       placeholder="Enter full transaction reference"
                     />
+                  </div>
+                )}
+
+                {formData.payment_method === 'Cheque' && (
+                  <div className="p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                      <div>
+                        <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                          Cheque Number <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={formData.reference_no}
+                          onChange={e => setFormData({ ...formData, reference_no: e.target.value })}
+                          className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-neutral-900 dark:text-white"
+                          placeholder="e.g. 0001234567"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                          Bank Name <span className="text-rose-500">*</span>
+                        </label>
+                        <AnimatedSelect
+                          value={
+                            BANK_OPTIONS.some(b => b.value === formData.bank_name)
+                              ? formData.bank_name
+                              : formData.bank_name
+                              ? 'Other Bank'
+                              : ''
+                          }
+                          onChange={val => {
+                            if (val === 'Other Bank') {
+                              setIsCustomBank(true);
+                              if (BANK_OPTIONS.some(b => b.value === formData.bank_name)) {
+                                setFormData({ ...formData, bank_name: '' });
+                              }
+                            } else {
+                              setIsCustomBank(false);
+                              setFormData({ ...formData, bank_name: val });
+                            }
+                          }}
+                          options={BANK_OPTIONS}
+                          placeholder="Select Bank"
+                          buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2.5 text-xs"
+                          menuClassName="w-72"
+                        />
+                      </div>
+                    </div>
+
+                    {isCustomBank && (
+                      <div className="animate-in fade-in duration-150">
+                        <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                          Specify Other Bank Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          value={formData.bank_name}
+                          onChange={e => setFormData({ ...formData, bank_name: e.target.value })}
+                          className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs font-bold text-neutral-900 dark:text-white"
+                          placeholder="Enter issuing bank name"
+                        />
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-amber-700 dark:text-amber-300 flex items-center gap-1 font-medium">
+                      <span>💡</span> Cheque number and issuing bank will be saved and printed on the official receipt.
+                    </p>
                   </div>
                 )}
 
@@ -2053,11 +2166,18 @@ export default function CollectionPage() {
                 <div>
                   <span className="text-[10px] uppercase font-bold text-neutral-400">Payment Method</span>
                   <p className="font-semibold text-neutral-900 dark:text-white mt-0.5">{selectedItemForModal.payment_method}</p>
-                  {selectedItemForModal.reference_no && (
+                  {selectedItemForModal.payment_method === 'Cheque' ? (
+                    <div className="text-[10px] text-neutral-600 dark:text-neutral-400 font-mono mt-0.5 space-y-0.5">
+                      {selectedItemForModal.bank_name && (
+                        <div>Bank: <span className="font-bold text-neutral-900 dark:text-white">{selectedItemForModal.bank_name}</span></div>
+                      )}
+                      <div>Cheque #: <span className="font-bold text-neutral-900 dark:text-white">{selectedItemForModal.reference_no || '—'}</span></div>
+                    </div>
+                  ) : selectedItemForModal.reference_no ? (
                     <p className="text-[10px] text-neutral-500 font-mono mt-0.5">
                       Ref: {selectedItemForModal.payment_method === 'GCash' ? `****${selectedItemForModal.reference_no}` : selectedItemForModal.reference_no}
                     </p>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
