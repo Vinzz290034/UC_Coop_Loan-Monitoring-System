@@ -47,7 +47,7 @@ export interface TabConfig {
 export const COLLECTION_TABS: TabConfig[] = [
   { id: 'all', label: 'All Collections', description: 'Consolidated master collection registry across all revenue categories' },
   { id: 'credit', label: 'Credit', description: 'Daily member loan amortizations, credit repayments, share capital & deposits' },
-  { id: 'sales', label: 'Store Sales', description: 'Itemized merchandise sales, student uniforms, and store inventory' },
+  { id: 'sales', label: 'Sales', description: 'Itemized merchandise sales, student uniforms, and store inventory' },
   { id: 'services', label: 'Services', description: 'Photocopying, ID packages, document printing, and service charges' },
 ];
 
@@ -969,7 +969,7 @@ export default function CollectionPage() {
       case 'credit':
         return 'CREDIT / LOAN';
       case 'sales':
-        return 'STORE SALES';
+        return 'SALES';
       case 'services':
         return 'SERVICES';
       case 'others':
@@ -2241,7 +2241,7 @@ export default function CollectionPage() {
 
         <div className="grid grid-cols-3 gap-2 text-xs border p-3 rounded bg-neutral-50 font-bold">
           <div>Credit Collections: ₱{collections.filter(c => c.tab === 'credit').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
-          <div>Store Sales: ₱{collections.filter(c => c.tab === 'sales').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
+          <div>Sales: ₱{collections.filter(c => c.tab === 'sales').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
           <div>Services: ₱{collections.filter(c => c.tab === 'services').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
           <div className="col-span-3 text-sm font-black text-right border-t pt-1">
             GRAND TOTAL COLLECTED: ₱{collections.reduce((s, c) => s + c.amount, 0).toFixed(2)}

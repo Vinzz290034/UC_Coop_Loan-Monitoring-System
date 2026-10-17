@@ -70,7 +70,7 @@ const formatDate = (iso: string) => {
 const categoryLabel = (tab: CollectionItem['tab']) => {
   switch (tab) {
     case 'credit': return 'Credit';
-    case 'sales': return 'Store Sales';
+    case 'sales': return 'Sales';
     case 'services': return 'Services';
     default: return 'Collection';
   }
