@@ -26,7 +26,7 @@ import { CollectionItem, CollectionTab } from '@/app/dashboard/collection/page';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onImportComplete: (items: CollectionItem[], mode: 'append' | 'replace') => void;
+  onImportComplete: (items: CollectionItem[], mode: 'append' | 'replace') => Promise<void> | void;
   currentUser: string;
 }
 
@@ -725,10 +725,18 @@ export default function InvoiceArExcelImportModal({
   }, [parsedBreakdowns, activePreviewTab]);
 
   // Execute import
-  const handleConfirmImport = () => {
-    if (allParsedItems.length === 0) return;
-    onImportComplete(allParsedItems, importMode);
-    onClose();
+  const handleConfirmImport = async () => {
+    if (allParsedItems.length === 0 || isProcessing) return;
+    setIsProcessing(true);
+    setErrorMessage(null);
+    try {
+      await onImportComplete(allParsedItems, importMode);
+      onClose();
+    } catch (err: any) {
+      setErrorMessage(err?.response?.data?.error?.message || err?.message || 'Failed to save imported records to database.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (!isOpen || typeof document === 'undefined') return null;
@@ -1146,12 +1154,18 @@ export default function InvoiceArExcelImportModal({
             <button
               type="button"
               onClick={handleConfirmImport}
-              disabled={allParsedItems.length === 0}
+              disabled={allParsedItems.length === 0 || isProcessing}
               className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
             >
-              <Check className="w-4 h-4" />
+              {isProcessing ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4" />
+              )}
               <span>
-                Import {allParsedItems.length} Records into Collection (₱{stats.totalCashOnHand.toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                {isProcessing
+                  ? 'Saving Records to Database...'
+                  : `Import ${allParsedItems.length} Records into Collection (₱${stats.totalCashOnHand.toLocaleString('en-US', { minimumFractionDigits: 2 })})`}
               </span>
             </button>
           )}

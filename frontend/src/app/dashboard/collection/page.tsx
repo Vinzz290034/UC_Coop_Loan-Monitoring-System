@@ -289,7 +289,7 @@ export default function CollectionPage() {
   const [activeTab, setActiveTab] = useState<CollectionTab>('all');
   const currentTabConfig = COLLECTION_TABS.find(t => t.id === activeTab) || COLLECTION_TABS[0];
 
-  // Stored collections (automatically migrating any legacy 'others' receipts into 'credit')
+  // Stored collections with server database integration
   const [collections, setCollections] = useState<CollectionItem[]>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('uc_coop_collections');
@@ -311,32 +311,67 @@ export default function CollectionPage() {
     }
     return [];
   });
+  const [loadingCollections, setLoadingCollections] = useState(true);
 
-  // Automatically purge sample data and permanently migrate all 'others' records into 'credit'
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setCollections(prev => {
-        let changed = false;
-        const cleaned = prev
-          .filter(item => !item.id.startsWith('col-'))
-          .map(item => {
-            if (item.tab === 'others') {
-              changed = true;
-              return { ...item, tab: 'credit' as const };
+  // Fetch collections from server with seamless auto-sync from localStorage if server is empty
+  const fetchCollections = async () => {
+    try {
+      setLoadingCollections(true);
+      const res = await api.get('/collections');
+      const serverItems: CollectionItem[] = res.data?.data || [];
+
+      // Check if local storage has existing collections that need migrating to cloud DB
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('uc_coop_collections');
+        if (stored) {
+          try {
+            const localItems: CollectionItem[] = JSON.parse(stored);
+            const validLocal = localItems
+              .filter(item => !item.id.startsWith('col-'))
+              .map(item => item.tab === 'others' ? { ...item, tab: 'credit' as const } : item);
+
+            // Auto-sync existing local receipts to cloud DB if server has 0 items
+            if (validLocal.length > 0 && serverItems.length === 0) {
+              const syncRes = await api.post('/collections/bulk', { items: validLocal, mode: 'append' });
+              const syncedItems: CollectionItem[] = syncRes.data?.data || validLocal;
+              setCollections(syncedItems);
+              localStorage.setItem('uc_coop_collections', JSON.stringify(syncedItems));
+              setActionFeedback({ type: 'success', message: `Synced ${syncedItems.length} collection receipts to cloud database.` });
+              setTimeout(() => setActionFeedback(null), 4000);
+              return;
             }
-            return item;
-          });
-        if (changed || cleaned.length !== prev.length) {
-          localStorage.setItem('uc_coop_collections', JSON.stringify(cleaned));
-          return cleaned;
+          } catch (err) {
+            console.error('Error parsing local collection cache:', err);
+          }
         }
-        return prev;
-      });
+      }
+
+      setCollections(serverItems);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('uc_coop_collections', JSON.stringify(serverItems));
+      }
+    } catch (err: any) {
+      console.error('Failed to load collections from server:', err);
+      // Fallback to local storage if network error
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('uc_coop_collections');
+        if (stored) {
+          try {
+            setCollections(JSON.parse(stored));
+          } catch {}
+        }
+      }
+    } finally {
+      setLoadingCollections(false);
     }
+  };
+
+  useEffect(() => {
+    fetchCollections();
   }, []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && collections.length > 0) {
       localStorage.setItem('uc_coop_collections', JSON.stringify(collections));
     }
   }, [collections]);
@@ -720,7 +755,7 @@ export default function CollectionPage() {
   };
 
   // Save new collection
-  const handleSaveCollection = (e: React.FormEvent) => {
+  const handleSaveCollection = async (e: React.FormEvent) => {
     e.preventDefault();
     let calculatedAmount = parseFloat(formData.amount || '0') || 0;
 
@@ -797,32 +832,54 @@ export default function CollectionPage() {
       collected_by: formData.collected_by.trim() || 'CHINNETTE A. LAMOSTE'
     };
 
-    setCollections(prev => [newItem, ...prev]);
-    setIsAddModalOpen(false);
-    setActionFeedback({ type: 'success', message: `Collection receipt ${newItem.or_no} recorded successfully!` });
-    setTimeout(() => setActionFeedback(null), 4000);
+    try {
+      const res = await api.post('/collections', newItem);
+      const savedItem: CollectionItem = res.data?.data || newItem;
+      setCollections(prev => [savedItem, ...prev]);
+      setIsAddModalOpen(false);
+      setActionFeedback({ type: 'success', message: `Collection receipt ${savedItem.or_no} recorded successfully!` });
+      setTimeout(() => setActionFeedback(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to create collection entry:', err);
+      setActionFeedback({ type: 'error', message: err?.response?.data?.error?.message || 'Failed to save collection receipt to database.' });
+      setTimeout(() => setActionFeedback(null), 5000);
+    }
   };
 
   // Delete single collection
-  const handleDeleteItem = (id: string, e?: React.MouseEvent) => {
+  const handleDeleteItem = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (window.confirm('Are you sure you want to delete this collection entry?')) {
-      setCollections(prev => prev.filter(c => c.id !== id));
-      if (selectedItemForModal?.id === id) setSelectedItemForModal(null);
-      setSelectedIds(prev => prev.filter(x => x !== id));
-      setActionFeedback({ type: 'success', message: 'Collection entry removed.' });
-      setTimeout(() => setActionFeedback(null), 4000);
+      try {
+        await api.delete(`/collections/${id}`);
+        setCollections(prev => prev.filter(c => c.id !== id));
+        if (selectedItemForModal?.id === id) setSelectedItemForModal(null);
+        setSelectedIds(prev => prev.filter(x => x !== id));
+        setActionFeedback({ type: 'success', message: 'Collection entry removed.' });
+        setTimeout(() => setActionFeedback(null), 4000);
+      } catch (err: any) {
+        console.error('Failed to delete collection entry:', err);
+        setActionFeedback({ type: 'error', message: 'Failed to delete collection entry.' });
+        setTimeout(() => setActionFeedback(null), 4000);
+      }
     }
   };
 
   // Bulk delete selected
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    setCollections(prev => prev.filter(c => !selectedIds.includes(c.id)));
-    setSelectedIds([]);
-    setIsBulkDeleteModalOpen(false);
-    setActionFeedback({ type: 'success', message: `${selectedIds.length} collection entries deleted.` });
-    setTimeout(() => setActionFeedback(null), 4000);
+    try {
+      await api.post('/collections/bulk-delete', { ids: selectedIds });
+      setCollections(prev => prev.filter(c => !selectedIds.includes(c.id)));
+      setSelectedIds([]);
+      setIsBulkDeleteModalOpen(false);
+      setActionFeedback({ type: 'success', message: `${selectedIds.length} collection entries deleted.` });
+      setTimeout(() => setActionFeedback(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to bulk delete collections:', err);
+      setActionFeedback({ type: 'error', message: 'Failed to bulk delete collections.' });
+      setTimeout(() => setActionFeedback(null), 4000);
+    }
   };
 
   // Export CSV
@@ -881,14 +938,29 @@ export default function CollectionPage() {
   };
 
   // Import handler
-  const handleImportComplete = (importedItems: CollectionItem[], mode: 'append' | 'replace') => {
-    if (mode === 'replace') {
-      setCollections(importedItems);
-    } else {
-      setCollections(prev => [...importedItems, ...prev]);
+  const handleImportComplete = async (importedItems: CollectionItem[], mode: 'append' | 'replace') => {
+    try {
+      const res = await api.post('/collections/bulk', { items: importedItems, mode });
+      const savedItems: CollectionItem[] = res.data?.data || importedItems;
+      if (mode === 'replace') {
+        setCollections(savedItems);
+      } else {
+        setCollections(prev => {
+          const existingIds = new Set(savedItems.map(s => s.id));
+          return [...savedItems, ...prev.filter(p => !existingIds.has(p.id))];
+        });
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('uc_coop_collections', JSON.stringify(savedItems));
+      }
+      setActionFeedback({ type: 'success', message: `Imported ${importedItems.length} collection items saved to cloud database!` });
+      setTimeout(() => setActionFeedback(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to save imported collections to database:', err);
+      setActionFeedback({ type: 'error', message: err?.response?.data?.error?.message || 'Failed to save imported collections to cloud database.' });
+      setTimeout(() => setActionFeedback(null), 5000);
+      throw err;
     }
-    setActionFeedback({ type: 'success', message: `Imported ${importedItems.length} collection items successfully!` });
-    setTimeout(() => setActionFeedback(null), 4000);
   };
 
   // Helper format Category Label
@@ -1230,7 +1302,21 @@ export default function CollectionPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/40">
-                {filteredCollections.length === 0 ? (
+                {loadingCollections && collections.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-neutral-500">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <RefreshCw className="w-8 h-8 text-primary dark:text-secondary animate-spin" />
+                        <p className="font-semibold text-neutral-700 dark:text-neutral-300">
+                          Loading collection records from database...
+                        </p>
+                        <p className="text-xs text-neutral-400">
+                          Retrieving real-time official receipts across all staff & admin devices.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredCollections.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="py-12 text-center text-neutral-500">
                       <div className="flex flex-col items-center justify-center gap-2">
