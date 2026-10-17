@@ -161,7 +161,7 @@ const LOAN_CATEGORIES = {
 const getProductCategory = (productName: string) => {
   if (!productName) return LOAN_CATEGORIES.REGULAR;
   const name = productName.toLowerCase();
-  if (name.includes('calamity') || name.includes('special loan')) {
+  if (name.includes('calamity') || name.includes('special loan') || name.includes('mortuary') || name.includes('columbary')) {
     return LOAN_CATEGORIES.SPECIAL;
   }
   if (
@@ -185,6 +185,18 @@ const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
   'Regular Loan - Project Loan': {
     desc: 'Project or entrepreneurial funding for business expansions or asset acquisitions.',
     helper: '₱76,000 to ₱300,000. Maximum term: 2 years (24 months).'
+  },
+  'Special Loan - Mortuary Loan (Columbary Loan)': {
+    desc: 'Assistance for funeral, memorial services, and columbarium vault/niche acquisition.',
+    helper: '₱10,000 to ₱100,000. Custom interest rate & flexible term duration.'
+  },
+  'Special Loan - Mortuary Loan': {
+    desc: 'Assistance for funeral, memorial services, and columbarium vault/niche acquisition.',
+    helper: '₱10,000 to ₱100,000. Custom interest rate & flexible term duration.'
+  },
+  'Mortuary Loan (Columbary Loan)': {
+    desc: 'Assistance for funeral, memorial services, and columbarium vault/niche acquisition.',
+    helper: '₱10,000 to ₱100,000. Custom interest rate & flexible term duration.'
   },
   'Special Loan - Calamity Loan': {
     desc: 'Emergency financial assistance released during officially declared State of Calamity.',
@@ -1038,6 +1050,16 @@ export default function OverviewPage() {
       amortization_type: 'flat_rate',
       min_amount: '10000.00',
       max_amount: '50000.00',
+      is_active: true,
+    },
+    {
+      id: '08f1bf53-d34a-4112-ab92-4ff6969d871d',
+      name: 'Special Loan - Mortuary Loan (Columbary Loan)',
+      interest_rate: '0.0200',
+      term_months: 24,
+      amortization_type: 'diminishing_balance',
+      min_amount: '10000.00',
+      max_amount: '100000.00',
       is_active: true,
     },
     {

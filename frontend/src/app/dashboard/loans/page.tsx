@@ -108,8 +108,13 @@ const LOAN_CATEGORIES = {
 const getProductCategory = (name: string) => {
   if (!name) return LOAN_CATEGORIES.REGULAR;
   const lowercaseName = name.toLowerCase();
-  // Calamity Loan is strictly a Special Loan
-  if (lowercaseName.includes('calamity') || lowercaseName.includes('special loan')) {
+  // Calamity Loan, Mortuary, and Columbary Loans are strictly Special Loans
+  if (
+    lowercaseName.includes('calamity') || 
+    lowercaseName.includes('special loan') ||
+    lowercaseName.includes('mortuary') ||
+    lowercaseName.includes('columbary')
+  ) {
     return LOAN_CATEGORIES.SPECIAL;
   }
   if (
@@ -133,6 +138,18 @@ const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
   'Regular Loan - Project Loan': {
     desc: 'Project or entrepreneurial funding for business expansions or asset acquisitions.',
     helper: '₱76,000 to ₱300,000. Maximum term: 2 years (24 months).'
+  },
+  'Special Loan - Mortuary Loan (Columbary Loan)': {
+    desc: 'Assistance for funeral, memorial services, and columbarium vault/niche acquisition.',
+    helper: '₱10,000 to ₱100,000. Custom interest rate & flexible term duration.'
+  },
+  'Special Loan - Mortuary Loan': {
+    desc: 'Assistance for funeral, memorial services, and columbarium vault/niche acquisition.',
+    helper: '₱10,000 to ₱100,000. Custom interest rate & flexible term duration.'
+  },
+  'Mortuary Loan (Columbary Loan)': {
+    desc: 'Assistance for funeral, memorial services, and columbarium vault/niche acquisition.',
+    helper: '₱10,000 to ₱100,000. Custom interest rate & flexible term duration.'
   },
   'Special Loan - Calamity Loan': {
     desc: 'Emergency financial assistance released during officially declared State of Calamity.',
@@ -1172,6 +1189,7 @@ function LoansPageContent() {
   const [coMakerName, setCoMakerName] = useState('');
   const [coMakerPhone, setCoMakerPhone] = useState('');
   const [applyTermMonths, setApplyTermMonths] = useState<number>(1);
+  const [applyInterestRate, setApplyInterestRate] = useState<string>('2');
   const [applyLafNo, setApplyLafNo] = useState('');
   const [loadingLafNo, setLoadingLafNo] = useState(false);
 
@@ -2391,7 +2409,10 @@ function LoansPageContent() {
     const principal = applyAmount || 0;
     const terms = applyTermMonths || 1;
     if (principal <= 0 || terms <= 0) return [];
-    const rate = selectedProduct?.interest_rate ? parseFloat(selectedProduct.interest_rate) : 0.02;
+    const parsedCustomRate = parseFloat(applyInterestRate);
+    const rate = !isNaN(parsedCustomRate) && parsedCustomRate >= 0
+      ? parsedCustomRate / 100
+      : (selectedProduct?.interest_rate ? parseFloat(selectedProduct.interest_rate) : 0.02);
     const monthlyPrincipal = principal / terms;
     const schedule: { monthLabel: string; payment: number }[] = [];
     
@@ -2411,7 +2432,7 @@ function LoansPageContent() {
       remaining -= monthlyPrincipal;
     }
     return schedule;
-  }, [applyAmount, applyTermMonths, selectedProduct]);
+  }, [applyAmount, applyTermMonths, selectedProduct, applyInterestRate]);
 
   const toggleLoanExpand = async (loanId: number | string) => {
     if (expandedLoanId === loanId) {
@@ -2695,6 +2716,7 @@ function LoansPageContent() {
         loan_product_id: selectedProduct.id,
         principal_amount: applyAmount,
         term_months: applyTermMonths,
+        interest_rate: !isNaN(parseFloat(applyInterestRate)) ? (parseFloat(applyInterestRate) / 100) : undefined,
         co_maker_name: isAdminOrManager ? null : (coMakerName.trim() || null),
         co_maker_phone: isAdminOrManager ? null : (coMakerPhone.trim() || null),
         laf_no: isAdminOrManager ? (applyLafNo.trim() || undefined) : undefined,
@@ -4646,7 +4668,7 @@ function LoansPageContent() {
                     const hasStl1MonthRepayment = selectedMemberSummary?.loans?.has_stl_with_1month_repayment || false;
                     const isRegularLocked = selectedLoanCategory === LOAN_CATEGORIES.REGULAR && activeRegularCount >= 1;
                     const isStlLocked = selectedLoanCategory === LOAN_CATEGORIES.STL && activeStlCount >= 3 && !hasStl1MonthRepayment;
-                    const isSpecialLocked = selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && !isCalamityDeclared;
+                    const isSpecialLocked = selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && Boolean(selectedProduct?.name?.toLowerCase().includes('calamity')) && !isCalamityDeclared;
 
                     return (
                       <div className="space-y-4">
@@ -4663,17 +4685,33 @@ function LoansPageContent() {
                                   onClick={() => {
                                     setSelectedLoanCategory(label);
                                     let filtered = products.filter(p => getProductCategory(p.name) === label);
-                                    if (label === LOAN_CATEGORIES.SPECIAL && isCalamityDeclared && !filtered.some(p => p.name.toLowerCase().includes('calamity'))) {
-                                      filtered = [{
-                                        id: 999999,
-                                        name: 'Special Loan - Calamity Loan',
-                                        interest_rate: '0.0800',
-                                        term_months: 24,
-                                        amortization_type: 'flat_rate',
-                                        min_amount: '10000.00',
-                                        max_amount: '50000.00',
-                                        is_active: true
-                                      }];
+                                    if (label === LOAN_CATEGORIES.SPECIAL) {
+                                      if (!isCalamityDeclared) {
+                                        filtered = filtered.filter(p => !p.name.toLowerCase().includes('calamity'));
+                                      } else if (!filtered.some(p => p.name.toLowerCase().includes('calamity'))) {
+                                        filtered.push({
+                                          id: 999999,
+                                          name: 'Special Loan - Calamity Loan',
+                                          interest_rate: '0.0800',
+                                          term_months: 24,
+                                          amortization_type: 'flat_rate',
+                                          min_amount: '10000.00',
+                                          max_amount: '50000.00',
+                                          is_active: true
+                                        });
+                                      }
+                                      if (!filtered.some(p => p.name.toLowerCase().includes('mortuary') || p.name.toLowerCase().includes('columbary'))) {
+                                        filtered.unshift({
+                                          id: '08f1bf53-d34a-4112-ab92-4ff6969d871d',
+                                          name: 'Special Loan - Mortuary Loan (Columbary Loan)',
+                                          interest_rate: '0.0200',
+                                          term_months: 24,
+                                          amortization_type: 'diminishing_balance',
+                                          min_amount: '10000.00',
+                                          max_amount: '100000.00',
+                                          is_active: true
+                                        });
+                                      }
                                     }
                                     if (filtered.length > 0) {
                                       setSelectedProduct(filtered[0]);
@@ -4681,6 +4719,8 @@ function LoansPageContent() {
                                       setApplyAmount(defAmt);
                                       const defTerm = filtered[0].term_months >= 2 && label === LOAN_CATEGORIES.STL ? 2 : filtered[0].term_months;
                                       setApplyTermMonths(defTerm);
+                                      const defRate = filtered[0].interest_rate ? (parseFloat(filtered[0].interest_rate) * 100).toString() : '2';
+                                      setApplyInterestRate(defRate);
                                     } else {
                                       setSelectedProduct(null);
                                     }
@@ -4705,7 +4745,7 @@ function LoansPageContent() {
                                 ) : selectedLoanCategory === LOAN_CATEGORIES.STL ? (
                                   <span>Policy Limit: Up to <strong className="text-primary dark:text-secondary font-extrabold">3 active Short Term Loans (STLs)</strong> <span className="text-neutral-500 dark:text-neutral-400 font-medium">(Current: {activeStlCount} / 3)</span></span>
                                 ) : (
-                                  <span><strong className="text-primary dark:text-secondary font-extrabold">Special Loan (Calamity Loan)</strong> is available during a declared State of Calamity.</span>
+                                  <span>Special Loan includes <strong className="text-primary dark:text-secondary font-extrabold">Mortuary Loan (Columbary Loan)</strong> and Calamity Loan during declared calamity.</span>
                                 )}
                               </div>
                             </div>
@@ -4773,6 +4813,21 @@ function LoansPageContent() {
                             categoryProducts = categoryProducts.filter(p => !p.name.toLowerCase().includes('calamity'));
                           }
 
+                          // Always guarantee Mortuary Loan (Columbary Loan) exists under Special Loan category
+                          if (selectedLoanCategory === LOAN_CATEGORIES.SPECIAL && !categoryProducts.some(p => p.name.toLowerCase().includes('mortuary') || p.name.toLowerCase().includes('columbary'))) {
+                            const mortuaryFallback: LoanProduct = {
+                              id: '08f1bf53-d34a-4112-ab92-4ff6969d871d',
+                              name: 'Special Loan - Mortuary Loan (Columbary Loan)',
+                              interest_rate: '0.0200',
+                              term_months: 24,
+                              amortization_type: 'diminishing_balance',
+                              min_amount: '10000.00',
+                              max_amount: '100000.00',
+                              is_active: true
+                            };
+                            categoryProducts = [mortuaryFallback, ...categoryProducts];
+                          }
+
                           return (
                             <div className="space-y-3 pt-2">
                               <div className="flex items-center justify-between">
@@ -4789,6 +4844,7 @@ function LoansPageContent() {
                                     const details = LOAN_DESCRIPTIONS[p.name] || { desc: 'Standard cooperative credit option.' };
                                     const isSelected = selectedProduct?.id === p.id;
                                     const isCalamityProduct = p.name.toLowerCase().includes('calamity');
+                                    const isMortuaryColumbary = p.name.toLowerCase().includes('mortuary') || p.name.toLowerCase().includes('columbary');
 
                                     const shareCap = selectedMemberSummary?.balances?.share_capital || 0;
                                     const histCount = selectedMemberSummary?.loans?.historical_count || 0;
@@ -4813,6 +4869,8 @@ function LoansPageContent() {
                                           setApplyAmount(defAmount);
                                           const defTerm = p.term_months >= 2 && getProductCategory(p.name) === LOAN_CATEGORIES.STL ? 2 : p.term_months;
                                           setApplyTermMonths(defTerm);
+                                          const defRate = p.interest_rate ? (parseFloat(p.interest_rate) * 100).toString() : '2';
+                                          setApplyInterestRate(defRate);
                                         }}
                                         className={`w-full p-3.5 rounded-2xl border text-left transition-all ${isDisabled
                                           ? 'border-outline-variant/40 bg-neutral-100/60 dark:bg-neutral-900/40 opacity-60 cursor-not-allowed'
@@ -4824,12 +4882,26 @@ function LoansPageContent() {
                                         <div className="flex justify-between items-center mb-2.5">
                                           <div className="flex items-center gap-1.5 flex-wrap">
                                             <span className="font-bold text-on-surface dark:text-white text-sm block tracking-tight">
-                                              {p.name
-                                                .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
-                                                .replace(/Short Term Loan\s*-\s*/gi, '')
-                                                .replace(/Regular Loan\s*-\s*/gi, '')
-                                                .replace(/Special Loan\s*-\s*/gi, '')}
+                                              {isMortuaryColumbary ? (
+                                                <span>
+                                                  Mortuary Loan{' '}
+                                                  <span className="text-xs font-semibold text-primary dark:text-secondary block sm:inline">
+                                                    (Columbary Loan)
+                                                  </span>
+                                                </span>
+                                              ) : (
+                                                p.name
+                                                  .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
+                                                  .replace(/Short Term Loan\s*-\s*/gi, '')
+                                                  .replace(/Regular Loan\s*-\s*/gi, '')
+                                                  .replace(/Special Loan\s*-\s*/gi, '')
+                                              )}
                                             </span>
+                                            {isMortuaryColumbary && (
+                                              <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/20 dark:border-secondary/20">
+                                                Columbary Sub-Type
+                                              </span>
+                                            )}
                                             {isCalamityProduct && (
                                               <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${isCalamityDeclared
                                                 ? 'bg-amber-500 text-white animate-pulse'
@@ -5156,40 +5228,92 @@ function LoansPageContent() {
                           </div>
                         </div>
 
-                        {/* Term Selection */}
-                        <div className="space-y-1.5 pt-1">
-                          <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center justify-between">
-                            <span>Loan Term Duration:</span>
-                            <span className="font-extrabold text-primary dark:text-secondary">{applyTermMonths} {applyTermMonths === 1 ? 'Month' : 'Months'}</span>
-                          </label>
-                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                            {[1, 2, 3].map((m) => (
-                              <button
-                                key={m}
-                                type="button"
-                                onClick={() => setApplyTermMonths(m)}
-                                className={`py-2 px-3 rounded-xl border text-center transition-all cursor-pointer font-bold text-xs ${
-                                  applyTermMonths === m
-                                    ? 'bg-primary text-white dark:bg-secondary dark:text-neutral-950 border-primary dark:border-secondary shadow-xs'
-                                    : 'bg-white dark:bg-surface-container-high/60 border-outline-variant hover:border-primary/40 text-neutral-700 dark:text-neutral-200'
-                                }`}
-                              >
-                                {m} {m === 1 ? 'Month' : 'Months'}
-                              </button>
-                            ))}
-                            {selectedProduct.term_months > 3 && (
-                              <div className="flex items-center">
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max={selectedProduct.term_months}
-                                  value={applyTermMonths}
-                                  onChange={(e) => setApplyTermMonths(parseInt(e.target.value, 10) || 1)}
-                                  placeholder="Months"
-                                  className="w-full px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/60 text-xs font-bold text-center text-on-surface dark:text-white"
-                                />
-                              </div>
-                            )}
+                        {/* Term & Manual Interest Rate Inputs */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-3 border-t border-primary/20 dark:border-secondary/20">
+                          {/* Term Duration Input */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                                <span>Loan Term (Months)</span>
+                                {(selectedProduct.name.toLowerCase().includes('mortuary') || selectedProduct.name.toLowerCase().includes('columbary')) && (
+                                  <span className="text-primary dark:text-secondary font-black">• Manual Input</span>
+                                )}
+                              </label>
+                              <span className="font-mono text-xs font-bold text-primary dark:text-secondary">
+                                {applyTermMonths} {applyTermMonths === 1 ? 'Month' : 'Months'}
+                              </span>
+                            </div>
+                            <div className="relative flex items-center">
+                              <input
+                                type="number"
+                                min="1"
+                                max="60"
+                                value={applyTermMonths || ''}
+                                onChange={(e) => setApplyTermMonths(parseInt(e.target.value, 10) || 1)}
+                                placeholder="e.g. 12"
+                                className="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/80 text-sm font-bold font-mono text-primary dark:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                              />
+                              <span className="absolute right-3.5 text-xs font-bold text-neutral-400">Mos</span>
+                            </div>
+                            <div className="flex gap-1.5 pt-0.5">
+                              {[1, 2, 3, 6, 12, 24].map((m) => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => setApplyTermMonths(m)}
+                                  className={`px-2 py-1 text-[10px] rounded-lg border font-bold cursor-pointer transition-all ${
+                                    applyTermMonths === m
+                                      ? 'bg-primary text-white dark:bg-secondary dark:text-neutral-950 border-primary dark:border-secondary shadow-xs'
+                                      : 'bg-white dark:bg-surface-container-high/60 border-outline-variant text-neutral-600 dark:text-neutral-300 hover:border-primary/40'
+                                  }`}
+                                >
+                                  {m}m
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Interest Rate Input */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                                <span>Interest Rate (% per month)</span>
+                                {(selectedProduct.name.toLowerCase().includes('mortuary') || selectedProduct.name.toLowerCase().includes('columbary')) && (
+                                  <span className="text-primary dark:text-secondary font-black">• Manual Input</span>
+                                )}
+                              </label>
+                              <span className="font-mono text-xs font-bold text-primary dark:text-secondary">
+                                {applyInterestRate || '0'}% / mo
+                              </span>
+                            </div>
+                            <div className="relative flex items-center">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={applyInterestRate}
+                                onChange={(e) => setApplyInterestRate(e.target.value)}
+                                placeholder="e.g. 2.0"
+                                className="w-full pl-3.5 pr-14 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/80 text-sm font-bold font-mono text-primary dark:text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                              />
+                              <span className="absolute right-3.5 text-xs font-bold text-neutral-400">% / mo</span>
+                            </div>
+                            <div className="flex gap-1.5 pt-0.5">
+                              {['0', '1', '1.5', '2', '2.5'].map((r) => (
+                                <button
+                                  key={r}
+                                  type="button"
+                                  onClick={() => setApplyInterestRate(r)}
+                                  className={`px-2 py-1 text-[10px] rounded-lg border font-bold cursor-pointer transition-all ${
+                                    applyInterestRate === r
+                                      ? 'bg-primary text-white dark:bg-secondary dark:text-neutral-950 border-primary dark:border-secondary shadow-xs'
+                                      : 'bg-white dark:bg-surface-container-high/60 border-outline-variant text-neutral-600 dark:text-neutral-300 hover:border-primary/40'
+                                  }`}
+                                >
+                                  {r}%
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -5846,7 +5970,9 @@ function LoansPageContent() {
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="text-[10px] font-bold text-neutral-500">
-                              {selectedProduct.amortization_type === 'flat_rate' ? 'Flat Rate' : 'Diminishing Balance (2% / mo)'}
+                              {selectedProduct.amortization_type === 'flat_rate'
+                                ? `Flat Rate (${applyInterestRate || '2'}% / mo)`
+                                : `Diminishing Balance (${applyInterestRate || '2'}% / mo)`}
                             </span>
                             {Object.keys(applyScheduleAmounts).length > 0 && (
                               <button

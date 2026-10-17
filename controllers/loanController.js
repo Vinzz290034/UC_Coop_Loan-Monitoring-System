@@ -540,8 +540,11 @@ export const applyForLoan = async (req, res, next) => {
       finalTermMonths = parsedTerm;
     }
 
-    // Product standard interest rate (e.g. 0.02 for 2% monthly)
-    const finalInterestRate = parseFloat(p.interest_rate) || 0.02;
+    // Product standard interest rate (e.g. 0.02 for 2% monthly), overridden if manually specified
+    let finalInterestRate = parseFloat(p.interest_rate) || 0.02;
+    if (req.body.interest_rate !== undefined && req.body.interest_rate !== null && !isNaN(parseFloat(req.body.interest_rate))) {
+      finalInterestRate = parseFloat(req.body.interest_rate);
+    }
 
     // Validate or auto-generate LAF No. (Only staff and admin can specify LAF No.)
     let finalLafNo = null;
