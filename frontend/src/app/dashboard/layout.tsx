@@ -34,6 +34,7 @@ import {
   FileUp,
   ReceiptText,
   TrendingUp,
+  HandCoins,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
@@ -122,6 +123,12 @@ function DashboardLayoutContent({
       path: '/dashboard/disbursement',
       icon: ReceiptText,
       // Members no longer see Disbursement — admin/staff only
+      allowed: isAdminOrStaff,
+    },
+    {
+      name: 'Collection',
+      path: '/dashboard/collection',
+      icon: HandCoins,
       allowed: isAdminOrStaff,
     },
     {
@@ -499,7 +506,18 @@ function DashboardLayoutContent({
         </header>
 
         {/* Page contents */}
-        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
+        <main
+          className={`flex-1 p-4 sm:p-6 md:p-8 w-full mx-auto ${
+            pathname.startsWith('/dashboard/collection') ||
+            pathname.startsWith('/dashboard/disbursement') ||
+            pathname.startsWith('/dashboard/loans') ||
+            pathname.startsWith('/dashboard/members') ||
+            pathname.startsWith('/dashboard/billing') ||
+            pathname.startsWith('/dashboard/accounting')
+              ? 'max-w-[1720px] 2xl:max-w-[1920px]'
+              : 'max-w-7xl'
+          }`}
+        >
           {children}
         </main>
       </div>
