@@ -26,6 +26,7 @@ import { migrateRevolvingFunds } from './migrate_revolving_funds.js';
 import { migrateStlLiquidations } from './migrate_stl_liquidations.js';
 import { migrateSavingsAccounts } from './migrate_savings_accounts.js';
 import { migrateCollections } from './migrate_collections.js';
+import { migrateConsolidateCollectionDuplicates } from './migrate_consolidate_collection_duplicates.js';
 import { migrateRemoveRegularCalamityLoan } from './migrate_remove_regular_calamity_loan.js';
 
 export async function runMigrations() {
@@ -58,6 +59,7 @@ export async function runMigrations() {
     await migrateStlLiquidations();
     await migrateSavingsAccounts();
     await migrateCollections();
+    await migrateConsolidateCollectionDuplicates();
     await migrateRemoveRegularCalamityLoan();
     console.log('[System Startup] All database migrations completed successfully.');
   } catch (error) {

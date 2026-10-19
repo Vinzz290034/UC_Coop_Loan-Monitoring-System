@@ -930,12 +930,15 @@ export default function CollectionPage() {
           for (const loan of item.loans) {
             if (loan.principal_amount && loan.principal_amount > 0) parts.push(loan.loan_account);
             if (loan.interest_amount && loan.interest_amount > 0) parts.push(loan.interest_account || 'Interest');
-            if (loan.fines_amount && loan.fines_amount > 0) parts.push(loan.fines_account || 'Fines');
+            if (loan.fines_amount && loan.fines_amount > 0) parts.push(loan.fines_account || 'Fines & Late Charges');
           }
         } else {
           if (item.principal_amount && item.principal_amount > 0) parts.push(item.loan_account || 'Principal');
           if (item.interest_amount && item.interest_amount > 0) parts.push(item.interest_account || 'Interest');
-          if (item.fines_amount && item.fines_amount > 0) parts.push(item.fines_account || 'Fines');
+          if (item.fines_amount && item.fines_amount > 0) parts.push(item.fines_account || 'Fines & Late Charges');
+        }
+        if (item.fines_amount && item.fines_amount > 0 && !parts.some(p => /fine|penalty|charge/i.test(p))) {
+          parts.push(item.fines_account || 'Fines & Late Charges');
         }
         if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
         desc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || 'Credit Collection');
@@ -1383,12 +1386,15 @@ export default function CollectionPage() {
                         for (const loan of item.loans) {
                           if (loan.principal_amount && loan.principal_amount > 0) parts.push(loan.loan_account);
                           if (loan.interest_amount && loan.interest_amount > 0) parts.push(loan.interest_account || 'Interest');
-                          if (loan.fines_amount && loan.fines_amount > 0) parts.push(loan.fines_account || 'Fines');
+                          if (loan.fines_amount && loan.fines_amount > 0) parts.push(loan.fines_account || 'Fines & Late Charges');
                         }
                       } else {
                         if (item.principal_amount && item.principal_amount > 0) parts.push(item.loan_account || 'Principal');
                         if (item.interest_amount && item.interest_amount > 0) parts.push(item.interest_account || 'Interest');
-                        if (item.fines_amount && item.fines_amount > 0) parts.push(item.fines_account || 'Fines');
+                        if (item.fines_amount && item.fines_amount > 0) parts.push(item.fines_account || 'Fines & Late Charges');
+                      }
+                      if (item.fines_amount && item.fines_amount > 0 && !parts.some(p => /fine|penalty|charge/i.test(p))) {
+                        parts.push(item.fines_account || 'Fines & Late Charges');
                       }
                       if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
                       primaryDesc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || item.particulars || 'Loan Repayment');

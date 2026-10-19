@@ -21,7 +21,7 @@ import {
   HelpCircle,
   FileText
 } from 'lucide-react';
-import { CollectionItem, CollectionTab } from '@/app/dashboard/collection/page';
+import { CollectionItem, CollectionTab, CollectionLoanPayment } from '@/app/dashboard/collection/page';
 
 interface Props {
   isOpen: boolean;
@@ -673,10 +673,88 @@ export default function InvoiceArExcelImportModal({
     }
   };
 
-  // Flattened all items to import
+  // Consolidated items to import (1 unique collection record per invoice/OR number)
   const allParsedItems = useMemo(() => {
-    return parsedBreakdowns.flatMap(b => b.items);
-  }, [parsedBreakdowns]);
+    return parsedBreakdowns.map((b, idx): CollectionItem => {
+      if (b.items.length === 1) {
+        return b.items[0];
+      }
+
+      const firstItem = b.items[0];
+      const hasCredit = b.items.some(it => it.tab === 'credit');
+      const hasSales = b.items.some(it => it.tab === 'sales');
+      const hasServices = b.items.some(it => it.tab === 'services');
+      const tab: CollectionItem['tab'] = hasCredit ? 'credit' : (hasSales ? 'sales' : (hasServices ? 'services' : 'credit'));
+
+      const consolidatedLoans: CollectionLoanPayment[] = [];
+      let principal_amount = 0;
+      let interest_amount = 0;
+      let fines_amount = 0;
+      let common_share_amount = 0;
+      let finesFromServices = 0;
+      const remarksParts: string[] = [];
+
+      for (const item of b.items) {
+        if (item.remarks && !remarksParts.includes(item.remarks)) {
+          remarksParts.push(item.remarks);
+        }
+
+        if (
+          (item.loan_account && /shared\s*capital|share\s*capital|fixed\s*deposit/i.test(item.loan_account)) ||
+          (item.particulars && /shared\s*capital|share\s*capital|fixed\s*deposit/i.test(item.particulars)) ||
+          (item.common_share_amount && item.common_share_amount > 0)
+        ) {
+          common_share_amount += item.amount;
+        } else if (item.service_type && /fine|penalty|late/i.test(item.service_type)) {
+          finesFromServices += item.amount;
+        } else if (item.loan_account || item.principal_amount || item.interest_amount) {
+          const p = item.principal_amount || 0;
+          const i = item.interest_amount || 0;
+          const f = item.fines_amount || 0;
+          consolidatedLoans.push({
+            loan_account: item.loan_account || 'Loans Payable',
+            principal_amount: p,
+            interest_account: item.interest_account || (i > 0 ? 'Interest Received' : ''),
+            interest_amount: i,
+            fines_account: item.fines_account || (f > 0 ? 'Fines & Late Charges' : ''),
+            fines_amount: f,
+          });
+          principal_amount += p;
+          interest_amount += i;
+          fines_amount += f;
+        }
+      }
+
+      if (finesFromServices > 0) {
+        fines_amount += finesFromServices;
+        if (consolidatedLoans.length > 0) {
+          consolidatedLoans[0].fines_amount = (consolidatedLoans[0].fines_amount || 0) + finesFromServices;
+          consolidatedLoans[0].fines_account = consolidatedLoans[0].fines_account || 'Fines & Late Charges';
+        }
+      }
+
+      const totalAmount = b.cashOnHand > 0 ? b.cashOnHand : b.rowTotal;
+
+      return {
+        id: firstItem?.id || `imp-${idx}-${b.invoiceNo}`,
+        tab,
+        date: b.date,
+        or_no: b.invoiceNo,
+        payor_name: b.payee,
+        payment_method: firstItem?.payment_method || 'Cash',
+        status: 'completed',
+        collected_by: firstItem?.collected_by || currentUser,
+        remarks: remarksParts.join('; ') || b.details || 'Collection Receipt',
+        loans: consolidatedLoans.length > 0 ? consolidatedLoans : undefined,
+        loan_account: consolidatedLoans[0]?.loan_account || firstItem?.loan_account,
+        principal_amount: principal_amount > 0 ? principal_amount : undefined,
+        interest_amount: interest_amount > 0 ? interest_amount : undefined,
+        fines_amount: fines_amount > 0 ? fines_amount : undefined,
+        common_share_amount: common_share_amount > 0 ? common_share_amount : undefined,
+        amount: totalAmount,
+      };
+    });
+  }, [parsedBreakdowns, currentUser]);
 
   // Statistics
   const stats = useMemo(() => {
