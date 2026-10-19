@@ -202,10 +202,6 @@ const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
     desc: 'Emergency financial assistance released during officially declared State of Calamity.',
     helper: '₱10,000 to ₱50,000. Maximum term: 1-2 years (24 months).'
   },
-  'Regular Loan - Calamity Loan': {
-    desc: 'Emergency financial assistance released during officially declared State of Calamity.',
-    helper: '₱10,000 to ₱50,000. Maximum term: 1-2 years (24 months).'
-  },
   'Short Term Loan (STL) - Utility Loan': {
     desc: 'Quick cash relief for paying electricity, water, internet, or other home utilities.',
     helper: 'Fixed amount: ₱3,000. Term: 1 month.'

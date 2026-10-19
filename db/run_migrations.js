@@ -26,6 +26,7 @@ import { migrateRevolvingFunds } from './migrate_revolving_funds.js';
 import { migrateStlLiquidations } from './migrate_stl_liquidations.js';
 import { migrateSavingsAccounts } from './migrate_savings_accounts.js';
 import { migrateCollections } from './migrate_collections.js';
+import { migrateRemoveRegularCalamityLoan } from './migrate_remove_regular_calamity_loan.js';
 
 export async function runMigrations() {
   console.log('[System Startup] Running automated database migrations...');
@@ -57,6 +58,7 @@ export async function runMigrations() {
     await migrateStlLiquidations();
     await migrateSavingsAccounts();
     await migrateCollections();
+    await migrateRemoveRegularCalamityLoan();
     console.log('[System Startup] All database migrations completed successfully.');
   } catch (error) {
     console.error('[System Startup] Database migration error:', error);
