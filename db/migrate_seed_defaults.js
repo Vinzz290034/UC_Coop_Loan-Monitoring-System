@@ -67,7 +67,8 @@ export async function migrateSeedDefaults() {
           ('Short Term Loan (STL) - Utility Loan', 0.0300, 1, 'diminishing_balance', 3000.00, 3000.00, true),
           ('Short Term Loan (STL) - Emergency Loan', 0.0400, 2, 'diminishing_balance', 5000.00, 5000.00, true),
           ('Short Term Loan (STL) - Cash Express', 0.0800, 2, 'diminishing_balance', 7000.00, 7000.00, true),
-          ('Short Term Loan (STL) - Special Occasion', 0.0500, 3, 'diminishing_balance', 10000.00, 10000.00, true)
+          ('Short Term Loan (STL) - Special Occasion', 0.0500, 3, 'diminishing_balance', 10000.00, 10000.00, true),
+          ('Special Loan - Mortuary Loan (Columbary Loan)', 0.0200, 24, 'diminishing_balance', 10000.00, 100000.00, true)
       ON CONFLICT (name) DO NOTHING;
     `);
 
