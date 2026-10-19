@@ -37,7 +37,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Edit3,
+  Lock,
+  Loader2
 } from 'lucide-react';
 
 export type CollectionTab = 'all' | 'credit' | 'sales' | 'services';
@@ -107,7 +110,7 @@ export interface CollectionItem {
   payment_method: PaymentMethod;
   reference_no?: string;
   bank_name?: string;
-  status?: 'completed' | 'on process';
+  status?: 'completed' | 'on process' | 'filed';
   remarks?: string;
   collected_by: string;
 }
@@ -300,6 +303,7 @@ export default function CollectionPage() {
   const router = useRouter();
 
   // Role Guard: Staff & Admin Only
+  const isAdmin = user?.role === 'admin';
   const isAdminOrStaff = user?.role === 'admin' || user?.role === 'staff';
 
   useEffect(() => {
@@ -416,6 +420,14 @@ export default function CollectionPage() {
   // Selected item for detail view modal
   const [selectedItemForModal, setSelectedItemForModal] = useState<CollectionItem | null>(null);
 
+  // Edit & Seal/File Modal States (Admin Only)
+  const [editingItem, setEditingItem] = useState<CollectionItem | null>(null);
+  const [editFormData, setEditFormData] = useState<any>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isEditCustomBank, setIsEditCustomBank] = useState(false);
+  const [isEditMemberDropdownOpen, setIsEditMemberDropdownOpen] = useState(false);
+  const editMemberComboboxRef = useRef<HTMLDivElement>(null);
+
   // Item currently being printed as an Acknowledgement Receipt
   const [printingReceipt, setPrintingReceipt] = useState<CollectionItem | null>(null);
 
@@ -440,6 +452,9 @@ export default function CollectionPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<CollectionItem | null>(null);
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
+  const [isSealModalOpen, setIsSealModalOpen] = useState(false);
 
   // Pre-loaded members list for Member Name dropdown & automatic Member ID
   const [membersList, setMembersList] = useState<MemberOption[]>([]);
@@ -506,6 +521,18 @@ export default function CollectionPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMemberDropdownOpen]);
+
+  // Click outside to close edit member dropdown
+  useEffect(() => {
+    if (!isEditMemberDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (editMemberComboboxRef.current && !editMemberComboboxRef.current.contains(e.target as Node)) {
+        setIsEditMemberDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isEditMemberDropdownOpen]);
 
   // Form Data for adding a new collection
   const [formData, setFormData] = useState({
@@ -666,6 +693,280 @@ export default function CollectionPage() {
     setIsMemberDropdownOpen(false);
   };
 
+  // Filtered members for Edit Modal
+  const editFilteredMembers = useMemo(() => {
+    const q = (editFormData?.payor_name || '').toLowerCase().trim();
+    if (!q) return membersList;
+    return membersList.filter(
+      m => m.name.toLowerCase().includes(q) || (m.member_no && m.member_no.toLowerCase().includes(q))
+    );
+  }, [membersList, editFormData?.payor_name]);
+
+  const handleEditMemberNameChange = (val: string) => {
+    const matched = membersList.find(m => m.name.toLowerCase() === val.trim().toLowerCase());
+    setEditFormData((prev: any) => ({
+      ...prev,
+      payor_name: val,
+      member_id: matched ? (matched.member_no || prev?.member_id) : prev?.member_id,
+    }));
+    setIsEditMemberDropdownOpen(true);
+  };
+
+  const handleSelectEditMember = (member: MemberOption) => {
+    setEditFormData((prev: any) => ({
+      ...prev,
+      payor_name: member.name,
+      member_id: member.member_no || '',
+    }));
+    setIsEditMemberDropdownOpen(false);
+  };
+
+  // Open Edit & Seal/File Modal (Admin Only)
+  const handleOpenEditModal = (item: CollectionItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    let initialLoans: FormLoanEntry[] = [];
+    if (item.loans && item.loans.length > 0) {
+      initialLoans = item.loans.map((l, idx) => ({
+        id: `edit-loan-${idx}-${Date.now()}`,
+        loan_account: l.loan_account || 'Loans Payable - Regular',
+        principal_amount: l.principal_amount ? String(l.principal_amount) : '',
+        interest_account: l.interest_account || 'Interest Received - Regular',
+        interest_amount: l.interest_amount ? String(l.interest_amount) : '',
+        fines_account: l.fines_account || 'Fines - Regular',
+        fines_amount: l.fines_amount ? String(l.fines_amount) : '',
+      }));
+    } else if (item.tab === 'credit') {
+      initialLoans = [
+        {
+          id: `edit-loan-0-${Date.now()}`,
+          loan_account: item.loan_account || 'Loans Payable - Regular',
+          principal_amount: item.principal_amount ? String(item.principal_amount) : '',
+          interest_account: item.interest_account || 'Interest Received - Regular',
+          interest_amount: item.interest_amount ? String(item.interest_amount) : '',
+          fines_account: item.fines_account || 'Fines - Regular',
+          fines_amount: item.fines_amount ? String(item.fines_amount) : '',
+        }
+      ];
+    } else {
+      initialLoans = [
+        {
+          id: `edit-loan-0-${Date.now()}`,
+          loan_account: 'Loans Payable - Regular',
+          principal_amount: '',
+          interest_account: 'Interest Received - Regular',
+          interest_amount: '',
+          fines_account: 'Fines - Regular',
+          fines_amount: '',
+        }
+      ];
+    }
+
+    const isCustom = item.payment_method === 'Cheque' && item.bank_name
+      ? !BANK_OPTIONS.some(b => b.value === item.bank_name)
+      : false;
+    setIsEditCustomBank(isCustom);
+
+    setEditFormData({
+      id: item.id,
+      tab: item.tab,
+      date: item.date ? item.date.split('T')[0] : new Date().toISOString().split('T')[0],
+      or_no: item.or_no || '',
+      payor_name: item.payor_name || '',
+      member_id: item.member_id || '',
+      loans: initialLoans,
+      loan_account: item.loan_account || 'Loans Payable - Regular',
+      principal_amount: item.principal_amount ? String(item.principal_amount) : '',
+      interest_account: item.interest_account || 'Interest Received - Regular',
+      interest_amount: item.interest_amount ? String(item.interest_amount) : '',
+      fines_account: item.fines_account || 'Fines - Regular',
+      fines_amount: item.fines_amount ? String(item.fines_amount) : '',
+      common_share_amount: item.common_share_amount ? String(item.common_share_amount) : '',
+      item_name: item.item_name || '',
+      item_category: item.item_category || 'Uniform',
+      quantity: item.quantity ? String(item.quantity) : '1',
+      unit_price: item.unit_price ? String(item.unit_price) : '',
+      service_type: item.service_type || 'Photocopying Services',
+      service_copies: item.service_copies ? String(item.service_copies) : '1',
+      service_rate: item.service_rate ? String(item.service_rate) : '',
+      amount: item.amount ? String(item.amount) : '',
+      payment_method: item.payment_method || 'Cash',
+      reference_no: item.reference_no || '',
+      bank_name: item.bank_name || '',
+      status: item.status || 'completed',
+      remarks: item.remarks || '',
+      collected_by: item.collected_by || 'CHINNETTE A. LAMOSTE',
+    });
+
+    setEditingItem(item);
+  };
+
+  const handleEditLoanFieldChange = (index: number, field: keyof FormLoanEntry, val: string) => {
+    setEditFormData((prev: any) => {
+      const nextLoans = [...prev.loans];
+      nextLoans[index] = { ...nextLoans[index], [field]: val };
+      return { ...prev, loans: nextLoans };
+    });
+  };
+
+  const handleAddEditLoan = () => {
+    setEditFormData((prev: any) => ({
+      ...prev,
+      loans: [
+        ...prev.loans,
+        {
+          id: `edit-loan-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+          loan_account: 'Loans Payable - Regular',
+          principal_amount: '',
+          interest_account: 'Interest Received - Regular',
+          interest_amount: '',
+          fines_account: 'Fines - Regular',
+          fines_amount: '',
+        }
+      ]
+    }));
+  };
+
+  const handleRemoveEditLoan = (index: number) => {
+    setEditFormData((prev: any) => {
+      if (prev.loans.length <= 1) return prev;
+      return {
+        ...prev,
+        loans: prev.loans.filter((_: any, i: number) => i !== index),
+      };
+    });
+  };
+
+  // Update or Seal & File collection
+  const handleUpdateCollection = async (markAsFiled: boolean = false) => {
+    if (!editFormData || !editingItem) return;
+
+    if (editingItem.status === 'filed') {
+      setActionFeedback({ type: 'error', message: 'Filed collection entries are permanently locked and cannot be edited.' });
+      setTimeout(() => setActionFeedback(null), 4000);
+      return;
+    }
+
+    // Validate Cheque fields
+    if (editFormData.payment_method === 'Cheque') {
+      if (!editFormData.reference_no?.trim()) {
+        setActionFeedback({ type: 'error', message: 'Cheque number is required for Cheque payments.' });
+        setTimeout(() => setActionFeedback(null), 4000);
+        return;
+      }
+      if (!editFormData.bank_name?.trim() || editFormData.bank_name === 'Other Bank') {
+        setActionFeedback({ type: 'error', message: 'Please select or specify the issuing bank.' });
+        setTimeout(() => setActionFeedback(null), 4000);
+        return;
+      }
+    }
+
+    let calculatedAmount = parseFloat(editFormData.amount || '0') || 0;
+
+    let savedLoans: CollectionLoanPayment[] = [];
+    if (editFormData.tab === 'credit') {
+      const loansSum = (editFormData.loans || []).reduce((acc: number, l: FormLoanEntry) => {
+        return acc + (parseFloat(l.principal_amount || '0') || 0) +
+                     (parseFloat(l.interest_amount || '0') || 0) +
+                     (parseFloat(l.fines_amount || '0') || 0);
+      }, 0);
+      const cs = parseFloat(editFormData.common_share_amount || '0') || 0;
+      if (loansSum + cs > 0) calculatedAmount = loansSum + cs;
+
+      savedLoans = (editFormData.loans || [])
+        .map((l: FormLoanEntry) => ({
+          loan_account: l.loan_account,
+          principal_amount: parseFloat(l.principal_amount || '0') || undefined,
+          interest_account: l.interest_account,
+          interest_amount: parseFloat(l.interest_amount || '0') || undefined,
+          fines_account: l.fines_account,
+          fines_amount: parseFloat(l.fines_amount || '0') || undefined,
+        }))
+        .filter((l: CollectionLoanPayment) => (l.principal_amount || 0) > 0 || (l.interest_amount || 0) > 0 || (l.fines_amount || 0) > 0);
+    } else if (editFormData.tab === 'sales') {
+      const q = parseInt(editFormData.quantity || '1', 10) || 1;
+      const u = parseFloat(editFormData.unit_price || '0') || 0;
+      if (u > 0) calculatedAmount = q * u;
+    } else if (editFormData.tab === 'services') {
+      const c = parseInt(editFormData.service_copies || '1', 10) || 1;
+      const r = parseFloat(editFormData.service_rate || '0') || 0;
+      if (r > 0) calculatedAmount = c * r;
+    }
+
+    const payload: Partial<CollectionItem> = {
+      tab: editFormData.tab,
+      date: editFormData.date,
+      or_no: editFormData.or_no.trim(),
+      payor_name: editFormData.payor_name.trim(),
+      member_id: editFormData.member_id?.trim() || undefined,
+      loans: savedLoans.length > 0 ? savedLoans : undefined,
+      loan_account: savedLoans[0]?.loan_account || editFormData.loan_account,
+      principal_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.principal_amount || 0), 0) || undefined) : undefined,
+      interest_account: savedLoans[0]?.interest_account || editFormData.interest_account,
+      interest_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.interest_amount || 0), 0) || undefined) : undefined,
+      fines_account: savedLoans[0]?.fines_account || editFormData.fines_account,
+      fines_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.fines_amount || 0), 0) || undefined) : undefined,
+      common_share_amount: parseFloat(editFormData.common_share_amount || '0') || undefined,
+      item_name: editFormData.item_name?.trim() || undefined,
+      item_category: editFormData.item_category?.trim() || undefined,
+      quantity: parseInt(editFormData.quantity || '1', 10) || undefined,
+      unit_price: parseFloat(editFormData.unit_price || '0') || undefined,
+      service_type: editFormData.service_type || undefined,
+      service_copies: parseInt(editFormData.service_copies || '1', 10) || undefined,
+      service_rate: parseFloat(editFormData.service_rate || '0') || undefined,
+      particulars: editFormData.tab === 'credit'
+        ? (() => {
+            const parts: string[] = [];
+            for (const l of savedLoans) {
+              if (l.principal_amount && l.principal_amount > 0) parts.push(l.loan_account);
+              if (l.interest_amount && l.interest_amount > 0) parts.push(l.interest_account);
+              if (l.fines_amount && l.fines_amount > 0) parts.push(l.fines_account);
+            }
+            if (parseFloat(editFormData.common_share_amount || '0') > 0) parts.push('Common Share');
+            return parts.length > 0 ? parts.join(' + ') : (editFormData.loans?.[0]?.loan_account || 'Credit Collection');
+          })()
+        : undefined,
+      amount: calculatedAmount,
+      payment_method: editFormData.payment_method,
+      reference_no: (editFormData.payment_method === 'GCash' || editFormData.payment_method === 'Bank Transfer' || editFormData.payment_method === 'Cheque')
+        ? editFormData.reference_no?.trim() || undefined
+        : undefined,
+      bank_name: editFormData.payment_method === 'Cheque' ? editFormData.bank_name?.trim() || undefined : undefined,
+      status: markAsFiled ? 'filed' : (editFormData.status || 'completed'),
+      remarks: editFormData.remarks?.trim() || undefined,
+      collected_by: editFormData.collected_by?.trim() || 'CHINNETTE A. LAMOSTE',
+    };
+
+    setIsSavingEdit(true);
+    try {
+      const res = await api.put(`/collections/${editFormData.id}`, payload);
+      const updated: CollectionItem = res.data?.data || { ...editingItem, ...payload };
+      setCollections(prev => prev.map(c => c.id === updated.id ? updated : c));
+      setEditingItem(null);
+      setEditFormData(null);
+      setIsSealModalOpen(false);
+      if (selectedItemForModal?.id === updated.id) {
+        setSelectedItemForModal(updated);
+      }
+      setActionFeedback({
+        type: 'success',
+        message: markAsFiled
+          ? `Collection receipt #${updated.or_no} is now sealed & filed (locked).`
+          : `Collection receipt #${updated.or_no} updated successfully.`
+      });
+      setTimeout(() => setActionFeedback(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to update collection entry:', err);
+      setActionFeedback({
+        type: 'error',
+        message: err?.response?.data?.error?.message || 'Failed to update collection receipt.'
+      });
+      setTimeout(() => setActionFeedback(null), 5000);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   // Filtered and Sorted Collections
   const filteredCollections = useMemo(() => {
     let result = collections.filter(item => {
@@ -759,11 +1060,12 @@ export default function CollectionPage() {
     return [1, '...', current - 1, current, current + 1, '...', total];
   };
 
-  // Selection handlers
+  // Selection handlers: Filed items cannot be selected for deletion
   const toggleSelectAll = () => {
-    const pageItems = isExpandedAll ? filteredCollections : paginatedCollections;
+    const pageItems = (isExpandedAll ? filteredCollections : paginatedCollections).filter(c => c.status !== 'filed');
     const pageIds = pageItems.map(c => c.id);
-    const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id));
+    if (pageIds.length === 0) return;
+    const allPageSelected = pageIds.every(id => selectedIds.includes(id));
     if (allPageSelected) {
       setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
     } else {
@@ -772,6 +1074,8 @@ export default function CollectionPage() {
   };
 
   const toggleSelectRow = (id: string) => {
+    const item = collections.find(c => c.id === id);
+    if (item?.status === 'filed') return;
     setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
 
@@ -927,38 +1231,70 @@ export default function CollectionPage() {
     }
   };
 
-  // Delete single collection
-  const handleDeleteItem = async (id: string, e?: React.MouseEvent) => {
+  // Open single collection delete confirmation modal
+  const handleDeleteItem = (idOrItem: string | CollectionItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (window.confirm('Are you sure you want to delete this collection entry?')) {
-      try {
-        await api.delete(`/collections/${id}`);
-        setCollections(prev => prev.filter(c => c.id !== id));
-        if (selectedItemForModal?.id === id) setSelectedItemForModal(null);
-        setSelectedIds(prev => prev.filter(x => x !== id));
-        setActionFeedback({ type: 'success', message: 'Collection entry removed.' });
-        setTimeout(() => setActionFeedback(null), 4000);
-      } catch (err: any) {
-        console.error('Failed to delete collection entry:', err);
-        setActionFeedback({ type: 'error', message: 'Failed to delete collection entry.' });
-        setTimeout(() => setActionFeedback(null), 4000);
-      }
+    const target = typeof idOrItem === 'string' ? collections.find(c => c.id === idOrItem) : idOrItem;
+    if (!target) return;
+    if (target.status === 'filed') {
+      setActionFeedback({ type: 'error', message: 'Filed collection receipts are permanently locked and cannot be deleted.' });
+      setTimeout(() => setActionFeedback(null), 4000);
+      return;
+    }
+    setItemToDelete(target);
+  };
+
+  // Perform single collection deletion after modal confirmation
+  const confirmDeleteSingleItem = async () => {
+    if (!itemToDelete) return;
+    if (itemToDelete.status === 'filed') {
+      setActionFeedback({ type: 'error', message: 'Filed collection receipts are permanently locked and cannot be deleted.' });
+      setTimeout(() => setActionFeedback(null), 4000);
+      setItemToDelete(null);
+      return;
+    }
+
+    setIsDeletingItem(true);
+    try {
+      await api.delete(`/collections/${itemToDelete.id}`);
+      setCollections(prev => prev.filter(c => c.id !== itemToDelete.id));
+      if (selectedItemForModal?.id === itemToDelete.id) setSelectedItemForModal(null);
+      if (editingItem?.id === itemToDelete.id) setEditingItem(null);
+      setSelectedIds(prev => prev.filter(x => x !== itemToDelete.id));
+      setActionFeedback({ type: 'success', message: `Collection receipt #${itemToDelete.or_no} removed successfully.` });
+      setTimeout(() => setActionFeedback(null), 4000);
+      setItemToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete collection entry:', err);
+      setActionFeedback({ type: 'error', message: err?.response?.data?.error?.message || 'Failed to delete collection entry.' });
+      setTimeout(() => setActionFeedback(null), 4000);
+    } finally {
+      setIsDeletingItem(false);
     }
   };
 
   // Bulk delete selected
   const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
+    const nonFiledIds = selectedIds.filter(id => {
+      const c = collections.find(item => item.id === id);
+      return c && c.status !== 'filed';
+    });
+    if (nonFiledIds.length === 0) {
+      setIsBulkDeleteModalOpen(false);
+      setActionFeedback({ type: 'error', message: 'Filed collection receipts cannot be deleted.' });
+      setTimeout(() => setActionFeedback(null), 4000);
+      return;
+    }
     try {
-      await api.post('/collections/bulk-delete', { ids: selectedIds });
-      setCollections(prev => prev.filter(c => !selectedIds.includes(c.id)));
+      await api.post('/collections/bulk-delete', { ids: nonFiledIds });
+      setCollections(prev => prev.filter(c => !nonFiledIds.includes(c.id)));
       setSelectedIds([]);
       setIsBulkDeleteModalOpen(false);
-      setActionFeedback({ type: 'success', message: `${selectedIds.length} collection entries deleted.` });
+      setActionFeedback({ type: 'success', message: `${nonFiledIds.length} collection entries deleted.` });
       setTimeout(() => setActionFeedback(null), 4000);
     } catch (err: any) {
       console.error('Failed to bulk delete collections:', err);
-      setActionFeedback({ type: 'error', message: 'Failed to bulk delete collections.' });
+      setActionFeedback({ type: 'error', message: err?.response?.data?.error?.message || 'Failed to bulk delete collections.' });
       setTimeout(() => setActionFeedback(null), 4000);
     }
   };
@@ -1067,6 +1403,13 @@ export default function CollectionPage() {
   const renderStatusBadge = (status?: string) => {
     const s = (status || 'completed').toLowerCase();
     switch (s) {
+      case 'filed':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-600/15 text-emerald-800 dark:text-emerald-200 border border-emerald-600/30">
+            <Lock className="w-3 h-3 text-emerald-700 dark:text-emerald-300" />
+            <span>Filed</span>
+          </span>
+        );
       case 'on process':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/25">
@@ -1077,8 +1420,8 @@ export default function CollectionPage() {
       case 'completed':
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
-            <CheckCircle2 className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-neutral-500/10 text-neutral-700 dark:text-neutral-300 border border-neutral-500/25">
+            <CheckCircle2 className="w-3 h-3 text-neutral-500" />
             <span>Completed</span>
           </span>
         );
@@ -1298,6 +1641,7 @@ export default function CollectionPage() {
                   onChange={setSelectedStatus}
                   options={[
                     { value: 'all', label: 'All Statuses' },
+                    { value: 'filed', label: 'Filed' },
                     { value: 'completed', label: 'Completed' },
                     { value: 'on process', label: 'On Process' },
                   ]}
@@ -1364,8 +1708,8 @@ export default function CollectionPage() {
                     <input
                       type="checkbox"
                       checked={
-                        (isExpandedAll ? filteredCollections : paginatedCollections).length > 0 &&
-                        (isExpandedAll ? filteredCollections : paginatedCollections).every(c => selectedIds.includes(c.id))
+                        (isExpandedAll ? filteredCollections : paginatedCollections).filter(c => c.status !== 'filed').length > 0 &&
+                        (isExpandedAll ? filteredCollections : paginatedCollections).filter(c => c.status !== 'filed').every(c => selectedIds.includes(c.id))
                       }
                       onChange={toggleSelectAll}
                       className="rounded border-neutral-300 text-primary focus:ring-primary cursor-pointer"
@@ -1456,7 +1800,13 @@ export default function CollectionPage() {
                     return (
                       <tr
                         key={item.id}
-                        onClick={() => setSelectedItemForModal(item)}
+                        onClick={() => {
+                          if (isAdmin) {
+                            handleOpenEditModal(item);
+                          } else {
+                            setSelectedItemForModal(item);
+                          }
+                        }}
                         className={`hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors cursor-pointer ${
                           isSelected ? 'bg-primary/5 dark:bg-secondary/5' : ''
                         }`}
@@ -1465,8 +1815,10 @@ export default function CollectionPage() {
                           <input
                             type="checkbox"
                             checked={isSelected}
+                            disabled={item.status === 'filed'}
                             onChange={() => toggleSelectRow(item.id)}
-                            className="rounded border-neutral-300 text-primary focus:ring-primary cursor-pointer"
+                            className="rounded border-neutral-300 text-primary focus:ring-primary cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={item.status === 'filed' ? 'Filed collections cannot be deleted' : undefined}
                           />
                         </td>
                         <td className="py-3 px-3 font-bold text-neutral-900 dark:text-white whitespace-nowrap">
@@ -1513,41 +1865,89 @@ export default function CollectionPage() {
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1.5">
-                            {/* Print Receipt */}
-                            <button
-                              type="button"
-                              onClick={e => {
-                                e.stopPropagation();
-                                handlePrintReceipt(item);
-                              }}
-                              className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
-                              title="Print Collection Receipt"
-                            >
-                              <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                            </button>
+                            {isAdmin ? (
+                              <>
+                                {/* Admin Edit Button (Replaces Print & Eye) */}
+                                <button
+                                  type="button"
+                                  onClick={e => handleOpenEditModal(item, e)}
+                                  className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                                    item.status === 'filed'
+                                      ? 'border-emerald-300/80 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+                                      : 'border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-primary dark:text-secondary'
+                                  }`}
+                                  title={item.status === 'filed' ? 'View Sealed & Filed Collection' : 'Edit Collection & Seal/File'}
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
 
-                            {/* View Details */}
-                            <button
-                              type="button"
-                              onClick={e => {
-                                e.stopPropagation();
-                                setSelectedItemForModal(item);
-                              }}
-                              className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
-                              title="View Collection Details"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
-                            </button>
+                                {/* Delete or Locked Indicator */}
+                                {item.status === 'filed' ? (
+                                  <span
+                                    className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 cursor-not-allowed inline-flex items-center justify-center"
+                                    title="Collection receipt is Sealed & Filed (Locked - cannot be deleted)"
+                                  >
+                                    <Lock className="w-3.5 h-3.5" />
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={e => handleDeleteItem(item.id, e)}
+                                    className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 transition-all cursor-pointer"
+                                    title="Delete Collection Item"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                {/* Non-Admin Staff: Print Receipt */}
+                                <button
+                                  type="button"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handlePrintReceipt(item);
+                                  }}
+                                  className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
+                                  title="Print Collection Receipt"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                </button>
 
-                            {/* Delete Item */}
-                            <button
-                              type="button"
-                              onClick={e => handleDeleteItem(item.id, e)}
-                              className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 transition-all cursor-pointer"
-                              title="Delete Collection Item"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                                {/* View Details */}
+                                <button
+                                  type="button"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setSelectedItemForModal(item);
+                                  }}
+                                  className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
+                                  title="View Collection Details"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-neutral-600 dark:text-neutral-400" />
+                                </button>
+
+                                {/* Delete or Locked Indicator */}
+                                {item.status === 'filed' ? (
+                                  <span
+                                    className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 cursor-not-allowed inline-flex items-center justify-center"
+                                    title="Collection receipt is Sealed & Filed (Locked - cannot be deleted)"
+                                  >
+                                    <Lock className="w-3.5 h-3.5" />
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={e => handleDeleteItem(item.id, e)}
+                                    className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 transition-all cursor-pointer"
+                                    title="Delete Collection Item"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -2300,6 +2700,710 @@ export default function CollectionPage() {
         document.body
       )}
 
+      {/* EDIT & SEAL/FILE COLLECTION MODAL (ADMIN ONLY) */}
+      {editingItem && editFormData && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-modal-pop">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-outline-variant/60 flex items-center justify-between bg-surface-container-lowest dark:bg-neutral-900">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                  editingItem.status === 'filed'
+                    ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-primary/10 text-primary dark:text-secondary'
+                }`}>
+                  {editingItem.status === 'filed' ? (
+                    <Lock className="w-5 h-5" />
+                  ) : (
+                    <Edit3 className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-neutral-900 dark:text-white">
+                      {editingItem.status === 'filed' ? 'Sealed & Filed Collection' : 'Edit Collection Receipt'}
+                    </h3>
+                    <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 font-bold text-primary dark:text-secondary">
+                      {editFormData.or_no}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    {editingItem.status === 'filed'
+                      ? 'This collection entry is permanently filed and locked in the official registry.'
+                      : 'Modify collection receipt details or seal as filed into master registry.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingItem(null);
+                  setEditFormData(null);
+                }}
+                className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                handleUpdateCollection(false);
+              }}
+              className="p-5 overflow-y-auto space-y-4 text-xs"
+            >
+              {/* Permanent Lock Banner if already filed */}
+              {editingItem.status === 'filed' && (
+                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-3">
+                  <Lock className="w-5 h-5 text-emerald-700 dark:text-emerald-300 shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <p className="font-bold text-emerald-900 dark:text-emerald-200">
+                      Collection Entry is Sealed &amp; Filed (Locked)
+                    </p>
+                    <p className="text-emerald-700 dark:text-emerald-300 text-[11px] mt-0.5">
+                      Identical to the disbursement registry, this entry cannot be edited or deleted once filed.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+
+              {/* Basic Fields */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                    Receipt #
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    disabled={editingItem.status === 'filed'}
+                    value={editFormData.or_no}
+                    onChange={e => setEditFormData({ ...editFormData, or_no: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent font-mono font-bold text-xs text-neutral-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="Enter receipt number"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                    Transaction Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    disabled={editingItem.status === 'filed'}
+                    value={editFormData.date}
+                    onChange={e => setEditFormData({ ...editFormData, date: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div ref={editMemberComboboxRef} className="relative">
+                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                    Member Name
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      disabled={editingItem.status === 'filed'}
+                      value={editFormData.payor_name}
+                      onFocus={() => {
+                        if (editingItem.status !== 'filed') setIsEditMemberDropdownOpen(true);
+                      }}
+                      onChange={e => handleEditMemberNameChange(e.target.value)}
+                      className="w-full pl-3 pr-8 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                      placeholder="Search or enter member name..."
+                    />
+                    {editingItem.status !== 'filed' && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditMemberDropdownOpen(prev => !prev)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
+                      >
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isEditMemberDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown list */}
+                  {isEditMemberDropdownOpen && editingItem.status !== 'filed' && (
+                    <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-neutral-800 border border-outline-variant/60 shadow-2xl py-1 custom-scrollbar origin-top">
+                      {editFilteredMembers.length === 0 ? (
+                        <div className="px-3 py-3 text-center text-xs text-neutral-400">
+                          No matching member found. You can keep typing custom name.
+                        </div>
+                      ) : (
+                        editFilteredMembers.map(m => {
+                          const isSelected = m.name.toLowerCase() === (editFormData.payor_name || '').toLowerCase();
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => handleSelectEditMember(m)}
+                              className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                isSelected
+                                  ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-secondary font-bold'
+                                  : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700/60'
+                              }`}
+                            >
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-semibold truncate">{m.name}</span>
+                                {m.member_no && (
+                                  <span className="text-[10px] font-mono text-neutral-400">ID: {m.member_no}</span>
+                                )}
+                              </div>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary shrink-0" />}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                    Member ID
+                  </label>
+                  <input
+                    type="text"
+                    disabled={editingItem.status === 'filed'}
+                    value={editFormData.member_id}
+                    onChange={e => setEditFormData({ ...editFormData, member_id: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent font-mono text-xs text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="Auto-filled on member select"
+                  />
+                </div>
+              </div>
+
+              {/* Dynamic Fields for Credit */}
+              {editFormData.tab === 'credit' && (
+                <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-300/70 dark:border-emerald-800/40 space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-emerald-200/80 dark:border-emerald-800/50 pb-2 gap-1">
+                    <div>
+                      <span className="text-[11px] font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-300 block">
+                        Credit &amp; Loan Repayment Breakdown
+                      </span>
+                      <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400 font-medium">
+                        Pay Principal, Interest, Fines, or Common Share
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                      Total: ₱{(editFormData.loans.reduce((acc: number, l: FormLoanEntry) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(editFormData.common_share_amount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  {/* Multi-Loan Cards List */}
+                  <div className="space-y-3">
+                    {editFormData.loans.map((loan: FormLoanEntry, idx: number) => (
+                      <div
+                        key={loan.id}
+                        className={`p-3 rounded-xl bg-white/80 dark:bg-neutral-900/70 border border-emerald-200/90 dark:border-emerald-800/50 space-y-2.5 transition-all ${
+                          editFormData.loans.length > 1 ? 'shadow-xs' : ''
+                        }`}
+                      >
+                        {editFormData.loans.length > 1 && (
+                          <div className="flex items-center justify-between border-b border-emerald-100 dark:border-emerald-900/50 pb-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                              Loan / Payment Item #{idx + 1}
+                            </span>
+                            {editingItem.status !== 'filed' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveEditLoan(idx)}
+                                className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 flex items-center gap-1 cursor-pointer transition-colors"
+                                title="Remove this loan"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Principal */}
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
+                            Account / Particulars (Principal)
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                            <AnimatedSelect
+                              value={loan.loan_account}
+                              onChange={val => handleEditLoanFieldChange(idx, 'loan_account', val)}
+                              options={LOANS_PAYABLE_OPTIONS}
+                              placeholder="Select Loans Payable..."
+                              disabled={editingItem.status === 'filed'}
+                              buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
+                            />
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                disabled={editingItem.status === 'filed'}
+                                value={loan.principal_amount}
+                                onChange={e => handleEditLoanFieldChange(idx, 'principal_amount', e.target.value)}
+                                className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Interest */}
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
+                            Interest Received
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                            <AnimatedSelect
+                              value={loan.interest_account}
+                              onChange={val => handleEditLoanFieldChange(idx, 'interest_account', val)}
+                              options={INTEREST_RECEIVED_OPTIONS}
+                              placeholder="Select Interest Received..."
+                              disabled={editingItem.status === 'filed'}
+                              buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
+                            />
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                disabled={editingItem.status === 'filed'}
+                                value={loan.interest_amount}
+                                onChange={e => handleEditLoanFieldChange(idx, 'interest_amount', e.target.value)}
+                                className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Fines */}
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
+                            Fines &amp; Penalties
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                            <AnimatedSelect
+                              value={loan.fines_account}
+                              onChange={val => handleEditLoanFieldChange(idx, 'fines_account', val)}
+                              options={FINES_OPTIONS}
+                              placeholder="Select Fines..."
+                              disabled={editingItem.status === 'filed'}
+                              buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
+                            />
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                disabled={editingItem.status === 'filed'}
+                                value={loan.fines_amount}
+                                onChange={e => handleEditLoanFieldChange(idx, 'fines_amount', e.target.value)}
+                                className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add Another Loan Item */}
+                  {editingItem.status !== 'filed' && (
+                    <div className="flex justify-end pt-0.5">
+                      <button
+                        type="button"
+                        onClick={handleAddEditLoan}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-emerald-500/70 dark:border-emerald-500/50 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30 transition-all cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Another Loan / Payment Item
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Common Share */}
+                  <div className="space-y-1 pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
+                    <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
+                      Common Share
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                      <div className="px-3 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 flex items-center justify-between">
+                        <span>Common Share</span>
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-100/80 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">
+                          Share Capital
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          disabled={editingItem.status === 'filed'}
+                          value={editFormData.common_share_amount}
+                          onChange={e => setEditFormData({ ...editFormData, common_share_amount: e.target.value })}
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic Fields for Sales */}
+              {editFormData.tab === 'sales' && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-300/60 dark:border-emerald-800/40 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                        Item Description
+                      </label>
+                      <input
+                        type="text"
+                        disabled={editingItem.status === 'filed'}
+                        value={editFormData.item_name}
+                        onChange={e => setEditFormData({ ...editFormData, item_name: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                        placeholder="e.g. BSMT Gala Uniform Set"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                        Category
+                      </label>
+                      <select
+                        disabled={editingItem.status === 'filed'}
+                        value={editFormData.item_category}
+                        onChange={e => setEditFormData({ ...editFormData, item_category: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        <option value="Uniform">Uniform</option>
+                        <option value="Coverall">Coverall</option>
+                        <option value="Pants">Pants</option>
+                        <option value="Shoulder Board">Shoulder Board</option>
+                        <option value="Nameplate / Pin">Nameplate / Pin</option>
+                        <option value="Store Merchandise">Store Merchandise</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                        Quantity
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        disabled={editingItem.status === 'filed'}
+                        value={editFormData.quantity}
+                        onChange={e => setEditFormData({ ...editFormData, quantity: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                        placeholder="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                        Unit Price (₱)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        disabled={editingItem.status === 'filed'}
+                        value={editFormData.unit_price}
+                        onChange={e => setEditFormData({ ...editFormData, unit_price: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic Fields for Services */}
+              {editFormData.tab === 'services' && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-300/60 dark:border-emerald-800/40 space-y-3">
+                  <div>
+                    <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                      Service Type
+                    </label>
+                    <select
+                      disabled={editingItem.status === 'filed'}
+                      value={editFormData.service_type}
+                      onChange={e => setEditFormData({ ...editFormData, service_type: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <option value="Photocopying Services">Photocopying Services</option>
+                      <option value="Document Printing & Lamination">Document Printing & Lamination</option>
+                      <option value="2x2 ID Photo Package">2x2 ID Photo Package</option>
+                      <option value="Membership Application Fee">Membership Application Fee</option>
+                      <option value="Passbook Replacement Fee">Passbook Replacement Fee</option>
+                      <option value="Notarial / Processing Fee">Notarial / Processing Fee</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                        Copies / Count
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        disabled={editingItem.status === 'filed'}
+                        value={editFormData.service_copies}
+                        onChange={e => setEditFormData({ ...editFormData, service_copies: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                        placeholder="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                        Rate per Unit (₱)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        disabled={editingItem.status === 'filed'}
+                        value={editFormData.service_rate}
+                        onChange={e => setEditFormData({ ...editFormData, service_rate: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Method, Reference, Cashier, and Remarks */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                      Payment Method
+                    </label>
+                    <AnimatedSelect
+                      value={editFormData.payment_method}
+                      onChange={val => setEditFormData({ ...editFormData, payment_method: val as PaymentMethod })}
+                      options={PAYMENT_METHOD_OPTIONS}
+                      placeholder="Select Payment Method..."
+                      disabled={editingItem.status === 'filed'}
+                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                      Cashier / Collector
+                    </label>
+                    <AnimatedSelect
+                      value={editFormData.collected_by}
+                      onChange={val => setEditFormData({ ...editFormData, collected_by: val })}
+                      options={CASHIER_OPTIONS}
+                      placeholder="Select Cashier..."
+                      disabled={editingItem.status === 'filed'}
+                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2"
+                    />
+                  </div>
+                </div>
+
+                {editFormData.payment_method === 'GCash' && (
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                      GCash Reference (Last 4 Digits) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      disabled={editingItem.status === 'filed'}
+                      value={editFormData.reference_no}
+                      onChange={e => setEditFormData({ ...editFormData, reference_no: e.target.value.replace(/\D/g, '') })}
+                      className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                      placeholder="e.g. 1234"
+                    />
+                  </div>
+                )}
+
+                {editFormData.payment_method === 'Bank Transfer' && (
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                      Bank Transfer Reference (Full) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      disabled={editingItem.status === 'filed'}
+                      value={editFormData.reference_no}
+                      onChange={e => setEditFormData({ ...editFormData, reference_no: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                      placeholder="Enter full transaction reference"
+                    />
+                  </div>
+                )}
+
+                {editFormData.payment_method === 'Cheque' && (
+                  <div className="p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                      <div>
+                        <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                          Cheque Number <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          disabled={editingItem.status === 'filed'}
+                          value={editFormData.reference_no}
+                          onChange={e => setEditFormData({ ...editFormData, reference_no: e.target.value })}
+                          className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                          placeholder="e.g. 0001234567"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                          Bank Name <span className="text-rose-500">*</span>
+                        </label>
+                        <AnimatedSelect
+                          value={
+                            BANK_OPTIONS.some(b => b.value === editFormData.bank_name)
+                              ? editFormData.bank_name
+                              : editFormData.bank_name
+                              ? 'Other Bank'
+                              : ''
+                          }
+                          onChange={val => {
+                            if (val === 'Other Bank') {
+                              setIsEditCustomBank(true);
+                              if (BANK_OPTIONS.some(b => b.value === editFormData.bank_name)) {
+                                setEditFormData({ ...editFormData, bank_name: '' });
+                              }
+                            } else {
+                              setIsEditCustomBank(false);
+                              setEditFormData({ ...editFormData, bank_name: val });
+                            }
+                          }}
+                          options={BANK_OPTIONS}
+                          placeholder="Select Bank"
+                          disabled={editingItem.status === 'filed'}
+                          buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2.5 text-xs"
+                          menuClassName="w-72"
+                        />
+                      </div>
+                    </div>
+
+                    {isEditCustomBank && (
+                      <div className="animate-in fade-in duration-150">
+                        <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                          Specify Other Bank Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          disabled={editingItem.status === 'filed'}
+                          value={editFormData.bank_name}
+                          onChange={e => setEditFormData({ ...editFormData, bank_name: e.target.value })}
+                          className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs font-bold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                          placeholder="Enter issuing bank name"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Remarks Field */}
+                <div>
+                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                    Remarks
+                  </label>
+                  <textarea
+                    rows={3}
+                    disabled={editingItem.status === 'filed'}
+                    value={editFormData.remarks}
+                    onChange={e => setEditFormData({ ...editFormData, remarks: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs text-neutral-900 dark:text-white resize-y min-h-[72px] disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="Enter remarks or additional details..."
+                  />
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="pt-3 border-t border-outline-variant/60 flex items-center justify-between gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handlePrintReceipt(editingItem)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
+                  title="Print collection receipt"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Receipt</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  {editingItem.status === 'filed' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingItem(null);
+                        setEditFormData(null);
+                      }}
+                      className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 hover:opacity-90 transition-all cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingItem(null);
+                          setEditFormData(null);
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={isSavingEdit}
+                        className="px-4 py-2 rounded-xl text-xs font-bold border border-outline-variant/60 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-900 dark:text-white transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5"
+                      >
+                        {isSavingEdit && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        <span>Save Changes</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isSavingEdit}
+                        onClick={() => setIsSealModalOpen(true)}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                        title="Seal and file this collection entry into master registry (Locks editing and deleting)"
+                      >
+                        {isSavingEdit ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Lock className="w-3.5 h-3.5" />
+                        )}
+                        <span>Seal &amp; File</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* VIEW COLLECTION DETAIL MODAL */}
       {selectedItemForModal && mounted && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
@@ -2457,14 +3561,38 @@ export default function CollectionPage() {
 
               {/* Actions inside Detail Modal */}
               <div className="pt-3 border-t border-outline-variant/60 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => handleDeleteItem(selectedItemForModal.id)}
-                  className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
-                >
-                  Delete Entry
-                </button>
+                {selectedItemForModal.status === 'filed' ? (
+                  <span
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-neutral-400 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed border border-neutral-200 dark:border-neutral-700"
+                    title="Filed collections cannot be deleted"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Locked / Filed</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteItem(selectedItemForModal.id)}
+                    className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                  >
+                    Delete Entry
+                  </button>
+                )}
                 <div className="flex items-center gap-2">
+                  {isAdmin && selectedItemForModal.status !== 'filed' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const itemToEdit = selectedItemForModal;
+                        setSelectedItemForModal(null);
+                        handleOpenEditModal(itemToEdit);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-primary text-white dark:bg-secondary dark:text-neutral-950 hover:brightness-110 transition-all cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Edit &amp; Seal</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handlePrintReceipt(selectedItemForModal)}
@@ -2482,6 +3610,129 @@ export default function CollectionPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* SINGLE ITEM DELETE CONFIRMATION MODAL */}
+      {itemToDelete && mounted && createPortal(
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-modal-pop">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-3 bg-rose-100 dark:bg-rose-950/50 rounded-2xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-neutral-900 dark:text-white">Delete Collection Entry</h3>
+                <p className="text-xs text-neutral-500 font-mono">Receipt #{itemToDelete.or_no}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-surface-container-low/60 dark:bg-neutral-800/60 border border-outline-variant/60 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500">Payor / Member:</span>
+                <span className="font-semibold text-neutral-900 dark:text-white text-right max-w-[200px] truncate">{itemToDelete.payor_name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500">Amount Collected:</span>
+                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                  ₱{itemToDelete.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500">Transaction Date:</span>
+                <span className="text-neutral-700 dark:text-neutral-300">{itemToDelete.date ? new Date(itemToDelete.date).toLocaleDateString() : '—'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500">Payment Method:</span>
+                <span className="font-semibold text-neutral-800 dark:text-neutral-200">{itemToDelete.payment_method}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-neutral-600 dark:text-neutral-400">
+              Are you sure you want to permanently delete this collection receipt? This action cannot be undone.
+            </p>
+
+            <div className="pt-2 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeletingItem}
+                onClick={() => setItemToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingItem}
+                onClick={confirmDeleteSingleItem}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                {isDeletingItem ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>Confirm Delete</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* SEAL & FILE CONFIRMATION MODAL (ADMIN ONLY) */}
+      {isSealModalOpen && editFormData && mounted && createPortal(
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-modal-pop">
+            <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
+              <div className="p-3 bg-emerald-100 dark:bg-emerald-950/60 rounded-2xl">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-neutral-900 dark:text-white">Seal &amp; File Collection Receipt</h3>
+                <p className="text-xs text-neutral-500 font-mono">Receipt #{editFormData.or_no}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-1.5">
+              <p className="font-bold text-emerald-900 dark:text-emerald-200">
+                Warning: Permanent Lock
+              </p>
+              <p className="text-emerald-800 dark:text-emerald-300 text-[11px] leading-relaxed">
+                Once sealed and filed, this collection entry status will become <span className="font-bold uppercase tracking-wider">Filed</span> and will be permanently locked against all future edits and deletions (identical to check vouchers on the disbursement page).
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-surface-container-low/60 dark:bg-neutral-800/60 border border-outline-variant/60 text-xs space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500">Payor / Member:</span>
+                <span className="font-semibold text-neutral-900 dark:text-white">{editFormData.payor_name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500">Total Amount:</span>
+                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                  ₱{(parseFloat(editFormData.amount || '0') || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isSavingEdit}
+                onClick={() => setIsSealModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingEdit}
+                onClick={() => handleUpdateCollection(true)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                <span>Confirm &amp; File</span>
+              </button>
             </div>
           </div>
         </div>,

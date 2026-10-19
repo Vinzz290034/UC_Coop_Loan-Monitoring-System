@@ -4,6 +4,7 @@ import {
   getCollections,
   createCollection,
   bulkImportCollections,
+  updateCollection,
   deleteCollection,
   bulkDeleteCollections
 } from '../controllers/collectionController.js';
@@ -21,6 +22,7 @@ router.post('/bulk', bulkImportCollections);
 router.post('/bulk-delete', bulkDeleteCollections);
 
 router.route('/:id')
+  .put(updateCollection)
   .delete(deleteCollection);
 
 export default router;

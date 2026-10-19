@@ -342,6 +342,100 @@ export async function bulkImportCollections(req, res) {
 }
 
 /**
+ * @desc Update single collection (Edit & Seal/File)
+ * @route PUT /api/collections/:id
+ * @access Private (Admin)
+ */
+export async function updateCollection(req, res) {
+  try {
+    const { id } = req.params;
+    const item = req.body;
+
+    // Check existing
+    const existingRes = await pool.query('SELECT * FROM collections WHERE id = $1', [id]);
+    if (existingRes.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Collection entry not found' }
+      });
+    }
+
+    const existing = existingRes.rows[0];
+
+    const tab = item.tab || existing.tab;
+    const date = item.date || existing.date;
+    const or_no = item.or_no ? item.or_no.trim() : existing.or_no;
+    const payor_name = item.payor_name ? item.payor_name.trim() : existing.payor_name;
+    const member_id = item.member_id !== undefined ? (item.member_id ? item.member_id.trim() : null) : existing.member_id;
+    const loans = item.loans !== undefined ? JSON.stringify(item.loans) : (existing.loans ? JSON.stringify(existing.loans) : '[]');
+    const loan_account = item.loan_account !== undefined ? item.loan_account : existing.loan_account;
+    const principal_amount = item.principal_amount !== undefined ? item.principal_amount : existing.principal_amount;
+    const interest_account = item.interest_account !== undefined ? item.interest_account : existing.interest_account;
+    const interest_amount = item.interest_amount !== undefined ? item.interest_amount : existing.interest_amount;
+    const fines_account = item.fines_account !== undefined ? item.fines_account : existing.fines_account;
+    const fines_amount = item.fines_amount !== undefined ? item.fines_amount : existing.fines_amount;
+    const common_share_amount = item.common_share_amount !== undefined ? item.common_share_amount : existing.common_share_amount;
+    const item_name = item.item_name !== undefined ? item.item_name : existing.item_name;
+    const item_category = item.item_category !== undefined ? item.item_category : existing.item_category;
+    const quantity = item.quantity !== undefined ? item.quantity : existing.quantity;
+    const unit_price = item.unit_price !== undefined ? item.unit_price : existing.unit_price;
+    const service_type = item.service_type !== undefined ? item.service_type : existing.service_type;
+    const service_copies = item.service_copies !== undefined ? item.service_copies : existing.service_copies;
+    const service_rate = item.service_rate !== undefined ? item.service_rate : existing.service_rate;
+    const particulars = item.particulars !== undefined ? item.particulars : existing.particulars;
+    const other_category = item.other_category !== undefined ? item.other_category : existing.other_category;
+    const amount = item.amount !== undefined ? item.amount : existing.amount;
+    const payment_method = item.payment_method || existing.payment_method;
+    const reference_no = item.reference_no !== undefined ? item.reference_no : existing.reference_no;
+    const bank_name = item.bank_name !== undefined ? item.bank_name : existing.bank_name;
+    const status = item.status || existing.status;
+    const remarks = item.remarks !== undefined ? item.remarks : existing.remarks;
+    const collected_by = item.collected_by || existing.collected_by;
+
+    const updateQuery = `
+      UPDATE collections SET
+        tab = $1, date = $2, or_no = $3, payor_name = $4, member_id = $5,
+        loans = $6::jsonb, loan_account = $7, principal_amount = $8, interest_account = $9, interest_amount = $10,
+        fines_account = $11, fines_amount = $12, common_share_amount = $13,
+        item_name = $14, item_category = $15, quantity = $16, unit_price = $17,
+        service_type = $18, service_copies = $19, service_rate = $20,
+        particulars = $21, other_category = $22,
+        amount = $23, payment_method = $24, reference_no = $25, bank_name = $26,
+        status = $27, remarks = $28, collected_by = $29, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $30
+      RETURNING *;
+    `;
+
+    const values = [
+      tab, date, or_no, payor_name, member_id,
+      loans, loan_account, principal_amount, interest_account, interest_amount,
+      fines_account, fines_amount, common_share_amount,
+      item_name, item_category, quantity, unit_price,
+      service_type, service_copies, service_rate,
+      particulars, other_category,
+      amount, payment_method, reference_no, bank_name,
+      status, remarks, collected_by,
+      id
+    ];
+
+    const result = await pool.query(updateQuery, values);
+    const updated = formatCollectionRow(result.rows[0]);
+
+    return res.status(200).json({
+      success: true,
+      data: updated,
+      message: status === 'filed' ? 'Collection entry sealed and filed successfully' : 'Collection entry updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating collection:', error);
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to update collection entry' }
+    });
+  }
+}
+
+/**
  * @desc Delete single collection
  * @route DELETE /api/collections/:id
  * @access Private (Admin, Staff)
@@ -349,14 +443,24 @@ export async function bulkImportCollections(req, res) {
 export async function deleteCollection(req, res) {
   try {
     const { id } = req.params;
-    const result = await pool.query('DELETE FROM collections WHERE id = $1 RETURNING id', [id]);
 
-    if (result.rowCount === 0) {
+    // Check if status is filed
+    const check = await pool.query('SELECT status FROM collections WHERE id = $1', [id]);
+    if (check.rowCount === 0) {
       return res.status(404).json({
         success: false,
         error: { message: 'Collection entry not found' }
       });
     }
+
+    if (check.rows[0].status === 'filed') {
+      return res.status(403).json({
+        success: false,
+        error: { message: 'This collection entry is Sealed & Filed and cannot be deleted.' }
+      });
+    }
+
+    await pool.query('DELETE FROM collections WHERE id = $1', [id]);
 
     return res.status(200).json({
       success: true,
@@ -387,7 +491,7 @@ export async function bulkDeleteCollections(req, res) {
     }
 
     const result = await pool.query(
-      'DELETE FROM collections WHERE id = ANY($1::text[]) RETURNING id',
+      "DELETE FROM collections WHERE id = ANY($1::text[]) AND status != 'filed' RETURNING id",
       [ids]
     );
 
