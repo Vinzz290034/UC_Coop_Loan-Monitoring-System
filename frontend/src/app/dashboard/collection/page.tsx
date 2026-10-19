@@ -33,7 +33,11 @@ import {
   Eye,
   Check,
   AlertCircle,
-  FolderOpen
+  FolderOpen,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 export type CollectionTab = 'all' | 'credit' | 'sales' | 'services';
@@ -404,6 +408,11 @@ export default function CollectionPage() {
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isCustomBank, setIsCustomBank] = useState(false);
 
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
+  const [isExpandedAll, setIsExpandedAll] = useState(false);
+
   // Selected item for detail view modal
   const [selectedItemForModal, setSelectedItemForModal] = useState<CollectionItem | null>(null);
 
@@ -718,12 +727,47 @@ export default function CollectionPage() {
     };
   }, [collections, activeTab]);
 
+  // Reset pagination on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery, selectedMethod, selectedStatus, sortOrder, itemsPerPage]);
+
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil(filteredCollections.length / itemsPerPage));
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const paginatedCollections = isExpandedAll
+    ? filteredCollections
+    : filteredCollections.slice(indexOfFirstItem, indexOfLastItem);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const getPaginationNumbers = (current: number, total: number): (number | string)[] => {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 4) {
+      return [1, 2, 3, 4, 5, '...', total];
+    }
+    if (current >= total - 3) {
+      return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+    }
+    return [1, '...', current - 1, current, current + 1, '...', total];
+  };
+
   // Selection handlers
   const toggleSelectAll = () => {
-    if (filteredCollections.length > 0 && selectedIds.length === filteredCollections.length) {
-      setSelectedIds([]);
+    const pageItems = isExpandedAll ? filteredCollections : paginatedCollections;
+    const pageIds = pageItems.map(c => c.id);
+    const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id));
+    if (allPageSelected) {
+      setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
     } else {
-      setSelectedIds(filteredCollections.map(c => c.id));
+      setSelectedIds(prev => Array.from(new Set([...prev, ...pageIds])));
     }
   };
 
@@ -1319,7 +1363,10 @@ export default function CollectionPage() {
                   <th className="py-3 px-3 w-10 text-center">
                     <input
                       type="checkbox"
-                      checked={filteredCollections.length > 0 && selectedIds.length === filteredCollections.length}
+                      checked={
+                        (isExpandedAll ? filteredCollections : paginatedCollections).length > 0 &&
+                        (isExpandedAll ? filteredCollections : paginatedCollections).every(c => selectedIds.includes(c.id))
+                      }
                       onChange={toggleSelectAll}
                       className="rounded border-neutral-300 text-primary focus:ring-primary cursor-pointer"
                     />
@@ -1375,7 +1422,7 @@ export default function CollectionPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredCollections.map(item => {
+                  paginatedCollections.map(item => {
                     const isSelected = selectedIds.includes(item.id);
 
                     // Formulate primary description
@@ -1510,6 +1557,132 @@ export default function CollectionPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          {filteredCollections.length > 0 && (
+            <div className="border-t border-outline-variant/60 px-4 py-3 bg-neutral-50/50 dark:bg-surface-container-low/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-3 text-neutral-600 dark:text-neutral-400">
+                <span>
+                  {isExpandedAll ? (
+                    <>Displaying all <strong className="font-bold text-neutral-900 dark:text-white font-mono">{filteredCollections.length}</strong> collections</>
+                  ) : (
+                    <>
+                      Displaying{' '}
+                      <strong className="font-bold text-neutral-900 dark:text-white font-mono">
+                        {indexOfFirstItem + 1}
+                      </strong>{' '}
+                      -{' '}
+                      <strong className="font-bold text-neutral-900 dark:text-white font-mono">
+                        {Math.min(indexOfLastItem, filteredCollections.length)}
+                      </strong>{' '}
+                      of{' '}
+                      <strong className="font-bold text-neutral-900 dark:text-white font-mono">
+                        {filteredCollections.length}
+                      </strong>{' '}
+                      collections
+                    </>
+                  )}
+                </span>
+
+                {/* Items per page selector */}
+                {!isExpandedAll && (
+                  <div className="flex items-center gap-1.5 ml-0 sm:ml-2 pl-0 sm:pl-2 border-l-0 sm:border-l border-outline-variant/60">
+                    <span className="text-neutral-500 text-[11px]">Rows:</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={e => {
+                        setItemsPerPage(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="px-2 py-1 rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 text-xs font-semibold focus:outline-none focus:border-primary cursor-pointer"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Page navigation controls */}
+              <div className="flex flex-wrap items-center gap-1.5 justify-center">
+                {isExpandedAll ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsExpandedAll(false)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant/60 rounded-full text-xs font-bold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                    title="Restore pagination"
+                  >
+                    <Minimize2 className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                    <span>Minimize Table</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 border border-outline-variant/60 rounded-full text-xs font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-neutral-700 dark:text-neutral-300"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Previous</span>
+                    </button>
+
+                    {getPaginationNumbers(currentPage, totalPages).map((p, idx) => {
+                      if (p === '...') {
+                        return (
+                          <span
+                            key={`ellipsis-${idx}`}
+                            className="w-7 h-7 flex items-center justify-center text-xs text-neutral-400 font-bold select-none"
+                          >
+                            ...
+                          </span>
+                        );
+                      }
+                      const pageNum = Number(p);
+                      return (
+                        <button
+                          key={`page-${pageNum}`}
+                          type="button"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-7 h-7 rounded-full text-xs font-bold border transition-all cursor-pointer ${
+                            currentPage === pageNum
+                              ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-xs'
+                              : 'border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 border border-outline-variant/60 rounded-full text-xs font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-neutral-700 dark:text-neutral-300"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+
+                    {filteredCollections.length > itemsPerPage && (
+                      <button
+                        type="button"
+                        onClick={() => setIsExpandedAll(true)}
+                        className="ml-1 inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/10 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95"
+                        title="Expand table to display all records on one page"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                        <span>All</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
