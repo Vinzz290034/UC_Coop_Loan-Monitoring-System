@@ -1359,24 +1359,39 @@ export default function CollectionPage() {
     window.print();
   };
 
-  // Import handler
-  const handleImportComplete = async (importedItems: CollectionItem[], mode: 'append' | 'replace') => {
+  // Import handler with smart deduplication
+  const handleImportComplete = async (importedItems: CollectionItem[]) => {
     try {
-      const res = await api.post('/collections/bulk', { items: importedItems, mode });
+      const res = await api.post('/collections/bulk', { items: importedItems });
       const savedItems: CollectionItem[] = res.data?.data || importedItems;
-      if (mode === 'replace') {
-        setCollections(savedItems);
-      } else {
-        setCollections(prev => {
-          const existingIds = new Set(savedItems.map(s => s.id));
-          return [...savedItems, ...prev.filter(p => !existingIds.has(p.id))];
-        });
-      }
+      const { inserted = 0, updated = 0, skipped = 0 } = res.data || {};
+
+      setCollections(prev => {
+        const savedMap = new Map(savedItems.map(s => [s.id, s]));
+        const updatedList = prev.map(p => savedMap.get(p.id) || p);
+        const existingIds = new Set(prev.map(p => p.id));
+        const newItems = savedItems.filter(s => !existingIds.has(s.id));
+        return [...newItems, ...updatedList];
+      });
+
       if (typeof window !== 'undefined') {
         localStorage.setItem('uc_coop_collections', JSON.stringify(savedItems));
       }
-      setActionFeedback({ type: 'success', message: `Imported ${importedItems.length} collection items saved to cloud database!` });
-      setTimeout(() => setActionFeedback(null), 4000);
+
+      let feedbackMsg = `Processed ${importedItems.length} records`;
+      if (inserted > 0 && updated > 0) {
+        feedbackMsg = `Import completed: ${inserted} new records added, ${updated} existing records updated.`;
+      } else if (updated > 0 && inserted === 0) {
+        feedbackMsg = `All ${updated} existing records updated without duplicates.`;
+      } else if (inserted > 0) {
+        feedbackMsg = `Imported ${inserted} new collection records saved to database.`;
+      }
+      if (skipped > 0) {
+        feedbackMsg += ` (${skipped} filed records preserved)`;
+      }
+
+      setActionFeedback({ type: 'success', message: feedbackMsg });
+      setTimeout(() => setActionFeedback(null), 5000);
     } catch (err: any) {
       console.error('Failed to save imported collections to database:', err);
       setActionFeedback({ type: 'error', message: err?.response?.data?.error?.message || 'Failed to save imported collections to cloud database.' });

@@ -207,7 +207,7 @@ export async function createCollection(req, res) {
 export async function bulkImportCollections(req, res) {
   const client = await pool.connect();
   try {
-    const { items, mode = 'append' } = req.body;
+    const { items } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -218,13 +218,12 @@ export async function bulkImportCollections(req, res) {
 
     await client.query('BEGIN');
 
-    if (mode === 'replace') {
-      await client.query('DELETE FROM collections');
-    }
+    let insertedCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const processedRows = [];
 
-    const insertedRows = [];
-
-    const insertSql = `
+    const upsertSql = `
       INSERT INTO collections (
         id, tab, date, or_no, payor_name, member_id,
         loans, loan_account, principal_amount, interest_account, interest_amount,
@@ -269,7 +268,7 @@ export async function bulkImportCollections(req, res) {
         payment_method = EXCLUDED.payment_method,
         reference_no = EXCLUDED.reference_no,
         bank_name = EXCLUDED.bank_name,
-        status = EXCLUDED.status,
+        status = CASE WHEN collections.status = 'filed' THEN 'filed' ELSE EXCLUDED.status END,
         remarks = EXCLUDED.remarks,
         collected_by = EXCLUDED.collected_by,
         updated_at = CURRENT_TIMESTAMP
@@ -277,10 +276,44 @@ export async function bulkImportCollections(req, res) {
     `;
 
     for (const item of items) {
-      const id = item.id || `imp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const or_no = item.or_no ? item.or_no.trim() : '';
+      let targetId = item.id;
+      let isExisting = false;
+
+      // 1. Direct match by ID
+      if (targetId) {
+        const idCheck = await client.query('SELECT id, status FROM collections WHERE id = $1 LIMIT 1', [targetId]);
+        if (idCheck.rowCount > 0) {
+          isExisting = true;
+          if (idCheck.rows[0].status === 'filed') {
+            skippedCount++;
+            continue;
+          }
+        }
+      }
+
+      // 2. Receipt Number (or_no) match if ID not already matched
+      if (!isExisting && or_no) {
+        const orCheck = await client.query(
+          'SELECT id, status FROM collections WHERE LOWER(TRIM(or_no)) = LOWER(TRIM($1)) LIMIT 1',
+          [or_no]
+        );
+        if (orCheck.rowCount > 0) {
+          targetId = orCheck.rows[0].id;
+          isExisting = true;
+          if (orCheck.rows[0].status === 'filed') {
+            skippedCount++;
+            continue;
+          }
+        }
+      }
+
+      if (!targetId) {
+        targetId = `imp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      }
+
       const tab = item.tab === 'others' ? 'credit' : (item.tab || 'credit');
       const date = item.date || new Date().toISOString().split('T')[0];
-      const or_no = item.or_no ? item.or_no.trim() : '';
       const payor_name = item.payor_name ? item.payor_name.trim() : '';
       const member_id = item.member_id ? item.member_id.trim() : null;
       const loans = item.loans ? JSON.stringify(item.loans) : '[]';
@@ -309,7 +342,7 @@ export async function bulkImportCollections(req, res) {
       const collected_by = item.collected_by || 'CHINNETTE A. LAMOSTE';
 
       const values = [
-        id, tab, date, or_no, payor_name, member_id,
+        targetId, tab, date, or_no, payor_name, member_id,
         loans, loan_account, principal_amount, interest_account, interest_amount,
         fines_account, fines_amount, common_share_amount,
         item_name, item_category, quantity, unit_price,
@@ -318,16 +351,25 @@ export async function bulkImportCollections(req, res) {
         amount, payment_method, reference_no, bank_name, status, remarks, collected_by
       ];
 
-      const resRow = await client.query(insertSql, values);
-      insertedRows.push(formatCollectionRow(resRow.rows[0]));
+      const resRow = await client.query(upsertSql, values);
+      processedRows.push(formatCollectionRow(resRow.rows[0]));
+
+      if (isExisting) {
+        updatedCount++;
+      } else {
+        insertedCount++;
+      }
     }
 
     await client.query('COMMIT');
 
     return res.status(200).json({
       success: true,
-      count: insertedRows.length,
-      data: insertedRows
+      count: processedRows.length,
+      inserted: insertedCount,
+      updated: updatedCount,
+      skipped: skippedCount,
+      data: processedRows
     });
   } catch (error) {
     await client.query('ROLLBACK');

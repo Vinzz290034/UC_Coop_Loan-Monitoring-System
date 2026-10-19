@@ -26,7 +26,7 @@ import { CollectionItem, CollectionTab, CollectionLoanPayment } from '@/app/dash
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onImportComplete: (items: CollectionItem[], mode: 'append' | 'replace') => Promise<void> | void;
+  onImportComplete: (items: CollectionItem[]) => Promise<void> | void;
   currentUser: string;
 }
 
@@ -55,7 +55,6 @@ export default function InvoiceArExcelImportModal({
 
   const [parsedBreakdowns, setParsedBreakdowns] = useState<ParsedRowBreakdown[]>([]);
   const [activePreviewTab, setActivePreviewTab] = useState<'all' | CollectionTab>('all');
-  const [importMode, setImportMode] = useState<'append' | 'replace'>('replace');
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -734,9 +733,11 @@ export default function InvoiceArExcelImportModal({
       }
 
       const totalAmount = b.cashOnHand > 0 ? b.cashOnHand : b.rowTotal;
+      const cleanSheetKey = (selectedSheet || 'sheet').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+      const cleanInvKey = (b.invoiceNo || `row${idx}`).toLowerCase().replace(/[^a-z0-9]/g, '');
 
       return {
-        id: firstItem?.id || `imp-${idx}-${b.invoiceNo}`,
+        id: `imp-${cleanSheetKey}-${cleanInvKey}`,
         tab,
         date: b.date,
         or_no: b.invoiceNo,
@@ -754,7 +755,7 @@ export default function InvoiceArExcelImportModal({
         amount: totalAmount,
       };
     });
-  }, [parsedBreakdowns, currentUser]);
+  }, [parsedBreakdowns, currentUser, selectedSheet]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -808,7 +809,7 @@ export default function InvoiceArExcelImportModal({
     setIsProcessing(true);
     setErrorMessage(null);
     try {
-      await onImportComplete(allParsedItems, importMode);
+      await onImportComplete(allParsedItems);
       onClose();
     } catch (err: any) {
       setErrorMessage(err?.response?.data?.error?.message || err?.message || 'Failed to save imported records to database.');
@@ -1179,39 +1180,18 @@ export default function InvoiceArExcelImportModal({
                 </div>
               </div>
 
-              {/* Import Options */}
-              <div className="p-4 rounded-2xl border border-outline-variant/50 bg-neutral-50/50 dark:bg-surface-container-low/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200 block">
-                    Import Mode:
-                  </span>
-                  <p className="text-[11px] text-neutral-500">
-                    Choose whether to append these entries to existing collections or replace existing records.
-                  </p>
+              {/* Smart Deduplication Note */}
+              <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Check className="w-4 h-4" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setImportMode('append')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      importMode === 'append'
-                        ? 'bg-emerald-700 text-white shadow-xs'
-                        : 'border border-outline-variant/60 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100'
-                    }`}
-                  >
-                    Append to Existing
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImportMode('replace')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      importMode === 'replace'
-                        ? 'bg-red-700 text-white shadow-xs'
-                        : 'border border-outline-variant/60 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100'
-                    }`}
-                  >
-                    Replace All
-                  </button>
+                <div className="text-xs">
+                  <p className="font-bold text-emerald-950 dark:text-emerald-200">
+                    Smart Deduplication &amp; Update Active
+                  </p>
+                  <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400 mt-0.5">
+                    Existing receipts will be automatically updated with new data without creating duplicate entries. Sealed &amp; filed records are safely preserved.
+                  </p>
                 </div>
               </div>
             </div>
