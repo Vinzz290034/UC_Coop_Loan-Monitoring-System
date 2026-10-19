@@ -926,7 +926,7 @@ export const getCheckVouchers = async (req, res, next) => {
     params.push(offset);
     const result = await query(
       `SELECT id, loan_id, voucher_no, voucher_date, check_no, payee, bank, particulars,
-              amount, managers_approval_date, date_released, folder_name, box_name, details, signatories,
+              amount, fund_amount, managers_approval_date, date_released, folder_name, box_name, details, signatories,
               COALESCE(status, 'edit') AS status, created_at,
               (
                 SELECT JSON_BUILD_OBJECT(
@@ -1000,6 +1000,7 @@ export const updateCheckVoucher = async (req, res, next) => {
       bank,
       particulars,
       amount,
+      fund_amount,
       date_released,
       managers_approval_date,
       folder_name,
@@ -1064,6 +1065,7 @@ export const updateCheckVoucher = async (req, res, next) => {
     const resolvedBank = bank !== undefined ? bank : currentCv.bank;
     const resolvedParticulars = particulars !== undefined ? particulars : currentCv.particulars;
     const resolvedAmount = amount !== undefined ? (amount !== null && amount !== '' ? parseFloat(amount) : null) : currentCv.amount;
+    const resolvedFundAmount = fund_amount !== undefined ? (fund_amount !== null && fund_amount !== '' ? parseFloat(fund_amount) : null) : currentCv.fund_amount;
     const resolvedFolderName = folder_name !== undefined ? folder_name : currentCv.folder_name;
     const resolvedStatus = status !== undefined ? status.toLowerCase() : currentCv.status;
 
@@ -1085,15 +1087,16 @@ export const updateCheckVoucher = async (req, res, next) => {
            bank = $5,
            particulars = $6,
            amount = $7,
-           date_released = $8,
-           managers_approval_date = $9,
-           folder_name = $10,
-           status = $11,
-           details = $12,
-           signatories = $13,
-           loan_id = $14,
+           fund_amount = $8,
+           date_released = $9,
+           managers_approval_date = $10,
+           folder_name = $11,
+           status = $12,
+           details = $13,
+           signatories = $14,
+           loan_id = $15,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $15
+       WHERE id = $16
        RETURNING *`,
       [
         resolvedVoucherNo,
@@ -1103,6 +1106,7 @@ export const updateCheckVoucher = async (req, res, next) => {
         resolvedBank,
         resolvedParticulars,
         resolvedAmount,
+        resolvedFundAmount,
         resolvedDateReleased,
         resolvedApprovalDate,
         resolvedFolderName,
@@ -1116,7 +1120,7 @@ export const updateCheckVoucher = async (req, res, next) => {
 
     const fullUpdatedCvRes = await query(
       `SELECT id, loan_id, voucher_no, voucher_date, check_no, payee, bank, particulars,
-              amount, managers_approval_date, date_released, folder_name, box_name, details, signatories,
+              amount, fund_amount, managers_approval_date, date_released, folder_name, box_name, details, signatories,
               COALESCE(status, 'edit') AS status, created_at, updated_at,
               (
                 SELECT JSON_BUILD_OBJECT(

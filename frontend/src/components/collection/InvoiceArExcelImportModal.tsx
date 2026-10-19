@@ -255,7 +255,7 @@ export default function InvoiceArExcelImportModal({
       const parsedDate = parseExcelDate(rawDate);
 
       const rawInvoice = String(row[invoiceCol !== -1 ? invoiceCol : 2] || '').trim();
-      const invoiceNo = rawInvoice ? (rawInvoice.startsWith('INV#') ? rawInvoice : `INV#${rawInvoice}`) : `INV#${Math.floor(1000 + Math.random() * 9000)}`;
+      const invoiceNo = rawInvoice ? rawInvoice.replace(/^INV#\s*/i, '').trim() : String(Math.floor(1000 + Math.random() * 9000));
 
       const rawCashOnHand = parseExcelNum(row[cashOnHandCol !== -1 ? cashOnHandCol : 3]);
       const rawDetails = String(row[detailsCol !== -1 ? detailsCol : 4] || '').trim();

@@ -133,16 +133,71 @@ export const DISBURSEMENT_CATEGORY_OPTIONS: { value: string; label: string }[] =
   { value: 'Others', label: 'Others' }
 ];
 
+export interface RevolvingFundClassification {
+  name: string;
+  defaultAmount: number;
+  shortName: string;
+}
+
+export const REVOLVING_FUND_CLASSIFICATIONS: RevolvingFundClassification[] = [
+  { name: 'Revolving Fund - Honorarium & Wages', defaultAmount: 56100, shortName: 'Honorarium & Wages' },
+  { name: 'Revolving Fund - Petty Cash', defaultAmount: 3000, shortName: 'Petty Cash' },
+  { name: 'Revolving Fund - Rice', defaultAmount: 50000, shortName: 'Rice' },
+  { name: 'Revolving Fund - Manager', defaultAmount: 100000, shortName: 'Manager' },
+];
+
+export const detectRfClassification = (cv?: any, rows?: any[]): string => {
+  let detailsText = '';
+  if (cv?.details) {
+    if (typeof cv.details === 'string') {
+      detailsText = cv.details;
+    } else if (Array.isArray(cv.details)) {
+      detailsText = cv.details.map((d: any) => `${d.book_of_account || ''} ${d.description || ''}`).join(' ');
+    }
+  }
+
+  const textToScan = [
+    cv?.particulars || '',
+    cv?.folder_name || '',
+    detailsText,
+    ...(rows || []).map((r: any) => r.description || r.book_of_account || '')
+  ].join(' ').toLowerCase();
+
+  for (const c of REVOLVING_FUND_CLASSIFICATIONS) {
+    if (textToScan.includes(c.name.toLowerCase()) || textToScan.includes(c.shortName.toLowerCase())) {
+      return c.name;
+    }
+  }
+
+  const fa = cv?.fund_amount !== undefined && cv?.fund_amount !== null && cv?.fund_amount !== '' ? parseFloat(cv.fund_amount) : NaN;
+  if (!isNaN(fa)) {
+    const matchByAmount = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.defaultAmount === fa);
+    if (matchByAmount) return matchByAmount.name;
+  }
+
+  return 'Revolving Fund - Honorarium & Wages';
+};
+
 export const formatCategoryLabel = (folderName?: string, cv?: any): string => {
   const targetFolder = folderName || cv?.folder_name;
   if (targetFolder) {
+    if (/revolving/i.test(targetFolder)) {
+      if (cv) {
+        const rfClass = detectRfClassification(cv);
+        const matchClass = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === rfClass);
+        if (matchClass) {
+          return `Revolving Fund Replenishment - ${matchClass.shortName}`;
+        }
+      }
+      return 'Revolving Fund Replenishment';
+    }
+
     const match = DISBURSEMENT_CATEGORY_OPTIONS.find(
       opt => opt.value.toLowerCase() === targetFolder.toLowerCase() || opt.label.toLowerCase() === targetFolder.toLowerCase()
     );
     if (match) return match.label;
     if (/loan/i.test(targetFolder)) return 'Regular Loans';
     if (/stl/i.test(targetFolder)) return 'STL Replenishment';
-    if (/revolving/i.test(targetFolder)) return 'Revolving Fund Replenishment';
     if (/petty/i.test(targetFolder)) return 'Petty Cash Replenishment';
     if (/merchandise/i.test(targetFolder)) return 'Merchandise Payment';
     if (/operation/i.test(targetFolder)) return 'Operation Expense';
@@ -154,7 +209,14 @@ export const formatCategoryLabel = (folderName?: string, cv?: any): string => {
   if (cv) {
     const part = (cv.particulars || '').toLowerCase();
     if (part.includes('stl') || part.includes('short term') || cv.stl_liquidation?.id) return 'STL Replenishment';
-    if (part.includes('rf') || part.includes('revolving') || part.includes('liquidation') || cv.revolving_fund?.id) return 'Revolving Fund Replenishment';
+    if (part.includes('rf') || part.includes('revolving') || part.includes('liquidation') || cv.revolving_fund?.id) {
+      const rfClass = detectRfClassification(cv);
+      const matchClass = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === rfClass);
+      if (matchClass) {
+        return `Revolving Fund Replenishment - ${matchClass.shortName}`;
+      }
+      return 'Revolving Fund Replenishment';
+    }
     if (part.includes('petty cash')) return 'Petty Cash Replenishment';
     if (
       part.includes('swimming') ||
@@ -992,6 +1054,7 @@ function DisbursementPageContent() {
   const [newCvCheckNo, setNewCvCheckNo] = useState('');
   const [newCvParticulars, setNewCvParticulars] = useState('');
   const [newCvFundAmount, setNewCvFundAmount] = useState('');
+  const [newCvRfClassification, setNewCvRfClassification] = useState<string>('Revolving Fund - Honorarium & Wages');
   const [newCvCategory, setNewCvCategory] = useState('');
   const [newCvPreparedBy, setNewCvPreparedBy] = useState('CHINNETTE A. LAMOSTE');
   const [newCvCheckedBy, setNewCvCheckedBy] = useState('MARILOU LARIOSA');
@@ -1014,6 +1077,8 @@ function DisbursementPageContent() {
     bank: '',
     particulars: '',
     folder_name: '',
+    fund_amount: '',
+    rf_classification: 'Revolving Fund - Honorarium & Wages',
     prepared_by: '',
     checked_by: '',
     approved_by: '',
@@ -2640,6 +2705,13 @@ function DisbursementPageContent() {
     }
     if (!detectedBank) detectedBank = 'BDO';
 
+    const detectedRfClass = detectRfClassification(cv, rowsToUse);
+    let initialFundAmount = cv.fund_amount !== undefined && cv.fund_amount !== null && cv.fund_amount !== '' ? String(cv.fund_amount) : '';
+    if (getReplenishmentType(cv.folder_name, cv) === 'rf' && !initialFundAmount) {
+      const match = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === detectedRfClass);
+      if (match) initialFundAmount = String(match.defaultAmount);
+    }
+
     const initialForm = {
       id: cv.id,
       voucher_no: cv.voucher_no || '',
@@ -2651,6 +2723,8 @@ function DisbursementPageContent() {
       bank: detectedBank,
       particulars: cv.particulars || '',
       folder_name: cv.folder_name || currentTabConfig.defaultCategory,
+      fund_amount: initialFundAmount,
+      rf_classification: detectedRfClass,
       prepared_by: formatSignatoryName(cv.signatories?.prepared_by, 'CHINNETTE A. LAMOSTE'),
       checked_by: formatSignatoryName(cv.signatories?.checked_by, 'MARILOU LARIOSA'),
       approved_by: formatSignatoryName(cv.signatories?.approved_by, 'MICHELLE M. PABLE'),
@@ -2999,6 +3073,7 @@ function DisbursementPageContent() {
         particulars: editCvFormData.particulars.trim() || null,
         folder_name: editCvFormData.folder_name.trim() || null,
         amount: finalAmount,
+        fund_amount: editCvFormData.fund_amount !== undefined && editCvFormData.fund_amount !== null && editCvFormData.fund_amount !== '' ? parseFloat(editCvFormData.fund_amount) : null,
         details: detailsArray,
         signatories: {
           prepared_by: editCvFormData.prepared_by.trim(),
@@ -3106,6 +3181,38 @@ function DisbursementPageContent() {
     }
   };
 
+  // Handle Revolving Fund classification selection (Create & Edit)
+  const handleSelectRfClassification = (classificationName: string, isEdit: boolean = false) => {
+    const match = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === classificationName);
+    const defaultAmt = match ? String(match.defaultAmount) : '';
+
+    if (isEdit) {
+      setEditCvFormData(prev => ({
+        ...prev,
+        rf_classification: classificationName,
+        fund_amount: defaultAmt
+      }));
+      setEditCvRows(prev => prev.map(r => {
+        if (r.isAutoCredit && (/revolving\s*fund/i.test(r.description || '') || /operation/i.test(r.description || ''))) {
+          return { ...r, description: classificationName };
+        }
+        return r;
+      }));
+    } else {
+      setNewCvRfClassification(classificationName);
+      setNewCvFundAmount(defaultAmt);
+      if (!newCvParticulars || newCvParticulars.startsWith('Revolving Fund Replenishment')) {
+        setNewCvParticulars(`Revolving Fund Replenishment - ${match?.shortName || ''}`);
+      }
+      setNewCvRows(prev => prev.map(r => {
+        if (r.isAutoCredit && (/revolving\s*fund/i.test(r.description || '') || /operation/i.test(r.description || ''))) {
+          return { ...r, description: classificationName };
+        }
+        return r;
+      }));
+    }
+  };
+
   // Open Create Check Voucher Modal
   const openCreateCheckVoucherModal = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -3116,8 +3223,6 @@ function DisbursementPageContent() {
     setNewCvPayee('');
     setNewCvBankName('BDO');
     setNewCvCheckNo('');
-    setNewCvParticulars('');
-    setNewCvFundAmount('');
     const defaultCat = currentTabConfig.defaultCategory || 'Loan';
     setNewCvCategory(defaultCat);
     setNewCvPreparedBy('CHINNETTE A. LAMOSTE');
@@ -3126,7 +3231,19 @@ function DisbursementPageContent() {
     setNewCvLiquidatedBy('MICHELLE M. PABLE');
     setNewCvDetailedApprovedBy('CANDILARIO N. TATOY');
 
+    const defaultRfClass = REVOLVING_FUND_CLASSIFICATIONS[0].name;
+    const defaultRfAmt = String(REVOLVING_FUND_CLASSIFICATIONS[0].defaultAmount);
+    setNewCvRfClassification(defaultRfClass);
+
     const isReplenish = getReplenishmentType(defaultCat);
+    if (isReplenish === 'rf') {
+      setNewCvFundAmount(defaultRfAmt);
+      setNewCvParticulars(`Revolving Fund Replenishment - ${REVOLVING_FUND_CLASSIFICATIONS[0].shortName}`);
+    } else {
+      setNewCvFundAmount('');
+      setNewCvParticulars('');
+    }
+
     const row0Id = `new-row-0-${Date.now()}`;
     if (isReplenish) {
       const defaultBank = formatCibAccountName(newCvBankName || 'MBTC');
@@ -3144,7 +3261,7 @@ function DisbursementPageContent() {
           id: `credit-${row0Id}`,
           date: today,
           voucher_no: '',
-          description: defaultBank,
+          description: isReplenish === 'rf' ? defaultRfClass : defaultBank,
           debit: '',
           credit: '',
           isAutoCredit: true
@@ -3706,7 +3823,7 @@ function DisbursementPageContent() {
                           </td>
                           <td className="py-3.5 px-4 text-neutral-700 dark:text-neutral-300 max-w-[280px]" title={cv.particulars}>
                             <div className="truncate font-medium">{cv.particulars || 'Disbursement voucher'}</div>
-                            {activeTab === 'summary' && (
+                            {(activeTab === 'summary' || activeTab === 'revolving_fund_replenishment') && (
                               <div className="mt-1">
                                 <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700">
                                   {formatCategoryLabel(cv.folder_name, cv)}
@@ -3888,14 +4005,21 @@ function DisbursementPageContent() {
                         setNewCvCategory(selected);
                         const matched = CATEGORY_TABS.find(t => t.defaultCategory === selected);
                         const isRepl = getReplenishmentType(selected);
-                        if (isRepl) {
+                        if (isRepl === 'rf') {
+                          const defaultRfClass = REVOLVING_FUND_CLASSIFICATIONS[0].name;
+                          const defaultRfAmt = String(REVOLVING_FUND_CLASSIFICATIONS[0].defaultAmount);
+                          setNewCvRfClassification(defaultRfClass);
+                          setNewCvFundAmount(defaultRfAmt);
+                          if (!newCvParticulars || newCvParticulars.startsWith('Revolving Fund Replenishment')) {
+                            setNewCvParticulars(`Revolving Fund Replenishment - ${REVOLVING_FUND_CLASSIFICATIONS[0].shortName}`);
+                          }
                           const row0Id = `new-row-0-${Date.now()}`;
                           setNewCvRows([
                             {
                               id: row0Id,
                               date: newCvDate || new Date().toISOString().split('T')[0],
                               voucher_no: '',
-                              description: isRepl === 'stl' ? 'Short Term Loan' : 'Communication',
+                              description: 'Communication',
                               debit: '',
                               credit: ''
                             },
@@ -3903,7 +4027,30 @@ function DisbursementPageContent() {
                               id: `credit-${row0Id}`,
                               date: newCvDate || new Date().toISOString().split('T')[0],
                               voucher_no: '',
-                              description: isRepl === 'stl' ? 'Revolving Fund - STL' : 'Revolving Fund - Operation',
+                              description: defaultRfClass,
+                              debit: '',
+                              credit: '',
+                              isAutoCredit: true,
+                              pairedWithId: row0Id
+                            }
+                          ]);
+                        } else if (isRepl === 'stl') {
+                          setNewCvFundAmount('');
+                          const row0Id = `new-row-0-${Date.now()}`;
+                          setNewCvRows([
+                            {
+                              id: row0Id,
+                              date: newCvDate || new Date().toISOString().split('T')[0],
+                              voucher_no: '',
+                              description: 'Short Term Loan',
+                              debit: '',
+                              credit: ''
+                            },
+                            {
+                              id: `credit-${row0Id}`,
+                              date: newCvDate || new Date().toISOString().split('T')[0],
+                              voucher_no: '',
+                              description: 'Revolving Fund - STL',
                               debit: '',
                               credit: '',
                               isAutoCredit: true,
@@ -4043,27 +4190,77 @@ function DisbursementPageContent() {
                   />
                 </div>
 
-                {/* Fund Amount */}
-                <div>
-                  <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
-                    Fund Amount <span className="text-neutral-400 font-normal normal-case">(Total fund amount)</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-sm">₱</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={newCvFundAmount}
-                      onChange={e => setNewCvFundAmount(e.target.value)}
-                      className="w-full pl-7 pr-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-mono font-bold"
-                    />
+                {/* Revolving Fund Classification & Fund Amount */}
+                {getReplenishmentType(newCvCategory) === 'rf' ? (
+                  <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Revolving Fund Classification
+                      </span>
+                      <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 font-medium">
+                        Selecting classification auto-fills the default fund amount and balancing credit row.
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                      <div className="sm:col-span-7">
+                        <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
+                          Classification *
+                        </label>
+                        <AnimatedSelect
+                          value={newCvRfClassification}
+                          onChange={val => handleSelectRfClassification(val, false)}
+                          options={REVOLVING_FUND_CLASSIFICATIONS.map(c => ({
+                            value: c.name,
+                            label: `${c.name} (₱${c.defaultAmount.toLocaleString()})`
+                          }))}
+                          buttonClassName="font-bold text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                          menuClassName="min-w-[280px]"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-5">
+                        <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
+                          Fund Amount (₱) *
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-sm">₱</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={newCvFundAmount}
+                            onChange={e => setNewCvFundAmount(e.target.value)}
+                            className="w-full pl-7 pr-3 py-2 rounded-xl bg-white dark:bg-neutral-800 border border-emerald-300 dark:border-emerald-800 font-mono font-bold text-neutral-900 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-neutral-500 mt-1">
-                    Used to compute Fund Balance on the detailed check voucher.
-                  </p>
-                </div>
+                ) : (
+                  <div>
+                    <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
+                      Fund Amount <span className="text-neutral-400 font-normal normal-case">(Total fund amount)</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-sm">₱</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={newCvFundAmount}
+                        onChange={e => setNewCvFundAmount(e.target.value)}
+                        className="w-full pl-7 pr-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-mono font-bold"
+                      />
+                    </div>
+                    <p className="text-[10px] text-neutral-500 mt-1">
+                      Used to compute Fund Balance on the detailed check voucher.
+                    </p>
+                  </div>
+                )}
 
                 {/* Line Items Rows (Balanced Double Entry) */}
                 {(() => {
@@ -4649,7 +4846,7 @@ function DisbursementPageContent() {
                 <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
                   <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Disbursement Category</span>
                   <span className="text-sm font-bold text-emerald-800 dark:text-emerald-300 truncate block mt-0.5">
-                    {formatCategoryLabel(selectedCvForModal.folder_name)}
+                    {formatCategoryLabel(selectedCvForModal.folder_name, selectedCvForModal)}
                   </span>
                 </div>
                 <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
@@ -4670,6 +4867,16 @@ function DisbursementPageContent() {
                     {selectedCvForModal.check_no || '—'}
                   </span>
                 </div>
+
+                {/* Fund Amount Card */}
+                {(selectedCvForModal.fund_amount || getReplenishmentType(selectedCvForModal.folder_name, selectedCvForModal) === 'rf') && (
+                  <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
+                    <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Fund Amount</span>
+                    <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
+                      ₱{parseFloat(String(selectedCvForModal.fund_amount || '0')).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
 
                 {/* Date Sealed & Disbursed Card */}
                 {(selectedCvForModal.status === 'filed' || selectedCvForModal.date_released || isStlOrRfTabOrVoucher(selectedCvForModal)) && (
@@ -5170,7 +5377,18 @@ function DisbursementPageContent() {
                   </label>
                   <AnimatedSelect
                     value={editCvFormData.folder_name}
-                    onChange={val => setEditCvFormData({ ...editCvFormData, folder_name: val })}
+                    onChange={val => {
+                      const isRf = getReplenishmentType(val) === 'rf';
+                      const defaultRf = REVOLVING_FUND_CLASSIFICATIONS[0];
+                      setEditCvFormData(prev => ({
+                        ...prev,
+                        folder_name: val,
+                        ...(isRf && !prev.fund_amount ? {
+                          fund_amount: String(defaultRf.defaultAmount),
+                          rf_classification: defaultRf.name
+                        } : {})
+                      }));
+                    }}
                     options={[
                       ...DISBURSEMENT_CATEGORY_OPTIONS,
                       ...(editCvFormData.folder_name && !DISBURSEMENT_CATEGORY_OPTIONS.some(t => t.value.toLowerCase() === editCvFormData.folder_name.toLowerCase())
@@ -5211,6 +5429,57 @@ function DisbursementPageContent() {
                   className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 resize-none"
                 />
               </div>
+
+              {/* Revolving Fund Classification & Fund Amount (Edit Mode) */}
+              {getReplenishmentType(editCvFormData.folder_name, selectedCvForModal) === 'rf' && (
+                <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Revolving Fund Classification
+                    </span>
+                    <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 font-medium">
+                      Selecting classification updates fund amount and balances credit accounts.
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    <div className="sm:col-span-7">
+                      <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
+                        Classification *
+                      </label>
+                      <AnimatedSelect
+                        value={editCvFormData.rf_classification || REVOLVING_FUND_CLASSIFICATIONS[0].name}
+                        onChange={val => handleSelectRfClassification(val, true)}
+                        options={REVOLVING_FUND_CLASSIFICATIONS.map(c => ({
+                          value: c.name,
+                          label: `${c.name} (₱${c.defaultAmount.toLocaleString()})`
+                        }))}
+                        buttonClassName="font-bold text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                        menuClassName="min-w-[280px]"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-5">
+                      <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
+                        Fund Amount (₱) *
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-sm">₱</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={editCvFormData.fund_amount}
+                          onChange={e => setEditCvFormData({ ...editCvFormData, fund_amount: e.target.value })}
+                          className="w-full pl-7 pr-3 py-2 rounded-xl bg-white dark:bg-neutral-800 border border-emerald-300 dark:border-emerald-800 font-mono font-bold text-neutral-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Rows */}
               {(() => {

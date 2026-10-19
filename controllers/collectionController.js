@@ -14,12 +14,11 @@ function formatCollectionRow(row) {
   } else if (typeof dateStr === 'string' && dateStr.includes('T')) {
     dateStr = dateStr.split('T')[0];
   }
-
   return {
     id: row.id,
     tab: row.tab,
     date: dateStr,
-    or_no: row.or_no,
+    or_no: row.or_no ? String(row.or_no).replace(/^INV#\s*/i, '').trim() : '',
     payor_name: row.payor_name,
     member_id: row.member_id || undefined,
     loans: Array.isArray(row.loans) ? row.loans : (typeof row.loans === 'string' ? JSON.parse(row.loans) : undefined),
@@ -113,18 +112,100 @@ export async function getCollections(req, res) {
 }
 
 /**
+ * Compute the next sequential numeric receipt number.
+ * MUST be called within a transaction holding an advisory lock or as a read query.
+ */
+export async function computeNextReceiptNo(clientOrPool) {
+  const result = await clientOrPool.query(`
+    SELECT or_no 
+    FROM collections 
+    WHERE or_no ~ '^[0-9]+$' 
+    ORDER BY CAST(or_no AS BIGINT) DESC 
+    LIMIT 1
+  `);
+
+  let nextSeq = 1001;
+  if (result.rowCount > 0 && result.rows[0].or_no) {
+    const currentSeq = parseInt(result.rows[0].or_no, 10);
+    if (!isNaN(currentSeq)) {
+      nextSeq = currentSeq + 1;
+    }
+  }
+
+  return String(nextSeq);
+}
+
+/**
+ * @desc Get next sequential receipt number
+ * @route GET /api/collections/next-receipt-no
+ * @access Private (Admin, Staff)
+ */
+export async function getNextReceiptNumber(req, res) {
+  try {
+    const nextReceiptNo = await computeNextReceiptNo(pool);
+    return res.status(200).json({
+      success: true,
+      data: {
+        next_receipt_no: nextReceiptNo
+      }
+    });
+  } catch (error) {
+    console.error('Error computing next receipt number:', error);
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to compute next receipt number' }
+    });
+  }
+}
+
+/**
  * @desc Create single collection
  * @route POST /api/collections
  * @access Private (Admin, Staff)
  */
 export async function createCollection(req, res) {
+  const client = await pool.connect();
   try {
     const item = req.body;
+
+    await client.query('BEGIN');
+
+    // 1. Acquire transaction-level advisory lock specifically for collection receipt sequencing.
+    // Serializes concurrent submissions so the first to record gets the number,
+    // and subsequent concurrent submissions automatically advance to the next sequential number.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('collection_receipt_number_lock'))");
+
+    let finalOrNo = item.or_no ? String(item.or_no).replace(/^INV#\s*/i, '').trim() : '';
+
+    const isAutoRequested = !finalOrNo || finalOrNo.toUpperCase() === 'AUTO';
+
+    if (isAutoRequested) {
+      finalOrNo = await computeNextReceiptNo(client);
+    } else {
+      // Check if provided receipt number already exists in the database
+      const existingCheck = await client.query(
+        'SELECT id, or_no, payor_name FROM collections WHERE or_no = $1 LIMIT 1',
+        [finalOrNo]
+      );
+
+      if (existingCheck.rowCount > 0) {
+        // If it's a numeric receipt number, it collided because another user concurrently
+        // recorded that number first! Automatically advance to the next available number!
+        if (/^\d+$/.test(finalOrNo)) {
+          finalOrNo = await computeNextReceiptNo(client);
+        } else {
+          await client.query('ROLLBACK');
+          return res.status(409).json({
+            success: false,
+            error: { message: `Receipt number "${finalOrNo}" already exists in the system.` }
+          });
+        }
+      }
+    }
 
     const id = item.id || `col-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const tab = item.tab || 'credit';
     const date = item.date || new Date().toISOString().split('T')[0];
-    const or_no = item.or_no ? item.or_no.trim() : '';
     const payor_name = item.payor_name ? item.payor_name.trim() : '';
     const member_id = item.member_id ? item.member_id.trim() : null;
     const loans = item.loans ? JSON.stringify(item.loans) : '[]';
@@ -174,7 +255,7 @@ export async function createCollection(req, res) {
     `;
 
     const values = [
-      id, tab, date, or_no, payor_name, member_id,
+      id, tab, date, finalOrNo, payor_name, member_id,
       loans, loan_account, principal_amount, interest_account, interest_amount,
       fines_account, fines_amount, common_share_amount,
       item_name, item_category, quantity, unit_price,
@@ -183,7 +264,9 @@ export async function createCollection(req, res) {
       amount, payment_method, reference_no, bank_name, status, remarks, collected_by
     ];
 
-    const result = await pool.query(insertQuery, values);
+    const result = await client.query(insertQuery, values);
+    await client.query('COMMIT');
+
     const createdItem = formatCollectionRow(result.rows[0]);
 
     return res.status(201).json({
@@ -191,11 +274,14 @@ export async function createCollection(req, res) {
       data: createdItem
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error creating collection:', error);
     return res.status(500).json({
       success: false,
       error: { message: 'Failed to create collection entry' }
     });
+  } finally {
+    client.release();
   }
 }
 

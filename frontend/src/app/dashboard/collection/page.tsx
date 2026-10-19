@@ -1079,13 +1079,22 @@ export default function CollectionPage() {
     setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
 
-  // Open Add Modal
-  const openRecordModal = () => {
+  // Open Add Modal with auto-generated receipt number
+  const openRecordModal = async () => {
     const targetCategory = (activeTab === 'all' ? 'credit' : activeTab) as 'credit' | 'sales' | 'services';
+
+    // Instant optimistic calculation from loaded collections
+    const maxLocalNo = collections.reduce((max, c) => {
+      const clean = (c.or_no || '').replace(/\D/g, '');
+      const n = parseInt(clean, 10);
+      return !isNaN(n) && n > max ? n : max;
+    }, 0);
+    const initialNo = maxLocalNo > 0 ? String(maxLocalNo + 1) : '1001';
+
     setFormData({
       tab: targetCategory,
       date: new Date().toISOString().split('T')[0],
-      or_no: '',
+      or_no: initialNo,
       payor_name: '',
       member_id: '',
       loans: [
@@ -1123,6 +1132,16 @@ export default function CollectionPage() {
     });
     setIsCustomBank(false);
     setIsAddModalOpen(true);
+
+    // Fetch authoritative sequence from server to guarantee sync with other staff
+    try {
+      const res = await api.get('/collections/next-receipt-no');
+      if (res.data?.data?.next_receipt_no) {
+        setFormData(prev => ({ ...prev, or_no: String(res.data.data.next_receipt_no) }));
+      }
+    } catch (err) {
+      console.warn('Failed to fetch authoritative next receipt number:', err);
+    }
   };
 
   // Save new collection
@@ -1838,7 +1857,7 @@ export default function CollectionPage() {
                         </td>
                         <td className="py-3 px-3 font-bold text-neutral-900 dark:text-white whitespace-nowrap">
                           <span className="font-mono text-primary dark:text-secondary hover:underline">
-                            {item.or_no}
+                            {item.or_no ? item.or_no.replace(/^INV#\s*/i, '') : ''}
                           </span>
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap text-neutral-600 dark:text-neutral-400">
@@ -2157,16 +2176,21 @@ export default function CollectionPage() {
               {/* Basic Fields */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                    Receipt
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300">
+                      Receipt #
+                    </label>
+                    <span className="text-[10px] font-semibold text-primary dark:text-secondary flex items-center gap-1">
+                      Auto-generated
+                    </span>
+                  </div>
                   <input
                     type="text"
                     required
                     value={formData.or_no}
                     onChange={e => setFormData({ ...formData, or_no: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent font-mono font-bold text-xs text-neutral-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                    placeholder="Enter receipt number"
+                    placeholder="Auto-generated"
                   />
                 </div>
                 <div>

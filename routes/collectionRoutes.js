@@ -3,6 +3,7 @@ import { protect, restrictTo } from '../middleware/authMiddleware.js';
 import {
   getCollections,
   createCollection,
+  getNextReceiptNumber,
   bulkImportCollections,
   updateCollection,
   deleteCollection,
@@ -13,6 +14,8 @@ const router = express.Router();
 
 router.use(protect);
 router.use(restrictTo('admin', 'staff'));
+
+router.get('/next-receipt-no', getNextReceiptNumber);
 
 router.route('/')
   .get(getCollections)
