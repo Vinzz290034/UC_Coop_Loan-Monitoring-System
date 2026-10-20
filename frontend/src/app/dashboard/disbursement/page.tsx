@@ -158,7 +158,6 @@ export const detectRfClassification = (cv?: any, rows?: any[]): string => {
 
   const textToScan = [
     cv?.particulars || '',
-    cv?.folder_name || '',
     detailsText,
     ...(rows || []).map((r: any) => r.description || r.book_of_account || '')
   ].join(' ').toLowerCase();
@@ -169,13 +168,27 @@ export const detectRfClassification = (cv?: any, rows?: any[]): string => {
     }
   }
 
+  // Check specific keywords in particulars or details
+  if (textToScan.includes('honorarium')) {
+    return 'Revolving Fund - Honorarium & Wages';
+  }
+  if (textToScan.includes('petty cash') || textToScan.includes('petty')) {
+    return 'Revolving Fund - Petty Cash';
+  }
+  if (textToScan.includes('manager')) {
+    return 'Revolving Fund - Manager';
+  }
+  if (textToScan.includes('rice')) {
+    return 'Revolving Fund - Rice';
+  }
+
   const fa = cv?.fund_amount !== undefined && cv?.fund_amount !== null && cv?.fund_amount !== '' ? parseFloat(cv.fund_amount) : NaN;
   if (!isNaN(fa)) {
     const matchByAmount = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.defaultAmount === fa);
     if (matchByAmount) return matchByAmount.name;
   }
 
-  return 'Revolving Fund - Honorarium & Wages';
+  return '';
 };
 
 export const formatCategoryLabel = (folderName?: string, cv?: any): string => {
@@ -184,9 +197,11 @@ export const formatCategoryLabel = (folderName?: string, cv?: any): string => {
     if (/revolving/i.test(targetFolder)) {
       if (cv) {
         const rfClass = detectRfClassification(cv);
-        const matchClass = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === rfClass);
-        if (matchClass) {
-          return `Revolving Fund Replenishment - ${matchClass.shortName}`;
+        if (rfClass) {
+          const matchClass = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === rfClass);
+          if (matchClass) {
+            return `Revolving Fund Replenishment - ${matchClass.shortName}`;
+          }
         }
       }
       return 'Revolving Fund Replenishment';
@@ -211,9 +226,11 @@ export const formatCategoryLabel = (folderName?: string, cv?: any): string => {
     if (part.includes('stl') || part.includes('short term') || cv.stl_liquidation?.id) return 'STL Replenishment';
     if (part.includes('rf') || part.includes('revolving') || part.includes('liquidation') || cv.revolving_fund?.id) {
       const rfClass = detectRfClassification(cv);
-      const matchClass = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === rfClass);
-      if (matchClass) {
-        return `Revolving Fund Replenishment - ${matchClass.shortName}`;
+      if (rfClass) {
+        const matchClass = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === rfClass);
+        if (matchClass) {
+          return `Revolving Fund Replenishment - ${matchClass.shortName}`;
+        }
       }
       return 'Revolving Fund Replenishment';
     }
@@ -2755,7 +2772,7 @@ function DisbursementPageContent() {
 
     const detectedRfClass = detectRfClassification(cv, rowsToUse);
     let initialFundAmount = cv.fund_amount !== undefined && cv.fund_amount !== null && cv.fund_amount !== '' ? String(cv.fund_amount) : '';
-    if (getReplenishmentType(cv.folder_name, cv) === 'rf' && !initialFundAmount) {
+    if (getReplenishmentType(cv.folder_name, cv) === 'rf' && !initialFundAmount && detectedRfClass) {
       const match = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === detectedRfClass);
       if (match) initialFundAmount = String(match.defaultAmount);
     }
