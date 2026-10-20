@@ -440,6 +440,7 @@ export const REPLENISHMENT_ACCOUNT_OPTIONS = [
   'Honorarium',
   'Honorarium and Allowances',
   'Representation',
+  'COS - Scoresheet',
   'COS- hardbound',
   'COS- printing',
   'COS- Insurance',
@@ -554,6 +555,8 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
     lower.includes('wifi') ||
     lower.includes('water') ||
     lower.includes('cos') ||
+    lower.includes('scoresheet') ||
+    lower.includes('score sheet') ||
     lower.includes('service') ||
     lower.includes('repair') ||
     lower.includes('labor') ||
@@ -2149,17 +2152,23 @@ function DisbursementPageContent() {
       const isCurrentCredit = checkIsCreditRow(currentRow);
       const nextRows = prev.map((r, i) => (i === rowIdx ? updatedRow : r));
 
-      // If description was edited on a debit row, auto-fill matching category on a paired credit row if present
+      // If description was edited on a debit row, auto-fill matching category on the credit row directly below it (or paired credit row)
       if (field === 'description' && !isCurrentCredit) {
         const cat = getCategoryForAccount(val, accountCategoryMap);
         const autoCreditDesc = replenishType === 'stl' ? 'Revolving Fund - STL' : `Revolving Fund - ${cat}`;
         
-        const pairedCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
-        if (pairedCreditIdx !== -1) {
-          const currentCreditDesc = nextRows[pairedCreditIdx]?.description || '';
+        let targetCreditIdx = -1;
+        if (rowIdx + 1 < nextRows.length && checkIsCreditRow(nextRows[rowIdx + 1])) {
+          targetCreditIdx = rowIdx + 1;
+        } else {
+          targetCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
+        }
+
+        if (targetCreditIdx !== -1) {
+          const currentCreditDesc = nextRows[targetCreditIdx]?.description || '';
           if (!/cib\b|cash\s*in\s*bank/i.test(currentCreditDesc)) {
-            nextRows[pairedCreditIdx] = {
-              ...nextRows[pairedCreditIdx],
+            nextRows[targetCreditIdx] = {
+              ...nextRows[targetCreditIdx],
               description: autoCreditDesc
             };
           }
@@ -2268,13 +2277,26 @@ function DisbursementPageContent() {
 
     let defaultDesc = '';
     if (isCredit) {
-      defaultDesc = replenishType === 'stl' 
-        ? 'Revolving Fund - STL' 
-        : (replenishType === 'rf' ? 'Revolving Fund - Operation' : '');
+      if (replenishType === 'stl') {
+        defaultDesc = 'Revolving Fund - STL';
+      } else if (replenishType === 'rf') {
+        const currentRows = isEdit ? editCvRows : newCvRows;
+        const lastRow = currentRows.length > 0 ? currentRows[currentRows.length - 1] : null;
+        if (lastRow && !checkIsCreditRow(lastRow)) {
+          // If the row above is a debit row, auto-read its category
+          const cat = getCategoryForAccount(lastRow.description, accountCategoryMap);
+          defaultDesc = `Revolving Fund - ${cat}`;
+        } else {
+          // If the row above is also a credit row, don't copy, allow manual input
+          defaultDesc = '';
+        }
+      } else {
+        defaultDesc = '';
+      }
     } else if (replenishType === 'stl') {
       defaultDesc = 'Short Term Loan';
     } else if (replenishType === 'rf') {
-      defaultDesc = 'Operation';
+      defaultDesc = 'Communication';
     } else {
       defaultDesc = '';
     }
@@ -3226,36 +3248,12 @@ function DisbursementPageContent() {
         rf_classification: classificationName,
         fund_amount: defaultAmt
       }));
-      setEditCvRows(prev => {
-        // Only update credit row description if it's a simple 2-row voucher (not an itemized detailed breakdown)
-        if (prev.length <= 2) {
-          return prev.map(r => {
-            if (r.isAutoCredit && (/revolving\s*fund/i.test(r.description || '') || /operation/i.test(r.description || ''))) {
-              return { ...r, description: classificationName };
-            }
-            return r;
-          });
-        }
-        return prev;
-      });
     } else {
       setNewCvRfClassification(classificationName);
       setNewCvFundAmount(defaultAmt);
       if (!newCvParticulars || newCvParticulars.startsWith('Revolving Fund Replenishment')) {
         setNewCvParticulars(`Revolving Fund Replenishment - ${match?.shortName || ''}`);
       }
-      setNewCvRows(prev => {
-        // Only update credit row description if it's a simple 2-row voucher (not an itemized detailed breakdown)
-        if (prev.length <= 2) {
-          return prev.map(r => {
-            if (r.isAutoCredit && (/revolving\s*fund/i.test(r.description || '') || /operation/i.test(r.description || ''))) {
-              return { ...r, description: classificationName };
-            }
-            return r;
-          });
-        }
-        return prev;
-      });
     }
   };
 
@@ -3293,12 +3291,14 @@ function DisbursementPageContent() {
     const row0Id = `new-row-0-${Date.now()}`;
     if (isReplenish) {
       const defaultBank = formatCibAccountName(newCvBankName || 'MBTC');
+      const initialDebitDesc = isReplenish === 'stl' ? 'Short Term Loan' : 'Communication';
+      const initialCat = getCategoryForAccount(initialDebitDesc, accountCategoryMap);
       setNewCvRows([
         {
           id: row0Id,
           date: today,
           voucher_no: '',
-          description: isReplenish === 'stl' ? 'Short Term Loan' : 'Operation',
+          description: initialDebitDesc,
           debit: '',
           credit: '',
           isAutoCredit: false
@@ -3307,10 +3307,11 @@ function DisbursementPageContent() {
           id: `credit-${row0Id}`,
           date: today,
           voucher_no: '',
-          description: isReplenish === 'rf' ? defaultRfClass : defaultBank,
+          description: isReplenish === 'rf' ? `Revolving Fund - ${initialCat}` : (isReplenish === 'stl' ? 'Revolving Fund - STL' : defaultBank),
           debit: '',
           credit: '',
-          isAutoCredit: true
+          isAutoCredit: true,
+          pairedWithId: row0Id
         }
       ]);
     } else {
@@ -4061,27 +4062,45 @@ function DisbursementPageContent() {
                           if (!newCvParticulars || newCvParticulars.startsWith('Revolving Fund Replenishment')) {
                             setNewCvParticulars(`Revolving Fund Replenishment - ${REVOLVING_FUND_CLASSIFICATIONS[0].shortName}`);
                           }
-                          const row0Id = `new-row-0-${Date.now()}`;
-                          setNewCvRows([
-                            {
-                              id: row0Id,
-                              date: newCvDate || new Date().toISOString().split('T')[0],
-                              voucher_no: '',
-                              description: 'Communication',
-                              debit: '',
-                              credit: ''
-                            },
-                            {
-                              id: `credit-${row0Id}`,
-                              date: newCvDate || new Date().toISOString().split('T')[0],
-                              voucher_no: '',
-                              description: defaultRfClass,
-                              debit: '',
-                              credit: '',
-                              isAutoCredit: true,
-                              pairedWithId: row0Id
+                          setNewCvRows(prev => {
+                            // If rows already exist, update every credit row whose row above is a debit row
+                            if (prev.length > 0 && prev.some(r => !checkIsCreditRow(r))) {
+                              return prev.map((r, idx, arr) => {
+                                if (!checkIsCreditRow(r)) return r;
+                                if (idx > 0 && !checkIsCreditRow(arr[idx - 1])) {
+                                  const cat = getCategoryForAccount(arr[idx - 1].description, accountCategoryMap);
+                                  return {
+                                    ...r,
+                                    description: `Revolving Fund - ${cat}`
+                                  };
+                                }
+                                return r;
+                              });
                             }
-                          ]);
+                            const row0Id = `new-row-0-${Date.now()}`;
+                            const initDebitDesc = 'Communication';
+                            const initCat = getCategoryForAccount(initDebitDesc, accountCategoryMap);
+                            return [
+                              {
+                                id: row0Id,
+                                date: newCvDate || new Date().toISOString().split('T')[0],
+                                voucher_no: '',
+                                description: initDebitDesc,
+                                debit: '',
+                                credit: ''
+                              },
+                              {
+                                id: `credit-${row0Id}`,
+                                date: newCvDate || new Date().toISOString().split('T')[0],
+                                voucher_no: '',
+                                description: `Revolving Fund - ${initCat}`,
+                                debit: '',
+                                credit: '',
+                                isAutoCredit: true,
+                                pairedWithId: row0Id
+                              }
+                            ];
+                          });
                         } else if (isRepl === 'stl') {
                           setNewCvFundAmount('');
                           const row0Id = `new-row-0-${Date.now()}`;
@@ -5418,6 +5437,21 @@ function DisbursementPageContent() {
                           rf_classification: defaultRf.name
                         } : {})
                       }));
+                      if (isRf) {
+                        setEditCvRows(prev => {
+                          return prev.map((r, idx, arr) => {
+                            if (!checkIsCreditRow(r)) return r;
+                            if (idx > 0 && !checkIsCreditRow(arr[idx - 1])) {
+                              const cat = getCategoryForAccount(arr[idx - 1].description, accountCategoryMap);
+                              return {
+                                ...r,
+                                description: `Revolving Fund - ${cat}`
+                              };
+                            }
+                            return r;
+                          });
+                        });
+                      }
                     }}
                     options={[
                       ...DISBURSEMENT_CATEGORY_OPTIONS,
