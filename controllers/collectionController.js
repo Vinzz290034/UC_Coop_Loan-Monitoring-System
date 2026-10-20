@@ -63,8 +63,12 @@ export async function getCollections(req, res) {
     const params = [];
 
     if (tab && tab !== 'all') {
-      params.push(tab);
-      query += ` AND tab = $${params.length}`;
+      if (tab === 'sales_services' || tab === 'sales' || tab === 'services') {
+        query += ` AND tab IN ('sales', 'services', 'sales_services')`;
+      } else {
+        params.push(tab);
+        query += ` AND tab = $${params.length}`;
+      }
     }
 
     if (payment_method && payment_method !== 'all') {

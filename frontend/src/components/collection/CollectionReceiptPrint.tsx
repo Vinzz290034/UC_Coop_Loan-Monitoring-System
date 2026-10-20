@@ -117,7 +117,7 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
     if (lines.length > 0) return lines;
     return [{ description: item.loan_account || item.particulars || 'Loans Payable', amount: item.amount }];
   }
-  if (item.tab === 'sales') {
+  if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
     const qty = item.quantity || 1;
     return [{
       description: item.item_name || 'Store Item',
@@ -125,7 +125,7 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
       amount: item.amount,
     }];
   }
-  if (item.tab === 'services') {
+  if (item.tab === 'services' || (item.tab === 'sales_services' && item.service_type)) {
     const qty = item.service_copies || 1;
     return [{
       description: item.service_type || 'Service',
@@ -133,7 +133,7 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
       amount: item.amount,
     }];
   }
-  return [{ description: item.particulars || 'Collection', amount: item.amount }];
+  return [{ description: item.particulars || item.item_name || item.service_type || 'Collection', amount: item.amount }];
 };
 
 const PAYMENT_METHODS: CollectionItem['payment_method'][] = ['Cash', 'GCash', 'Bank Transfer', 'Cheque', 'Cash in Vault'];

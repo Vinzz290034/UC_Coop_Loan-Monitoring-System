@@ -43,7 +43,7 @@ import {
   Loader2
 } from 'lucide-react';
 
-export type CollectionTab = 'all' | 'credit' | 'sales' | 'services';
+export type CollectionTab = 'all' | 'credit' | 'sales_services';
 
 export interface TabConfig {
   id: CollectionTab;
@@ -54,8 +54,7 @@ export interface TabConfig {
 export const COLLECTION_TABS: TabConfig[] = [
   { id: 'all', label: 'All Collections', description: 'Consolidated master collection registry across all revenue categories' },
   { id: 'credit', label: 'Credit', description: 'Daily member loan amortizations, credit repayments, share capital & deposits' },
-  { id: 'sales', label: 'Sales', description: 'Itemized merchandise sales, student uniforms, and store inventory' },
-  { id: 'services', label: 'Services', description: 'Photocopying, ID packages, document printing, and service charges' },
+  { id: 'sales_services', label: 'Sales & Services', description: 'Itemized merchandise sales, uniforms, store inventory, photocopying, and printing services' },
 ];
 
 export interface CollectionLoanPayment {
@@ -79,7 +78,7 @@ export interface FormLoanEntry {
 
 export interface CollectionItem {
   id: string;
-  tab: 'credit' | 'sales' | 'services' | 'others';
+  tab: 'credit' | 'sales' | 'services' | 'sales_services' | 'others';
   date: string;
   or_no: string;
   payor_name: string;
@@ -536,7 +535,8 @@ export default function CollectionPage() {
 
   // Form Data for adding a new collection
   const [formData, setFormData] = useState({
-    tab: 'credit' as 'credit' | 'sales' | 'services',
+    tab: 'credit' as 'credit' | 'sales_services',
+    sales_service_type: 'merchandise' as 'merchandise' | 'service',
     date: new Date().toISOString().split('T')[0],
     or_no: '',
     payor_name: '',
@@ -767,9 +767,11 @@ export default function CollectionPage() {
       : false;
     setIsEditCustomBank(isCustom);
 
+    const isService = item.tab === 'services' || (Boolean(item.service_type) && !item.item_name);
     setEditFormData({
       id: item.id,
-      tab: item.tab,
+      tab: (item.tab === 'sales' || item.tab === 'services') ? 'sales_services' : item.tab,
+      sales_service_type: isService ? 'service' : 'merchandise',
       date: item.date ? item.date.split('T')[0] : new Date().toISOString().split('T')[0],
       or_no: item.or_no || '',
       payor_name: item.payor_name || '',
@@ -883,10 +885,16 @@ export default function CollectionPage() {
           fines_amount: parseFloat(l.fines_amount || '0') || undefined,
         }))
         .filter((l: CollectionLoanPayment) => (l.principal_amount || 0) > 0 || (l.interest_amount || 0) > 0 || (l.fines_amount || 0) > 0);
-    } else if (editFormData.tab === 'sales') {
-      const q = parseInt(editFormData.quantity || '1', 10) || 1;
-      const u = parseFloat(editFormData.unit_price || '0') || 0;
-      if (u > 0) calculatedAmount = q * u;
+    } else if (editFormData.tab === 'sales' || editFormData.tab === 'sales_services') {
+      if (editFormData.sales_service_type === 'service' || (!editFormData.item_name && editFormData.service_type)) {
+        const c = parseInt(editFormData.service_copies || '1', 10) || 1;
+        const r = parseFloat(editFormData.service_rate || '0') || 0;
+        if (r > 0) calculatedAmount = c * r;
+      } else {
+        const q = parseInt(editFormData.quantity || '1', 10) || 1;
+        const u = parseFloat(editFormData.unit_price || '0') || 0;
+        if (u > 0) calculatedAmount = q * u;
+      }
     } else if (editFormData.tab === 'services') {
       const c = parseInt(editFormData.service_copies || '1', 10) || 1;
       const r = parseFloat(editFormData.service_rate || '0') || 0;
@@ -907,13 +915,27 @@ export default function CollectionPage() {
       fines_account: savedLoans[0]?.fines_account || editFormData.fines_account,
       fines_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.fines_amount || 0), 0) || undefined) : undefined,
       common_share_amount: parseFloat(editFormData.common_share_amount || '0') || undefined,
-      item_name: editFormData.item_name?.trim() || undefined,
-      item_category: editFormData.item_category?.trim() || undefined,
-      quantity: parseInt(editFormData.quantity || '1', 10) || undefined,
-      unit_price: parseFloat(editFormData.unit_price || '0') || undefined,
-      service_type: editFormData.service_type || undefined,
-      service_copies: parseInt(editFormData.service_copies || '1', 10) || undefined,
-      service_rate: parseFloat(editFormData.service_rate || '0') || undefined,
+      item_name: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
+        ? undefined
+        : (editFormData.item_name?.trim() || undefined),
+      item_category: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
+        ? undefined
+        : (editFormData.item_category?.trim() || undefined),
+      quantity: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
+        ? undefined
+        : (parseInt(editFormData.quantity || '1', 10) || undefined),
+      unit_price: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
+        ? undefined
+        : (parseFloat(editFormData.unit_price || '0') || undefined),
+      service_type: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'merchandise')
+        ? undefined
+        : (editFormData.service_type || undefined),
+      service_copies: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'merchandise')
+        ? undefined
+        : (parseInt(editFormData.service_copies || '1', 10) || undefined),
+      service_rate: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'merchandise')
+        ? undefined
+        : (parseFloat(editFormData.service_rate || '0') || undefined),
       particulars: editFormData.tab === 'credit'
         ? (() => {
             const parts: string[] = [];
@@ -925,7 +947,9 @@ export default function CollectionPage() {
             if (parseFloat(editFormData.common_share_amount || '0') > 0) parts.push('Common Share');
             return parts.length > 0 ? parts.join(' + ') : (editFormData.loans?.[0]?.loan_account || 'Credit Collection');
           })()
-        : undefined,
+        : editFormData.tab === 'sales_services'
+        ? (editFormData.sales_service_type === 'service' ? (editFormData.service_type || 'Services') : (editFormData.item_name || 'Store Sales'))
+        : editFormData.particulars || undefined,
       amount: calculatedAmount,
       payment_method: editFormData.payment_method,
       reference_no: (editFormData.payment_method === 'GCash' || editFormData.payment_method === 'Bank Transfer' || editFormData.payment_method === 'Cheque')
@@ -971,7 +995,13 @@ export default function CollectionPage() {
   const filteredCollections = useMemo(() => {
     let result = collections.filter(item => {
       // Tab filter
-      if (activeTab !== 'all' && item.tab !== activeTab) return false;
+      if (activeTab !== 'all') {
+        if (activeTab === 'sales_services') {
+          if (item.tab !== 'sales_services' && item.tab !== 'sales' && item.tab !== 'services') return false;
+        } else if (item.tab !== activeTab) {
+          return false;
+        }
+      }
 
       // Method filter
       if (selectedMethod !== 'all' && item.payment_method !== selectedMethod) return false;
@@ -1014,7 +1044,11 @@ export default function CollectionPage() {
 
   // Tab Stats for 4 KPI Cards (Calculated over current tab's scope or all)
   const tabStats = useMemo(() => {
-    const scopeItems = activeTab === 'all' ? collections : collections.filter(c => c.tab === activeTab);
+    const scopeItems = activeTab === 'all'
+      ? collections
+      : activeTab === 'sales_services'
+      ? collections.filter(c => c.tab === 'sales_services' || c.tab === 'sales' || c.tab === 'services')
+      : collections.filter(c => c.tab === activeTab);
     const count = scopeItems.length;
     const totalAmount = scopeItems.reduce((sum, item) => sum + (item.amount || 0), 0);
     const avgAmount = count > 0 ? totalAmount / count : 0;
@@ -1081,7 +1115,7 @@ export default function CollectionPage() {
 
   // Open Add Modal with auto-generated receipt number
   const openRecordModal = async () => {
-    const targetCategory = (activeTab === 'all' ? 'credit' : activeTab) as 'credit' | 'sales' | 'services';
+    const targetCategory = (activeTab === 'all' ? 'credit' : activeTab) as 'credit' | 'sales_services';
 
     // Instant optimistic calculation from loaded collections
     const maxLocalNo = collections.reduce((max, c) => {
@@ -1093,6 +1127,7 @@ export default function CollectionPage() {
 
     setFormData({
       tab: targetCategory,
+      sales_service_type: 'merchandise',
       date: new Date().toISOString().split('T')[0],
       or_no: initialNo,
       payor_name: '',
@@ -1157,11 +1192,17 @@ export default function CollectionPage() {
       }, 0);
       const cs = parseFloat(formData.common_share_amount || '0') || 0;
       if (loansSum + cs > 0) calculatedAmount = loansSum + cs;
-    } else if (formData.tab === 'sales') {
-      const q = parseInt(formData.quantity || '1', 10) || 1;
-      const u = parseFloat(formData.unit_price || '0') || 0;
-      if (u > 0) calculatedAmount = q * u;
-    } else if (formData.tab === 'services') {
+    } else if (formData.tab === 'sales_services' || (formData.tab as any) === 'sales') {
+      if (formData.sales_service_type === 'service') {
+        const c = parseInt(formData.service_copies || '1', 10) || 1;
+        const r = parseFloat(formData.service_rate || '0') || 0;
+        if (r > 0) calculatedAmount = c * r;
+      } else {
+        const q = parseInt(formData.quantity || '1', 10) || 1;
+        const u = parseFloat(formData.unit_price || '0') || 0;
+        if (u > 0) calculatedAmount = q * u;
+      }
+    } else if ((formData.tab as any) === 'services') {
       const c = parseInt(formData.service_copies || '1', 10) || 1;
       const r = parseFloat(formData.service_rate || '0') || 0;
       if (r > 0) calculatedAmount = c * r;
@@ -1193,12 +1234,27 @@ export default function CollectionPage() {
       fines_account: savedLoans[0]?.fines_account,
       fines_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.fines_amount || 0), 0) || undefined) : undefined,
       common_share_amount: parseFloat(formData.common_share_amount || '0') || undefined,
-      item_name: formData.item_name.trim() || undefined,
-      item_category: formData.item_category.trim() || undefined,
-      quantity: parseInt(formData.quantity || '1', 10) || undefined,
-      unit_price: parseFloat(formData.unit_price || '0') || undefined,
-      service_type: formData.service_type || undefined,
-      service_copies: parseInt(formData.service_copies || '1', 10) || undefined,
+      item_name: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
+        ? undefined
+        : (formData.item_name.trim() || undefined),
+      item_category: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
+        ? undefined
+        : (formData.item_category.trim() || undefined),
+      quantity: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
+        ? undefined
+        : (parseInt(formData.quantity || '1', 10) || undefined),
+      unit_price: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
+        ? undefined
+        : (parseFloat(formData.unit_price || '0') || undefined),
+      service_type: (formData.tab === 'sales_services' && formData.sales_service_type === 'merchandise')
+        ? undefined
+        : (formData.service_type || undefined),
+      service_copies: (formData.tab === 'sales_services' && formData.sales_service_type === 'merchandise')
+        ? undefined
+        : (parseInt(formData.service_copies || '1', 10) || undefined),
+      service_rate: (formData.tab === 'sales_services' && formData.sales_service_type === 'merchandise')
+        ? undefined
+        : (parseFloat(formData.service_rate || '0') || undefined),
       particulars: formData.tab === 'credit'
         ? (() => {
             const parts: string[] = [];
@@ -1210,6 +1266,8 @@ export default function CollectionPage() {
             if (parseFloat(formData.common_share_amount || '0') > 0) parts.push('Common Share');
             return parts.length > 0 ? parts.join(' + ') : (formData.loans[0]?.loan_account || 'Credit Collection');
           })()
+        : formData.tab === 'sales_services'
+        ? (formData.sales_service_type === 'service' ? (formData.service_type || 'Services') : (formData.item_name || 'Store Sales'))
         : undefined,
       other_category: undefined,
       amount: calculatedAmount,
@@ -1341,15 +1399,25 @@ export default function CollectionPage() {
         }
         if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
         desc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || 'Credit Collection');
-      } else if (item.tab === 'sales') desc = `${item.item_name || 'Store Item'} (${item.quantity || 1} pcs @ ₱${item.unit_price || 0})`;
-      else if (item.tab === 'services') desc = `${item.service_type || 'Service'} (${item.service_copies || 1} @ ₱${item.service_rate || 0})`;
-      else if (item.tab === 'others') desc = item.particulars || 'Miscellaneous';
+      } else if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
+        desc = `${item.item_name || 'Store Item'} (${item.quantity || 1} pcs @ ₱${item.unit_price || 0})`;
+      } else if (item.tab === 'services' || (item.tab === 'sales_services' && item.service_type)) {
+        desc = `${item.service_type || 'Service'} (${item.service_copies || 1} @ ₱${item.service_rate || 0})`;
+      } else if (item.tab === 'sales_services') {
+        desc = item.particulars || item.item_name || item.service_type || 'Sales & Services';
+      } else if (item.tab === 'others') {
+        desc = item.particulars || 'Miscellaneous';
+      }
+
+      const catLabel = (item.tab === 'sales' || item.tab === 'services' || item.tab === 'sales_services')
+        ? 'SALES & SERVICES'
+        : item.tab.toUpperCase();
 
       return [
         item.date,
         item.or_no,
         item.payor_name,
-        item.tab.toUpperCase(),
+        catLabel,
         desc,
         item.amount.toFixed(2),
         item.payment_method,
@@ -1420,14 +1488,14 @@ export default function CollectionPage() {
   };
 
   // Helper format Category Label
-  const formatCategoryBadge = (tab: 'credit' | 'sales' | 'services' | 'others') => {
+  const formatCategoryBadge = (tab: 'credit' | 'sales' | 'services' | 'sales_services' | 'others') => {
     switch (tab) {
       case 'credit':
         return 'CREDIT / LOAN';
       case 'sales':
-        return 'SALES';
       case 'services':
-        return 'SERVICES';
+      case 'sales_services':
+        return 'SALES & SERVICES';
       case 'others':
         return 'OTHER RECEIPTS';
     }
@@ -1823,10 +1891,12 @@ export default function CollectionPage() {
                       }
                       if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
                       primaryDesc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || item.particulars || 'Loan Repayment');
-                    } else if (item.tab === 'sales') {
+                    } else if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
                       primaryDesc = `${item.item_name || 'Store Item'}${item.quantity ? ` (${item.quantity} pcs)` : ''}`;
-                    } else if (item.tab === 'services') {
+                    } else if (item.tab === 'services' || (item.tab === 'sales_services' && item.service_type)) {
                       primaryDesc = `${item.service_type || 'Service'}${item.service_copies ? ` (${item.service_copies} units)` : ''}`;
+                    } else if (item.tab === 'sales_services') {
+                      primaryDesc = item.particulars || item.item_name || item.service_type || 'Sales & Services';
                     } else {
                       primaryDesc = item.particulars || 'Collection Receipt';
                     }
@@ -2155,19 +2225,22 @@ export default function CollectionPage() {
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1.5">
                   Collection Category
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['credit', 'sales', 'services'] as const).map(tabKey => (
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'credit', label: 'Credit' },
+                    { id: 'sales_services', label: 'Sales & Services' },
+                  ].map(tabOpt => (
                     <button
-                      key={tabKey}
+                      key={tabOpt.id}
                       type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, tab: tabKey }))}
+                      onClick={() => setFormData(prev => ({ ...prev, tab: tabOpt.id as any }))}
                       className={`py-2 px-2.5 rounded-xl font-bold uppercase text-[11px] transition-all cursor-pointer border ${
-                        formData.tab === tabKey
+                        formData.tab === tabOpt.id
                           ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950 border-primary dark:border-secondary shadow-2xs'
                           : 'bg-neutral-50 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-outline-variant/60 hover:bg-neutral-100'
                       }`}
                     >
-                      {tabKey}
+                      {tabOpt.label}
                     </button>
                   ))}
                 </div>
@@ -2451,119 +2524,150 @@ export default function CollectionPage() {
                 </div>
               )}
 
-              {/* Dynamic Fields for Sales */}
-              {formData.tab === 'sales' && (
+              {/* Dynamic Fields for Sales & Services */}
+              {(formData.tab === 'sales_services' || (formData.tab as any) === 'sales' || (formData.tab as any) === 'services') && (
                 <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-300/60 dark:border-emerald-800/40 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Item Description
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.item_name}
-                        onChange={e => setFormData({ ...formData, item_name: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
-                        placeholder="e.g. BSMT Gala Uniform Set"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Category
-                      </label>
-                      <select
-                        value={formData.item_category}
-                        onChange={e => setFormData({ ...formData, item_category: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
+                  <div className="flex items-center justify-between pb-2 border-b border-emerald-200/60 dark:border-emerald-800/40">
+                    <span className="text-[11px] font-bold uppercase text-emerald-900 dark:text-emerald-300">
+                      Transaction Type
+                    </span>
+                    <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-emerald-100/70 dark:bg-emerald-900/40 border border-emerald-300/40 dark:border-emerald-700/40 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, sales_service_type: 'merchandise' }))}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          formData.sales_service_type !== 'service'
+                            ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
+                            : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
+                        }`}
                       >
-                        <option value="Uniform">Uniform</option>
-                        <option value="Coverall">Coverall</option>
-                        <option value="Pants">Pants</option>
-                        <option value="Shoulder Board">Shoulder Board</option>
-                        <option value="Nameplate / Pin">Nameplate / Pin</option>
-                        <option value="Store Merchandise">Store Merchandise</option>
-                      </select>
+                        Store Merchandise / Sales
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, sales_service_type: 'service' }))}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                          formData.sales_service_type === 'service'
+                            ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
+                            : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
+                        }`}
+                      >
+                        Coop Services / Fees
+                      </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Quantity
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={formData.quantity}
-                        onChange={e => setFormData({ ...formData, quantity: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white"
-                        placeholder="1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Unit Price (₱)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.unit_price}
-                        onChange={e => setFormData({ ...formData, unit_price: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {/* Dynamic Fields for Services */}
-              {formData.tab === 'services' && (
-                <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-300/60 dark:border-emerald-800/40 space-y-3">
-                  <div>
-                    <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                      Service Type
-                    </label>
-                    <select
-                      value={formData.service_type}
-                      onChange={e => setFormData({ ...formData, service_type: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
-                    >
-                      <option value="Photocopying Services">Photocopying Services</option>
-                      <option value="Document Printing & Lamination">Document Printing & Lamination</option>
-                      <option value="2x2 ID Photo Package">2x2 ID Photo Package</option>
-                      <option value="Membership Application Fee">Membership Application Fee</option>
-                      <option value="Passbook Replacement Fee">Passbook Replacement Fee</option>
-                      <option value="Notarial / Processing Fee">Notarial / Processing Fee</option>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Copies / Count
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={formData.service_copies}
-                        onChange={e => setFormData({ ...formData, service_copies: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white"
-                        placeholder="1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Rate per Unit (₱)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.service_rate}
-                        onChange={e => setFormData({ ...formData, service_rate: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
+                  {formData.sales_service_type !== 'service' ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Item Description
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.item_name}
+                            onChange={e => setFormData({ ...formData, item_name: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
+                            placeholder="e.g. BSMT Gala Uniform Set"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Category
+                          </label>
+                          <select
+                            value={formData.item_category}
+                            onChange={e => setFormData({ ...formData, item_category: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
+                          >
+                            <option value="Uniform">Uniform</option>
+                            <option value="Coverall">Coverall</option>
+                            <option value="Pants">Pants</option>
+                            <option value="Shoulder Board">Shoulder Board</option>
+                            <option value="Nameplate / Pin">Nameplate / Pin</option>
+                            <option value="Store Merchandise">Store Merchandise</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Quantity
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={formData.quantity}
+                            onChange={e => setFormData({ ...formData, quantity: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white"
+                            placeholder="1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Unit Price (₱)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={formData.unit_price}
+                            onChange={e => setFormData({ ...formData, unit_price: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                          Service Type
+                        </label>
+                        <select
+                          value={formData.service_type}
+                          onChange={e => setFormData({ ...formData, service_type: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
+                        >
+                          <option value="Photocopying Services">Photocopying Services</option>
+                          <option value="Document Printing & Lamination">Document Printing & Lamination</option>
+                          <option value="2x2 ID Photo Package">2x2 ID Photo Package</option>
+                          <option value="Membership Application Fee">Membership Application Fee</option>
+                          <option value="Passbook Replacement Fee">Passbook Replacement Fee</option>
+                          <option value="Notarial / Processing Fee">Notarial / Processing Fee</option>
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Copies / Count
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={formData.service_copies}
+                            onChange={e => setFormData({ ...formData, service_copies: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white"
+                            placeholder="1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Rate per Unit (₱)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={formData.service_rate}
+                            onChange={e => setFormData({ ...formData, service_rate: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -3101,126 +3205,159 @@ export default function CollectionPage() {
                 </div>
               )}
 
-              {/* Dynamic Fields for Sales */}
-              {editFormData.tab === 'sales' && (
+              {/* Dynamic Fields for Sales & Services */}
+              {(editFormData.tab === 'sales_services' || editFormData.tab === 'sales' || editFormData.tab === 'services') && (
                 <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-300/60 dark:border-emerald-800/40 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Item Description
-                      </label>
-                      <input
-                        type="text"
+                  <div className="flex items-center justify-between pb-2 border-b border-emerald-200/60 dark:border-emerald-800/40">
+                    <span className="text-[11px] font-bold uppercase text-emerald-900 dark:text-emerald-300">
+                      Transaction Type
+                    </span>
+                    <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-emerald-100/70 dark:bg-emerald-900/40 border border-emerald-300/40 dark:border-emerald-700/40 text-[11px]">
+                      <button
+                        type="button"
                         disabled={editingItem.status === 'filed'}
-                        value={editFormData.item_name}
-                        onChange={e => setEditFormData({ ...editFormData, item_name: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                        placeholder="e.g. BSMT Gala Uniform Set"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Category
-                      </label>
-                      <select
-                        disabled={editingItem.status === 'filed'}
-                        value={editFormData.item_category}
-                        onChange={e => setEditFormData({ ...editFormData, item_category: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                        onClick={() => setEditFormData((prev: any) => ({ ...prev, sales_service_type: 'merchandise' }))}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                          editFormData.sales_service_type !== 'service'
+                            ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
+                            : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
+                        }`}
                       >
-                        <option value="Uniform">Uniform</option>
-                        <option value="Coverall">Coverall</option>
-                        <option value="Pants">Pants</option>
-                        <option value="Shoulder Board">Shoulder Board</option>
-                        <option value="Nameplate / Pin">Nameplate / Pin</option>
-                        <option value="Store Merchandise">Store Merchandise</option>
-                      </select>
+                        Store Merchandise / Sales
+                      </button>
+                      <button
+                        type="button"
+                        disabled={editingItem.status === 'filed'}
+                        onClick={() => setEditFormData((prev: any) => ({ ...prev, sales_service_type: 'service' }))}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                          editFormData.sales_service_type === 'service'
+                            ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
+                            : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
+                        }`}
+                      >
+                        Coop Services / Fees
+                      </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Quantity
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={editingItem.status === 'filed'}
-                        value={editFormData.quantity}
-                        onChange={e => setEditFormData({ ...editFormData, quantity: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                        placeholder="1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Unit Price (₱)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        disabled={editingItem.status === 'filed'}
-                        value={editFormData.unit_price}
-                        onChange={e => setEditFormData({ ...editFormData, unit_price: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {/* Dynamic Fields for Services */}
-              {editFormData.tab === 'services' && (
-                <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-300/60 dark:border-emerald-800/40 space-y-3">
-                  <div>
-                    <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                      Service Type
-                    </label>
-                    <select
-                      disabled={editingItem.status === 'filed'}
-                      value={editFormData.service_type}
-                      onChange={e => setEditFormData({ ...editFormData, service_type: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      <option value="Photocopying Services">Photocopying Services</option>
-                      <option value="Document Printing & Lamination">Document Printing & Lamination</option>
-                      <option value="2x2 ID Photo Package">2x2 ID Photo Package</option>
-                      <option value="Membership Application Fee">Membership Application Fee</option>
-                      <option value="Passbook Replacement Fee">Passbook Replacement Fee</option>
-                      <option value="Notarial / Processing Fee">Notarial / Processing Fee</option>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Copies / Count
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={editingItem.status === 'filed'}
-                        value={editFormData.service_copies}
-                        onChange={e => setEditFormData({ ...editFormData, service_copies: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                        placeholder="1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                        Rate per Unit (₱)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        disabled={editingItem.status === 'filed'}
-                        value={editFormData.service_rate}
-                        onChange={e => setEditFormData({ ...editFormData, service_rate: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
+                  {editFormData.sales_service_type !== 'service' ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Item Description
+                          </label>
+                          <input
+                            type="text"
+                            disabled={editingItem.status === 'filed'}
+                            value={editFormData.item_name}
+                            onChange={e => setEditFormData({ ...editFormData, item_name: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                            placeholder="e.g. BSMT Gala Uniform Set"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Category
+                          </label>
+                          <select
+                            disabled={editingItem.status === 'filed'}
+                            value={editFormData.item_category}
+                            onChange={e => setEditFormData({ ...editFormData, item_category: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            <option value="Uniform">Uniform</option>
+                            <option value="Coverall">Coverall</option>
+                            <option value="Pants">Pants</option>
+                            <option value="Shoulder Board">Shoulder Board</option>
+                            <option value="Nameplate / Pin">Nameplate / Pin</option>
+                            <option value="Store Merchandise">Store Merchandise</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Quantity
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            disabled={editingItem.status === 'filed'}
+                            value={editFormData.quantity}
+                            onChange={e => setEditFormData({ ...editFormData, quantity: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                            placeholder="1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Unit Price (₱)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            disabled={editingItem.status === 'filed'}
+                            value={editFormData.unit_price}
+                            onChange={e => setEditFormData({ ...editFormData, unit_price: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                          Service Type
+                        </label>
+                        <select
+                          disabled={editingItem.status === 'filed'}
+                          value={editFormData.service_type}
+                          onChange={e => setEditFormData({ ...editFormData, service_type: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          <option value="Photocopying Services">Photocopying Services</option>
+                          <option value="Document Printing & Lamination">Document Printing & Lamination</option>
+                          <option value="2x2 ID Photo Package">2x2 ID Photo Package</option>
+                          <option value="Membership Application Fee">Membership Application Fee</option>
+                          <option value="Passbook Replacement Fee">Passbook Replacement Fee</option>
+                          <option value="Notarial / Processing Fee">Notarial / Processing Fee</option>
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Copies / Count
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            disabled={editingItem.status === 'filed'}
+                            value={editFormData.service_copies}
+                            onChange={e => setEditFormData({ ...editFormData, service_copies: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                            placeholder="1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                            Rate per Unit (₱)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            disabled={editingItem.status === 'filed'}
+                            value={editFormData.service_rate}
+                            onChange={e => setEditFormData({ ...editFormData, service_rate: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -3556,14 +3693,14 @@ export default function CollectionPage() {
                     )}
                   </div>
                 )}
-                {selectedItemForModal.tab === 'sales' && (
+                {(selectedItemForModal.tab === 'sales' || (selectedItemForModal.tab === 'sales_services' && selectedItemForModal.item_name)) && (
                   <div className="space-y-1">
                     <p className="font-medium text-neutral-800 dark:text-neutral-200">Item: {selectedItemForModal.item_name || 'Store Item'}</p>
                     <p className="text-neutral-500">Category: {selectedItemForModal.item_category || 'Uniform'}</p>
                     <p className="text-neutral-500">Quantity: {selectedItemForModal.quantity || 1} pcs @ ₱{(selectedItemForModal.unit_price || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                   </div>
                 )}
-                {selectedItemForModal.tab === 'services' && (
+                {(selectedItemForModal.tab === 'services' || (selectedItemForModal.tab === 'sales_services' && selectedItemForModal.service_type)) && (
                   <div className="space-y-1">
                     <p className="font-medium text-neutral-800 dark:text-neutral-200">Service: {selectedItemForModal.service_type || 'Services'}</p>
                     <p className="text-neutral-500">Count / Units: {selectedItemForModal.service_copies || 1} @ ₱{(selectedItemForModal.service_rate || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
@@ -3828,11 +3965,10 @@ export default function CollectionPage() {
           <p className="text-xs font-mono text-neutral-700">Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-xs border p-3 rounded bg-neutral-50 font-bold">
+        <div className="grid grid-cols-2 gap-2 text-xs border p-3 rounded bg-neutral-50 font-bold">
           <div>Credit Collections: ₱{collections.filter(c => c.tab === 'credit').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
-          <div>Sales: ₱{collections.filter(c => c.tab === 'sales').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
-          <div>Services: ₱{collections.filter(c => c.tab === 'services').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
-          <div className="col-span-3 text-sm font-black text-right border-t pt-1">
+          <div>Sales & Services: ₱{collections.filter(c => c.tab === 'sales' || c.tab === 'services' || c.tab === 'sales_services').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
+          <div className="col-span-2 text-sm font-black text-right border-t pt-1">
             GRAND TOTAL COLLECTED: ₱{collections.reduce((s, c) => s + c.amount, 0).toFixed(2)}
           </div>
         </div>

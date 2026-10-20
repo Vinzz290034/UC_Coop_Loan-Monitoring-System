@@ -681,9 +681,8 @@ export default function InvoiceArExcelImportModal({
 
       const firstItem = b.items[0];
       const hasCredit = b.items.some(it => it.tab === 'credit');
-      const hasSales = b.items.some(it => it.tab === 'sales');
-      const hasServices = b.items.some(it => it.tab === 'services');
-      const tab: CollectionItem['tab'] = hasCredit ? 'credit' : (hasSales ? 'sales' : (hasServices ? 'services' : 'credit'));
+      const hasSalesOrServices = b.items.some(it => it.tab === 'sales' || it.tab === 'services' || it.tab === 'sales_services');
+      const tab: CollectionItem['tab'] = hasCredit ? 'credit' : (hasSalesOrServices ? 'sales_services' : 'credit');
 
       const consolidatedLoans: CollectionLoanPayment[] = [];
       let principal_amount = 0;
@@ -760,23 +759,18 @@ export default function InvoiceArExcelImportModal({
   // Statistics
   const stats = useMemo(() => {
     let creditTotal = 0;
-    let salesTotal = 0;
-    let servicesTotal = 0;
+    let salesServicesTotal = 0;
 
     let creditCount = 0;
-    let salesCount = 0;
-    let servicesCount = 0;
+    let salesServicesCount = 0;
 
     for (const item of allParsedItems) {
       if (item.tab === 'credit') {
         creditTotal += item.amount;
         creditCount++;
-      } else if (item.tab === 'sales') {
-        salesTotal += item.amount;
-        salesCount++;
-      } else if (item.tab === 'services') {
-        servicesTotal += item.amount;
-        servicesCount++;
+      } else if (item.tab === 'sales' || item.tab === 'services' || item.tab === 'sales_services') {
+        salesServicesTotal += item.amount;
+        salesServicesCount++;
       }
     }
 
@@ -789,10 +783,8 @@ export default function InvoiceArExcelImportModal({
       totalCashOnHand,
       creditTotal,
       creditCount,
-      salesTotal,
-      salesCount,
-      servicesTotal,
-      servicesCount,
+      salesServicesTotal,
+      salesServicesCount,
       discrepanciesCount
     };
   }, [parsedBreakdowns, allParsedItems]);
@@ -800,7 +792,12 @@ export default function InvoiceArExcelImportModal({
   // Filtered preview items
   const filteredPreviewBreakdowns = useMemo(() => {
     if (activePreviewTab === 'all') return parsedBreakdowns;
-    return parsedBreakdowns.filter(b => b.items.some(it => it.tab === activePreviewTab));
+    return parsedBreakdowns.filter(b => b.items.some(it => {
+      if (activePreviewTab === 'sales_services') {
+        return it.tab === 'sales_services' || it.tab === 'sales' || it.tab === 'services';
+      }
+      return it.tab === activePreviewTab;
+    }));
   }, [parsedBreakdowns, activePreviewTab]);
 
   // Execute import
@@ -997,7 +994,7 @@ export default function InvoiceArExcelImportModal({
               )}
 
               {/* Statistics Overview Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3.5 rounded-2xl border border-outline-variant/50 bg-white dark:bg-surface-container-lowest">
                   <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
                     Total Payees
@@ -1026,26 +1023,13 @@ export default function InvoiceArExcelImportModal({
                 <div className="p-3.5 rounded-2xl border border-outline-variant/50 bg-white dark:bg-surface-container-lowest">
                   <div className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1">
                     <ShoppingBag className="w-3 h-3" />
-                    <span>Sales</span>
+                    <span>Sales & Services</span>
                   </div>
                   <div className="text-lg font-black font-mono text-neutral-900 dark:text-white mt-1">
-                    ₱{stats.salesTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    ₱{stats.salesServicesTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-[10px] text-neutral-500 mt-0.5">
-                    {stats.salesCount} store items
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-2xl border border-outline-variant/50 bg-white dark:bg-surface-container-lowest">
-                  <div className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1">
-                    <Wrench className="w-3 h-3" />
-                    <span>Services</span>
-                  </div>
-                  <div className="text-lg font-black font-mono text-neutral-900 dark:text-white mt-1">
-                    ₱{stats.servicesTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </div>
-                  <div className="text-[10px] text-neutral-500 mt-0.5">
-                    {stats.servicesCount} fees & insurance
+                    {stats.salesServicesCount} items & fees
                   </div>
                 </div>
               </div>
@@ -1079,27 +1063,15 @@ export default function InvoiceArExcelImportModal({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setActivePreviewTab('sales')}
+                      onClick={() => setActivePreviewTab('sales_services')}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activePreviewTab === 'sales'
+                        activePreviewTab === 'sales_services'
                           ? 'bg-emerald-700 text-white shadow-xs'
                           : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
                       }`}
                     >
                       <ShoppingBag className="w-3 h-3" />
-                      <span>Sales ({stats.salesCount})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActivePreviewTab('services')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                        activePreviewTab === 'services'
-                          ? 'bg-emerald-700 text-white shadow-xs'
-                          : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                      }`}
-                    >
-                      <Wrench className="w-3 h-3" />
-                      <span>Services ({stats.servicesCount})</span>
+                      <span>Sales & Services ({stats.salesServicesCount})</span>
                     </button>
                   </div>
 
