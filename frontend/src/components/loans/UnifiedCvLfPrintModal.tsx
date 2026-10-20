@@ -227,11 +227,44 @@ export function formatPayeeName(name?: string): string {
 
 function cleanCategoryName(name: string): string {
   if (!name) return 'Operation';
-  return name
+  const stripped = name
     .replace(/^revolving\s*fund\s*-\s*/i, '')
     .replace(/^stl\s*-\s*/i, '')
     .replace(/^short\s*term\s*loan\s*-\s*/i, '')
     .trim();
+  const lower = stripped.toLowerCase();
+  if (lower === 'operation' || lower === 'operations') return 'Operation';
+  if (lower === 'service' || lower === 'services') return 'Service';
+  if (lower === 'merchandise') return 'Merchandise';
+  if (lower === 'cetf') return 'CETF';
+  if (lower === 'cdf') return 'CDF';
+  if (lower === 'stl') return 'STL';
+  return stripped;
+}
+
+function isRowCredit(row: any): boolean {
+  if (!row) return false;
+  if (row.is_credit === true || row.isAutoCredit === true) return true;
+  const rawAmt = typeof row.amount === 'number' ? row.amount : parseFloat(row.amount || 0);
+  if (rawAmt < 0) return true;
+  const creditVal = typeof row.credit === 'number' ? row.credit : parseFloat(row.credit || 0);
+  const debitVal = typeof row.debit === 'number' ? row.debit : parseFloat(row.debit || 0);
+  if (creditVal > 0 && debitVal <= 0) return true;
+  const desc = (row.book_of_account || row.description || '').trim();
+  if (/^revolving\s*fund\s*-\s*/i.test(desc)) return true;
+  return false;
+}
+
+function getCreditRowCategory(creditRow: any): string {
+  if (!creditRow) return '';
+  if (creditRow.category) {
+    const cleaned = cleanCategoryName(creditRow.category);
+    if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) return cleaned;
+  }
+  const creditAcct = (creditRow.book_of_account || creditRow.description || '').trim();
+  const cleaned = cleanCategoryName(creditAcct);
+  if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) return cleaned;
+  return '';
 }
 
 function getCategoryForAccount(acct: string): string {
@@ -295,64 +328,67 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
   // 1. Explicit category directly on the item
   if (it.category) {
     const cleaned = cleanCategoryName(it.category);
-    if (cleaned) return cleaned;
+    if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) return cleaned;
+  }
+
+  // If the item itself is an explicit credit row (e.g. "Revolving Fund - CDF"), return its category directly
+  if (isRowCredit(it)) {
+    const directCat = getCreditRowCategory(it);
+    if (directCat) return directCat;
   }
 
   const vKey = it.voucher_no ? String(it.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
 
-  // 2. Look for paired credit row in cvDetails with matching voucher_no or adjacent index
+  // 2. Look for paired credit row in cvDetails
   if (Array.isArray(cvDetails) && cvDetails.length > 0) {
     const itIdx = cvDetails.indexOf(it);
 
-    // 2a. Look forward from itIdx for the immediate paired credit row (supports multi-category vouchers like 26-379)
+    // 2a. Primary journal check: immediate subsequent row (itIdx + 1)
+    // In standard journal entries, each debit row is directly followed by its balancing credit row.
+    // This correctly pairs debit entries with their credit row (e.g. Miscellaneous paired with Revolving Fund - CDF)
+    // even if voucher_no on credit differs or reflects CV header number.
+    if (itIdx !== -1 && itIdx + 1 < cvDetails.length) {
+      const nextRow = cvDetails[itIdx + 1];
+      if (isRowCredit(nextRow) && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(nextRow.book_of_account || nextRow.description || '')) {
+        const cat = getCreditRowCategory(nextRow);
+        if (cat) return cat;
+      }
+    }
+
+    // 2b. Look forward from itIdx for credit row matching voucher_no
     if (itIdx !== -1) {
       for (let j = itIdx + 1; j < cvDetails.length; j++) {
         const c = cvDetails[j];
-        const isCredit = c.is_credit === true || c.isAutoCredit === true || (c.credit !== null && c.credit !== undefined && Number(c.credit) > 0);
-        if (isCredit && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(c.book_of_account || c.description || '')) {
+        if (isRowCredit(c) && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(c.book_of_account || c.description || '')) {
           const cVKey = c.voucher_no ? String(c.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
-          if (!vKey || !cVKey || cVKey.toLowerCase() === vKey.toLowerCase()) {
-            const creditAcct = (c.book_of_account || c.description || '').trim();
-            const cleaned = cleanCategoryName(creditAcct);
-            if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) {
-              return cleaned;
-            }
+          if (vKey && cVKey && cVKey.toLowerCase() === vKey.toLowerCase()) {
+            const cat = getCreditRowCategory(c);
+            if (cat) return cat;
           }
-          break; // Stop at the immediate subsequent credit row
         }
       }
     }
 
-    // 2b. Match paired credit row by voucher_no
+    // 2c. Look across all cvDetails for a credit row with matching voucher_no
     if (vKey) {
       const pairedCredit = cvDetails.find((c: any) => {
-        const isCredit = c.is_credit === true || c.isAutoCredit === true || (c.credit !== null && c.credit !== undefined && Number(c.credit) > 0);
-        if (!isCredit) return false;
+        if (!isRowCredit(c) || /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(c.book_of_account || c.description || '')) return false;
         const cVKey = c.voucher_no ? String(c.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
-        return cVKey && cVKey.toLowerCase() === vKey.toLowerCase() && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(c.book_of_account || c.description || '');
+        return cVKey && cVKey.toLowerCase() === vKey.toLowerCase();
       });
 
       if (pairedCredit) {
-        const creditAcct = (pairedCredit.book_of_account || pairedCredit.description || '').trim();
-        const cleaned = cleanCategoryName(creditAcct);
-        if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) {
-          return cleaned;
-        }
+        const cat = getCreditRowCategory(pairedCredit);
+        if (cat) return cat;
       }
     }
 
-    // 2c. Adjacent index check in cvDetails (standard auto-credit pairing order)
-    if (itIdx !== -1) {
-      const candidates = [cvDetails[itIdx + 1], cvDetails[itIdx - 1]].filter(Boolean);
-      for (const cand of candidates) {
-        const isCredit = cand.is_credit === true || cand.isAutoCredit === true || (cand.credit !== null && cand.credit !== undefined && Number(cand.credit) > 0);
-        if (isCredit && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(cand.book_of_account || cand.description || '')) {
-          const creditAcct = (cand.book_of_account || cand.description || '').trim();
-          const cleaned = cleanCategoryName(creditAcct);
-          if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) {
-            return cleaned;
-          }
-        }
+    // 2d. Adjacent preceding row (itIdx - 1)
+    if (itIdx > 0) {
+      const prevRow = cvDetails[itIdx - 1];
+      if (isRowCredit(prevRow) && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(prevRow.book_of_account || prevRow.description || '')) {
+        const cat = getCreditRowCategory(prevRow);
+        if (cat) return cat;
       }
     }
   }
@@ -366,14 +402,15 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
        (it.remarks && l.remarks && String(it.remarks).trim() === String(l.remarks).trim()))
     );
     if (matchLf?.category) {
-      return cleanCategoryName(matchLf.category);
+      const cleaned = cleanCategoryName(matchLf.category);
+      if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) return cleaned;
     }
   }
 
   // 4. Remarks or description explicit mentions of category
   const textToCheck = `${it.remarks || ''} ${it.book_of_account || ''} ${it.description || ''}`.toLowerCase();
-  if (/\bcdf\b/.test(textToCheck)) return 'CDF';
-  if (/\bcetf\b/.test(textToCheck)) return 'CETF';
+  if (/\bcdf\b/i.test(textToCheck)) return 'CDF';
+  if (/\bcetf\b/i.test(textToCheck)) return 'CETF';
 
   // 5. Account heuristic fallback
   const desc = (it.book_of_account || it.description || '').trim();
