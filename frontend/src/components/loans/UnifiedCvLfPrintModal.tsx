@@ -436,7 +436,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         remarks: it.remarks || '',
         debit: amt,
         credit: null,
-        category: it.category
+        category: it.category ? cleanCategoryName(it.category) : resolveItemCategory(it, [], activeItems)
       });
       debitTotal += amt;
     }
@@ -445,6 +445,9 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
   }
 
   if (details.length > 0) {
+    let lastDebitCategory: string | undefined = undefined;
+    let lastDebitVoucherNo: string | undefined = undefined;
+
     for (const item of details) {
       const desc = item.book_of_account || item.description || '';
       const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
@@ -465,17 +468,32 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         const creditVal = rawVal < 0
           ? Math.abs(rawVal)
           : (item.credit !== null && item.credit !== undefined && item.credit !== '' ? Number(item.credit) : (item.debit ? Number(item.debit) : (rawVal > 0 ? rawVal : null)));
+        
+        let creditCat = item.category ? cleanCategoryName(item.category) : '';
+        if (!creditCat || !['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(creditCat)) {
+          const fromDesc = cleanCategoryName(desc);
+          if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(fromDesc)) {
+            creditCat = fromDesc;
+          }
+        }
+        if (!creditCat && lastDebitCategory && (vNo === lastDebitVoucherNo || vNo === '—' || !vNo)) {
+          creditCat = lastDebitCategory;
+        }
+
         rows.push({
           date: dateStr,
           voucher_no: vNo,
           description: desc || 'Credit / Deduction',
           remarks: item.remarks || '',
           debit: null,
-          credit: creditVal
+          credit: creditVal,
+          category: creditCat || undefined
         });
         if (creditVal) creditTotal += creditVal;
       } else if (rawVal > 0) {
         const resolvedCat = resolveItemCategory(item, details, activeItems);
+        lastDebitCategory = resolvedCat;
+        lastDebitVoucherNo = vNo;
         rows.push({
           date: dateStr,
           voucher_no: vNo,
@@ -813,6 +831,9 @@ export default function UnifiedCvLfPrintModal({
   // Track whether modal was already open to avoid resetting view mode mid-session
   const wasOpenRef = useRef(false);
 
+  // Category filter for on-screen inspection (never prints)
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
+
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
       // Only reset view mode when modal first opens, not while it stays open
@@ -1003,6 +1024,7 @@ export default function UnifiedCvLfPrintModal({
       setIsPrinting(false);
       setSelectedLinkTargetId('');
       setIsEditingDetailedSignatories(false);
+      setSelectedCategoryFilter(null);
     }
   }, [isOpen, loadFullData]);
 
@@ -1339,6 +1361,44 @@ export default function UnifiedCvLfPrintModal({
     }));
   }, [isRevolvingFund, detailedCvData.rows, lfItems, categoryBreakdown.list]);
 
+  // On-screen filtered rows based on user breakdown pill click (does NOT affect printing)
+  const displayedDetailedRows = useMemo(() => {
+    if (!selectedCategoryFilter) {
+      return detailedCvData.rows;
+    }
+    const filterCat = selectedCategoryFilter.trim().toLowerCase();
+    return detailedCvData.rows.filter(r => {
+      const rowCat = ((r as any).category || '').trim().toLowerCase();
+      if (rowCat === filterCat) return true;
+
+      const descCat = cleanCategoryName(r.description || '').toLowerCase();
+      if (descCat === filterCat) return true;
+
+      return false;
+    });
+  }, [detailedCvData.rows, selectedCategoryFilter]);
+
+  const filteredTotals = useMemo(() => {
+    if (!selectedCategoryFilter) {
+      return {
+        debitTotal: detailedCvData.debitTotal,
+        creditTotal: detailedCvData.creditTotal,
+        count: detailedCvData.rows.length
+      };
+    }
+    let dTot = 0;
+    let cTot = 0;
+    for (const r of displayedDetailedRows) {
+      if (r.debit !== null && r.debit !== undefined) dTot += Number(r.debit) || 0;
+      if (r.credit !== null && r.credit !== undefined) cTot += Number(r.credit) || 0;
+    }
+    return {
+      debitTotal: dTot,
+      creditTotal: cTot,
+      count: displayedDetailedRows.length
+    };
+  }, [selectedCategoryFilter, displayedDetailedRows, detailedCvData]);
+
   if (!isOpen || !mounted) return null;
 
   const hasAttachedSchedule = Boolean(currentLf && lfItems.length > 0);
@@ -1511,21 +1571,55 @@ export default function UnifiedCvLfPrintModal({
                     {/* Particulars / Breakdown */}
                     {isRevolvingFund && cvViewMode === 'detailed' && rfDetailedCategoryBreakdown.length > 0 ? (
                       <div className="bg-gradient-to-r from-emerald-50 via-teal-50/70 to-emerald-50 p-2.5 rounded-xl border border-emerald-200/90 shadow-2xs">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="px-2.5 py-0.5 rounded-md bg-[#064e3b] text-white font-extrabold text-[9.5px] uppercase tracking-wider shadow-2xs">
-                            Breakdown
-                          </span>
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            {rfDetailedCategoryBreakdown.map((cat) => (
-                              <span
-                                key={cat.name}
-                                className="inline-flex items-center gap-1.5 bg-white/95 px-2.5 py-0.5 rounded-lg border border-emerald-200 shadow-2xs"
-                              >
-                                <span className="text-[#065f46] font-bold text-[11px]">{cat.name}:</span>
-                                <span className="font-mono font-bold text-neutral-900 text-[11.5px]">{cat.formatted}</span>
-                              </span>
-                            ))}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-md bg-[#064e3b] text-white font-extrabold text-[9.5px] uppercase tracking-wider shadow-2xs">
+                              Breakdown
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCategoryFilter(null)}
+                              className={`px-2.5 py-0.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                                !selectedCategoryFilter
+                                  ? 'bg-[#064e3b] text-white border-[#064e3b] shadow-2xs ring-2 ring-emerald-500/30'
+                                  : 'bg-white/95 text-neutral-600 hover:bg-emerald-50 hover:text-emerald-900 border-emerald-200'
+                              }`}
+                              title="Show all transactions across all categories"
+                            >
+                              All
+                            </button>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              {rfDetailedCategoryBreakdown.map((cat) => {
+                                const isSelected = selectedCategoryFilter === cat.name;
+                                return (
+                                  <button
+                                    key={cat.name}
+                                    type="button"
+                                    onClick={() => setSelectedCategoryFilter(prev => prev === cat.name ? null : cat.name)}
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border transition-all cursor-pointer select-none active:scale-95 ${
+                                      isSelected
+                                        ? 'bg-[#065f46] text-white border-[#047857] shadow-xs ring-2 ring-emerald-400 font-bold scale-[1.02]'
+                                        : 'bg-white/95 hover:bg-emerald-100/70 border-emerald-200 hover:border-emerald-300 shadow-2xs text-neutral-800'
+                                    }`}
+                                    title={`Click to filter transaction details by ${cat.name}`}
+                                  >
+                                    <span className={`font-bold text-[11px] ${isSelected ? 'text-emerald-100' : 'text-[#065f46]'}`}>
+                                      {cat.name}:
+                                    </span>
+                                    <span className={`font-mono font-bold text-[11.5px] ${isSelected ? 'text-white' : 'text-neutral-900'}`}>
+                                      {cat.formatted}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
+
+                          {selectedCategoryFilter && (
+                            <span className="text-[10px] text-emerald-800 italic font-medium bg-emerald-100/60 px-2 py-0.5 rounded border border-emerald-200">
+                              Click category again or &apos;All&apos; to view full schedule
+                            </span>
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -1588,9 +1682,37 @@ export default function UnifiedCvLfPrintModal({
                     ) : (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="font-extrabold uppercase text-[10px] tracking-wider text-[#064e3b]">
-                            TRANSACTION DETAILS
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold uppercase text-[10px] tracking-wider text-[#064e3b]">
+                              TRANSACTION DETAILS
+                            </span>
+                            {selectedCategoryFilter && (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-950 border border-emerald-300 text-[10px] font-bold">
+                                <span>Filtered: <strong className="font-extrabold text-emerald-900">{selectedCategoryFilter}</strong> ({formatCurrency(filteredTotals.debitTotal)} • {filteredTotals.count} line{filteredTotals.count === 1 ? '' : 's'})</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedCategoryFilter(null)}
+                                  className="ml-1 text-emerald-700 hover:text-emerald-950 hover:bg-emerald-200/80 rounded px-1 text-[9px] font-black cursor-pointer"
+                                  title="Clear category filter"
+                                >
+                                  ✕ Clear
+                                </button>
+                              </span>
+                            )}
+                          </div>
+                          {selectedCategoryFilter ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCategoryFilter(null)}
+                              className="text-[10px] font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                            >
+                              Show All Transactions ({formatCurrency(detailedCvData.debitTotal)})
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-neutral-400 font-medium hidden sm:inline-block">
+                              Tip: Click any breakdown pill above to inspect its transactions
+                            </span>
+                          )}
                         </div>
                         <div className="border border-emerald-300 rounded-2xl overflow-hidden text-[10px] shadow-2xs">
                           <table className="w-full text-left border-collapse">
@@ -1605,38 +1727,53 @@ export default function UnifiedCvLfPrintModal({
                               </tr>
                             </thead>
                             <tbody>
-                              {detailedCvData.rows.map((r, i) => (
-                                <tr key={i} className="border-b border-neutral-200 hover:bg-emerald-50/30">
-                                  <td
-                                    className="p-2.5 font-mono text-[9.5px] text-neutral-600 border-r border-neutral-200 whitespace-nowrap cursor-pointer hover:bg-emerald-100/70 hover:text-emerald-900 transition-colors"
-                                    title="Click to edit date"
-                                    onClick={() => {
-                                      if (onEdit && (currentCv || initialCv)) {
-                                        const activeCv = currentCv || initialCv;
-                                        const rowsToPass = detailedCvData.rows && detailedCvData.rows.length > 0 ? detailedCvData.rows : summaryCvData.rows;
-                                        onEdit(activeCv, cvViewMode, rowsToPass);
-                                      }
-                                    }}
-                                  >
-                                    {r.date}
-                                  </td>
-                                  <td className="p-2.5 font-mono text-[10px] font-bold text-neutral-800 border-r border-neutral-200">
-                                    {r.voucher_no}
-                                  </td>
-                                  <td className={`p-2.5 border-r border-neutral-200 ${r.credit !== null ? 'pl-6 italic text-neutral-700 font-medium' : 'font-bold text-neutral-900'}`}>
-                                    {r.description}
-                                  </td>
-                                  <td className="p-2.5 border-r border-neutral-200 text-[9.5px] text-neutral-600 italic">
-                                    {r.remarks || <span className="text-neutral-300">—</span>}
-                                  </td>
-                                  <td className="p-2.5 text-right font-mono font-bold text-neutral-900 border-r border-neutral-200">
-                                    {r.debit !== null ? `₱${r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : <span className="text-neutral-400 font-bold">–</span>}
-                                  </td>
-                                  <td className="p-2.5 text-right font-mono font-bold text-neutral-900">
-                                    {r.credit !== null ? `₱${r.credit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : <span className="text-neutral-400 font-bold">–</span>}
+                              {displayedDetailedRows.length > 0 ? (
+                                displayedDetailedRows.map((r, i) => (
+                                  <tr key={i} className="border-b border-neutral-200 hover:bg-emerald-50/30">
+                                    <td
+                                      className="p-2.5 font-mono text-[9.5px] text-neutral-600 border-r border-neutral-200 whitespace-nowrap cursor-pointer hover:bg-emerald-100/70 hover:text-emerald-900 transition-colors"
+                                      title="Click to edit date"
+                                      onClick={() => {
+                                        if (onEdit && (currentCv || initialCv)) {
+                                          const activeCv = currentCv || initialCv;
+                                          const rowsToPass = detailedCvData.rows && detailedCvData.rows.length > 0 ? detailedCvData.rows : summaryCvData.rows;
+                                          onEdit(activeCv, cvViewMode, rowsToPass);
+                                        }
+                                      }}
+                                    >
+                                      {r.date}
+                                    </td>
+                                    <td className="p-2.5 font-mono text-[10px] font-bold text-neutral-800 border-r border-neutral-200">
+                                      {r.voucher_no}
+                                    </td>
+                                    <td className={`p-2.5 border-r border-neutral-200 ${r.credit !== null ? 'pl-6 italic text-neutral-700 font-medium' : 'font-bold text-neutral-900'}`}>
+                                      {r.description}
+                                    </td>
+                                    <td className="p-2.5 border-r border-neutral-200 text-[9.5px] text-neutral-600 italic">
+                                      {r.remarks || <span className="text-neutral-300">—</span>}
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-bold text-neutral-900 border-r border-neutral-200">
+                                      {r.debit !== null ? `₱${r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : <span className="text-neutral-400 font-bold">–</span>}
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-bold text-neutral-900">
+                                      {r.credit !== null ? `₱${r.credit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : <span className="text-neutral-400 font-bold">–</span>}
+                                    </td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={6} className="p-8 text-center text-neutral-500 font-medium">
+                                    <p className="text-xs font-semibold text-neutral-700">No transactions found for category &ldquo;{selectedCategoryFilter}&rdquo;.</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedCategoryFilter(null)}
+                                      className="mt-2 text-xs font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+                                    >
+                                      Show all transactions
+                                    </button>
                                   </td>
                                 </tr>
-                              ))}
+                              )}
                               {/* 3-ROW FOOTER MATCHING DETAILED CV SPEC FOR STL ONLY; 2-ROW FOOTER FOR REVOLVING */}
                               {resolvedType === 'stl' ? (
                                 <>
@@ -1671,21 +1808,29 @@ export default function UnifiedCvLfPrintModal({
                               ) : (
                                 <>
                                   <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-300 text-[10px]">
-                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">TOTAL:</td>
+                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">
+                                      {selectedCategoryFilter ? `TOTAL (${selectedCategoryFilter.toUpperCase()}):` : 'TOTAL:'}
+                                    </td>
                                     <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
-                                      ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                      ₱{(selectedCategoryFilter ? filteredTotals.debitTotal : detailedCvData.debitTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
-                                      <span className="text-neutral-400 font-bold">–</span>
+                                      {selectedCategoryFilter && filteredTotals.creditTotal > 0 ? (
+                                        `₱${filteredTotals.creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                                      ) : (
+                                        <span className="text-neutral-400 font-bold">–</span>
+                                      )}
                                     </td>
                                   </tr>
                                   <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-200 text-[10px]">
-                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">{cibName}:</td>
+                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">
+                                      {selectedCategoryFilter ? `${cibName} (${selectedCategoryFilter.toUpperCase()}):` : `${cibName}:`}
+                                    </td>
                                     <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
                                       <span className="text-neutral-400 font-bold">–</span>
                                     </td>
                                     <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b]">
-                                      ₱{cibDetailedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                      ₱{(selectedCategoryFilter ? filteredTotals.debitTotal : cibDetailedAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </td>
                                   </tr>
                                 </>
