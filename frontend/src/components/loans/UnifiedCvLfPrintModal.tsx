@@ -302,7 +302,28 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
 
   // 2. Look for paired credit row in cvDetails with matching voucher_no or adjacent index
   if (Array.isArray(cvDetails) && cvDetails.length > 0) {
-    // 2a. Match paired credit row by voucher_no
+    const itIdx = cvDetails.indexOf(it);
+
+    // 2a. Look forward from itIdx for the immediate paired credit row (supports multi-category vouchers like 26-379)
+    if (itIdx !== -1) {
+      for (let j = itIdx + 1; j < cvDetails.length; j++) {
+        const c = cvDetails[j];
+        const isCredit = c.is_credit === true || c.isAutoCredit === true || (c.credit !== null && c.credit !== undefined && Number(c.credit) > 0);
+        if (isCredit && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(c.book_of_account || c.description || '')) {
+          const cVKey = c.voucher_no ? String(c.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
+          if (!vKey || !cVKey || cVKey.toLowerCase() === vKey.toLowerCase()) {
+            const creditAcct = (c.book_of_account || c.description || '').trim();
+            const cleaned = cleanCategoryName(creditAcct);
+            if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) {
+              return cleaned;
+            }
+          }
+          break; // Stop at the immediate subsequent credit row
+        }
+      }
+    }
+
+    // 2b. Match paired credit row by voucher_no
     if (vKey) {
       const pairedCredit = cvDetails.find((c: any) => {
         const isCredit = c.is_credit === true || c.isAutoCredit === true || (c.credit !== null && c.credit !== undefined && Number(c.credit) > 0);
@@ -320,8 +341,7 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
       }
     }
 
-    // 2b. Adjacent index check in cvDetails (standard auto-credit pairing order)
-    const itIdx = cvDetails.indexOf(it);
+    // 2c. Adjacent index check in cvDetails (standard auto-credit pairing order)
     if (itIdx !== -1) {
       const candidates = [cvDetails[itIdx + 1], cvDetails[itIdx - 1]].filter(Boolean);
       for (const cand of candidates) {
