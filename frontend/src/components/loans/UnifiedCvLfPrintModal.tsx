@@ -854,21 +854,33 @@ export default function UnifiedCvLfPrintModal({
   // Detailed Check Voucher Signatories
   const [isEditingDetailedSignatories, setIsEditingDetailedSignatories] = useState(false);
   const [detailedLiquidatedBy, setDetailedLiquidatedBy] = useState('MICHELLE M. PABLE');
+  const [detailedLiquidatedByTitle, setDetailedLiquidatedByTitle] = useState('Manager');
   const [detailedApprovedBy, setDetailedApprovedBy] = useState('CANDILARIO N. TATOY');
+  const [detailedApprovedByTitle, setDetailedApprovedByTitle] = useState('Chairman');
   const [isSavingSignatories, setIsSavingSignatories] = useState(false);
 
   // Sync signatories when currentCv or currentLf updates
   useEffect(() => {
     if (currentCv || currentLf) {
       const liq = currentCv?.signatories?.liquidated_by || currentLf?.custodian_name || 'MICHELLE M. PABLE';
+      const liqTitle = currentCv?.signatories?.liquidated_by_title !== undefined
+        ? currentCv.signatories.liquidated_by_title
+        : (getSignatoryTitle(liq) || 'Manager');
       const app = currentCv?.signatories?.detailed_approved_by || currentCv?.signatories?.approved_by || currentLf?.approved_by || 'CANDILARIO N. TATOY';
+      const appTitle = currentCv?.signatories?.detailed_approved_by_title !== undefined
+        ? currentCv.signatories.detailed_approved_by_title
+        : (currentCv?.signatories?.approved_by_title !== undefined
+            ? currentCv.signatories.approved_by_title
+            : (getSignatoryTitle(app) || 'Chairman'));
       setDetailedLiquidatedBy(liq);
+      setDetailedLiquidatedByTitle(liqTitle);
       setDetailedApprovedBy(app);
+      setDetailedApprovedByTitle(appTitle);
     }
   }, [currentCv, currentLf]);
 
-  const liquidatedByTitle = useMemo(() => getSignatoryTitle(detailedLiquidatedBy), [detailedLiquidatedBy]);
-  const approvedByTitle = useMemo(() => getSignatoryTitle(detailedApprovedBy), [detailedApprovedBy]);
+  const liquidatedByTitle = detailedLiquidatedByTitle;
+  const approvedByTitle = detailedApprovedByTitle;
 
   useEffect(() => {
     setMounted(true);
@@ -1068,8 +1080,11 @@ export default function UnifiedCvLfPrintModal({
       const updatedSignatories = {
         ...(currentCv?.signatories || {}),
         liquidated_by: detailedLiquidatedBy.trim(),
+        liquidated_by_title: detailedLiquidatedByTitle.trim(),
         detailed_approved_by: detailedApprovedBy.trim(),
-        approved_by: detailedApprovedBy.trim()
+        approved_by: detailedApprovedBy.trim(),
+        detailed_approved_by_title: detailedApprovedByTitle.trim(),
+        approved_by_title: detailedApprovedByTitle.trim()
       };
 
       if (currentCv?.id) {
@@ -1958,68 +1973,58 @@ export default function UnifiedCvLfPrintModal({
                           <div className="p-3 mb-3 rounded-xl bg-neutral-50 border border-neutral-300 space-y-3 shadow-xs">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               {/* Liquidated By */}
-                              <div className="space-y-1">
-                                <label className="text-[8px] font-bold uppercase text-neutral-600 block">
-                                  Liquidated By:
-                                </label>
-                                <input
-                                  type="text"
-                                  value={detailedLiquidatedBy}
-                                  onChange={e => setDetailedLiquidatedBy(e.target.value)}
-                                  placeholder="e.g. MICHELLE M. PABLE"
-                                  className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 bg-white text-neutral-900 focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
-                                />
-                                <div className="flex items-center justify-between text-[8px] text-neutral-500 pt-0.5">
-                                  <span>Role displayed: <strong className="text-emerald-700 font-bold">{liquidatedByTitle || 'None (no title)'}</strong></span>
-                                  <div className="flex gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => setDetailedLiquidatedBy('MICHELLE M. PABLE')}
-                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 hover:bg-emerald-100 text-neutral-700 hover:text-emerald-800 transition-colors"
-                                    >
-                                      Pable (Manager)
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setDetailedLiquidatedBy('CANDILARIO N. TATOY')}
-                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 hover:bg-emerald-100 text-neutral-700 hover:text-emerald-800 transition-colors"
-                                    >
-                                      Tatoy (Chairman)
-                                    </button>
-                                  </div>
+                              <div className="space-y-1.5">
+                                <div>
+                                  <label className="text-[8px] font-bold uppercase text-neutral-600 block mb-0.5">
+                                    Liquidated By (Name):
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={detailedLiquidatedBy}
+                                    onChange={e => setDetailedLiquidatedBy(e.target.value)}
+                                    placeholder="Full Name (e.g. MICHELLE M. PABLE)"
+                                    className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 bg-white text-neutral-900 focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[8px] font-bold uppercase text-neutral-600 block mb-0.5">
+                                    Position / Title:
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={detailedLiquidatedByTitle}
+                                    onChange={e => setDetailedLiquidatedByTitle(e.target.value)}
+                                    placeholder="Position (e.g. Manager)"
+                                    className="w-full px-2 py-1 text-[10px] font-semibold rounded border border-neutral-300 bg-white text-neutral-800 focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
+                                  />
                                 </div>
                               </div>
 
                               {/* Approved By */}
-                              <div className="space-y-1">
-                                <label className="text-[8px] font-bold uppercase text-neutral-600 block">
-                                  Approved By:
-                                </label>
-                                <input
-                                  type="text"
-                                  value={detailedApprovedBy}
-                                  onChange={e => setDetailedApprovedBy(e.target.value)}
-                                  placeholder="e.g. CANDILARIO N. TATOY"
-                                  className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 bg-white text-neutral-900 focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
-                                />
-                                <div className="flex items-center justify-between text-[8px] text-neutral-500 pt-0.5">
-                                  <span>Role displayed: <strong className="text-emerald-700 font-bold">{approvedByTitle || 'None (no title)'}</strong></span>
-                                  <div className="flex gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => setDetailedApprovedBy('CANDILARIO N. TATOY')}
-                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 hover:bg-emerald-100 text-neutral-700 hover:text-emerald-800 transition-colors"
-                                    >
-                                      Tatoy (Chairman)
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setDetailedApprovedBy('MICHELLE M. PABLE')}
-                                      className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-neutral-200 hover:bg-emerald-100 text-neutral-700 hover:text-emerald-800 transition-colors"
-                                    >
-                                      Pable (Manager)
-                                    </button>
-                                  </div>
+                              <div className="space-y-1.5">
+                                <div>
+                                  <label className="text-[8px] font-bold uppercase text-neutral-600 block mb-0.5">
+                                    Approved By (Name):
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={detailedApprovedBy}
+                                    onChange={e => setDetailedApprovedBy(e.target.value)}
+                                    placeholder="Full Name (e.g. CANDILARIO N. TATOY)"
+                                    className="w-full px-2 py-1 text-[11px] font-bold uppercase rounded border border-neutral-300 bg-white text-neutral-900 focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[8px] font-bold uppercase text-neutral-600 block mb-0.5">
+                                    Position / Title:
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={detailedApprovedByTitle}
+                                    onChange={e => setDetailedApprovedByTitle(e.target.value)}
+                                    placeholder="Position (e.g. Chairman)"
+                                    className="w-full px-2 py-1 text-[10px] font-semibold rounded border border-neutral-300 bg-white text-neutral-800 focus:outline-none focus:ring-1 focus:ring-emerald-600 focus:border-emerald-600 shadow-2xs"
+                                  />
                                 </div>
                               </div>
                             </div>
