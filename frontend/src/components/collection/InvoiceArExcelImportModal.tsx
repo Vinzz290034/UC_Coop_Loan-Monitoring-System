@@ -19,7 +19,8 @@ import {
   Eye,
   Check,
   HelpCircle,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 import { CollectionItem, CollectionTab, CollectionLoanPayment } from '@/app/dashboard/collection/page';
 
@@ -32,6 +33,7 @@ interface Props {
 
 interface ParsedRowBreakdown {
   id: string;
+  sheetName?: string;
   date: string;
   payee: string;
   invoiceNo: string;
@@ -41,6 +43,12 @@ interface ParsedRowBreakdown {
   rowTotal: number;
   isDiscrepancy: boolean;
 }
+
+const ALL_JAN_TO_AUG = '__ALL_JAN_TO_AUG__';
+const ALL_MONTHS = '__ALL_MONTHS__';
+const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const JAN_TO_AUG_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug'];
+const isSummarySheet = (name: string) => /sum\b|summary\b|totals?\b|ar\b|template/i.test(name.trim());
 
 export default function InvoiceArExcelImportModal({
   isOpen,
@@ -144,51 +152,58 @@ export default function InvoiceArExcelImportModal({
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  // Handle file drop / selection
-  const handleFile = async (selected: File) => {
-    setFile(selected);
-    setErrorMessage(null);
-    setIsProcessing(true);
+  // Helper to determine sheet list for selection
+  const getSheetsForSelection = (selection: string, wb: XLSX.WorkBook): string[] => {
+    const getMonthOrder = (sheetName: string): number => {
+      const lower = sheetName.toLowerCase();
+      for (let i = 0; i < MONTH_NAMES.length; i++) {
+        if (lower.includes(MONTH_NAMES[i])) return i;
+      }
+      return 99;
+    };
 
-    try {
-      const buffer = await selected.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
-      setWorkbook(wb);
-      setSheetNames(wb.SheetNames);
-
-      // Prioritize current/latest month sheet or the active sheet (e.g., SEPTEMBER-2026, AR)
-      const targetSheet =
-        wb.SheetNames.find(s => /sep|aug|jul|jun|ar/i.test(s) && !/sum/i.test(s)) ||
-        wb.SheetNames[0];
-
-      setSelectedSheet(targetSheet);
-      parseSheet(wb, targetSheet);
-    } catch (err: any) {
-      console.error('Excel parse error:', err);
-      setErrorMessage(err.message || 'Failed to read Excel file. Please ensure it is a valid .xlsx or .xls file.');
-    } finally {
-      setIsProcessing(false);
+    if (selection === ALL_JAN_TO_AUG) {
+      return wb.SheetNames
+        .filter(name => {
+          if (isSummarySheet(name)) return false;
+          const lower = name.toLowerCase();
+          return JAN_TO_AUG_MONTHS.some(m => lower.includes(m));
+        })
+        .sort((a, b) => getMonthOrder(a) - getMonthOrder(b));
     }
+
+    if (selection === ALL_MONTHS) {
+      return wb.SheetNames
+        .filter(name => {
+          if (isSummarySheet(name)) return false;
+          const lower = name.toLowerCase();
+          return MONTH_NAMES.some(m => lower.includes(m));
+        })
+        .sort((a, b) => getMonthOrder(a) - getMonthOrder(b));
+    }
+
+    return [selection];
   };
 
-  // Parse specific sheet within workbook
-  const parseSheet = (wb: XLSX.WorkBook, sheetName: string) => {
-    const ws = wb.Sheets[sheetName];
-    if (!ws) return;
+  // Parse a single worksheet into row breakdowns
+  const parseSingleSheet = (ws: XLSX.WorkSheet, sheetName: string): ParsedRowBreakdown[] => {
+    if (!ws) return [];
 
     // Convert sheet to 2D array of cells
     const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
     if (!rawRows || rawRows.length < 2) {
-      setErrorMessage(`Sheet "${sheetName}" does not contain enough data.`);
-      setParsedBreakdowns([]);
-      return;
+      return [];
     }
 
-    // Locate header row containing 'Payee' or 'INVOICE' or 'Date'
+    // Locate header row containing 'Payee' or 'INVOICE' or 'Date' or 'Particulars'
     let headerRowIdx = -1;
     for (let r = 0; r < Math.min(10, rawRows.length); r++) {
       const rowStr = rawRows[r].map(c => String(c).toLowerCase()).join(' ');
-      if (rowStr.includes('payee') || (rowStr.includes('invoice') && rowStr.includes('date'))) {
+      if (
+        rowStr.includes('payee') ||
+        (rowStr.includes('invoice') && (rowStr.includes('date') || rowStr.includes('particular'))) ||
+        (rowStr.includes('particular') && rowStr.includes('date'))
+      ) {
         headerRowIdx = r;
         break;
       }
@@ -198,8 +213,23 @@ export default function InvoiceArExcelImportModal({
       headerRowIdx = 1; // Default to row 2 (0-indexed 1)
     }
 
-    const groupHeaderRow = headerRowIdx > 0 ? rawRows[headerRowIdx - 1] : [];
-    const subHeaderRow = rawRows[headerRowIdx];
+    const groupHeaderRow = headerRowIdx > 0 ? [...rawRows[headerRowIdx - 1]] : [];
+    const subHeaderRow = [...rawRows[headerRowIdx]];
+
+    // Propagate merged group headers if ws['!merges'] exists
+    if (ws['!merges'] && headerRowIdx > 0) {
+      const targetR = headerRowIdx - 1;
+      for (const merge of (ws['!merges'] as any[])) {
+        if (merge.s.r <= targetR && merge.e.r >= targetR) {
+          const parentVal = groupHeaderRow[merge.s.c];
+          if (parentVal) {
+            for (let c = merge.s.c; c <= merge.e.c; c++) {
+              groupHeaderRow[c] = parentVal;
+            }
+          }
+        }
+      }
+    }
 
     // Build normalized column descriptors with merged-group inheritance
     let lastGroupHeader = '';
@@ -219,7 +249,8 @@ export default function InvoiceArExcelImportModal({
         lastGroupHeader = g;
       }
 
-      const activeGroup = (g || (s.toLowerCase() === 'interest' ? lastGroupHeader : g)).trim();
+      // Inherit group header if sub is repayment/interest or adjacent merged column
+      const activeGroup = (g || (s.toLowerCase().includes('interest') ? lastGroupHeader : g)).trim();
       const combined = `${activeGroup} ${s}`.trim();
 
       colMetadata.push({
@@ -230,12 +261,42 @@ export default function InvoiceArExcelImportModal({
       });
     }
 
-    // Locate basic columns
+    // Basic columns detection
+    const isFinancialOrFee = (text: string) =>
+      /fee|loan|deposit|capital|share|climbs|insurance|fine|penalty|sale|total|cash|interest|repay|principal|amount/i.test(text);
+
     const dateCol = colMetadata.findIndex(m => /date/i.test(m.sub || m.group));
-    const payeeCol = colMetadata.findIndex(m => /payee|borrower|member|client/i.test(m.sub || m.group));
-    const invoiceCol = colMetadata.findIndex(m => /invoice\s*no|or\s*no|receipt/i.test(m.sub || m.group));
-    const cashOnHandCol = colMetadata.findIndex(m => /cash\s*on\s*hand|total/i.test(m.sub || m.group));
-    const detailsCol = colMetadata.findIndex(m => /detail|particular|remark|payment\s*mode/i.test(m.sub || m.group));
+    const invoiceCol = colMetadata.findIndex(m => /invoice\s*no|or\s*no|receipt\s*no|inv\s*no/i.test(m.sub || m.group));
+    const cashOnHandCol = colMetadata.findIndex(m => /cash\s*on\s*hand|total\s*collected|cash\s*received/i.test(m.sub || m.group));
+
+    // Payee / Member name detection (MUST ignore fee / loan / deposit / amount columns)
+    let payeeCol = colMetadata.findIndex(m => {
+      const full = `${m.group} ${m.sub}`.trim();
+      if (isFinancialOrFee(full)) return false;
+      return /^(payee|payor|borrower|client|name\s*of\s*member|member\s*name|received\s*from)$/i.test(m.sub) ||
+             /^(payee|payor|borrower|client|name\s*of\s*member|member\s*name|received\s*from)$/i.test(m.group) ||
+             /^(payee|payor|borrower|client)$/i.test(full);
+    });
+
+    if (payeeCol === -1) {
+      payeeCol = colMetadata.findIndex(m => {
+        const full = `${m.group} ${m.sub}`.trim();
+        if (isFinancialOrFee(full)) return false;
+        return /particulars?|full\s*name|^name$/i.test(m.sub) || /particulars?|full\s*name|^name$/i.test(m.group);
+      });
+    }
+
+    if (payeeCol === -1) {
+      payeeCol = 1; // Default to Column B
+    }
+
+    // Details / remarks column (must NOT be the payee column or date/invoice/cash column)
+    const detailsCol = colMetadata.findIndex(m => {
+      if (m.index === payeeCol || m.index === dateCol || m.index === invoiceCol || m.index === cashOnHandCol) return false;
+      const full = `${m.group} ${m.sub}`.trim();
+      if (isFinancialOrFee(full)) return false;
+      return /detail|remark|note|description|purpose|payment\s*mode|mode\s*of\s*payment/i.test(m.sub || m.group);
+    });
 
     const finalBreakdowns: ParsedRowBreakdown[] = [];
 
@@ -245,8 +306,28 @@ export default function InvoiceArExcelImportModal({
       if (!row || row.length === 0) continue;
 
       const rawPayee = String(row[payeeCol !== -1 ? payeeCol : 1] || '').trim();
-      // Skip empty or summary rows
-      if (!rawPayee || /^(total|grand\s*total|subtotal|summary)/i.test(rawPayee)) continue;
+
+      // Skip empty rows
+      if (!rawPayee) continue;
+
+      // Skip purely numeric payee (e.g. sums or accidental numeric values)
+      if (/^\d+(\.\d+)?$/.test(rawPayee)) continue;
+
+      // Check first few columns for total/summary indicators
+      const firstColsCombined = [
+        row[0],
+        row[1],
+        row[2],
+        row[payeeCol]
+      ].map(c => String(c || '').trim().toLowerCase()).join(' ');
+
+      if (
+        /^(total|grand\s*total|subtotal|summary|totals|balance|brought\s*forward|forwarded)/i.test(rawPayee) ||
+        /\b(grand\s*total|subtotal|monthly\s*total)\b/i.test(firstColsCombined) ||
+        /^(total|totals)\b/i.test(firstColsCombined)
+      ) {
+        continue;
+      }
 
       const dateColIdx = dateCol !== -1 ? dateCol : 0;
       const cellAddr = XLSX.utils.encode_cell({ r, c: dateColIdx });
@@ -258,7 +339,7 @@ export default function InvoiceArExcelImportModal({
       const invoiceNo = rawInvoice ? rawInvoice.replace(/^INV#\s*/i, '').trim() : String(Math.floor(1000 + Math.random() * 9000));
 
       const rawCashOnHand = parseExcelNum(row[cashOnHandCol !== -1 ? cashOnHandCol : 3]);
-      const rawDetails = String(row[detailsCol !== -1 ? detailsCol : 4] || '').trim();
+      const rawDetails = detailsCol !== -1 ? String(row[detailsCol] || '').trim() : '';
 
       // Determine Payment Method
       let paymentMethod: CollectionItem['payment_method'] = 'Cash';
@@ -649,7 +730,8 @@ export default function InvoiceArExcelImportModal({
       const isDiscrepancy = rawCashOnHand > 0 && Math.abs(sumItems - rawCashOnHand) > 0.05;
 
       finalBreakdowns.push({
-        id: `row-${r}`,
+        id: `row-${sheetName}-${r}`,
+        sheetName,
         date: parsedDate,
         payee: rawPayee,
         invoiceNo,
@@ -661,22 +743,87 @@ export default function InvoiceArExcelImportModal({
       });
     }
 
-    setParsedBreakdowns(finalBreakdowns);
+    return finalBreakdowns;
   };
 
-  // Switch sheet
+  // Parse workbook based on selection (single sheet, Jan-Aug bulk, or all months)
+  const parseWorkbook = (wb: XLSX.WorkBook, selection: string) => {
+    const sheetsToParse = getSheetsForSelection(selection, wb);
+    if (sheetsToParse.length === 0) {
+      setErrorMessage(`No matching monthly sheets found for "${selection}".`);
+      setParsedBreakdowns([]);
+      return;
+    }
+
+    const allBreakdowns: ParsedRowBreakdown[] = [];
+    for (const sName of sheetsToParse) {
+      const ws = wb.Sheets[sName];
+      if (!ws) continue;
+      const sheetBreakdowns = parseSingleSheet(ws, sName);
+      allBreakdowns.push(...sheetBreakdowns);
+    }
+
+    if (allBreakdowns.length === 0) {
+      setErrorMessage(`No valid collection records found in sheet(s): ${sheetsToParse.join(', ')}.`);
+    } else {
+      setErrorMessage(null);
+    }
+
+    setParsedBreakdowns(allBreakdowns);
+  };
+
+  // Handle file drop / selection
+  const handleFile = async (selected: File) => {
+    setFile(selected);
+    setErrorMessage(null);
+    setIsProcessing(true);
+
+    try {
+      const buffer = await selected.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+      setWorkbook(wb);
+      setSheetNames(wb.SheetNames);
+
+      const janToAugSheets = wb.SheetNames.filter(name => {
+        if (isSummarySheet(name)) return false;
+        const lower = name.toLowerCase();
+        return JAN_TO_AUG_MONTHS.some(m => lower.includes(m));
+      });
+
+      const initialSheet = janToAugSheets.length > 0 ? ALL_JAN_TO_AUG : (wb.SheetNames[0] || '');
+
+      setSelectedSheet(initialSheet);
+      parseWorkbook(wb, initialSheet);
+    } catch (err: any) {
+      console.error('Excel parse error:', err);
+      setErrorMessage(err.message || 'Failed to read Excel file. Please ensure it is a valid .xlsx or .xls file.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Switch sheet or bulk import mode
   const handleSheetChange = (sheet: string) => {
     setSelectedSheet(sheet);
     if (workbook) {
-      parseSheet(workbook, sheet);
+      parseWorkbook(workbook, sheet);
     }
   };
 
   // Consolidated items to import (1 unique collection record per invoice/OR number)
   const allParsedItems = useMemo(() => {
     return parsedBreakdowns.map((b, idx): CollectionItem => {
+      const cleanSheetKey = (b.sheetName || selectedSheet || 'sheet').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+      const cleanInvKey = (b.invoiceNo || `row${idx}`).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const uniqueId = `imp-${cleanSheetKey}-${cleanInvKey}-${idx}`;
+
       if (b.items.length === 1) {
-        return b.items[0];
+        const single = b.items[0];
+        return {
+          ...single,
+          id: uniqueId,
+          amount: b.cashOnHand > 0 ? b.cashOnHand : single.amount
+        };
       }
 
       const firstItem = b.items[0];
@@ -732,11 +879,9 @@ export default function InvoiceArExcelImportModal({
       }
 
       const totalAmount = b.cashOnHand > 0 ? b.cashOnHand : b.rowTotal;
-      const cleanSheetKey = (selectedSheet || 'sheet').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
-      const cleanInvKey = (b.invoiceNo || `row${idx}`).toLowerCase().replace(/[^a-z0-9]/g, '');
 
       return {
-        id: `imp-${cleanSheetKey}-${cleanInvKey}`,
+        id: uniqueId,
         tab,
         date: b.date,
         or_no: b.invoiceNo,
@@ -799,6 +944,40 @@ export default function InvoiceArExcelImportModal({
       return it.tab === activePreviewTab;
     }));
   }, [parsedBreakdowns, activePreviewTab]);
+
+  // Helper labels for sheet display
+  const displaySheetTitle = useMemo(() => {
+    if (selectedSheet === ALL_JAN_TO_AUG) return 'Jan – Aug 2026 (All 8 Sheets)';
+    if (selectedSheet === ALL_MONTHS) return 'All Monthly Sheets Combined';
+    return selectedSheet || 'Select Sheet';
+  }, [selectedSheet]);
+
+  const displaySheetDescription = useMemo(() => {
+    if (selectedSheet === ALL_JAN_TO_AUG) {
+      const count = workbook ? getSheetsForSelection(ALL_JAN_TO_AUG, workbook).length : 8;
+      return `All ${count} monthly sheets from January to August 2026 combined`;
+    }
+    if (selectedSheet === ALL_MONTHS) {
+      const count = workbook ? getSheetsForSelection(ALL_MONTHS, workbook).length : 0;
+      return `All ${count} monthly sheets in workbook combined`;
+    }
+    return `Sheet: ${selectedSheet}`;
+  }, [selectedSheet, workbook]);
+
+  const hasJanToAugOption = useMemo(() => {
+    if (!workbook) return false;
+    return workbook.SheetNames.some(name => !isSummarySheet(name) && JAN_TO_AUG_MONTHS.some(m => name.toLowerCase().includes(m)));
+  }, [workbook]);
+
+  const hasAllMonthsOption = useMemo(() => {
+    if (!workbook) return false;
+    return workbook.SheetNames.filter(name => !isSummarySheet(name) && MONTH_NAMES.some(m => name.toLowerCase().includes(m))).length > 1;
+  }, [workbook]);
+
+  // Delete a parsed row from preview
+  const handleDeleteRow = (id: string) => {
+    setParsedBreakdowns(prev => prev.filter(b => b.id !== id));
+  };
 
   // Execute import
   const handleConfirmImport = async () => {
@@ -912,9 +1091,9 @@ export default function InvoiceArExcelImportModal({
                       </span>
                     </div>
                     <div className="text-[11px] text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5 mt-0.5">
-                      <span>Parsed from active sheet:</span>
+                      <span>Source:</span>
                       <span className="font-bold text-emerald-700 dark:text-emerald-300">
-                        {selectedSheet}
+                        {displaySheetDescription}
                       </span>
                     </div>
                   </div>
@@ -929,7 +1108,7 @@ export default function InvoiceArExcelImportModal({
                       onClick={() => setIsSheetDropdownOpen(prev => !prev)}
                       className="inline-flex items-center justify-between gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold border border-emerald-600/40 bg-white dark:bg-surface-container-lowest text-neutral-900 dark:text-white shadow-2xs hover:border-emerald-500 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                     >
-                      <span className="truncate max-w-[150px]">{selectedSheet || 'Select Sheet'}</span>
+                      <span className="truncate max-w-[200px]">{displaySheetTitle}</span>
                       <ChevronDown
                         className={`w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 transition-transform duration-200 ${
                           isSheetDropdownOpen ? 'rotate-180' : 'rotate-0'
@@ -938,11 +1117,67 @@ export default function InvoiceArExcelImportModal({
                     </button>
 
                     {isSheetDropdownOpen && (
-                      <div className="absolute top-full right-0 mt-1.5 w-60 max-h-64 overflow-y-auto rounded-2xl border border-outline-variant/60 bg-white dark:bg-neutral-900 p-1.5 shadow-2xl z-50 animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-150">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 px-2 py-1 border-b border-outline-variant/30 mb-1 flex items-center justify-between">
-                          <span>Sheets in Workbook</span>
+                      <div className="absolute top-full right-0 mt-1.5 w-72 max-h-72 overflow-y-auto rounded-2xl border border-outline-variant/60 bg-white dark:bg-neutral-900 p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-150 space-y-1">
+                        {/* Multi-sheet preset options */}
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 px-2 py-0.5 flex items-center justify-between">
+                          <span>Multi-Sheet Bulk Import</span>
+                        </div>
+
+                        {hasJanToAugOption && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleSheetChange(ALL_JAN_TO_AUG);
+                              setIsSheetDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer text-left ${
+                              selectedSheet === ALL_JAN_TO_AUG
+                                ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                                : 'text-neutral-800 dark:text-neutral-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                            }`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-bold flex items-center gap-1">
+                                ✨ Jan to Aug 2026 (All 8 Sheets)
+                              </span>
+                              <span className={`text-[10px] ${selectedSheet === ALL_JAN_TO_AUG ? 'text-emerald-100' : 'text-neutral-500'}`}>
+                                Imports January through August in 1 click
+                              </span>
+                            </div>
+                            {selectedSheet === ALL_JAN_TO_AUG && <Check className="w-4 h-4 shrink-0 ml-1 text-white" />}
+                          </button>
+                        )}
+
+                        {hasAllMonthsOption && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleSheetChange(ALL_MONTHS);
+                              setIsSheetDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer text-left ${
+                              selectedSheet === ALL_MONTHS
+                                ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                                : 'text-neutral-800 dark:text-neutral-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                            }`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-bold flex items-center gap-1">
+                                📚 All Monthly Sheets Combined
+                              </span>
+                              <span className={`text-[10px] ${selectedSheet === ALL_MONTHS ? 'text-emerald-100' : 'text-neutral-500'}`}>
+                                Imports all available monthly sheets
+                              </span>
+                            </div>
+                            {selectedSheet === ALL_MONTHS && <Check className="w-4 h-4 shrink-0 ml-1 text-white" />}
+                          </button>
+                        )}
+
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 px-2 pt-2 pb-0.5 border-t border-outline-variant/30 flex items-center justify-between">
+                          <span>Individual Sheets</span>
                           <span className="text-neutral-500 font-mono font-normal">({sheetNames.length})</span>
                         </div>
+
                         <div className="space-y-0.5">
                           {sheetNames.map(sheet => {
                             const isSelected = sheet === selectedSheet;
@@ -1094,12 +1329,13 @@ export default function InvoiceArExcelImportModal({
                         <th className="py-2.5 px-3 bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold">Details</th>
                         <th className="py-2.5 px-3 bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold">Breakdown Items</th>
                         <th className="py-2.5 px-3 bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold text-right">Cash On Hand</th>
+                        <th className="py-2.5 px-3 bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold text-center w-14">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/30">
                       {filteredPreviewBreakdowns.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-neutral-400">
+                          <td colSpan={7} className="py-8 text-center text-neutral-400">
                             No records found under this filter.
                           </td>
                         </tr>
@@ -1109,8 +1345,17 @@ export default function InvoiceArExcelImportModal({
                             <td className="py-2.5 px-3 font-mono text-neutral-600 dark:text-neutral-400">
                               {row.date}
                             </td>
-                            <td className="py-2.5 px-3 font-mono font-bold text-neutral-900 dark:text-white">
-                              {row.invoiceNo}
+                            <td className="py-2.5 px-3">
+                              <div className="flex flex-col">
+                                <span className="font-mono font-bold text-neutral-900 dark:text-white">
+                                  {row.invoiceNo}
+                                </span>
+                                {row.sheetName && (selectedSheet === ALL_JAN_TO_AUG || selectedSheet === ALL_MONTHS) && (
+                                  <span className="inline-block mt-0.5 text-[9px] font-semibold text-emerald-800 dark:text-emerald-300 font-mono uppercase bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded w-fit">
+                                    {row.sheetName.replace(/\s*20\d\d/i, '')}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-2.5 px-3 font-bold text-neutral-800 dark:text-neutral-200">
                               {row.payee}
@@ -1143,6 +1388,16 @@ export default function InvoiceArExcelImportModal({
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono font-black text-neutral-900 dark:text-white">
                               ₱{row.cashOnHand.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRow(row.id)}
+                                title={`Delete invoice #${row.invoiceNo} (${row.payee}) from import`}
+                                className="w-7 h-7 inline-flex items-center justify-center rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </td>
                           </tr>
                         ))
