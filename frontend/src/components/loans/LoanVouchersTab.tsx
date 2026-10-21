@@ -303,7 +303,7 @@ export default function LoanVouchersTab({
 
     const currencyUnit = pesos === 1 ? 'PESO' : 'PESOS';
     if (centavos > 0) {
-      return `${words} ${currencyUnit} AND ${centavos.toString().padStart(2, '0')}/100 ONLY`;
+      return `${words} AND ${centavos.toString().padStart(2, '0')}/100 ${currencyUnit} ONLY`;
     }
     return `${words} ${currencyUnit} ONLY`;
   };

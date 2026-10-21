@@ -127,7 +127,7 @@ function formatDisbursedInWords(amount: number): string {
   const currencyUnit = pesos === 1 ? 'PESO' : 'PESOS';
 
   if (centavos > 0) {
-    return `${words} ${currencyUnit} AND ${centavos.toString().padStart(2, '0')}/100 ONLY`;
+    return `${words} AND ${centavos.toString().padStart(2, '0')}/100 ${currencyUnit} ONLY`;
   }
   return `${words} ${currencyUnit} ONLY`;
 }
@@ -1517,7 +1517,7 @@ export default function UnifiedCvLfPrintModal({
                       }`}
                     >
                       <Receipt className="w-3.5 h-3.5" />
-                      <span>Summary Voucher Only</span>
+                      <span>Summary Voucher</span>
                     </button>
                     <button
                       type="button"
@@ -1529,7 +1529,7 @@ export default function UnifiedCvLfPrintModal({
                       }`}
                     >
                       <Layers className="w-3.5 h-3.5" />
-                      <span>Detailed Check Voucher</span>
+                      <span>Detailed Transaction</span>
                     </button>
 
                     {onEdit && (currentCv || initialCv) && (

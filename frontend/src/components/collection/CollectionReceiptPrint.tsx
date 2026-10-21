@@ -53,7 +53,7 @@ export const amountToWords = (amount: number): string => {
   const centavos = Math.round((safe - pesos) * 100);
   const unit = pesos === 1 ? 'PESO' : 'PESOS';
   return centavos > 0
-    ? `${toWords(pesos)} ${unit} AND ${String(centavos).padStart(2, '0')}/100 ONLY`
+    ? `${toWords(pesos)} AND ${String(centavos).padStart(2, '0')}/100 ${unit} ONLY`
     : `${toWords(pesos)} ${unit} ONLY`;
 };
 
