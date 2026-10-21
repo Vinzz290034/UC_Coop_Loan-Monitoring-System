@@ -155,6 +155,8 @@ export interface SelectOption {
 
 export const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
   { value: 'Loans Payable - Regular', label: 'Loans Payable - Regular' },
+  { value: 'Loans Payable - Calamity Loan', label: 'Loans Payable - Calamity Loan' },
+  { value: 'Loans Payable - Mortuary Loan (Columbary Loan)', label: 'Loans Payable - Mortuary Loan (Columbary Loan)' },
   { value: 'Loans Payable - Cash Express', label: 'Loans Payable - Cash Express' },
   { value: 'Loans Payable - Emergency', label: 'Loans Payable - Emergency' },
   { value: 'Loans Payable - Special Occasion', label: 'Loans Payable - Special Occasion' },
@@ -163,6 +165,8 @@ export const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
 
 export const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
   { value: 'Interest Received - Regular', label: 'Interest Received - Regular' },
+  { value: 'Interest Received - Calamity Loan', label: 'Interest Received - Calamity Loan' },
+  { value: 'Interest Received - Mortuary Loan (Columbary Loan)', label: 'Interest Received - Mortuary Loan (Columbary Loan)' },
   { value: 'Interest Received - Cash Express', label: 'Interest Received - Cash Express' },
   { value: 'Interest Received - Emergency', label: 'Interest Received - Emergency' },
   { value: 'Interest Received - Special Occasion', label: 'Interest Received - Special Occasion' },
@@ -171,6 +175,8 @@ export const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
 
 export const FINES_OPTIONS: SelectOption[] = [
   { value: 'Fines - Regular', label: 'Fines - Regular' },
+  { value: 'Fines - Calamity Loan', label: 'Fines - Calamity Loan' },
+  { value: 'Fines - Mortuary Loan (Columbary Loan)', label: 'Fines - Mortuary Loan (Columbary Loan)' },
   { value: 'Fines - Cash Express', label: 'Fines - Cash Express' },
   { value: 'Fines - Emergency', label: 'Fines - Emergency' },
   { value: 'Fines - Special Occasion', label: 'Fines - Special Occasion' },
@@ -806,7 +812,23 @@ export default function CollectionPage() {
   const handleEditLoanFieldChange = (index: number, field: keyof FormLoanEntry, val: string) => {
     setEditFormData((prev: any) => {
       const nextLoans = [...prev.loans];
-      nextLoans[index] = { ...nextLoans[index], [field]: val };
+      if (field === 'loan_account') {
+        const suffix = val.replace(/^Loans Payable\s*-\s*/, '');
+        const matchingInterest = `Interest Received - ${suffix}`;
+        const matchingFines = `Fines - ${suffix}`;
+        nextLoans[index] = {
+          ...nextLoans[index],
+          loan_account: val,
+          interest_account: INTEREST_RECEIVED_OPTIONS.some(o => o.value === matchingInterest)
+            ? matchingInterest
+            : nextLoans[index].interest_account,
+          fines_account: FINES_OPTIONS.some(o => o.value === matchingFines)
+            ? matchingFines
+            : nextLoans[index].fines_account,
+        };
+      } else {
+        nextLoans[index] = { ...nextLoans[index], [field]: val };
+      }
       return { ...prev, loans: nextLoans };
     });
   };
