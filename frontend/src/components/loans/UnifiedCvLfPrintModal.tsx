@@ -1511,6 +1511,15 @@ export default function UnifiedCvLfPrintModal({
     return folder.includes('revolving') || part.includes('revolving') || Boolean(currentCv?.revolving_fund);
   }, [resolvedType, currentCv]);
 
+  const isStlFund = useMemo(() => {
+    if (resolvedType === 'stl') return true;
+    const folder = String(currentCv?.folder_name || currentLf?.folder_name || '').toLowerCase();
+    const part = String(currentCv?.particulars || currentCv?.description || currentLf?.particulars || '').toLowerCase();
+    const tt = String(currentCv?.transaction_type || '').toLowerCase();
+    const rfClass = String(currentCv?.rf_classification || currentCv?.revolving_fund_classification || '').toLowerCase();
+    return folder.includes('stl') || part.includes('stl') || tt.includes('stl') || rfClass.includes('stl');
+  }, [resolvedType, currentCv, currentLf]);
+
   const isHonorariumAndWages = useMemo(() => {
     // 1. Check direct classification properties
     const rfClass = String(
@@ -1880,7 +1889,7 @@ export default function UnifiedCvLfPrintModal({
                           )}
                         </div>
                       </div>
-                    ) : (
+                    ) : (isStlFund && cvViewMode === 'detailed') ? null : (
                       <div className="text-xs bg-neutral-50 p-2.5 rounded border border-neutral-200">
                         <strong className="text-neutral-700 uppercase text-[10px] tracking-wide">Description:</strong>{' '}
                         <span className="italic text-neutral-800 font-medium">
@@ -2193,7 +2202,35 @@ export default function UnifiedCvLfPrintModal({
                             <div className="border-b border-neutral-300"></div>
                           </div>
 
-                          
+                          {/* Row 2: Received By, Date */}
+                          <div>
+                            <span className="font-bold uppercase text-[9.5px] text-neutral-500 tracking-wider block">
+                              RECEIVED BY:
+                            </span>
+                            <div className="pt-2.5 pb-1">
+                              <p className="font-bold text-neutral-900 uppercase text-[11px] tracking-wide">
+                                {currentCv?.signatories?.received_by || currentCv?.payee || currentLf?.payee || '—'}
+                              </p>
+                            </div>
+                            <div className="border-b border-neutral-300"></div>
+                            <span className="text-[8.5px] text-neutral-500 block mt-1">
+                              Signature over Printed Name
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="font-bold uppercase text-[9.5px] text-neutral-500 tracking-wider block">
+                              DATE:
+                            </span>
+                            <div className="pt-2.5 pb-1">
+                              <p className="font-bold text-neutral-900 uppercase text-[11px] tracking-wide">
+                                {currentCv?.date_released ? new Date(currentCv.date_released).toLocaleDateString() : '—'}
+                              </p>
+                            </div>
+                            <div className="border-b border-neutral-300"></div>
+                          </div>
+
+                          <div>{/* Blank spacer column */}</div>
                         </div>
                       </div>
                     ) : (
@@ -2489,7 +2526,7 @@ export default function UnifiedCvLfPrintModal({
                   ))}
                 </span>
               </div>
-            ) : (
+            ) : (isStlFund && cvViewMode === 'detailed') ? null : (
               <div style={{ backgroundColor: '#f9fafb', padding: '5px 8px', borderRadius: '4px', border: '1px solid #e5e7eb', fontSize: '9px' }}>
                 <strong style={{ color: '#374151' }}>DESCRIPTION:</strong>{' '}
                 <span style={{ color: '#1f2937', fontStyle: 'italic' }}>
@@ -2725,7 +2762,35 @@ export default function UnifiedCvLfPrintModal({
                     <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
                   </div>
 
-                  
+                  {/* Row 2: Received By, Date */}
+                  <div>
+                    <span style={{ fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', fontSize: '7.5px', display: 'block', letterSpacing: '0.04em' }}>
+                      RECEIVED BY:
+                    </span>
+                    <div style={{ paddingTop: '8px', paddingBottom: '2px' }}>
+                      <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9.5px', color: '#111827' }}>
+                        {currentCv?.signatories?.received_by || currentCv?.payee || currentLf?.payee || '—'}
+                      </p>
+                    </div>
+                    <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
+                    <span style={{ fontSize: '7px', color: '#6b7280', display: 'block', marginTop: '2px' }}>
+                      Signature over Printed Name
+                    </span>
+                  </div>
+
+                  <div>
+                    <span style={{ fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', fontSize: '7.5px', display: 'block', letterSpacing: '0.04em' }}>
+                      DATE:
+                    </span>
+                    <div style={{ paddingTop: '8px', paddingBottom: '2px' }}>
+                      <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9.5px', color: '#111827' }}>
+                        {currentCv?.date_released ? new Date(currentCv.date_released).toLocaleDateString() : '—'}
+                      </p>
+                    </div>
+                    <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>
+                  </div>
+
+                  <div>{/* Blank spacer column */}</div>
                 </div>
               </div>
             ) : (

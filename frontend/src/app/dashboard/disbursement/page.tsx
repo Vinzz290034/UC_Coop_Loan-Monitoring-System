@@ -5177,6 +5177,28 @@ function DisbursementPageContent() {
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                         </div>
                       </div>
+
+                      {/* Row 2: Received By, Date */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                        <div>
+                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">RECEIVED BY:</span>
+                          <div className="h-4"></div>
+                          <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide">
+                            {selectedCvForModal.payee || '—'}
+                          </p>
+                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                          <span className="text-[8px] text-neutral-400 block mt-0.5">Signature over Printed Name</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">DATE:</span>
+                          <div className="h-4"></div>
+                          <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide">
+                            {selectedCvForModal.date_released ? new Date(selectedCvForModal.date_released).toLocaleDateString() : '—'}
+                          </p>
+                          <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
+                        </div>
+                        <div>{/* Spacer */}</div>
+                      </div>
                     </div>
                   </div>
                 );

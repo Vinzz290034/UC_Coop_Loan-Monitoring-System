@@ -1773,7 +1773,7 @@ export default function LoanVouchersTab({
             })()}
 
             {/* Signatures */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginTop: '16px', fontSize: '9.5px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginTop: '16px', fontSize: '9.5px' }}>
               <div>
                 <span style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Prepared by:</span>
                 <div style={{ height: '24px' }}></div>
@@ -1797,6 +1797,14 @@ export default function LoanVouchersTab({
                   {formatSignatoryFullName(printingCvBreakdown.signatories?.approved_by, 'approved')}
                 </p>
                 <span style={{ fontSize: '8px', color: '#9ca3af' }}>Manager / Treasurer</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Received by:</span>
+                <div style={{ height: '24px' }}></div>
+                <p style={{ fontWeight: 'bold', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
+                  {printingCvBreakdown.payee || printingCvBreakdown.payee_name || 'Borrower'}
+                </p>
+                <span style={{ fontSize: '8px', color: '#9ca3af' }}>Signature over printed name</span>
               </div>
             </div>
 
