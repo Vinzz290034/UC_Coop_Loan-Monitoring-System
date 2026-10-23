@@ -4402,9 +4402,9 @@ function DisbursementPageContent() {
                             <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
                               <div className="text-center">#</div>
                               <div>Date</div>
-                              <div>{replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}</div>
+                              <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}</div>
                               <div>Book of Accounts</div>
-                              <div>Remarks</div>
+                              <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Recipient' : 'Remarks'}</div>
                               <div className="text-right">Debit (₱)</div>
                               <div className="text-right">Credit (₱)</div>
                               <div className="text-center">Action</div>
@@ -4413,6 +4413,7 @@ function DisbursementPageContent() {
                             <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest overflow-visible">
                               {newCvRows.map((row, idx) => {
                                 const isCreditRow = checkIsCreditRow(row);
+                                const isHonWagesRow = (newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages');
                                 return (
                                   <div
                                     key={row.id || idx}
@@ -4450,7 +4451,7 @@ function DisbursementPageContent() {
                                     <div>
                                       <input
                                         type="text"
-                                        placeholder={replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}
+                                        placeholder={isHonWagesRow ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}
                                         value={row.voucher_no || ''}
                                         onChange={e => updateCvRowField(false, row.id!, 'voucher_no', e.target.value, replenishType)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -4487,7 +4488,7 @@ function DisbursementPageContent() {
                                     <div>
                                       <input
                                         type="text"
-                                        placeholder="Remarks..."
+                                        placeholder={isHonWagesRow ? 'Recipient...' : 'Remarks...'}
                                         value={row.remarks || ''}
                                         onChange={e => updateCvRowField(false, row.id!, 'remarks', e.target.value, replenishType)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -5007,6 +5008,21 @@ function DisbursementPageContent() {
                 const activeData = isReplenish ? summaryData : detailedData;
                 const { rows, debitTotal, creditTotal } = activeData;
                 const isStl = getReplenishmentType(selectedCvForModal?.folder_name, selectedCvForModal) === 'stl';
+                const isHonWagesModal = (
+                  selectedCvForModal?.rf_classification ||
+                  selectedCvForModal?.revolving_fund_classification ||
+                  selectedCvForModal?.folder_name ||
+                  selectedCvForModal?.particulars ||
+                  selectedCvForModal?.description ||
+                  ''
+                ).toLowerCase().includes('honorarium') || (
+                  selectedCvForModal?.rf_classification ||
+                  selectedCvForModal?.revolving_fund_classification ||
+                  selectedCvForModal?.folder_name ||
+                  selectedCvForModal?.particulars ||
+                  selectedCvForModal?.description ||
+                  ''
+                ).toLowerCase().includes('wages') || Number(selectedCvForModal?.fund_amount) === 56100;
                 const cibRow = rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
                 const actualDisbursedAmount = (cibRow && cibRow.credit !== null && cibRow.credit !== undefined && Number(cibRow.credit) > 0)
                   ? Number(cibRow.credit)
@@ -5026,7 +5042,7 @@ function DisbursementPageContent() {
                           <thead className="bg-[#ecfdf5] dark:bg-emerald-950/40 text-[#064e3b] dark:text-emerald-300 font-extrabold uppercase text-[9px] border-b border-emerald-200 dark:border-emerald-800">
                             <tr>
                               <th className="p-2.5 w-12 text-center border-r border-emerald-200 dark:border-emerald-800">#</th>
-                              <th className="p-2.5 w-28 border-r border-emerald-200 dark:border-emerald-800">{isStl ? 'LAF NO.' : 'RF VOUCHER #'}</th>
+                              <th className="p-2.5 w-28 border-r border-emerald-200 dark:border-emerald-800">{isHonWagesModal ? 'Cash Release Form No.' : (isStl ? 'LAF NO.' : 'RF VOUCHER #')}</th>
                               <th className="p-2.5 border-r border-emerald-200 dark:border-emerald-800">BOOK OF ACCOUNTS</th>
                               <th className="p-2.5 w-36 text-right border-r border-emerald-200 dark:border-emerald-800">DEBIT (₱)</th>
                               <th className="p-2.5 w-36 text-right">CREDIT (₱)</th>
@@ -5617,9 +5633,9 @@ function DisbursementPageContent() {
                           <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
                             <div className="text-center">#</div>
                             <div>Date</div>
-                            <div>{replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}</div>
+                            <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}</div>
                             <div>Book of Accounts</div>
-                            <div>Remarks</div>
+                            <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Recipient' : 'Remarks'}</div>
                             <div className="text-right">Debit (₱)</div>
                             <div className="text-right">Credit (₱)</div>
                             <div className="text-center">Action</div>
@@ -5628,6 +5644,7 @@ function DisbursementPageContent() {
                           <div className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-surface-container-lowest overflow-visible">
                             {editCvRows.map((row, idx) => {
                               const isCreditRow = checkIsCreditRow(row);
+                              const isHonWagesRow = (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages');
                               return (
                                 <div
                                   key={row.id || idx}
@@ -5665,7 +5682,7 @@ function DisbursementPageContent() {
                                   <div>
                                     <input
                                       type="text"
-                                      placeholder={replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #'}
+                                      placeholder={isHonWagesRow ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}
                                       value={row.voucher_no || ''}
                                       onChange={e => updateCvRowField(true, row.id!, 'voucher_no', e.target.value, replenishType)}
                                       className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -5704,7 +5721,7 @@ function DisbursementPageContent() {
                                   <div>
                                     <input
                                       type="text"
-                                      placeholder="Remarks..."
+                                      placeholder={isHonWagesRow ? 'Recipient...' : 'Remarks...'}
                                       value={row.remarks || ''}
                                       onChange={e => updateCvRowField(true, row.id!, 'remarks', e.target.value, replenishType)}
                                       className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
