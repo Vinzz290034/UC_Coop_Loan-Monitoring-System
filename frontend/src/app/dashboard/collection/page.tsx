@@ -154,7 +154,9 @@ export interface SelectOption {
 }
 
 export const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
-  { value: 'Loans Payable - Regular', label: 'Loans Payable - Regular' },
+  { value: 'Loans Payable - Salary', label: 'Loans Payable - Salary' },
+  { value: 'Loans Payable - Project', label: 'Loans Payable - Project' },
+  { value: 'Loans Payable - Product', label: 'Loans Payable - Product' },
   { value: 'Loans Payable - Calamity Loan', label: 'Loans Payable - Calamity Loan' },
   { value: 'Loans Payable - Mortuary Loan (Columbary Loan)', label: 'Loans Payable - Mortuary Loan (Columbary Loan)' },
   { value: 'Loans Payable - Cash Express', label: 'Loans Payable - Cash Express' },
@@ -164,7 +166,9 @@ export const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
 ];
 
 export const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
-  { value: 'Interest Received - Regular', label: 'Interest Received - Regular' },
+  { value: 'Interest Received - Salary', label: 'Interest Received - Salary' },
+  { value: 'Interest Received - Project', label: 'Interest Received - Project' },
+  { value: 'Interest Received - Product', label: 'Interest Received - Product' },
   { value: 'Interest Received - Calamity Loan', label: 'Interest Received - Calamity Loan' },
   { value: 'Interest Received - Mortuary Loan (Columbary Loan)', label: 'Interest Received - Mortuary Loan (Columbary Loan)' },
   { value: 'Interest Received - Cash Express', label: 'Interest Received - Cash Express' },
@@ -174,7 +178,9 @@ export const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
 ];
 
 export const FINES_OPTIONS: SelectOption[] = [
-  { value: 'Fines - Regular', label: 'Fines - Regular' },
+  { value: 'Fines - Salary', label: 'Fines - Salary' },
+  { value: 'Fines - Project', label: 'Fines - Project' },
+  { value: 'Fines - Product', label: 'Fines - Product' },
   { value: 'Fines - Calamity Loan', label: 'Fines - Calamity Loan' },
   { value: 'Fines - Mortuary Loan (Columbary Loan)', label: 'Fines - Mortuary Loan (Columbary Loan)' },
   { value: 'Fines - Cash Express', label: 'Fines - Cash Express' },
@@ -253,8 +259,8 @@ function AnimatedSelect({
             : 'bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 hover:border-outline-variant text-neutral-900 dark:text-white'
         } ${buttonClassName} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       >
-        <span className={`truncate ${selectedOption ? '' : 'text-neutral-400 font-normal'}`}>
-          {selectedOption ? selectedOption.label : placeholder}
+        <span className={`truncate ${selectedOption || value ? '' : 'text-neutral-400 font-normal'}`}>
+          {selectedOption ? selectedOption.label : (value || placeholder)}
         </span>
         <ChevronDown
           className={`w-3.5 h-3.5 flex-shrink-0 text-neutral-400 transition-transform duration-200 ease-out ${
@@ -551,19 +557,19 @@ export default function CollectionPage() {
     loans: [
       {
         id: 'loan-1',
-        loan_account: 'Loans Payable - Regular',
+        loan_account: 'Loans Payable - Salary',
         principal_amount: '',
-        interest_account: 'Interest Received - Regular',
+        interest_account: 'Interest Received - Salary',
         interest_amount: '',
-        fines_account: 'Fines - Regular',
+        fines_account: 'Fines - Salary',
         fines_amount: '',
       }
     ] as FormLoanEntry[],
-    loan_account: 'Loans Payable - Regular',
+    loan_account: 'Loans Payable - Salary',
     principal_amount: '',
-    interest_account: 'Interest Received - Regular',
+    interest_account: 'Interest Received - Salary',
     interest_amount: '',
-    fines_account: 'Fines - Regular',
+    fines_account: 'Fines - Salary',
     fines_amount: '',
     common_share_amount: '',
     // Sales
@@ -735,22 +741,22 @@ export default function CollectionPage() {
     if (item.loans && item.loans.length > 0) {
       initialLoans = item.loans.map((l, idx) => ({
         id: `edit-loan-${idx}-${Date.now()}`,
-        loan_account: l.loan_account || 'Loans Payable - Regular',
+        loan_account: l.loan_account || 'Loans Payable - Salary',
         principal_amount: l.principal_amount ? String(l.principal_amount) : '',
-        interest_account: l.interest_account || 'Interest Received - Regular',
+        interest_account: l.interest_account || 'Interest Received - Salary',
         interest_amount: l.interest_amount ? String(l.interest_amount) : '',
-        fines_account: l.fines_account || 'Fines - Regular',
+        fines_account: l.fines_account || 'Fines - Salary',
         fines_amount: l.fines_amount ? String(l.fines_amount) : '',
       }));
     } else if (item.tab === 'credit') {
       initialLoans = [
         {
           id: `edit-loan-0-${Date.now()}`,
-          loan_account: item.loan_account || 'Loans Payable - Regular',
+          loan_account: item.loan_account || 'Loans Payable - Salary',
           principal_amount: item.principal_amount ? String(item.principal_amount) : '',
-          interest_account: item.interest_account || 'Interest Received - Regular',
+          interest_account: item.interest_account || 'Interest Received - Salary',
           interest_amount: item.interest_amount ? String(item.interest_amount) : '',
-          fines_account: item.fines_account || 'Fines - Regular',
+          fines_account: item.fines_account || 'Fines - Salary',
           fines_amount: item.fines_amount ? String(item.fines_amount) : '',
         }
       ];
@@ -758,11 +764,11 @@ export default function CollectionPage() {
       initialLoans = [
         {
           id: `edit-loan-0-${Date.now()}`,
-          loan_account: 'Loans Payable - Regular',
+          loan_account: 'Loans Payable - Salary',
           principal_amount: '',
-          interest_account: 'Interest Received - Regular',
+          interest_account: 'Interest Received - Salary',
           interest_amount: '',
-          fines_account: 'Fines - Regular',
+          fines_account: 'Fines - Salary',
           fines_amount: '',
         }
       ];
@@ -783,11 +789,11 @@ export default function CollectionPage() {
       payor_name: item.payor_name || '',
       member_id: item.member_id || '',
       loans: initialLoans,
-      loan_account: item.loan_account || 'Loans Payable - Regular',
+      loan_account: item.loan_account || 'Loans Payable - Salary',
       principal_amount: item.principal_amount ? String(item.principal_amount) : '',
-      interest_account: item.interest_account || 'Interest Received - Regular',
+      interest_account: item.interest_account || 'Interest Received - Salary',
       interest_amount: item.interest_amount ? String(item.interest_amount) : '',
-      fines_account: item.fines_account || 'Fines - Regular',
+      fines_account: item.fines_account || 'Fines - Salary',
       fines_amount: item.fines_amount ? String(item.fines_amount) : '',
       common_share_amount: item.common_share_amount ? String(item.common_share_amount) : '',
       item_name: item.item_name || '',
@@ -834,21 +840,29 @@ export default function CollectionPage() {
   };
 
   const handleAddEditLoan = () => {
-    setEditFormData((prev: any) => ({
-      ...prev,
-      loans: [
-        ...prev.loans,
-        {
-          id: `edit-loan-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-          loan_account: 'Loans Payable - Regular',
-          principal_amount: '',
-          interest_account: 'Interest Received - Regular',
-          interest_amount: '',
-          fines_account: 'Fines - Regular',
-          fines_amount: '',
-        }
-      ]
-    }));
+    setEditFormData((prev: any) => {
+      const usedAccounts = (prev.loans || []).map((l: any) => l.loan_account);
+      const nextOpt = LOANS_PAYABLE_OPTIONS.find(opt => !usedAccounts.includes(opt.value)) || LOANS_PAYABLE_OPTIONS[0];
+      const suffix = nextOpt.value.replace(/^Loans Payable\s*-\s*/, '');
+      const matchingInterest = `Interest Received - ${suffix}`;
+      const matchingFines = `Fines - ${suffix}`;
+
+      return {
+        ...prev,
+        loans: [
+          ...prev.loans,
+          {
+            id: `edit-loan-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+            loan_account: nextOpt.value,
+            principal_amount: '',
+            interest_account: matchingInterest,
+            interest_amount: '',
+            fines_account: matchingFines,
+            fines_amount: '',
+          }
+        ]
+      };
+    });
   };
 
   const handleRemoveEditLoan = (index: number) => {
@@ -1157,19 +1171,19 @@ export default function CollectionPage() {
       loans: [
         {
           id: `loan-${Date.now()}`,
-          loan_account: 'Loans Payable - Regular',
+          loan_account: 'Loans Payable - Salary',
           principal_amount: '',
-          interest_account: 'Interest Received - Regular',
+          interest_account: 'Interest Received - Salary',
           interest_amount: '',
-          fines_account: 'Fines - Regular',
+          fines_account: 'Fines - Salary',
           fines_amount: '',
         }
       ],
-      loan_account: 'Loans Payable - Regular',
+      loan_account: 'Loans Payable - Salary',
       principal_amount: '',
-      interest_account: 'Interest Received - Regular',
+      interest_account: 'Interest Received - Salary',
       interest_amount: '',
-      fines_account: 'Fines - Regular',
+      fines_account: 'Fines - Salary',
       fines_amount: '',
       common_share_amount: '',
       item_name: '',
