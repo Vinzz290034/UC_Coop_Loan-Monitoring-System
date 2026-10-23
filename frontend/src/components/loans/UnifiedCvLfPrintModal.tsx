@@ -225,6 +225,8 @@ export function formatPayeeName(name?: string): string {
   return trimmed.replace(/\s+/g, ' ').toUpperCase();
 }
 
+const VALID_CV_CATEGORIES = ['Operation', 'Service', 'Merchandise', 'CETF', 'CDF', 'Honorarium', 'Allowances', 'Wages'];
+
 function cleanCategoryName(name: string): string {
   if (!name) return 'Operation';
   const stripped = name
@@ -233,6 +235,10 @@ function cleanCategoryName(name: string): string {
     .replace(/^short\s*term\s*loan\s*-\s*/i, '')
     .trim();
   const lower = stripped.toLowerCase();
+  if (lower === 'honorarium') return 'Honorarium';
+  if (lower === 'allowance' || lower === 'allowances') return 'Allowances';
+  if (lower === 'wage' || lower === 'wages') return 'Wages';
+  if (lower === 'honorarium and allowances') return 'Honorarium';
   if (lower === 'operation' || lower === 'operations') return 'Operation';
   if (lower === 'service' || lower === 'services') return 'Service';
   if (lower === 'merchandise') return 'Merchandise';
@@ -259,11 +265,11 @@ function getCreditRowCategory(creditRow: any): string {
   if (!creditRow) return '';
   if (creditRow.category) {
     const cleaned = cleanCategoryName(creditRow.category);
-    if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) return cleaned;
+    if (VALID_CV_CATEGORIES.includes(cleaned)) return cleaned;
   }
   const creditAcct = (creditRow.book_of_account || creditRow.description || '').trim();
   const cleaned = cleanCategoryName(creditAcct);
-  if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) return cleaned;
+  if (VALID_CV_CATEGORIES.includes(cleaned)) return cleaned;
   return '';
 }
 
@@ -285,7 +291,21 @@ function getCategoryForAccount(acct: string): string {
     }
   }
 
-  // 2. Keyword heuristic
+  // 2. Specific Honorarium & Wages accounts
+  if (lower === 'honorarium' || (lower.includes('honorarium') && !lower.includes('allowance'))) {
+    return 'Honorarium';
+  }
+  if (lower === 'allowances' || lower === 'allowance' || (lower.includes('allowance') && !lower.includes('honorarium'))) {
+    return 'Allowances';
+  }
+  if (lower === 'honorarium and allowances') {
+    return 'Honorarium';
+  }
+  if (lower.includes('wage')) {
+    return 'Wages';
+  }
+
+  // 3. Keyword heuristic
   if (
     lower.includes('wifi') ||
     lower.includes('water') ||
@@ -328,7 +348,23 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
   // 1. Explicit category directly on the item
   if (it.category) {
     const cleaned = cleanCategoryName(it.category);
-    if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) return cleaned;
+    if (VALID_CV_CATEGORIES.includes(cleaned)) return cleaned;
+  }
+
+  // 2. Direct account inspection for Honorarium, Allowances, Wages
+  const desc = (it.book_of_account || it.description || it.particulars || '').trim();
+  const lower = desc.toLowerCase();
+  if (lower === 'honorarium' || (lower.includes('honorarium') && !lower.includes('allowance'))) {
+    return 'Honorarium';
+  }
+  if (lower === 'allowances' || lower === 'allowance' || (lower.includes('allowance') && !lower.includes('honorarium'))) {
+    return 'Allowances';
+  }
+  if (lower === 'honorarium and allowances') {
+    return 'Honorarium';
+  }
+  if (lower.includes('wage')) {
+    return 'Wages';
   }
 
   // If the item itself is an explicit credit row (e.g. "Revolving Fund - CDF"), return its category directly
@@ -339,14 +375,11 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
 
   const vKey = it.voucher_no ? String(it.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
 
-  // 2. Look for paired credit row in cvDetails
+  // 3. Look for paired credit row in cvDetails
   if (Array.isArray(cvDetails) && cvDetails.length > 0) {
     const itIdx = cvDetails.indexOf(it);
 
-    // 2a. Primary journal check: immediate subsequent row (itIdx + 1)
-    // In standard journal entries, each debit row is directly followed by its balancing credit row.
-    // This correctly pairs debit entries with their credit row (e.g. Miscellaneous paired with Revolving Fund - CDF)
-    // even if voucher_no on credit differs or reflects CV header number.
+    // 3a. Primary journal check: immediate subsequent row (itIdx + 1)
     if (itIdx !== -1 && itIdx + 1 < cvDetails.length) {
       const nextRow = cvDetails[itIdx + 1];
       if (isRowCredit(nextRow) && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(nextRow.book_of_account || nextRow.description || '')) {
@@ -355,7 +388,7 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
       }
     }
 
-    // 2b. Look forward from itIdx for credit row matching voucher_no
+    // 3b. Look forward from itIdx for credit row matching voucher_no
     if (itIdx !== -1) {
       for (let j = itIdx + 1; j < cvDetails.length; j++) {
         const c = cvDetails[j];
@@ -369,7 +402,7 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
       }
     }
 
-    // 2c. Look across all cvDetails for a credit row with matching voucher_no
+    // 3c. Look across all cvDetails for a credit row with matching voucher_no
     if (vKey) {
       const pairedCredit = cvDetails.find((c: any) => {
         if (!isRowCredit(c) || /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(c.book_of_account || c.description || '')) return false;
@@ -383,7 +416,7 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
       }
     }
 
-    // 2d. Adjacent preceding row (itIdx - 1)
+    // 3d. Adjacent preceding row (itIdx - 1)
     if (itIdx > 0) {
       const prevRow = cvDetails[itIdx - 1];
       if (isRowCredit(prevRow) && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(prevRow.book_of_account || prevRow.description || '')) {
@@ -393,7 +426,7 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
     }
   }
 
-  // 3. Matched liquidation schedule item
+  // 4. Matched liquidation schedule item
   if (Array.isArray(lfItems) && lfItems.length > 0) {
     const matchLf = lfItems.find((l: any) =>
       !l.is_cancelled &&
@@ -403,18 +436,21 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
     );
     if (matchLf?.category) {
       const cleaned = cleanCategoryName(matchLf.category);
-      if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) return cleaned;
+      if (VALID_CV_CATEGORIES.includes(cleaned)) return cleaned;
     }
   }
 
-  // 4. Remarks or description explicit mentions of category
+  // 5. Remarks or description explicit mentions of category
   const textToCheck = `${it.remarks || ''} ${it.book_of_account || ''} ${it.description || ''}`.toLowerCase();
   if (/\bcdf\b/i.test(textToCheck)) return 'CDF';
   if (/\bcetf\b/i.test(textToCheck)) return 'CETF';
+  if (/\bhonorarium\b/i.test(textToCheck) && !/\ballowance\b/i.test(textToCheck)) return 'Honorarium';
+  if (/\ballowance\b/i.test(textToCheck) && !/\bhonorarium\b/i.test(textToCheck)) return 'Allowances';
+  if (/\bwages?\b/i.test(textToCheck)) return 'Wages';
 
-  // 5. Account heuristic fallback
-  const desc = (it.book_of_account || it.description || '').trim();
-  return cleanCategoryName(getCategoryForAccount(desc));
+  // 6. Account heuristic fallback
+  const descToUse = (it.book_of_account || it.description || '').trim();
+  return cleanCategoryName(getCategoryForAccount(descToUse));
 }
 
 function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf') {
@@ -507,9 +543,9 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           : (item.credit !== null && item.credit !== undefined && item.credit !== '' ? Number(item.credit) : (item.debit ? Number(item.debit) : (rawVal > 0 ? rawVal : null)));
         
         let creditCat = item.category ? cleanCategoryName(item.category) : '';
-        if (!creditCat || !['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(creditCat)) {
+        if (!creditCat || !VALID_CV_CATEGORIES.includes(creditCat)) {
           const fromDesc = cleanCategoryName(desc);
-          if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(fromDesc)) {
+          if (VALID_CV_CATEGORIES.includes(fromDesc)) {
             creditCat = fromDesc;
           }
         }
@@ -590,6 +626,36 @@ function formatCibAccountName(bankName?: string): string {
   return `CIB-${b.replace(/\s*BANK\b/i, '').trim()}`;
 }
 
+function checkIsHonorariumAndWages(cv: any): boolean {
+  if (!cv) return false;
+  const rfClass = String(
+    cv?.rf_classification ||
+    cv?.revolving_fund_classification ||
+    ''
+  ).toLowerCase();
+  if (rfClass.includes('honorarium') || rfClass.includes('wages')) return true;
+
+  const folder = String(cv?.folder_name || '').toLowerCase();
+  if (folder.includes('honorarium') || folder.includes('wages')) return true;
+
+  const particulars = String(cv?.particulars || cv?.description || '').toLowerCase();
+  if (particulars.includes('honorarium') || particulars.includes('wages')) return true;
+
+  let detailsText = '';
+  const details = cv?.details;
+  if (Array.isArray(details)) {
+    detailsText = details.map((d: any) => `${d.book_of_account || ''} ${d.description || ''} ${d.particulars || ''} ${d.remarks || ''}`).join(' ');
+  } else if (typeof details === 'string') {
+    detailsText = details;
+  }
+  if (detailsText.toLowerCase().includes('honorarium') || detailsText.toLowerCase().includes('wages')) return true;
+
+  const fa = Number(cv?.fund_amount || cv?.authorized_amount);
+  if (fa === 56100) return true;
+
+  return false;
+}
+
 function getSummaryCvRows(
   cv: any,
   resolvedType: 'stl' | 'rf',
@@ -600,6 +666,7 @@ function getSummaryCvRows(
   let debitTotal = 0;
   let creditTotal = 0;
 
+  const isHonorarium = checkIsHonorariumAndWages(cv);
   const cibName = formatCibAccountName(cv?.bank || cv?.bank_name);
 
   // STL Replenishment: Group into Loans Receivable, Service Fee, Insurance Payable, other deductions, and CIB
@@ -733,7 +800,94 @@ function getSummaryCvRows(
   }
 
   // Revolving Fund (resolvedType === 'rf')
-  if (categoryBreakdown.list.length > 0) {
+  if (isHonorarium) {
+    // For Revolving Fund Replenishment - Honorarium & Wages:
+    // Separate by specific account (e.g. Honorarium and Allowances, Wages, Allowances) instead of collapsing into a single category
+    const honorariumMap: Record<string, number> = {};
+
+    let sourceItems: any[] = [];
+    if (detailedRows && detailedRows.length > 0) {
+      sourceItems = detailedRows;
+    } else {
+      let rawDetails: any[] = [];
+      if (Array.isArray(cv?.details)) {
+        rawDetails = cv.details;
+      } else if (typeof cv?.details === 'string') {
+        try {
+          const parsed = JSON.parse(cv.details);
+          if (Array.isArray(parsed)) rawDetails = parsed;
+        } catch {}
+      }
+      if (rawDetails.length > 0) {
+        sourceItems = rawDetails;
+      } else if (Array.isArray(cv?.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
+        sourceItems = cv.revolving_fund.items.filter((it: any) => !it.is_cancelled);
+      }
+    }
+
+    if (sourceItems.length > 0) {
+      for (const it of sourceItems) {
+        const desc = (it.book_of_account || it.description || it.particulars || '').trim();
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+
+        const val = typeof it.amount === 'number'
+          ? it.amount
+          : (it.debit !== null && it.debit !== undefined && it.debit !== ''
+              ? parseFloat(it.debit)
+              : parseFloat(it.amount || 0));
+
+        const isCredit = it.is_credit === true || it.isAutoCredit === true || val < 0;
+        if (!isCredit && val > 0) {
+          let acctName = desc;
+          const lowerAcct = acctName.toLowerCase();
+          if (!acctName || lowerAcct === 'operation') {
+            acctName = 'Honorarium';
+          } else if (lowerAcct === 'honorarium and allowances') {
+            acctName = 'Honorarium';
+          } else if (lowerAcct.includes('honorarium') && !lowerAcct.includes('allowance')) {
+            acctName = 'Honorarium';
+          } else if (lowerAcct.includes('allowance') && !lowerAcct.includes('honorarium')) {
+            acctName = 'Allowances';
+          } else if (lowerAcct.includes('wage')) {
+            acctName = 'Wages';
+          }
+          honorariumMap[acctName] = (honorariumMap[acctName] || 0) + val;
+        }
+      }
+    }
+
+    if (Object.keys(honorariumMap).length === 0) {
+      const fallbackAmt = parseFloat(cv?.amount || 0);
+      if (fallbackAmt > 0) {
+        honorariumMap['Honorarium'] = fallbackAmt;
+      }
+    }
+
+    const preferredOrder = [
+      'Honorarium',
+      'Allowances',
+      'Wages'
+    ];
+
+    const sortedKeys = Object.keys(honorariumMap).sort((a, b) => {
+      const idxA = preferredOrder.indexOf(a);
+      const idxB = preferredOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+
+    for (const acct of sortedKeys) {
+      const amt = honorariumMap[acct];
+      rows.push({
+        description: acct,
+        debit: amt,
+        credit: null
+      });
+      debitTotal += amt;
+    }
+  } else if (categoryBreakdown.list.length > 0) {
     for (const cat of categoryBreakdown.list) {
       const cleanName = cleanCategoryName(cat.name);
       rows.push({
@@ -1208,7 +1362,9 @@ export default function UnifiedCvLfPrintModal({
       }
     }
 
-    const preferredOrder = ['Operation', 'CDF', 'Service', 'Merchandise', 'CETF'];
+    const preferredOrder = checkIsHonorariumAndWages(currentCv)
+      ? ['Honorarium', 'Allowances', 'Wages', 'Operation', 'CDF', 'Service', 'Merchandise', 'CETF']
+      : ['Operation', 'CDF', 'Service', 'Merchandise', 'CETF'];
     const list = Object.entries(map).map(([name, amount]) => ({
       name,
       amount,
@@ -1355,10 +1511,55 @@ export default function UnifiedCvLfPrintModal({
     return folder.includes('revolving') || part.includes('revolving') || Boolean(currentCv?.revolving_fund);
   }, [resolvedType, currentCv]);
 
+  const isHonorariumAndWages = useMemo(() => {
+    // 1. Check direct classification properties
+    const rfClass = String(
+      currentCv?.rf_classification ||
+      currentCv?.revolving_fund_classification ||
+      currentLf?.rf_classification ||
+      ''
+    ).toLowerCase();
+    if (rfClass.includes('honorarium') || rfClass.includes('wages')) return true;
+
+    // 2. Check folder name
+    const folder = String(currentCv?.folder_name || currentLf?.folder_name || '').toLowerCase();
+    if (folder.includes('honorarium') || folder.includes('wages')) return true;
+
+    // 3. Check particulars and description
+    const particulars = String(currentCv?.particulars || currentCv?.description || currentLf?.particulars || '').toLowerCase();
+    if (particulars.includes('honorarium') || particulars.includes('wages')) return true;
+
+    // 4. Check details / rows
+    let detailsText = '';
+    const details = currentCv?.details;
+    if (Array.isArray(details)) {
+      detailsText = details.map((d: any) => `${d.book_of_account || ''} ${d.description || ''} ${d.particulars || ''} ${d.remarks || ''}`).join(' ');
+    } else if (typeof details === 'string') {
+      detailsText = details;
+    }
+    if (detailsText.toLowerCase().includes('honorarium') || detailsText.toLowerCase().includes('wages')) return true;
+
+    // 5. Check rows in summaryCvData and detailedCvData
+    if (summaryCvData.rows.some(r => (r.description || '').toLowerCase().includes('honorarium') || (r.description || '').toLowerCase().includes('wages'))) {
+      return true;
+    }
+    if (detailedCvData.rows.some(r => (r.description || '').toLowerCase().includes('honorarium') || (r.remarks || '').toLowerCase().includes('honorarium'))) {
+      return true;
+    }
+
+    // 6. Fund amount: 56100 is specifically defined for Revolving Fund - Honorarium & Wages
+    const fa = Number(currentCv?.fund_amount || currentLf?.fund_amount || currentLf?.authorized_amount);
+    if (fa === 56100) return true;
+
+    return false;
+  }, [currentCv, currentLf, summaryCvData.rows, detailedCvData.rows]);
+
   const rfDetailedCategoryBreakdown = useMemo(() => {
     if (!isRevolvingFund) return [];
 
-    const preferredOrder = ['Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
+    const preferredOrder = isHonorariumAndWages
+      ? ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF']
+      : ['Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
     const catMap: Record<string, number> = {};
 
     const nonCibRows = (detailedCvData.rows || []).filter(r => !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
@@ -1411,7 +1612,7 @@ export default function UnifiedCvLfPrintModal({
       amount: catMap[name],
       formatted: formatCurrency(catMap[name])
     }));
-  }, [isRevolvingFund, detailedCvData.rows, lfItems, categoryBreakdown.list]);
+  }, [isRevolvingFund, isHonorariumAndWages, detailedCvData.rows, lfItems, categoryBreakdown.list]);
 
   // On-screen filtered rows based on user breakdown pill click (does NOT affect printing)
   const displayedDetailedRows = useMemo(() => {
@@ -1425,6 +1626,11 @@ export default function UnifiedCvLfPrintModal({
 
       const descCat = cleanCategoryName(r.description || '').toLowerCase();
       if (descCat === filterCat) return true;
+
+      const desc = (r.description || '').toLowerCase();
+      if (filterCat === 'honorarium' && desc.includes('honorarium')) return true;
+      if (filterCat === 'allowances' && desc.includes('allowance')) return true;
+      if (filterCat === 'wages' && desc.includes('wage')) return true;
 
       return false;
     });
@@ -1909,40 +2115,42 @@ export default function UnifiedCvLfPrintModal({
                     </div>
 
                     {/* 3 Summary Cards */}
-                    <div className="grid grid-cols-3 gap-2.5 text-xs">
-                      <div className="p-2.5 border border-neutral-200 rounded-lg bg-white">
-                        <span className="text-[8px] font-bold uppercase text-neutral-400 block tracking-wider">FUND AMOUNT</span>
-                        <div className="text-[13px] font-extrabold font-mono text-neutral-900 mt-0.5">
-                          ₱{authorizedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {!(cvViewMode === 'summary' && isHonorariumAndWages) && (
+                      <div className="grid grid-cols-3 gap-2.5 text-xs">
+                        <div className="p-2.5 border border-neutral-200 rounded-lg bg-white">
+                          <span className="text-[8px] font-bold uppercase text-neutral-400 block tracking-wider">FUND AMOUNT</span>
+                          <div className="text-[13px] font-extrabold font-mono text-neutral-900 mt-0.5">
+                            ₱{authorizedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </div>
                         </div>
-                      </div>
-                      <div className="p-2.5 border border-neutral-200 rounded-lg bg-white">
-                        <span className="text-[8px] font-bold uppercase text-neutral-400 block tracking-wider">
-                          TOTAL EXPENSE ({activeItems.length > 0 ? activeItems.length : (cvViewMode === 'summary' ? summaryCvData.rows.filter(r => r.debit !== null).length : detailedCvData.rows.filter(r => r.debit !== null).length)} ITEMS)
-                        </span>
-                        <div className="text-[13px] font-extrabold font-mono text-neutral-900 mt-0.5">
-                          ₱{displayedTotalExpense.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        <div className="p-2.5 border border-neutral-200 rounded-lg bg-white">
+                          <span className="text-[8px] font-bold uppercase text-neutral-400 block tracking-wider">
+                            TOTAL EXPENSE ({activeItems.length > 0 ? activeItems.length : (cvViewMode === 'summary' ? summaryCvData.rows.filter(r => r.debit !== null).length : detailedCvData.rows.filter(r => r.debit !== null).length)} ITEMS)
+                          </span>
+                          <div className="text-[13px] font-extrabold font-mono text-neutral-900 mt-0.5">
+                            ₱{displayedTotalExpense.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </div>
                         </div>
-                      </div>
-                      <div className={`p-2.5 border-2 rounded-lg ${
-                        displayedFundBalance < 0
-                          ? 'border-rose-500 bg-rose-50/70'
-                          : 'border-emerald-500 bg-emerald-50/70'
-                      }`}>
-                        <span className={`text-[8px] font-bold uppercase block tracking-wider ${
+                        <div className={`p-2.5 border-2 rounded-lg ${
                           displayedFundBalance < 0
-                            ? 'text-rose-800'
-                            : 'text-emerald-800'
-                        }`}>FUND BALANCE</span>
-                        <div className={`text-[13px] font-extrabold font-mono mt-0.5 ${
-                          displayedFundBalance < 0
-                            ? 'text-rose-700'
-                            : 'text-emerald-900'
+                            ? 'border-rose-500 bg-rose-50/70'
+                            : 'border-emerald-500 bg-emerald-50/70'
                         }`}>
-                          ₱{displayedFundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          <span className={`text-[8px] font-bold uppercase block tracking-wider ${
+                            displayedFundBalance < 0
+                              ? 'text-rose-800'
+                              : 'text-emerald-800'
+                          }`}>FUND BALANCE</span>
+                          <div className={`text-[13px] font-extrabold font-mono mt-0.5 ${
+                            displayedFundBalance < 0
+                              ? 'text-rose-700'
+                              : 'text-emerald-900'
+                          }`}>
+                            ₱{displayedFundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Official Signatories */}
                     {cvViewMode === 'summary' ? (
@@ -2451,28 +2659,30 @@ export default function UnifiedCvLfPrintModal({
             </div>
 
             {/* 3 Summary Cards */}
-            <div className="no-print-split" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-              <div style={{ padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: '#ffffff' }}>
-                <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>FUND AMOUNT</span>
-                <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace', color: '#111827' }}>
-                  ₱{authorizedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {!(cvViewMode === 'summary' && isHonorariumAndWages) && (
+              <div className="no-print-split" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                <div style={{ padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: '#ffffff' }}>
+                  <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>FUND AMOUNT</span>
+                  <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace', color: '#111827' }}>
+                    ₱{authorizedAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div style={{ padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: '#ffffff' }}>
+                  <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>
+                    TOTAL EXPENSE ({activeItems.length > 0 ? activeItems.length : (cvViewMode === 'summary' ? summaryCvData.rows.filter(r => r.debit !== null).length : detailedCvData.rows.filter(r => r.debit !== null).length)} ITEMS)
+                  </span>
+                  <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace', color: '#047857' }}>
+                    ₱{displayedTotalExpense.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div style={{ padding: '3px 6px', border: displayedFundBalance < 0 ? '1.5px solid #ef4444' : '1.5px solid #059669', borderRadius: '4px', backgroundColor: displayedFundBalance < 0 ? '#fef2f2' : '#ecfdf5' }}>
+                  <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: displayedFundBalance < 0 ? '#991b1b' : '#047857', display: 'block' }}>FUND BALANCE</span>
+                  <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace', color: displayedFundBalance < 0 ? '#b91c1c' : '#065f46' }}>
+                    ₱{displayedFundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </div>
                 </div>
               </div>
-              <div style={{ padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: '#ffffff' }}>
-                <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>
-                  TOTAL EXPENSE ({activeItems.length > 0 ? activeItems.length : (cvViewMode === 'summary' ? summaryCvData.rows.filter(r => r.debit !== null).length : detailedCvData.rows.filter(r => r.debit !== null).length)} ITEMS)
-                </span>
-                <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace', color: '#047857' }}>
-                  ₱{displayedTotalExpense.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </div>
-              </div>
-              <div style={{ padding: '3px 6px', border: displayedFundBalance < 0 ? '1.5px solid #ef4444' : '1.5px solid #059669', borderRadius: '4px', backgroundColor: displayedFundBalance < 0 ? '#fef2f2' : '#ecfdf5' }}>
-                <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: displayedFundBalance < 0 ? '#991b1b' : '#047857', display: 'block' }}>FUND BALANCE</span>
-                <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'monospace', color: displayedFundBalance < 0 ? '#b91c1c' : '#065f46' }}>
-                  ₱{displayedFundBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* Signatures */}
             {cvViewMode === 'summary' ? (

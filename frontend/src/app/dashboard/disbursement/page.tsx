@@ -455,7 +455,7 @@ export const REPLENISHMENT_ACCOUNT_OPTIONS = [
   'Transportation',
   'Travel & Transportation',
   'Honorarium',
-  'Honorarium and Allowances',
+  'Allowances',
   'Representation',
   'COS - Scoresheet',
   'COS- hardbound',
@@ -541,7 +541,10 @@ export const ACCOUNT_CATEGORIES = [
   { value: 'Merchandise', label: 'Merchandise', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700' },
   { value: 'Service', label: 'Service', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 border-purple-300 dark:border-purple-700' },
   { value: 'CETF', label: 'CETF', color: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-300 dark:border-rose-700' },
-  { value: 'CDF', label: 'CDF', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' }
+  { value: 'CDF', label: 'CDF', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' },
+  { value: 'Honorarium', label: 'Honorarium', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border-teal-300 dark:border-teal-700' },
+  { value: 'Allowances', label: 'Allowances', color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300 border-cyan-300 dark:border-cyan-700' },
+  { value: 'Wages', label: 'Wages', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700' }
 ] as const;
 
 export const getCategoryForAccount = (acct: string, categoryMap?: Record<string, string>): string => {
@@ -567,7 +570,21 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
     }
   }
 
-  // 3. Keyword-based heuristic auto-classification
+  // 3. Honorarium & Wages accounts
+  if (lower === 'honorarium' || (lower.includes('honorarium') && !lower.includes('allowance'))) {
+    return 'Honorarium';
+  }
+  if (lower === 'allowances' || lower === 'allowance' || (lower.includes('allowance') && !lower.includes('honorarium'))) {
+    return 'Allowances';
+  }
+  if (lower === 'honorarium and allowances') {
+    return 'Honorarium';
+  }
+  if (lower.includes('wage')) {
+    return 'Wages';
+  }
+
+  // 4. Keyword-based heuristic auto-classification
   if (
     lower.includes('wifi') ||
     lower.includes('water') ||
@@ -4508,7 +4525,7 @@ function DisbursementPageContent() {
                                       {(() => {
                                         const hasMultipleDebits = newCvRows.filter(r => !checkIsCreditRow(r)).length > 1;
                                         const hasMultipleCredits = newCvRows.filter(r => checkIsCreditRow(r)).length > 1;
-                                        const canDelete = isCreditRow ? hasMultipleCredits : hasMultipleDebits;
+                                        const canDelete = isCreditRow ? true : hasMultipleDebits;
                                         return canDelete ? (
                                           <button
                                             type="button"
@@ -5725,7 +5742,7 @@ function DisbursementPageContent() {
                                     {(() => {
                                       const hasMultipleDebits = editCvRows.filter(r => !checkIsCreditRow(r)).length > 1;
                                       const hasMultipleCredits = editCvRows.filter(r => checkIsCreditRow(r)).length > 1;
-                                      const canDelete = isCreditRow ? hasMultipleCredits : hasMultipleDebits;
+                                      const canDelete = isCreditRow ? true : hasMultipleDebits;
                                       return canDelete ? (
                                         <button
                                           type="button"

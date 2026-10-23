@@ -130,6 +130,7 @@ export const ACCOUNT_OPTIONS = [
   'COS -water',
   'Transportation',
   'Honorarium',
+  'Allowances',
   'Representation',
   'COS- hardbound',
   'Inventory-handbag',
