@@ -6952,7 +6952,7 @@ function LoansPageContent() {
                 <h5 className="font-bold text-on-surface dark:text-white text-xs">Schedule Statement Summary</h5>
                 <div className="grid grid-cols-2 gap-2 text-[10px]">
                   <p><strong>Member Name:</strong> {printLoan.last_name}, {printLoan.first_name}</p>
-                  <p><strong>Loan Product:</strong> {printLoan.product_name}</p>
+                  <p><strong>Loan Product:</strong> {(printLoan.product_name || 'Regular - Salary Loan').replace(/^Regular Loan\s*-\s*/i, 'Regular - ')}</p>
                   <p><strong>Principal Amount:</strong> {formatCurrency(parseFloat(printLoan.principal_amount))}</p>
                   <p><strong>Total Repayment Periods:</strong> {printLoan.term_months} Months</p>
                 </div>
@@ -7487,14 +7487,23 @@ function LoansPageContent() {
                   <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{formatCurrency(parseFloat(printLoan.principal_amount))}</p>
                   <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Interest: {parseFloat(printLoan.interest_rate) <= 0.05 ? `${(parseFloat(printLoan.interest_rate) * 100).toFixed(1)}% / mo` : `${(parseFloat(printLoan.interest_rate) * 100).toFixed(1)}% p.a.`}</p>
                 </div>
-                <div style={{ textAlign: 'right', flex: 1 }}>
+                <div style={{ textAlign: 'right', flex: 1.2 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Monthly Payment Due</span>
-                  <p style={{ fontSize: '12px', fontWeight: '800', color: '#064e3b', margin: '2px 0 0 0' }}>
-                    {formatCurrency(
-                      printLoan.schedule && printLoan.schedule.length > 0
-                        ? parseFloat(printLoan.schedule[0].principal_due) + parseFloat(printLoan.schedule[0].interest_due)
-                        : 0
-                    )}
+                  <p style={{ fontSize: '11px', fontWeight: '800', color: '#064e3b', margin: '2px 0 0 0', whiteSpace: 'nowrap' }}>
+                    {(() => {
+                      if (!printLoan.schedule || printLoan.schedule.length === 0) {
+                        return formatCurrency(0);
+                      }
+                      const firstSch = printLoan.schedule[0];
+                      const lastSch = printLoan.schedule[printLoan.schedule.length - 1];
+                      const firstTotal = (parseFloat(firstSch.principal_due) || 0) + (parseFloat(firstSch.interest_due) || 0);
+                      const lastTotal = (parseFloat(lastSch.principal_due) || 0) + (parseFloat(lastSch.interest_due) || 0);
+
+                      if (Math.abs(firstTotal - lastTotal) < 0.01) {
+                        return formatCurrency(firstTotal);
+                      }
+                      return `${formatCurrency(firstTotal)} - ${formatCurrency(lastTotal)}`;
+                    })()}
                   </p>
                   <p style={{ fontSize: '9px', color: '#6b7280', margin: '2px 0 0 0' }}>Term: {printLoan.term_months} Months</p>
                 </div>
