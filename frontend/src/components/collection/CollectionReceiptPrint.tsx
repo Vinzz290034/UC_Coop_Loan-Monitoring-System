@@ -140,7 +140,7 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
   return [{ description: item.particulars || item.item_name || item.service_type || 'Collection', amount: item.amount }];
 };
 
-const PAYMENT_METHODS: CollectionItem['payment_method'][] = ['Cash', 'GCash', 'Bank Transfer', 'Cheque', 'Cash in Vault'];
+const PAYMENT_METHODS: CollectionItem['payment_method'][] = ['Cash', 'Salary Deduction', 'GCash', 'Bank Transfer', 'Cheque', 'Cash in Vault'];
 
 function ReceiptCopy({ item, copyLabel }: { item: CollectionItem; copyLabel?: string }) {
   const lines = buildLines(item);

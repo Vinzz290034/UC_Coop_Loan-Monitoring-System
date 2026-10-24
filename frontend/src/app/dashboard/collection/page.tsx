@@ -115,7 +115,7 @@ export interface CollectionItem {
   collected_by: string;
 }
 
-export type PaymentMethod = 'Cash' | 'GCash' | 'Bank Transfer' | 'Cheque' | 'Cash in Vault' | 'Check' | 'Payroll Deduction';
+export type PaymentMethod = 'Cash' | 'Salary Deduction' | 'GCash' | 'Bank Transfer' | 'Cheque' | 'Cash in Vault' | 'Check' | 'Payroll Deduction';
 
 export const BANK_OPTIONS: SelectOption[] = [
   { value: 'BDO Unibank', label: 'BDO Unibank' },
@@ -138,10 +138,12 @@ export const BANK_OPTIONS: SelectOption[] = [
 export const CASHIER_OPTIONS: SelectOption[] = [
   { value: 'CHINNETTE A. LAMOSTE', label: 'CHINNETTE A. LAMOSTE' },
   { value: 'VANESSA MAE A. MONDRANO', label: 'VANESSA MAE A. MONDRANO' },
+  { value: 'DAILYN JAY J. LEDESMA', label: 'DAILYN JAY J. LEDESMA' },
 ];
 
 export const PAYMENT_METHOD_OPTIONS: SelectOption[] = [
   { value: 'Cash', label: 'Cash' },
+  { value: 'Salary Deduction', label: 'Salary Deduction' },
   { value: 'GCash', label: 'GCash' },
   { value: 'Bank Transfer', label: 'Bank Transfer' },
   { value: 'Cheque', label: 'Cheque' },
@@ -1706,6 +1708,7 @@ export default function CollectionPage() {
                   options={[
                     { value: 'all', label: 'All Methods' },
                     { value: 'Cash', label: 'Cash' },
+                    { value: 'Salary Deduction', label: 'Salary Deduction' },
                     { value: 'GCash', label: 'GCash' },
                     { value: 'Bank Transfer', label: 'Bank Transfer' },
                     { value: 'Cheque', label: 'Cheque' },
