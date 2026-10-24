@@ -131,6 +131,14 @@ const getProductCategory = (name: string) => {
 };
 
 const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
+  'Regular - Salary Loan': {
+    desc: 'Regular salary-based credit line with automatic payroll deduction.',
+    helper: '₱10,000 to ₱75,000. Maximum term: 1 year (12 months).'
+  },
+  'Regular - Project Loan': {
+    desc: 'Project or entrepreneurial funding for business expansions or asset acquisitions.',
+    helper: '₱76,000 to ₱300,000. Maximum term: 2 years (24 months).'
+  },
   'Regular Loan - Salary Loan': {
     desc: 'Regular salary-based credit line with automatic payroll deduction.',
     helper: '₱10,000 to ₱75,000. Maximum term: 1 year (12 months).'
@@ -4893,7 +4901,7 @@ function LoansPageContent() {
                                                 p.name
                                                   .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
                                                   .replace(/Short Term Loan\s*-\s*/gi, '')
-                                                  .replace(/Regular Loan\s*-\s*/gi, '')
+                                                  .replace(/Regular(?:\s+Loan)?\s*-\s*/gi, '')
                                                   .replace(/Special Loan\s*-\s*/gi, '')
                                               )}
                                             </span>
@@ -7469,7 +7477,9 @@ function LoansPageContent() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Loan Product</span>
-                  <p style={{ fontWeight: 'bold', color: '#064e3b', margin: '2px 0 0 0' }}>{printLoan.product_name}</p>
+                  <p style={{ fontWeight: 'bold', color: '#064e3b', margin: '2px 0 0 0' }}>
+                    {(printLoan.product_name || 'Regular - Salary Loan').replace(/^Regular Loan\s*-\s*/i, 'Regular - ')}
+                  </p>
                   <p style={{ fontSize: '9px', color: '#6b7280', textTransform: 'capitalize', margin: '2px 0 0 0' }}>{printLoan.amortization_type === 'flat_rate' ? 'Straight' : 'Diminishing Balance'}</p>
                 </div>
                 <div style={{ flex: 1 }}>
@@ -7627,7 +7637,7 @@ function LoansPageContent() {
                 <div>
                   <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block', letterSpacing: '0.03em' }}>Loan Reference</span>
                   <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#111827', margin: '2px 0 0 0' }}>
-                    {printLoan.laf_no ? `LAF #${printLoan.laf_no}` : (printLoan.product_name || 'Regular Loan')}
+                    {printLoan.laf_no ? `LAF #${printLoan.laf_no}` : (printLoan.product_name || 'Regular - Salary Loan').replace(/^Regular Loan\s*-\s*/i, 'Regular - ')}
                   </p>
                   <p style={{ fontSize: '9px', color: '#059669', fontWeight: 'bold', margin: '2px 0 0 0' }}>Status: Posted to Ledger</p>
                 </div>

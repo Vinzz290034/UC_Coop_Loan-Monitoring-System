@@ -392,7 +392,7 @@ export const applyForLoan = async (req, res, next) => {
       totalExistingPrincipal += parseFloat(loan.principal_amount);
       if (pName.includes('special loan') || pName.includes('calamity')) {
         specialCount++;
-      } else if (pName.includes('regular loan')) {
+      } else if (pName.includes('regular loan') || pName.startsWith('regular -') || pName.includes('regular')) {
         regularCount++;
       } else if (pName.includes('short term loan') || pName.includes('stl')) {
         stlCount++;
@@ -401,7 +401,7 @@ export const applyForLoan = async (req, res, next) => {
 
     if (!isStaffOrAdmin) {
       const isSpecialProduct = p.name.toLowerCase().includes('special loan') || p.name.toLowerCase().includes('calamity');
-      const isRegularProduct = !isSpecialProduct && p.name.toLowerCase().includes('regular loan');
+      const isRegularProduct = !isSpecialProduct && (p.name.toLowerCase().includes('regular loan') || p.name.toLowerCase().startsWith('regular -') || p.name.toLowerCase().includes('regular'));
       const isStlProduct = !isSpecialProduct && (p.name.toLowerCase().includes('short term loan') || p.name.toLowerCase().includes('stl'));
 
       if (isRegularProduct && regularCount >= 1) {

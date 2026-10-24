@@ -178,6 +178,14 @@ const getProductCategory = (productName: string) => {
 };
 
 const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
+  'Regular - Salary Loan': {
+    desc: 'Regular salary-based credit line with automatic payroll deduction.',
+    helper: '₱10,000 to ₱75,000. Maximum term: 1 year (12 months).'
+  },
+  'Regular - Project Loan': {
+    desc: 'Project or entrepreneurial funding for business expansions or asset acquisitions.',
+    helper: '₱76,000 to ₱300,000. Maximum term: 2 years (24 months).'
+  },
   'Regular Loan - Salary Loan': {
     desc: 'Regular salary-based credit line with automatic payroll deduction.',
     helper: '₱10,000 to ₱75,000. Maximum term: 1 year (12 months).'
@@ -1024,7 +1032,7 @@ export default function OverviewPage() {
   const DEFAULT_LOAN_PRODUCTS = useMemo(() => [
     {
       id: 1,
-      name: 'Regular Loan - Salary Loan',
+      name: 'Regular - Salary Loan',
       interest_rate: '0.1200',
       term_months: 12,
       amortization_type: 'diminishing_balance',
@@ -1034,7 +1042,7 @@ export default function OverviewPage() {
     },
     {
       id: 2,
-      name: 'Regular Loan - Project Loan',
+      name: 'Regular - Project Loan',
       interest_rate: '0.0700',
       term_months: 24,
       amortization_type: 'diminishing_balance',
@@ -2490,7 +2498,7 @@ export default function OverviewPage() {
                                             {p.name
                                               .replace(/Short Term Loan\s*\(STL\)\s*-\s*/gi, '')
                                               .replace(/Short Term Loan\s*-\s*/gi, '')
-                                              .replace(/Regular Loan\s*-\s*/gi, '')
+                                              .replace(/Regular(?:\s+Loan)?\s*-\s*/gi, '')
                                               .replace(/Special Loan\s*-\s*/gi, '')}
                                           </span>
                                           {isCalamityProduct && (
