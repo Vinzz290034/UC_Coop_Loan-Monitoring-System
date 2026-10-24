@@ -704,7 +704,7 @@ export const executeImport = async (req, res, next) => {
       if (pAmt === 7000 && (termsNum === 2 || l.mode === 'SD2')) return systemProducts.find(p => p.name.toLowerCase().includes('cash express')) || systemProducts[0];
       if (pAmt === 10000 && (termsNum === 3 || l.mode === 'SD2' || l.mode === 'SD30')) return systemProducts.find(p => p.name.toLowerCase().includes('special occasion')) || systemProducts[0];
       
-      return systemProducts.find(p => p.name.toLowerCase().includes('regular loan - salary deduction')) || systemProducts[0];
+      return systemProducts.find(p => p.name.toLowerCase().includes('regular loan - salary loan') || p.name.toLowerCase().includes('regular loan - salary deduction') || p.name.toLowerCase().includes('salary loan')) || systemProducts[0];
     };
 
     // 2. Pre-cache existing database entities to eliminate 30,000+ sequential round-trips

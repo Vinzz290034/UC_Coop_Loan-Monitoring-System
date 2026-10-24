@@ -59,9 +59,13 @@ export async function migrateSeedDefaults() {
 
     // 3. Seed Default Loan Products
     await client.query(`
+      UPDATE loan_products SET name = 'Regular Loan - Salary Loan' WHERE name = 'Regular Loan - Salary Deduction';
+    `);
+
+    await client.query(`
       INSERT INTO loan_products (name, interest_rate, term_months, amortization_type, min_amount, max_amount, is_active)
       VALUES 
-          ('Regular Loan - Salary Deduction', 0.1200, 12, 'diminishing_balance', 10000.00, 75000.00, true),
+          ('Regular Loan - Salary Loan', 0.1200, 12, 'diminishing_balance', 10000.00, 75000.00, true),
           ('Regular Loan - Project Loan', 0.0700, 24, 'diminishing_balance', 76000.00, 300000.00, true),
           ('Special Loan - Calamity Loan', 0.0800, 24, 'flat_rate', 10000.00, 50000.00, true),
           ('Short Term Loan (STL) - Utility Loan', 0.0300, 1, 'diminishing_balance', 3000.00, 3000.00, true),

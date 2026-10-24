@@ -131,6 +131,10 @@ const getProductCategory = (name: string) => {
 };
 
 const LOAN_DESCRIPTIONS: Record<string, { desc: string; helper?: string }> = {
+  'Regular Loan - Salary Loan': {
+    desc: 'Regular salary-based credit line with automatic payroll deduction.',
+    helper: '₱10,000 to ₱75,000. Maximum term: 1 year (12 months).'
+  },
   'Regular Loan - Salary Deduction': {
     desc: 'Regular salary-based credit line with automatic payroll deduction.',
     helper: '₱10,000 to ₱75,000. Maximum term: 1 year (12 months).'
