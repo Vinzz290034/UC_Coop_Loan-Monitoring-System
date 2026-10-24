@@ -118,6 +118,10 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
       lines.push({ description: 'Membership Fee', amount: item.membership_fee });
     }
 
+    if (item.billing_amount && item.billing_amount > 0) {
+      lines.push({ description: 'University of Cebu Inc. (Billing)', amount: item.billing_amount });
+    }
+
     if (lines.length > 0) return lines;
     return [{ description: item.loan_account || item.particulars || 'Loans Payable', amount: item.amount }];
   }

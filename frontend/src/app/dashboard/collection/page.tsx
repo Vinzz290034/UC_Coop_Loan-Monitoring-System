@@ -93,6 +93,7 @@ export interface CollectionItem {
   fines_amount?: number;
   common_share_amount?: number;
   membership_fee?: number;
+  billing_amount?: number;
   // Sales specific (itemized)
   item_name?: string;
   item_category?: string;
@@ -520,6 +521,7 @@ export default function CollectionPage() {
     fines_amount: '',
     common_share_amount: '',
     membership_fee: '',
+    billing_amount: '',
     // Sales
     item_name: '',
     item_category: 'Uniform',
@@ -745,6 +747,7 @@ export default function CollectionPage() {
       fines_amount: item.fines_amount ? String(item.fines_amount) : '',
       common_share_amount: item.common_share_amount ? String(item.common_share_amount) : '',
       membership_fee: item.membership_fee ? String(item.membership_fee) : '',
+      billing_amount: item.billing_amount ? String(item.billing_amount) : '',
       item_name: item.item_name || '',
       item_category: item.item_category || 'Uniform',
       quantity: item.quantity ? String(item.quantity) : '1',
@@ -859,7 +862,8 @@ export default function CollectionPage() {
       }, 0);
       const cs = parseFloat(editFormData.common_share_amount || '0') || 0;
       const mf = parseFloat(editFormData.membership_fee || '0') || 0;
-      if (loansSum + cs + mf > 0) calculatedAmount = loansSum + cs + mf;
+      const billing = parseFloat(editFormData.billing_amount || '0') || 0;
+      if (loansSum + cs + mf + billing > 0) calculatedAmount = loansSum + cs + mf + billing;
 
       savedLoans = (editFormData.loans || [])
         .map((l: FormLoanEntry) => ({
@@ -902,6 +906,7 @@ export default function CollectionPage() {
       fines_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.fines_amount || 0), 0) || undefined) : undefined,
       common_share_amount: parseFloat(editFormData.common_share_amount || '0') || undefined,
       membership_fee: parseFloat(editFormData.membership_fee || '0') || undefined,
+      billing_amount: parseFloat(editFormData.billing_amount || '0') || undefined,
       item_name: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
         ? undefined
         : (editFormData.item_name?.trim() || undefined),
@@ -933,6 +938,7 @@ export default function CollectionPage() {
             }
             if (parseFloat(editFormData.common_share_amount || '0') > 0) parts.push('Common Share');
             if (parseFloat(editFormData.membership_fee || '0') > 0) parts.push('Membership Fee');
+            if (parseFloat(editFormData.billing_amount || '0') > 0) parts.push('University of Cebu Inc. (Billing)');
             return parts.length > 0 ? parts.join(' + ') : (editFormData.loans?.[0]?.loan_account || 'Credit Collection');
           })()
         : editFormData.tab === 'sales_services'
@@ -1139,6 +1145,7 @@ export default function CollectionPage() {
       fines_amount: '',
       common_share_amount: '',
       membership_fee: '',
+      billing_amount: '',
       item_name: '',
       item_category: 'Uniform',
       quantity: '1',
@@ -1181,7 +1188,8 @@ export default function CollectionPage() {
       }, 0);
       const cs = parseFloat(formData.common_share_amount || '0') || 0;
       const mf = parseFloat(formData.membership_fee || '0') || 0;
-      if (loansSum + cs + mf > 0) calculatedAmount = loansSum + cs + mf;
+      const billing = parseFloat(formData.billing_amount || '0') || 0;
+      if (loansSum + cs + mf + billing > 0) calculatedAmount = loansSum + cs + mf + billing;
     } else if (formData.tab === 'sales_services' || (formData.tab as any) === 'sales') {
       if (formData.sales_service_type === 'service') {
         const c = parseInt(formData.service_copies || '1', 10) || 1;
@@ -1225,6 +1233,7 @@ export default function CollectionPage() {
       fines_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.fines_amount || 0), 0) || undefined) : undefined,
       common_share_amount: parseFloat(formData.common_share_amount || '0') || undefined,
       membership_fee: parseFloat(formData.membership_fee || '0') || undefined,
+      billing_amount: parseFloat(formData.billing_amount || '0') || undefined,
       item_name: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
         ? undefined
         : (formData.item_name.trim() || undefined),
@@ -1256,6 +1265,7 @@ export default function CollectionPage() {
             }
             if (parseFloat(formData.common_share_amount || '0') > 0) parts.push('Common Share');
             if (parseFloat(formData.membership_fee || '0') > 0) parts.push('Membership Fee');
+            if (parseFloat(formData.billing_amount || '0') > 0) parts.push('University of Cebu Inc. (Billing)');
             return parts.length > 0 ? parts.join(' + ') : (formData.loans[0]?.loan_account || 'Credit Collection');
           })()
         : formData.tab === 'sales_services'
@@ -1391,6 +1401,7 @@ export default function CollectionPage() {
         }
         if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
         if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
+        if (item.billing_amount && item.billing_amount > 0) parts.push('University of Cebu Inc. (Billing)');
         desc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || 'Credit Collection');
       } else if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
         desc = `${item.item_name || 'Store Item'} (${item.quantity || 1} pcs @ ₱${item.unit_price || 0})`;
@@ -1875,6 +1886,7 @@ export default function CollectionPage() {
                       }
                       if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
                       if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
+                      if (item.billing_amount && item.billing_amount > 0) parts.push('University of Cebu Inc. (Billing)');
                       primaryDesc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || item.particulars || 'Loan Repayment');
                     } else if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
                       primaryDesc = `${item.item_name || 'Store Item'}${item.quantity ? ` (${item.quantity} pcs)` : ''}`;
@@ -2347,11 +2359,11 @@ export default function CollectionPage() {
                         Credit & Loan Repayment Breakdown
                       </span>
                       <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400 font-medium">
-                        Pay Principal, Interest, Fines, Common Share, or Membership Fee (leave unneeded fields at 0.00)
+                        Pay Principal, Interest, Fines, Common Share, Membership Fee, or UC Billing (leave unneeded fields at 0.00)
                       </span>
                     </div>
                     <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                      Total: ₱{(formData.loans.reduce((acc, l) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(formData.common_share_amount || '0') || 0) + (parseFloat(formData.membership_fee || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      Total: ₱{(formData.loans.reduce((acc, l) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(formData.common_share_amount || '0') || 0) + (parseFloat(formData.membership_fee || '0') || 0) + (parseFloat(formData.billing_amount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
 
@@ -2481,17 +2493,14 @@ export default function CollectionPage() {
                   </div>
 
                   {/* 4. Common Share */}
-                  <div className="space-y-1 pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
-                    <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
-                      Common Share
-                    </label>
+                  <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
-                      <div className="px-3 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 flex items-center justify-between">
-                        <span>Common Share</span>
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-100/80 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">
-                          Share Capital
-                        </span>
-                      </div>
+                      <input
+                        type="text"
+                        readOnly
+                        value="Common Share"
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-default select-none focus:outline-none"
+                      />
                       <div className="relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
                         <input
@@ -2500,7 +2509,7 @@ export default function CollectionPage() {
                           min="0"
                           value={formData.common_share_amount}
                           onChange={e => setFormData({ ...formData, common_share_amount: e.target.value })}
-                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                           placeholder="0.00"
                         />
                       </div>
@@ -2508,17 +2517,14 @@ export default function CollectionPage() {
                   </div>
 
                   {/* 5. Membership Fee */}
-                  <div className="space-y-1 pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
-                    <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
-                      Membership Fee
-                    </label>
+                  <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
-                      <div className="px-3 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 flex items-center justify-between">
-                        <span>Membership Fee</span>
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-100/80 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">
-                          Membership
-                        </span>
-                      </div>
+                      <input
+                        type="text"
+                        readOnly
+                        value="Membership Fee"
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-default select-none focus:outline-none"
+                      />
                       <div className="relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
                         <input
@@ -2527,7 +2533,31 @@ export default function CollectionPage() {
                           min="0"
                           value={formData.membership_fee}
                           onChange={e => setFormData({ ...formData, membership_fee: e.target.value })}
-                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 6. University of Cebu Inc. (Billing) */}
+                  <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                      <input
+                        type="text"
+                        readOnly
+                        value="University of Cebu Inc. (Billing)"
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-default select-none focus:outline-none"
+                      />
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.billing_amount}
+                          onChange={e => setFormData({ ...formData, billing_amount: e.target.value })}
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                           placeholder="0.00"
                         />
                       </div>
@@ -3044,11 +3074,11 @@ export default function CollectionPage() {
                         Credit &amp; Loan Repayment Breakdown
                       </span>
                       <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400 font-medium">
-                        Pay Principal, Interest, Fines, Common Share, or Membership Fee
+                        Pay Principal, Interest, Fines, Common Share, Membership Fee, or UC Billing
                       </span>
                     </div>
                     <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                      Total: ₱{(editFormData.loans.reduce((acc: number, l: FormLoanEntry) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(editFormData.common_share_amount || '0') || 0) + (parseFloat(editFormData.membership_fee || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      Total: ₱{(editFormData.loans.reduce((acc: number, l: FormLoanEntry) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(editFormData.common_share_amount || '0') || 0) + (parseFloat(editFormData.membership_fee || '0') || 0) + (parseFloat(editFormData.billing_amount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
 
@@ -3188,17 +3218,14 @@ export default function CollectionPage() {
                   )}
 
                   {/* Common Share */}
-                  <div className="space-y-1 pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
-                    <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
-                      Common Share
-                    </label>
+                  <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
-                      <div className="px-3 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 flex items-center justify-between">
-                        <span>Common Share</span>
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-100/80 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">
-                          Share Capital
-                        </span>
-                      </div>
+                      <input
+                        type="text"
+                        readOnly
+                        value="Common Share"
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-default select-none focus:outline-none"
+                      />
                       <div className="relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
                         <input
@@ -3208,7 +3235,7 @@ export default function CollectionPage() {
                           disabled={editingItem.status === 'filed'}
                           value={editFormData.common_share_amount}
                           onChange={e => setEditFormData({ ...editFormData, common_share_amount: e.target.value })}
-                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                           placeholder="0.00"
                         />
                       </div>
@@ -3216,17 +3243,14 @@ export default function CollectionPage() {
                   </div>
 
                   {/* Membership Fee */}
-                  <div className="space-y-1 pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
-                    <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
-                      Membership Fee
-                    </label>
+                  <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
-                      <div className="px-3 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 flex items-center justify-between">
-                        <span>Membership Fee</span>
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-100/80 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">
-                          Membership
-                        </span>
-                      </div>
+                      <input
+                        type="text"
+                        readOnly
+                        value="Membership Fee"
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-default select-none focus:outline-none"
+                      />
                       <div className="relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
                         <input
@@ -3236,7 +3260,32 @@ export default function CollectionPage() {
                           disabled={editingItem.status === 'filed'}
                           value={editFormData.membership_fee}
                           onChange={e => setEditFormData({ ...editFormData, membership_fee: e.target.value })}
-                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* University of Cebu Inc. (Billing) */}
+                  <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                      <input
+                        type="text"
+                        readOnly
+                        value="University of Cebu Inc. (Billing)"
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 cursor-default select-none focus:outline-none"
+                      />
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          disabled={editingItem.status === 'filed'}
+                          value={editFormData.billing_amount}
+                          onChange={e => setEditFormData({ ...editFormData, billing_amount: e.target.value })}
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                           placeholder="0.00"
                         />
                       </div>
@@ -3739,6 +3788,17 @@ export default function CollectionPage() {
                         </div>
                         <span className="font-mono font-bold text-xs text-emerald-800 dark:text-emerald-300">
                           ₱{selectedItemForModal.membership_fee.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                    {selectedItemForModal.billing_amount !== undefined && selectedItemForModal.billing_amount > 0 && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/50 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-emerald-950 dark:text-emerald-200">University of Cebu Inc. (Billing)</p>
+                          <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400">Institutional Billing Collection</p>
+                        </div>
+                        <span className="font-mono font-bold text-xs text-emerald-800 dark:text-emerald-300">
+                          ₱{selectedItemForModal.billing_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     )}

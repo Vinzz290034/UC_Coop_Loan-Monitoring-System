@@ -25,6 +25,8 @@ export async function migrateCollections() {
         fines_account VARCHAR(255),
         fines_amount NUMERIC(15, 2) DEFAULT 0,
         common_share_amount NUMERIC(15, 2) DEFAULT 0,
+        membership_fee NUMERIC(15, 2) DEFAULT 0,
+        billing_amount NUMERIC(15, 2) DEFAULT 0,
         item_name VARCHAR(255),
         item_category VARCHAR(100),
         quantity INTEGER DEFAULT 1,
@@ -46,10 +48,11 @@ export async function migrateCollections() {
       );
     `);
 
-    // Ensure bank_name and membership_fee columns exist if table was already created
+    // Ensure bank_name, membership_fee, and billing_amount columns exist if table was already created
     await client.query(`
       ALTER TABLE collections ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100);
       ALTER TABLE collections ADD COLUMN IF NOT EXISTS membership_fee NUMERIC(15, 2) DEFAULT 0;
+      ALTER TABLE collections ADD COLUMN IF NOT EXISTS billing_amount NUMERIC(15, 2) DEFAULT 0;
     `);
 
     await client.query(`
