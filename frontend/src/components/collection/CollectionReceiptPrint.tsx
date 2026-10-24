@@ -114,6 +114,10 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
       lines.push({ description: 'Common Share', amount: item.common_share_amount });
     }
 
+    if (item.membership_fee && item.membership_fee > 0) {
+      lines.push({ description: 'Membership Fee', amount: item.membership_fee });
+    }
+
     if (lines.length > 0) return lines;
     return [{ description: item.loan_account || item.particulars || 'Loans Payable', amount: item.amount }];
   }

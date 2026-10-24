@@ -836,6 +836,7 @@ export default function InvoiceArExcelImportModal({
       let interest_amount = 0;
       let fines_amount = 0;
       let common_share_amount = 0;
+      let membership_fee = 0;
       let finesFromServices = 0;
       const remarksParts: string[] = [];
 
@@ -850,6 +851,12 @@ export default function InvoiceArExcelImportModal({
           (item.common_share_amount && item.common_share_amount > 0)
         ) {
           common_share_amount += item.amount;
+        } else if (
+          (item.loan_account && /membership\s*fee/i.test(item.loan_account)) ||
+          (item.particulars && /membership\s*fee/i.test(item.particulars)) ||
+          ((item as any).membership_fee && (item as any).membership_fee > 0)
+        ) {
+          membership_fee += item.amount;
         } else if (item.service_type && /fine|penalty|late/i.test(item.service_type)) {
           finesFromServices += item.amount;
         } else if (item.loan_account || item.principal_amount || item.interest_amount) {
@@ -896,6 +903,7 @@ export default function InvoiceArExcelImportModal({
         interest_amount: interest_amount > 0 ? interest_amount : undefined,
         fines_amount: fines_amount > 0 ? fines_amount : undefined,
         common_share_amount: common_share_amount > 0 ? common_share_amount : undefined,
+        membership_fee: membership_fee > 0 ? membership_fee : undefined,
         amount: totalAmount,
       };
     });

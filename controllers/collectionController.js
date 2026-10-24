@@ -29,6 +29,7 @@ function formatCollectionRow(row) {
     fines_account: row.fines_account || undefined,
     fines_amount: row.fines_amount !== null && row.fines_amount !== undefined ? parseFloat(row.fines_amount) : undefined,
     common_share_amount: row.common_share_amount !== null && row.common_share_amount !== undefined ? parseFloat(row.common_share_amount) : undefined,
+    membership_fee: row.membership_fee !== null && row.membership_fee !== undefined ? parseFloat(row.membership_fee) : undefined,
     item_name: row.item_name || undefined,
     item_category: row.item_category || undefined,
     quantity: row.quantity !== null && row.quantity !== undefined ? parseInt(row.quantity, 10) : undefined,
@@ -220,6 +221,7 @@ export async function createCollection(req, res) {
     const fines_account = item.fines_account || null;
     const fines_amount = item.fines_amount || 0;
     const common_share_amount = item.common_share_amount || 0;
+    const membership_fee = item.membership_fee || 0;
     const item_name = item.item_name || null;
     const item_category = item.item_category || null;
     const quantity = item.quantity || 1;
@@ -241,7 +243,7 @@ export async function createCollection(req, res) {
       INSERT INTO collections (
         id, tab, date, or_no, payor_name, member_id,
         loans, loan_account, principal_amount, interest_account, interest_amount,
-        fines_account, fines_amount, common_share_amount,
+        fines_account, fines_amount, common_share_amount, membership_fee,
         item_name, item_category, quantity, unit_price,
         service_type, service_copies, service_rate,
         particulars, other_category,
@@ -249,11 +251,11 @@ export async function createCollection(req, res) {
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7::jsonb, $8, $9, $10, $11,
-        $12, $13, $14,
-        $15, $16, $17, $18,
-        $19, $20, $21,
-        $22, $23,
-        $24, $25, $26, $27, $28, $29, $30
+        $12, $13, $14, $15,
+        $16, $17, $18, $19,
+        $20, $21, $22,
+        $23, $24,
+        $25, $26, $27, $28, $29, $30, $31
       )
       RETURNING *;
     `;
@@ -261,7 +263,7 @@ export async function createCollection(req, res) {
     const values = [
       id, tab, date, finalOrNo, payor_name, member_id,
       loans, loan_account, principal_amount, interest_account, interest_amount,
-      fines_account, fines_amount, common_share_amount,
+      fines_account, fines_amount, common_share_amount, membership_fee,
       item_name, item_category, quantity, unit_price,
       service_type, service_copies, service_rate,
       particulars, other_category,
@@ -317,7 +319,7 @@ export async function bulkImportCollections(req, res) {
       INSERT INTO collections (
         id, tab, date, or_no, payor_name, member_id,
         loans, loan_account, principal_amount, interest_account, interest_amount,
-        fines_account, fines_amount, common_share_amount,
+        fines_account, fines_amount, common_share_amount, membership_fee,
         item_name, item_category, quantity, unit_price,
         service_type, service_copies, service_rate,
         particulars, other_category,
@@ -325,11 +327,11 @@ export async function bulkImportCollections(req, res) {
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7::jsonb, $8, $9, $10, $11,
-        $12, $13, $14,
-        $15, $16, $17, $18,
-        $19, $20, $21,
-        $22, $23,
-        $24, $25, $26, $27, $28, $29, $30
+        $12, $13, $14, $15,
+        $16, $17, $18, $19,
+        $20, $21, $22,
+        $23, $24,
+        $25, $26, $27, $28, $29, $30, $31
       )
       ON CONFLICT (id) DO UPDATE SET
         tab = EXCLUDED.tab,
@@ -345,6 +347,7 @@ export async function bulkImportCollections(req, res) {
         fines_account = EXCLUDED.fines_account,
         fines_amount = EXCLUDED.fines_amount,
         common_share_amount = EXCLUDED.common_share_amount,
+        membership_fee = EXCLUDED.membership_fee,
         item_name = EXCLUDED.item_name,
         item_category = EXCLUDED.item_category,
         quantity = EXCLUDED.quantity,
@@ -414,6 +417,7 @@ export async function bulkImportCollections(req, res) {
       const fines_account = item.fines_account || null;
       const fines_amount = item.fines_amount || 0;
       const common_share_amount = item.common_share_amount || 0;
+      const membership_fee = item.membership_fee || 0;
       const item_name = item.item_name || null;
       const item_category = item.item_category || null;
       const quantity = item.quantity || 1;
@@ -434,7 +438,7 @@ export async function bulkImportCollections(req, res) {
       const values = [
         targetId, tab, date, or_no, payor_name, member_id,
         loans, loan_account, principal_amount, interest_account, interest_amount,
-        fines_account, fines_amount, common_share_amount,
+        fines_account, fines_amount, common_share_amount, membership_fee,
         item_name, item_category, quantity, unit_price,
         service_type, service_copies, service_rate,
         particulars, other_category,
@@ -507,6 +511,7 @@ export async function updateCollection(req, res) {
     const fines_account = item.fines_account !== undefined ? item.fines_account : existing.fines_account;
     const fines_amount = item.fines_amount !== undefined ? item.fines_amount : existing.fines_amount;
     const common_share_amount = item.common_share_amount !== undefined ? item.common_share_amount : existing.common_share_amount;
+    const membership_fee = item.membership_fee !== undefined ? item.membership_fee : existing.membership_fee;
     const item_name = item.item_name !== undefined ? item.item_name : existing.item_name;
     const item_category = item.item_category !== undefined ? item.item_category : existing.item_category;
     const quantity = item.quantity !== undefined ? item.quantity : existing.quantity;
@@ -528,20 +533,20 @@ export async function updateCollection(req, res) {
       UPDATE collections SET
         tab = $1, date = $2, or_no = $3, payor_name = $4, member_id = $5,
         loans = $6::jsonb, loan_account = $7, principal_amount = $8, interest_account = $9, interest_amount = $10,
-        fines_account = $11, fines_amount = $12, common_share_amount = $13,
-        item_name = $14, item_category = $15, quantity = $16, unit_price = $17,
-        service_type = $18, service_copies = $19, service_rate = $20,
-        particulars = $21, other_category = $22,
-        amount = $23, payment_method = $24, reference_no = $25, bank_name = $26,
-        status = $27, remarks = $28, collected_by = $29, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $30
+        fines_account = $11, fines_amount = $12, common_share_amount = $13, membership_fee = $14,
+        item_name = $15, item_category = $16, quantity = $17, unit_price = $18,
+        service_type = $19, service_copies = $20, service_rate = $21,
+        particulars = $22, other_category = $23,
+        amount = $24, payment_method = $25, reference_no = $26, bank_name = $27,
+        status = $28, remarks = $29, collected_by = $30, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $31
       RETURNING *;
     `;
 
     const values = [
       tab, date, or_no, payor_name, member_id,
       loans, loan_account, principal_amount, interest_account, interest_amount,
-      fines_account, fines_amount, common_share_amount,
+      fines_account, fines_amount, common_share_amount, membership_fee,
       item_name, item_category, quantity, unit_price,
       service_type, service_copies, service_rate,
       particulars, other_category,

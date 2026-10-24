@@ -46,9 +46,10 @@ export async function migrateCollections() {
       );
     `);
 
-    // Ensure bank_name column exists if table was already created
+    // Ensure bank_name and membership_fee columns exist if table was already created
     await client.query(`
       ALTER TABLE collections ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100);
+      ALTER TABLE collections ADD COLUMN IF NOT EXISTS membership_fee NUMERIC(15, 2) DEFAULT 0;
     `);
 
     await client.query(`

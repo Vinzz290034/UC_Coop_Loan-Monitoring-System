@@ -92,6 +92,7 @@ export interface CollectionItem {
   fines_account?: string;
   fines_amount?: number;
   common_share_amount?: number;
+  membership_fee?: number;
   // Sales specific (itemized)
   item_name?: string;
   item_category?: string;
@@ -330,92 +331,33 @@ export default function CollectionPage() {
   const [activeTab, setActiveTab] = useState<CollectionTab>('all');
   const currentTabConfig = COLLECTION_TABS.find(t => t.id === activeTab) || COLLECTION_TABS[0];
 
-  // Stored collections with server database integration
-  const [collections, setCollections] = useState<CollectionItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('uc_coop_collections');
-      if (stored) {
-        try {
-          const parsed: CollectionItem[] = JSON.parse(stored);
-          return parsed
-            .filter(item => !item.id.startsWith('col-'))
-            .map(item => {
-              if (item.tab === 'others') {
-                return { ...item, tab: 'credit' as const };
-              }
-              return item;
-            });
-        } catch {
-          return [];
-        }
-      }
-    }
-    return [];
-  });
+  // Stored collections (100% PostgreSQL database-driven)
+  const [collections, setCollections] = useState<CollectionItem[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(true);
 
-  // Fetch collections from server with seamless auto-sync from localStorage if server is empty
+  // Fetch collections strictly from server database
   const fetchCollections = async () => {
     try {
       setLoadingCollections(true);
       const res = await api.get('/collections');
       const serverItems: CollectionItem[] = res.data?.data || [];
-
-      // Check if local storage has existing collections that need migrating to cloud DB
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('uc_coop_collections');
-        if (stored) {
-          try {
-            const localItems: CollectionItem[] = JSON.parse(stored);
-            const validLocal = localItems
-              .filter(item => !item.id.startsWith('col-'))
-              .map(item => item.tab === 'others' ? { ...item, tab: 'credit' as const } : item);
-
-            // Auto-sync existing local receipts to cloud DB if server has 0 items
-            if (validLocal.length > 0 && serverItems.length === 0) {
-              const syncRes = await api.post('/collections/bulk', { items: validLocal, mode: 'append' });
-              const syncedItems: CollectionItem[] = syncRes.data?.data || validLocal;
-              setCollections(syncedItems);
-              localStorage.setItem('uc_coop_collections', JSON.stringify(syncedItems));
-              setActionFeedback({ type: 'success', message: `Synced ${syncedItems.length} collection receipts to cloud database.` });
-              setTimeout(() => setActionFeedback(null), 4000);
-              return;
-            }
-          } catch (err) {
-            console.error('Error parsing local collection cache:', err);
-          }
-        }
-      }
-
       setCollections(serverItems);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('uc_coop_collections', JSON.stringify(serverItems));
-      }
     } catch (err: any) {
-      console.error('Failed to load collections from server:', err);
-      // Fallback to local storage if network error
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('uc_coop_collections');
-        if (stored) {
-          try {
-            setCollections(JSON.parse(stored));
-          } catch {}
-        }
-      }
+      console.error('Failed to load collections from database:', err);
+      setActionFeedback({ type: 'error', message: 'Failed to load collections from database.' });
+      setTimeout(() => setActionFeedback(null), 5000);
     } finally {
       setLoadingCollections(false);
     }
   };
 
   useEffect(() => {
+    // Clear any legacy localStorage collection cache so everything is 100% database-driven
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('uc_coop_collections');
+    }
     fetchCollections();
   }, []);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && collections.length > 0) {
-      localStorage.setItem('uc_coop_collections', JSON.stringify(collections));
-    }
-  }, [collections]);
 
   // Filter & Toolbar States
   const [searchQuery, setSearchQuery] = useState('');
@@ -575,6 +517,7 @@ export default function CollectionPage() {
     fines_account: 'Fines - Salary',
     fines_amount: '',
     common_share_amount: '',
+    membership_fee: '',
     // Sales
     item_name: '',
     item_category: 'Uniform',
@@ -799,6 +742,7 @@ export default function CollectionPage() {
       fines_account: item.fines_account || 'Fines - Salary',
       fines_amount: item.fines_amount ? String(item.fines_amount) : '',
       common_share_amount: item.common_share_amount ? String(item.common_share_amount) : '',
+      membership_fee: item.membership_fee ? String(item.membership_fee) : '',
       item_name: item.item_name || '',
       item_category: item.item_category || 'Uniform',
       quantity: item.quantity ? String(item.quantity) : '1',
@@ -912,7 +856,8 @@ export default function CollectionPage() {
                      (parseFloat(l.fines_amount || '0') || 0);
       }, 0);
       const cs = parseFloat(editFormData.common_share_amount || '0') || 0;
-      if (loansSum + cs > 0) calculatedAmount = loansSum + cs;
+      const mf = parseFloat(editFormData.membership_fee || '0') || 0;
+      if (loansSum + cs + mf > 0) calculatedAmount = loansSum + cs + mf;
 
       savedLoans = (editFormData.loans || [])
         .map((l: FormLoanEntry) => ({
@@ -954,6 +899,7 @@ export default function CollectionPage() {
       fines_account: savedLoans[0]?.fines_account || editFormData.fines_account,
       fines_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.fines_amount || 0), 0) || undefined) : undefined,
       common_share_amount: parseFloat(editFormData.common_share_amount || '0') || undefined,
+      membership_fee: parseFloat(editFormData.membership_fee || '0') || undefined,
       item_name: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
         ? undefined
         : (editFormData.item_name?.trim() || undefined),
@@ -984,6 +930,7 @@ export default function CollectionPage() {
               if (l.fines_amount && l.fines_amount > 0) parts.push(l.fines_account);
             }
             if (parseFloat(editFormData.common_share_amount || '0') > 0) parts.push('Common Share');
+            if (parseFloat(editFormData.membership_fee || '0') > 0) parts.push('Membership Fee');
             return parts.length > 0 ? parts.join(' + ') : (editFormData.loans?.[0]?.loan_account || 'Credit Collection');
           })()
         : editFormData.tab === 'sales_services'
@@ -1189,6 +1136,7 @@ export default function CollectionPage() {
       fines_account: 'Fines - Salary',
       fines_amount: '',
       common_share_amount: '',
+      membership_fee: '',
       item_name: '',
       item_category: 'Uniform',
       quantity: '1',
@@ -1230,7 +1178,8 @@ export default function CollectionPage() {
                      (parseFloat(l.fines_amount || '0') || 0);
       }, 0);
       const cs = parseFloat(formData.common_share_amount || '0') || 0;
-      if (loansSum + cs > 0) calculatedAmount = loansSum + cs;
+      const mf = parseFloat(formData.membership_fee || '0') || 0;
+      if (loansSum + cs + mf > 0) calculatedAmount = loansSum + cs + mf;
     } else if (formData.tab === 'sales_services' || (formData.tab as any) === 'sales') {
       if (formData.sales_service_type === 'service') {
         const c = parseInt(formData.service_copies || '1', 10) || 1;
@@ -1273,6 +1222,7 @@ export default function CollectionPage() {
       fines_account: savedLoans[0]?.fines_account,
       fines_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.fines_amount || 0), 0) || undefined) : undefined,
       common_share_amount: parseFloat(formData.common_share_amount || '0') || undefined,
+      membership_fee: parseFloat(formData.membership_fee || '0') || undefined,
       item_name: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
         ? undefined
         : (formData.item_name.trim() || undefined),
@@ -1303,6 +1253,7 @@ export default function CollectionPage() {
               if (l.fines_amount && l.fines_amount > 0) parts.push(l.fines_account);
             }
             if (parseFloat(formData.common_share_amount || '0') > 0) parts.push('Common Share');
+            if (parseFloat(formData.membership_fee || '0') > 0) parts.push('Membership Fee');
             return parts.length > 0 ? parts.join(' + ') : (formData.loans[0]?.loan_account || 'Credit Collection');
           })()
         : formData.tab === 'sales_services'
@@ -1437,6 +1388,7 @@ export default function CollectionPage() {
           parts.push(item.fines_account || 'Fines & Late Charges');
         }
         if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
+        if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
         desc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || 'Credit Collection');
       } else if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
         desc = `${item.item_name || 'Store Item'} (${item.quantity || 1} pcs @ ₱${item.unit_price || 0})`;
@@ -1485,24 +1437,14 @@ export default function CollectionPage() {
     window.print();
   };
 
-  // Import handler with smart deduplication
+  // Import handler with smart deduplication (100% database-driven)
   const handleImportComplete = async (importedItems: CollectionItem[]) => {
     try {
       const res = await api.post('/collections/bulk', { items: importedItems });
-      const savedItems: CollectionItem[] = res.data?.data || importedItems;
       const { inserted = 0, updated = 0, skipped = 0 } = res.data || {};
 
-      setCollections(prev => {
-        const savedMap = new Map(savedItems.map(s => [s.id, s]));
-        const updatedList = prev.map(p => savedMap.get(p.id) || p);
-        const existingIds = new Set(prev.map(p => p.id));
-        const newItems = savedItems.filter(s => !existingIds.has(s.id));
-        return [...newItems, ...updatedList];
-      });
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('uc_coop_collections', JSON.stringify(savedItems));
-      }
+      // Refresh list directly from database to guarantee 100% data fidelity
+      await fetchCollections();
 
       let feedbackMsg = `Processed ${importedItems.length} records`;
       if (inserted > 0 && updated > 0) {
@@ -1929,6 +1871,7 @@ export default function CollectionPage() {
                         parts.push(item.fines_account || 'Fines & Late Charges');
                       }
                       if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
+                      if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
                       primaryDesc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || item.particulars || 'Loan Repayment');
                     } else if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
                       primaryDesc = `${item.item_name || 'Store Item'}${item.quantity ? ` (${item.quantity} pcs)` : ''}`;
@@ -2401,11 +2344,11 @@ export default function CollectionPage() {
                         Credit & Loan Repayment Breakdown
                       </span>
                       <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400 font-medium">
-                        Pay Principal, Interest, Fines, or Common Share (leave unneeded fields at 0.00)
+                        Pay Principal, Interest, Fines, Common Share, or Membership Fee (leave unneeded fields at 0.00)
                       </span>
                     </div>
                     <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                      Total: ₱{(formData.loans.reduce((acc, l) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(formData.common_share_amount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      Total: ₱{(formData.loans.reduce((acc, l) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(formData.common_share_amount || '0') || 0) + (parseFloat(formData.membership_fee || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
 
@@ -2554,6 +2497,33 @@ export default function CollectionPage() {
                           min="0"
                           value={formData.common_share_amount}
                           onChange={e => setFormData({ ...formData, common_share_amount: e.target.value })}
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5. Membership Fee */}
+                  <div className="space-y-1 pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
+                    <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
+                      Membership Fee
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                      <div className="px-3 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 flex items-center justify-between">
+                        <span>Membership Fee</span>
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-100/80 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">
+                          Membership
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.membership_fee}
+                          onChange={e => setFormData({ ...formData, membership_fee: e.target.value })}
                           className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
                           placeholder="0.00"
                         />
@@ -3071,11 +3041,11 @@ export default function CollectionPage() {
                         Credit &amp; Loan Repayment Breakdown
                       </span>
                       <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400 font-medium">
-                        Pay Principal, Interest, Fines, or Common Share
+                        Pay Principal, Interest, Fines, Common Share, or Membership Fee
                       </span>
                     </div>
                     <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                      Total: ₱{(editFormData.loans.reduce((acc: number, l: FormLoanEntry) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(editFormData.common_share_amount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      Total: ₱{(editFormData.loans.reduce((acc: number, l: FormLoanEntry) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(editFormData.common_share_amount || '0') || 0) + (parseFloat(editFormData.membership_fee || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
 
@@ -3235,6 +3205,34 @@ export default function CollectionPage() {
                           disabled={editingItem.status === 'filed'}
                           value={editFormData.common_share_amount}
                           onChange={e => setEditFormData({ ...editFormData, common_share_amount: e.target.value })}
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Membership Fee */}
+                  <div className="space-y-1 pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50">
+                    <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
+                      Membership Fee
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                      <div className="px-3 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-800 dark:text-neutral-200 flex items-center justify-between">
+                        <span>Membership Fee</span>
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-100/80 dark:bg-emerald-900/40 px-2 py-0.5 rounded-md">
+                          Membership
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          disabled={editingItem.status === 'filed'}
+                          value={editFormData.membership_fee}
+                          onChange={e => setEditFormData({ ...editFormData, membership_fee: e.target.value })}
                           className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
                           placeholder="0.00"
                         />
@@ -3727,6 +3725,17 @@ export default function CollectionPage() {
                         </div>
                         <span className="font-mono font-bold text-xs text-emerald-800 dark:text-emerald-300">
                           ₱{selectedItemForModal.common_share_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                    {selectedItemForModal.membership_fee !== undefined && selectedItemForModal.membership_fee > 0 && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/50 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-emerald-950 dark:text-emerald-200">Membership Fee</p>
+                          <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400">Membership / Entry Fee</p>
+                        </div>
+                        <span className="font-mono font-bold text-xs text-emerald-800 dark:text-emerald-300">
+                          ₱{selectedItemForModal.membership_fee.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     )}
