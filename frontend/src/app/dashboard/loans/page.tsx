@@ -7572,11 +7572,16 @@ function LoansPageContent() {
               </div>
 
               {/* Signatures */}
-              <div style={{ display: 'flex', justifyContent: includeGuarantor ? 'space-between' : 'flex-start', gap: '32px', paddingTop: '32px', fontSize: '9px', textAlign: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: includeGuarantor ? 'space-between' : 'flex-start', alignItems: 'flex-end', gap: '24px', paddingTop: '20px', fontSize: '9px', textAlign: 'center', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                 <div style={{ flex: includeGuarantor ? 1 : '0 0 45%', maxWidth: includeGuarantor ? 'none' : '320px', backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
                   <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{printLoan.last_name}, {printLoan.first_name}</p>
                   <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
                   <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Signature of Borrower</p>
+                </div>
+                <div style={{ width: includeGuarantor ? '160px' : '200px', flexShrink: 0, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0, minHeight: '14px' }}>&nbsp;</p>
+                  <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
+                  <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Date Received</p>
                 </div>
                 {includeGuarantor && (
                   <div style={{ flex: 1, backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
