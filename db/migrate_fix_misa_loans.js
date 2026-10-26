@@ -130,8 +130,33 @@ export async function migrateFixMisaLoans() {
       }
     }
 
+    // 3. Ensure Share Capital Transactions are fully synchronized (Total ₱69,000.00)
+    const checkSc = await client.query(
+      `SELECT id FROM share_capital_transactions
+       WHERE member_id = $1 AND transaction_date::date = '2026-10-08'::date AND amount = 1000.00`,
+      [memberId]
+    );
+    if (checkSc.rows.length === 0) {
+      const balRes = await client.query(
+        `SELECT COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE -amount END), 0) as current_balance
+         FROM share_capital_transactions
+         WHERE member_id = $1 AND status = 'completed'`,
+        [memberId]
+      );
+      const currentBal = parseFloat(balRes.rows[0].current_balance);
+      const newBal = currentBal + 1000.00;
+      await client.query(
+        `INSERT INTO share_capital_transactions (
+          member_id, transaction_type, amount, balance_after, transaction_date, invoice_no, remarks, status
+        ) VALUES (
+          $1, 'credit', 1000.00, $2, '2026-10-08', '2383', 'Imported from Excel - LAF/Invoice: 2383', 'completed'
+        )`,
+        [memberId, newBal]
+      );
+    }
+
     await client.query('COMMIT');
-    console.log('[Migration] Teresita Misa loan 26-344 synchronized successfully (Total Paid: ₱14,000.00, Balance: ₱6,400.00).');
+    console.log('[Migration] Teresita Misa loan 26-344 & Share Capital (₱69,000.00) synchronized successfully.');
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('[Migration] Failed to synchronize Teresita Misa loan:', error);

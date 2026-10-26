@@ -745,7 +745,7 @@ export const executeImport = async (req, res, next) => {
       const dStr = sc.tdate || '';
       scSet.add(`${sc.member_id}_${parseFloat(sc.amount)}_${sc.invoice_no || 'SD'}_${dStr}`);
       if (sc.invoice_no && sc.invoice_no !== 'SD' && sc.invoice_no !== 'HAND-IN') {
-        scSet.add(`${sc.member_id}_ref_${sc.invoice_no.toLowerCase().trim()}`);
+        scSet.add(`${sc.member_id}_ref_${sc.invoice_no.toLowerCase().trim()}_${dStr}`);
       }
     }
 
@@ -836,7 +836,7 @@ export const executeImport = async (req, res, next) => {
           const invoice = sc.invoiceNo || 'SD';
           const scKey = `${memberId}_${scAmount}_${invoice}_${dStr}`;
           const scKeyRef = (invoice && invoice !== 'SD' && invoice !== 'HAND-IN')
-            ? `${memberId}_ref_${invoice.toLowerCase().trim()}`
+            ? `${memberId}_ref_${invoice.toLowerCase().trim()}_${dStr}`
             : null;
 
           if (!scSet.has(scKey) && (!scKeyRef || !scSet.has(scKeyRef))) {
