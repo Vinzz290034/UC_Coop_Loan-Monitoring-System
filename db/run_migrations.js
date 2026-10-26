@@ -30,6 +30,7 @@ import { migrateConsolidateCollectionDuplicates } from './migrate_consolidate_co
 import { migrateRemoveRegularCalamityLoan } from './migrate_remove_regular_calamity_loan.js';
 import { migrateRenameRegularLoans } from './migrate_rename_regular_loans.js';
 import { migrateCollectionItems } from './migrate_collection_items.js';
+import { migrateFixMisaLoans } from './migrate_fix_misa_loans.js';
 
 export async function runMigrations() {
   console.log('[System Startup] Running automated database migrations...');
@@ -65,6 +66,7 @@ export async function runMigrations() {
     await migrateRemoveRegularCalamityLoan();
     await migrateRenameRegularLoans();
     await migrateCollectionItems();
+    await migrateFixMisaLoans();
     console.log('[System Startup] All database migrations completed successfully.');
   } catch (error) {
     console.error('[System Startup] Database migration error:', error);

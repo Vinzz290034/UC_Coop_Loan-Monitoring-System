@@ -945,14 +945,12 @@ export const executeImport = async (req, res, next) => {
               let scheduleId = schedMap.get(schedKey);
 
               if (scheduleId) {
-                if (hasPayment) {
-                  await client.query(
-                    `UPDATE repayment_schedules
-                     SET principal_due = $1, total_due = $2, principal_paid = $3, interest_paid = $4, fines_due = $5, status = $6, updated_at = CURRENT_TIMESTAMP
-                     WHERE id = $7`,
-                    [finalPDue, finalTDue, pPaid, iPaid, finesDue, instStatus, scheduleId]
-                  );
-                }
+                await client.query(
+                  `UPDATE repayment_schedules
+                   SET due_date = $1, principal_due = $2, interest_due = $3, total_due = $4, principal_paid = $5, interest_paid = $6, fines_due = $7, status = $8, updated_at = CURRENT_TIMESTAMP
+                   WHERE id = $9`,
+                  [dueDate, finalPDue, iDue, finalTDue, pPaid, iPaid, finesDue, instStatus, scheduleId]
+                );
               } else {
                 const insertSched = await client.query(
                   `INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, fines_due, principal_paid, interest_paid, status)
@@ -1022,6 +1020,14 @@ export const executeImport = async (req, res, next) => {
                   allocSet.add(allocKey);
                 }
               }
+            }
+            if (l.installments && l.installments.length > 0) {
+              await client.query(
+                `DELETE FROM repayment_schedules
+                 WHERE loan_id = $1 AND installment_number > $2
+                   AND id NOT IN (SELECT DISTINCT repayment_schedule_id FROM loan_payment_allocations WHERE repayment_schedule_id IS NOT NULL)`,
+                [loanId, l.installments.length]
+              );
             }
           }
         }
