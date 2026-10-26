@@ -364,7 +364,7 @@ export const resetPassword = async (req, res, next) => {
       });
     }
 
-    // 1. Verify the signature and expiration of the recovery token
+    // 1. Verify the signature, expiration, and scope of the recovery token
     let decoded;
     try {
       decoded = jwt.verify(
@@ -375,6 +375,14 @@ export const resetPassword = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: { message: 'The recovery link is invalid or has expired. Please request a new one.' }
+      });
+    }
+
+    // Require explicit password_reset scope to prevent using standard session tokens
+    if (!decoded || decoded.scope !== 'password_reset') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid recovery token scope. Please complete OTP verification.' }
       });
     }
 
@@ -779,9 +787,9 @@ export const verifyRegistrationOtp = async (req, res, next) => {
         [email.toLowerCase(), otpRecord.id, purpose]
       );
 
-      // Generate a short-lived recovery token (JWT) valid for 15 minutes
+      // Generate a short-lived recovery token (JWT) valid for 15 minutes with dedicated scope
       const recoveryToken = jwt.sign(
-        { id: regData.user_id },
+        { id: regData.user_id, scope: 'password_reset' },
         process.env.JWT_SECRET || 'coop_loan_monitoring_secret_key_2026_dev',
         { expiresIn: '15m' }
       );

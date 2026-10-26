@@ -24,7 +24,7 @@ const storage = multer.diskStorage({
   }
 });
 
-// Resilient File Filter
+// Strict and Resilient File Filter
 const fileFilter = (req, file, cb) => {
   if (!file) {
     return cb(null, true);
@@ -37,7 +37,8 @@ const fileFilter = (req, file, cb) => {
   const isMimeValid = allowedMimeTypes.includes(file.mimetype.toLowerCase());
   const isExtValid = allowedExtensions.includes(ext);
 
-  if (isMimeValid || isExtValid) {
+  // Require BOTH a valid image MIME type and a matching image extension to prevent extension spoofing / XSS
+  if (isMimeValid && isExtValid) {
     return cb(null, true);
   }
 

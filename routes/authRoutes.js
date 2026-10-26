@@ -25,22 +25,47 @@ import {
 } from '../controllers/authController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 import { uploadAvatar } from '../middleware/uploadMiddleware.js';
+import { rateLimit } from 'express-rate-limit';
 
 const router = express.Router();
+
+// Dedicated rate limiter for login to prevent password brute-forcing
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 15 : 100,
+  message: {
+    success: false,
+    error: { message: 'Too many login attempts from this IP. Please try again after 15 minutes.' }
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Dedicated rate limiter for OTP / password recovery to prevent email bombing & OTP enumeration
+const recoveryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 6 : 50,
+  message: {
+    success: false,
+    error: { message: 'Too many recovery requests from this IP. Please try again after 15 minutes.' }
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // ==========================================
 // Public Authentication & Recovery Routes
 // ==========================================
-router.post('/login', login);
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
+router.post('/login', authLimiter, login);
+router.post('/forgot-password', recoveryLimiter, forgotPassword);
+router.post('/reset-password', recoveryLimiter, resetPassword);
 
 // ==========================================
 // Public Member Self-Registration (OTP-based)
 // ==========================================
-router.post('/member-register', memberRegister);
-router.post('/verify-otp', verifyRegistrationOtp);
-router.post('/resend-otp', resendOtp);
+router.post('/member-register', recoveryLimiter, memberRegister);
+router.post('/verify-otp', recoveryLimiter, verifyRegistrationOtp);
+router.post('/resend-otp', recoveryLimiter, resendOtp);
 
 // ==========================================
 // Public Contact / Inquiry Routes

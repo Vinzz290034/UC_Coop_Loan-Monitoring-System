@@ -23,3 +23,8 @@ Thumbs.db
 
 # Uploaded files
 /uploads/avatars/
+/uploads/temp/
+
+# Sensitive data and credential dumps
+*.csv
+coop_member_credentials_*.csv

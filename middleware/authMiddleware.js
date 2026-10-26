@@ -26,6 +26,14 @@ export const protect = async (req, res, next) => {
       process.env.JWT_SECRET || 'coop_loan_monitoring_secret_key_2026_dev'
     );
 
+    // Block dedicated recovery/reset tokens from being used for general authenticated sessions
+    if (decoded.scope === 'password_reset') {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Password recovery token cannot be used for general API access.' }
+      });
+    }
+
     // Fetch user from DB to ensure they still exist and check latest data
     const userResult = await query(
       'SELECT id, username, role, profile_picture_url, created_at FROM users WHERE id = $1',
@@ -75,11 +83,8 @@ export const protect = async (req, res, next) => {
           client.release();
         }
       } else {
-        // For admin/manager fallback, get first active member ID if needed
-        const firstMember = await query('SELECT * FROM members ORDER BY created_at ASC LIMIT 1');
-        if (firstMember.rowCount > 0) {
-          req.user.profile = firstMember.rows[0];
-        }
+        // Staff/Admin users without an associated member profile should not impersonate existing members
+        req.user.profile = null;
       }
     }
 
