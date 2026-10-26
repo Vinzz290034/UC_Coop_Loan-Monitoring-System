@@ -924,6 +924,7 @@ export const executeImport = async (req, res, next) => {
               const tDue = parseFloat(inst.totalDue || (pDue + iDue));
               const finesDue = parseFloat(inst.finesDue || 0);
               const amtPaid = parseFloat(inst.amountPaid || 0);
+              const isLoanFullyPaid = l.status === 'fully_paid';
               const hasPayment = amtPaid > 0 || isLoanFullyPaid;
               const isPaid = isLoanFullyPaid || (amtPaid >= tDue && tDue > 0);
               let pPaid = parseFloat(inst.principalPaid || 0);
