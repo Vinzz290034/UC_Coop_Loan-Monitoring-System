@@ -5192,8 +5192,8 @@ function DisbursementPageContent() {
                         <div>
                           <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">DATE:</span>
                           <div className="h-4"></div>
-                          <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide">
-                            {selectedCvForModal.date_released ? new Date(selectedCvForModal.date_released).toLocaleDateString() : '—'}
+                          <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide min-h-[16px]">
+                            &nbsp;
                           </p>
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                         </div>
