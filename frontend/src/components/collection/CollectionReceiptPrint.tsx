@@ -125,6 +125,21 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
     if (lines.length > 0) return lines;
     return [{ description: item.loan_account || item.particulars || 'Loans Payable', amount: item.amount }];
   }
+  if (item.items && item.items.length > 0) {
+    return item.items.map(it => {
+      const q = parseFloat(String(it.quantity)) || 1;
+      const sp = parseFloat(String(it.selling_price)) || 0;
+      const rev = it.revenue !== undefined ? it.revenue : (q * sp);
+      const descParts = [it.item];
+      if (it.description) descParts.push(it.description);
+      if (it.size) descParts.push(`Size: ${it.size}`);
+      return {
+        description: descParts.join(' - '),
+        detail: `${q} pc${q > 1 ? 's' : ''} @ ${peso(sp)}`,
+        amount: rev,
+      };
+    });
+  }
   if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
     const qty = item.quantity || 1;
     return [{

@@ -76,6 +76,18 @@ export interface FormLoanEntry {
   fines_amount: string;
 }
 
+export interface CollectionMerchandiseItem {
+  id: string;
+  item: string;
+  description: string;
+  size: string;
+  quantity: string | number;
+  cost_price: string | number;
+  selling_price: string | number;
+  revenue?: number;
+  gross_profit?: number;
+}
+
 export interface CollectionItem {
   id: string;
   tab: 'credit' | 'sales' | 'services' | 'sales_services' | 'others';
@@ -94,11 +106,17 @@ export interface CollectionItem {
   common_share_amount?: number;
   membership_fee?: number;
   billing_amount?: number;
-  // Sales specific (itemized)
+  // Sales specific (itemized & multi-item)
+  items?: CollectionMerchandiseItem[];
   item_name?: string;
   item_category?: string;
   quantity?: number;
   unit_price?: number;
+  size?: string;
+  cost_price?: number;
+  selling_price?: number;
+  revenue?: number;
+  gross_profit?: number;
   // Services specific
   service_type?: string;
   service_copies?: number;
@@ -523,6 +541,19 @@ export default function CollectionPage() {
     membership_fee: '',
     billing_amount: '',
     // Sales
+    items: [
+      {
+        id: 'item-1',
+        item: '',
+        description: '',
+        size: '',
+        quantity: '1',
+        cost_price: '',
+        selling_price: '',
+        revenue: 0,
+        gross_profit: 0
+      }
+    ] as CollectionMerchandiseItem[],
     item_name: '',
     item_category: 'Uniform',
     quantity: '1',
@@ -540,6 +571,75 @@ export default function CollectionPage() {
     remarks: '',
     collected_by: 'CHINNETTE A. LAMOSTE'
   });
+
+  // Merchandise Item Handlers for Create Modal
+  const handleAddItem = () => {
+    setFormData(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        {
+          id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }
+      ]
+    }));
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setFormData(prev => {
+      if (prev.items.length <= 1) {
+        return {
+          ...prev,
+          items: [{
+            id: `item-${Date.now()}`,
+            item: '',
+            description: '',
+            size: '',
+            quantity: '1',
+            cost_price: '',
+            selling_price: '',
+            revenue: 0,
+            gross_profit: 0
+          }]
+        };
+      }
+      return {
+        ...prev,
+        items: prev.items.filter((_, i) => i !== index)
+      };
+    });
+  };
+
+  const handleItemFieldChange = (index: number, field: keyof CollectionMerchandiseItem, value: string) => {
+    setFormData(prev => {
+      const updated = prev.items.map((it, i) => {
+        if (i !== index) return it;
+        const updatedItem = { ...it, [field]: value };
+        const q = parseFloat(String(field === 'quantity' ? value : updatedItem.quantity)) || 0;
+        const cp = parseFloat(String(field === 'cost_price' ? value : updatedItem.cost_price)) || 0;
+        const sp = parseFloat(String(field === 'selling_price' ? value : updatedItem.selling_price)) || 0;
+        const revenue = q * sp;
+        const gross_profit = revenue - (q * cp);
+        return {
+          ...updatedItem,
+          revenue,
+          gross_profit
+        };
+      });
+      return {
+        ...prev,
+        items: updated
+      };
+    });
+  };
 
   // Handler for updating a specific loan entry field and synchronizing interest/fines accounts
   const handleLoanFieldChange = (index: number, field: keyof FormLoanEntry, value: string) => {
@@ -730,6 +830,32 @@ export default function CollectionPage() {
     setIsEditCustomBank(isCustom);
 
     const isService = item.tab === 'services' || (Boolean(item.service_type) && !item.item_name);
+    const initialItems: CollectionMerchandiseItem[] = (item.items && item.items.length > 0)
+      ? item.items.map((it, idx) => ({
+          id: it.id || `edit-item-${idx}-${Date.now()}`,
+          item: it.item || (it as any).item_name || '',
+          description: it.description || (it as any).item_category || '',
+          size: it.size || '',
+          quantity: String(it.quantity || 1),
+          cost_price: it.cost_price !== undefined ? String(it.cost_price) : '',
+          selling_price: it.selling_price !== undefined ? String(it.selling_price) : String((it as any).unit_price || ''),
+          revenue: it.revenue !== undefined ? it.revenue : ((parseFloat(String(it.quantity || 1)) || 0) * (parseFloat(String(it.selling_price || (it as any).unit_price || 0)) || 0)),
+          gross_profit: it.gross_profit !== undefined ? it.gross_profit : (((parseFloat(String(it.quantity || 1)) || 0) * (parseFloat(String(it.selling_price || (it as any).unit_price || 0)) || 0)) - ((parseFloat(String(it.quantity || 1)) || 0) * (parseFloat(String(it.cost_price || 0)) || 0)))
+        }))
+      : [
+          {
+            id: `edit-item-0-${Date.now()}`,
+            item: item.item_name || '',
+            description: item.item_category || '',
+            size: (item as any).size || '',
+            quantity: item.quantity ? String(item.quantity) : '1',
+            cost_price: (item as any).cost_price ? String((item as any).cost_price) : '',
+            selling_price: item.unit_price ? String(item.unit_price) : ((item as any).selling_price ? String((item as any).selling_price) : ''),
+            revenue: (parseFloat(String(item.quantity || 1)) || 1) * (parseFloat(String(item.unit_price || 0)) || 0),
+            gross_profit: ((parseFloat(String(item.quantity || 1)) || 1) * (parseFloat(String(item.unit_price || 0)) || 0)) - ((parseFloat(String(item.quantity || 1)) || 1) * (parseFloat(String((item as any).cost_price || 0)) || 0))
+          }
+        ];
+
     setEditFormData({
       id: item.id,
       tab: (item.tab === 'sales' || item.tab === 'services') ? 'sales_services' : item.tab,
@@ -748,6 +874,7 @@ export default function CollectionPage() {
       common_share_amount: item.common_share_amount ? String(item.common_share_amount) : '',
       membership_fee: item.membership_fee ? String(item.membership_fee) : '',
       billing_amount: item.billing_amount ? String(item.billing_amount) : '',
+      items: initialItems,
       item_name: item.item_name || '',
       item_category: item.item_category || 'Uniform',
       quantity: item.quantity ? String(item.quantity) : '1',
@@ -765,6 +892,77 @@ export default function CollectionPage() {
     });
 
     setEditingItem(item);
+  };
+
+  // Merchandise Item Handlers for Edit Modal
+  const handleEditAddItem = () => {
+    setEditFormData((prev: any) => ({
+      ...prev,
+      items: [
+        ...(prev.items || []),
+        {
+          id: `edit-item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }
+      ]
+    }));
+  };
+
+  const handleEditRemoveItem = (index: number) => {
+    setEditFormData((prev: any) => {
+      const currentItems = prev.items || [];
+      if (currentItems.length <= 1) {
+        return {
+          ...prev,
+          items: [{
+            id: `edit-item-${Date.now()}`,
+            item: '',
+            description: '',
+            size: '',
+            quantity: '1',
+            cost_price: '',
+            selling_price: '',
+            revenue: 0,
+            gross_profit: 0
+          }]
+        };
+      }
+      return {
+        ...prev,
+        items: currentItems.filter((_: any, i: number) => i !== index)
+      };
+    });
+  };
+
+  const handleEditItemFieldChange = (index: number, field: keyof CollectionMerchandiseItem, value: string) => {
+    setEditFormData((prev: any) => {
+      const currentItems = prev.items || [];
+      const updated = currentItems.map((it: any, i: number) => {
+        if (i !== index) return it;
+        const updatedItem = { ...it, [field]: value };
+        const q = parseFloat(String(field === 'quantity' ? value : updatedItem.quantity)) || 0;
+        const cp = parseFloat(String(field === 'cost_price' ? value : updatedItem.cost_price)) || 0;
+        const sp = parseFloat(String(field === 'selling_price' ? value : updatedItem.selling_price)) || 0;
+        const revenue = q * sp;
+        const gross_profit = revenue - (q * cp);
+        return {
+          ...updatedItem,
+          revenue,
+          gross_profit
+        };
+      });
+      return {
+        ...prev,
+        items: updated
+      };
+    });
   };
 
   const handleEditLoanFieldChange = (index: number, field: keyof FormLoanEntry, val: string) => {
@@ -881,15 +1079,39 @@ export default function CollectionPage() {
         const r = parseFloat(editFormData.service_rate || '0') || 0;
         if (r > 0) calculatedAmount = c * r;
       } else {
-        const q = parseInt(editFormData.quantity || '1', 10) || 1;
-        const u = parseFloat(editFormData.unit_price || '0') || 0;
-        if (u > 0) calculatedAmount = q * u;
+        const itemsRevenue = (editFormData.items || []).reduce((sum: number, it: any) => {
+          const q = parseFloat(String(it.quantity)) || 0;
+          const sp = parseFloat(String(it.selling_price)) || 0;
+          return sum + (q * sp);
+        }, 0);
+        if (itemsRevenue > 0) {
+          calculatedAmount = itemsRevenue;
+        } else {
+          const q = parseInt(editFormData.quantity || '1', 10) || 1;
+          const u = parseFloat(editFormData.unit_price || '0') || 0;
+          if (u > 0) calculatedAmount = q * u;
+        }
       }
     } else if (editFormData.tab === 'services') {
       const c = parseInt(editFormData.service_copies || '1', 10) || 1;
       const r = parseFloat(editFormData.service_rate || '0') || 0;
       if (r > 0) calculatedAmount = c * r;
     }
+
+    const savedMerchItems: CollectionMerchandiseItem[] = (editFormData.items || [])
+      .map((it: any) => ({
+        id: it.id,
+        item: String(it.item || '').trim(),
+        description: String(it.description || '').trim(),
+        size: String(it.size || '').trim(),
+        quantity: parseInt(String(it.quantity || '1'), 10) || 1,
+        cost_price: parseFloat(String(it.cost_price || '0')) || 0,
+        selling_price: parseFloat(String(it.selling_price || '0')) || 0,
+        revenue: (parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.selling_price || '0')) || 0),
+        gross_profit: ((parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.selling_price || '0')) || 0)) -
+                     ((parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.cost_price || '0')) || 0)),
+      }))
+      .filter((it: CollectionMerchandiseItem) => it.item.length > 0 || (it.selling_price as number) > 0);
 
     const payload: Partial<CollectionItem> = {
       tab: editFormData.tab,
@@ -907,18 +1129,25 @@ export default function CollectionPage() {
       common_share_amount: parseFloat(editFormData.common_share_amount || '0') || undefined,
       membership_fee: parseFloat(editFormData.membership_fee || '0') || undefined,
       billing_amount: parseFloat(editFormData.billing_amount || '0') || undefined,
+      items: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
+        ? undefined
+        : (savedMerchItems.length > 0 ? savedMerchItems : undefined),
       item_name: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
         ? undefined
-        : (editFormData.item_name?.trim() || undefined),
+        : (savedMerchItems[0]?.item || editFormData.item_name?.trim() || undefined),
       item_category: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
         ? undefined
-        : (editFormData.item_category?.trim() || undefined),
+        : (savedMerchItems[0]?.description || editFormData.item_category?.trim() || undefined),
       quantity: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
         ? undefined
-        : (parseInt(editFormData.quantity || '1', 10) || undefined),
+        : (savedMerchItems.length > 0
+            ? savedMerchItems.reduce((sum, it) => sum + Number(it.quantity), 0)
+            : (parseInt(editFormData.quantity || '1', 10) || undefined)),
       unit_price: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
         ? undefined
-        : (parseFloat(editFormData.unit_price || '0') || undefined),
+        : (savedMerchItems.length > 0
+            ? Number(savedMerchItems[0].selling_price)
+            : (parseFloat(editFormData.unit_price || '0') || undefined)),
       service_type: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'merchandise')
         ? undefined
         : (editFormData.service_type || undefined),
@@ -942,7 +1171,9 @@ export default function CollectionPage() {
             return parts.length > 0 ? parts.join(' + ') : (editFormData.loans?.[0]?.loan_account || 'Credit Collection');
           })()
         : editFormData.tab === 'sales_services'
-        ? (editFormData.sales_service_type === 'service' ? (editFormData.service_type || 'Services') : (editFormData.item_name || 'Store Sales'))
+        ? (editFormData.sales_service_type === 'service'
+            ? (editFormData.service_type || 'Services')
+            : (savedMerchItems.length > 0 ? savedMerchItems.map(it => it.item).join(', ') : (editFormData.item_name || 'Store Sales')))
         : editFormData.particulars || undefined,
       amount: calculatedAmount,
       payment_method: editFormData.payment_method,
@@ -1146,6 +1377,19 @@ export default function CollectionPage() {
       common_share_amount: '',
       membership_fee: '',
       billing_amount: '',
+      items: [
+        {
+          id: `item-${Date.now()}`,
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }
+      ],
       item_name: '',
       item_category: 'Uniform',
       quantity: '1',
@@ -1196,9 +1440,18 @@ export default function CollectionPage() {
         const r = parseFloat(formData.service_rate || '0') || 0;
         if (r > 0) calculatedAmount = c * r;
       } else {
-        const q = parseInt(formData.quantity || '1', 10) || 1;
-        const u = parseFloat(formData.unit_price || '0') || 0;
-        if (u > 0) calculatedAmount = q * u;
+        const itemsRevenue = (formData.items || []).reduce((sum, it) => {
+          const q = parseFloat(String(it.quantity)) || 0;
+          const sp = parseFloat(String(it.selling_price)) || 0;
+          return sum + (q * sp);
+        }, 0);
+        if (itemsRevenue > 0) {
+          calculatedAmount = itemsRevenue;
+        } else {
+          const q = parseInt(formData.quantity || '1', 10) || 1;
+          const u = parseFloat(formData.unit_price || '0') || 0;
+          if (u > 0) calculatedAmount = q * u;
+        }
       }
     } else if ((formData.tab as any) === 'services') {
       const c = parseInt(formData.service_copies || '1', 10) || 1;
@@ -1217,6 +1470,21 @@ export default function CollectionPage() {
       }))
       .filter(l => (l.principal_amount || 0) > 0 || (l.interest_amount || 0) > 0 || (l.fines_amount || 0) > 0);
 
+    const savedMerchItems: CollectionMerchandiseItem[] = (formData.items || [])
+      .map(it => ({
+        id: it.id,
+        item: it.item.trim(),
+        description: it.description.trim(),
+        size: it.size.trim(),
+        quantity: parseInt(String(it.quantity || '1'), 10) || 1,
+        cost_price: parseFloat(String(it.cost_price || '0')) || 0,
+        selling_price: parseFloat(String(it.selling_price || '0')) || 0,
+        revenue: (parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.selling_price || '0')) || 0),
+        gross_profit: ((parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.selling_price || '0')) || 0)) -
+                     ((parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.cost_price || '0')) || 0)),
+      }))
+      .filter(it => it.item.length > 0 || (it.selling_price as number) > 0);
+
     const newItem: CollectionItem = {
       id: `rec-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       tab: formData.tab,
@@ -1234,18 +1502,25 @@ export default function CollectionPage() {
       common_share_amount: parseFloat(formData.common_share_amount || '0') || undefined,
       membership_fee: parseFloat(formData.membership_fee || '0') || undefined,
       billing_amount: parseFloat(formData.billing_amount || '0') || undefined,
+      items: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
+        ? undefined
+        : (savedMerchItems.length > 0 ? savedMerchItems : undefined),
       item_name: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
         ? undefined
-        : (formData.item_name.trim() || undefined),
+        : (savedMerchItems[0]?.item || formData.item_name.trim() || undefined),
       item_category: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
         ? undefined
-        : (formData.item_category.trim() || undefined),
+        : (savedMerchItems[0]?.description || formData.item_category.trim() || undefined),
       quantity: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
         ? undefined
-        : (parseInt(formData.quantity || '1', 10) || undefined),
+        : (savedMerchItems.length > 0
+            ? savedMerchItems.reduce((sum, it) => sum + Number(it.quantity), 0)
+            : (parseInt(formData.quantity || '1', 10) || undefined)),
       unit_price: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
         ? undefined
-        : (parseFloat(formData.unit_price || '0') || undefined),
+        : (savedMerchItems.length > 0
+            ? Number(savedMerchItems[0].selling_price)
+            : (parseFloat(formData.unit_price || '0') || undefined)),
       service_type: (formData.tab === 'sales_services' && formData.sales_service_type === 'merchandise')
         ? undefined
         : (formData.service_type || undefined),
@@ -1269,7 +1544,9 @@ export default function CollectionPage() {
             return parts.length > 0 ? parts.join(' + ') : (formData.loans[0]?.loan_account || 'Credit Collection');
           })()
         : formData.tab === 'sales_services'
-        ? (formData.sales_service_type === 'service' ? (formData.service_type || 'Services') : (formData.item_name || 'Store Sales'))
+        ? (formData.sales_service_type === 'service'
+            ? (formData.service_type || 'Services')
+            : (savedMerchItems.length > 0 ? savedMerchItems.map(it => it.item).join(', ') : (formData.item_name || 'Store Sales')))
         : undefined,
       other_category: undefined,
       amount: calculatedAmount,
@@ -2600,67 +2877,196 @@ export default function CollectionPage() {
                   </div>
 
                   {formData.sales_service_type !== 'service' ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-3 pt-1">
+                      <div className="flex items-center justify-between pb-1 border-b border-emerald-200/60 dark:border-emerald-800/40">
                         <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Item Description
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.item_name}
-                            onChange={e => setFormData({ ...formData, item_name: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
-                            placeholder="e.g. BSMT Gala Uniform Set"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Category
-                          </label>
-                          <select
-                            value={formData.item_category}
-                            onChange={e => setFormData({ ...formData, item_category: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
-                          >
-                            <option value="Uniform">Uniform</option>
-                            <option value="Coverall">Coverall</option>
-                            <option value="Pants">Pants</option>
-                            <option value="Shoulder Board">Shoulder Board</option>
-                            <option value="Nameplate / Pin">Nameplate / Pin</option>
-                            <option value="Store Merchandise">Store Merchandise</option>
-                          </select>
+                          <span className="text-[11px] font-bold uppercase text-emerald-900 dark:text-emerald-300 block">
+                            Merchandise Items & Sales Breakdown
+                          </span>
+                          <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400">
+                            Enter item, description, size, cost, and selling price. Revenue and gross profit are calculated automatically.
+                          </span>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Quantity
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={formData.quantity}
-                            onChange={e => setFormData({ ...formData, quantity: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white"
-                            placeholder="1"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Unit Price (₱)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={formData.unit_price}
-                            onChange={e => setFormData({ ...formData, unit_price: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
-                            placeholder="0.00"
-                          />
+
+                      {/* Items List */}
+                      <div className="space-y-3">
+                        {formData.items.map((it, idx) => {
+                          const q = parseFloat(String(it.quantity)) || 0;
+                          const cp = parseFloat(String(it.cost_price)) || 0;
+                          const sp = parseFloat(String(it.selling_price)) || 0;
+                          const rev = q * sp;
+                          const gp = rev - (q * cp);
+
+                          return (
+                            <div
+                              key={it.id || idx}
+                              className="p-3 rounded-xl bg-white/90 dark:bg-neutral-900/80 border border-emerald-200/90 dark:border-emerald-800/50 space-y-2.5 shadow-2xs"
+                            >
+                              <div className="flex items-center justify-between border-b border-emerald-100 dark:border-emerald-900/50 pb-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                                  Item #{idx + 1}
+                                </span>
+                                {formData.items.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveItem(idx)}
+                                    className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Remove this item"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    Remove
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Row 1: Item, Description, Size */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Item
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={it.item}
+                                    onChange={e => handleItemFieldChange(idx, 'item', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
+                                    placeholder="e.g. Uniform Polo"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Description
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={it.description}
+                                    onChange={e => handleItemFieldChange(idx, 'description', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
+                                    placeholder="e.g. BSMT Gala Set"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Size
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={it.size}
+                                    onChange={e => handleItemFieldChange(idx, 'size', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
+                                    placeholder="e.g. XS, S, M, L, XL"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Row 2: Quantity, Cost Price, Selling Price */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Quantity
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={it.quantity}
+                                    onChange={e => handleItemFieldChange(idx, 'quantity', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white"
+                                    placeholder="1"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Cost Price (₱)
+                                  </label>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={it.cost_price}
+                                      onChange={e => handleItemFieldChange(idx, 'cost_price', e.target.value)}
+                                      className="w-full pl-6 pr-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Selling Price (₱)
+                                  </label>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={it.selling_price}
+                                      onChange={e => handleItemFieldChange(idx, 'selling_price', e.target.value)}
+                                      className="w-full pl-6 pr-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Row 3: Auto-calculated Revenue & Gross Profit */}
+                              <div className="grid grid-cols-2 gap-2.5 pt-1.5 border-t border-dashed border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-2 rounded-lg">
+                                <div>
+                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block">
+                                    Revenue (Qty × Selling)
+                                  </span>
+                                  <span className="text-xs font-mono font-bold text-emerald-900 dark:text-emerald-200">
+                                    ₱{rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block">
+                                    Gross Profit (Revenue - Cost)
+                                  </span>
+                                  <span className={`text-xs font-mono font-bold ${gp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                    ₱{gp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* "+ Add Another Item" button & Summary */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleAddItem}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-emerald-500/70 dark:border-emerald-500/50 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30 transition-all cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add Another Item
+                        </button>
+
+                        <div className="flex items-center gap-3 self-end sm:self-auto text-right">
+                          <div>
+                            <span className="text-[10px] text-neutral-500 uppercase font-semibold block">Total Revenue</span>
+                            <span className="text-xs font-mono font-bold text-neutral-900 dark:text-white">
+                              ₱{formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-neutral-500 uppercase font-semibold block">Total Profit</span>
+                            <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                              ₱{formData.items.reduce((acc, it) => {
+                                const q = parseFloat(String(it.quantity)) || 0;
+                                const cp = parseFloat(String(it.cost_price)) || 0;
+                                const sp = parseFloat(String(it.selling_price)) || 0;
+                                return acc + ((q * sp) - (q * cp));
+                              }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </>
+                    </div>
                   ) : (
                     <>
                       <div>
@@ -3330,71 +3736,204 @@ export default function CollectionPage() {
                   </div>
 
                   {editFormData.sales_service_type !== 'service' ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-3 pt-1">
+                      <div className="flex items-center justify-between pb-1 border-b border-emerald-200/60 dark:border-emerald-800/40">
                         <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Item Description
-                          </label>
-                          <input
-                            type="text"
-                            disabled={editingItem.status === 'filed'}
-                            value={editFormData.item_name}
-                            onChange={e => setEditFormData({ ...editFormData, item_name: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                            placeholder="e.g. BSMT Gala Uniform Set"
-                          />
+                          <span className="text-[11px] font-bold uppercase text-emerald-900 dark:text-emerald-300 block">
+                            Merchandise Items & Sales Breakdown
+                          </span>
+                          <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400">
+                            Enter item, description, size, cost, and selling price. Revenue and gross profit are calculated automatically.
+                          </span>
                         </div>
-                        <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Category
-                          </label>
-                          <select
-                            disabled={editingItem.status === 'filed'}
-                            value={editFormData.item_category}
-                            onChange={e => setEditFormData({ ...editFormData, item_category: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                      </div>
+
+                      {/* Items List */}
+                      <div className="space-y-3">
+                        {(editFormData.items || []).map((it: any, idx: number) => {
+                          const q = parseFloat(String(it.quantity)) || 0;
+                          const cp = parseFloat(String(it.cost_price)) || 0;
+                          const sp = parseFloat(String(it.selling_price)) || 0;
+                          const rev = q * sp;
+                          const gp = rev - (q * cp);
+
+                          return (
+                            <div
+                              key={it.id || idx}
+                              className="p-3 rounded-xl bg-white/90 dark:bg-neutral-900/80 border border-emerald-200/90 dark:border-emerald-800/50 space-y-2.5 shadow-2xs"
+                            >
+                              <div className="flex items-center justify-between border-b border-emerald-100 dark:border-emerald-900/50 pb-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                                  Item #{idx + 1}
+                                </span>
+                                {(editFormData.items || []).length > 1 && editingItem.status !== 'filed' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditRemoveItem(idx)}
+                                    className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Remove this item"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    Remove
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Row 1: Item, Description, Size */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Item
+                                  </label>
+                                  <input
+                                    type="text"
+                                    disabled={editingItem.status === 'filed'}
+                                    value={it.item}
+                                    onChange={e => handleEditItemFieldChange(idx, 'item', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                                    placeholder="e.g. Uniform Polo"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Description
+                                  </label>
+                                  <input
+                                    type="text"
+                                    disabled={editingItem.status === 'filed'}
+                                    value={it.description}
+                                    onChange={e => handleEditItemFieldChange(idx, 'description', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                                    placeholder="e.g. BSMT Gala Set"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Size
+                                  </label>
+                                  <input
+                                    type="text"
+                                    disabled={editingItem.status === 'filed'}
+                                    value={it.size}
+                                    onChange={e => handleEditItemFieldChange(idx, 'size', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                                    placeholder="e.g. XS, S, M, L, XL"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Row 2: Quantity, Cost Price, Selling Price */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Quantity
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    disabled={editingItem.status === 'filed'}
+                                    value={it.quantity}
+                                    onChange={e => handleEditItemFieldChange(idx, 'quantity', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                                    placeholder="1"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Cost Price (₱)
+                                  </label>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      disabled={editingItem.status === 'filed'}
+                                      value={it.cost_price}
+                                      onChange={e => handleEditItemFieldChange(idx, 'cost_price', e.target.value)}
+                                      className="w-full pl-6 pr-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
+                                    Selling Price (₱)
+                                  </label>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      disabled={editingItem.status === 'filed'}
+                                      value={it.selling_price}
+                                      onChange={e => handleEditItemFieldChange(idx, 'selling_price', e.target.value)}
+                                      className="w-full pl-6 pr-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Row 3: Auto-calculated Revenue & Gross Profit */}
+                              <div className="grid grid-cols-2 gap-2.5 pt-1.5 border-t border-dashed border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-2 rounded-lg">
+                                <div>
+                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block">
+                                    Revenue (Qty × Selling)
+                                  </span>
+                                  <span className="text-xs font-mono font-bold text-emerald-900 dark:text-emerald-200">
+                                    ₱{rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block">
+                                    Gross Profit (Revenue - Cost)
+                                  </span>
+                                  <span className={`text-xs font-mono font-bold ${gp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                    ₱{gp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* "+ Add Another Item" button & Summary */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                        {editingItem.status !== 'filed' ? (
+                          <button
+                            type="button"
+                            onClick={handleEditAddItem}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-emerald-500/70 dark:border-emerald-500/50 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30 transition-all cursor-pointer"
                           >
-                            <option value="Uniform">Uniform</option>
-                            <option value="Coverall">Coverall</option>
-                            <option value="Pants">Pants</option>
-                            <option value="Shoulder Board">Shoulder Board</option>
-                            <option value="Nameplate / Pin">Nameplate / Pin</option>
-                            <option value="Store Merchandise">Store Merchandise</option>
-                          </select>
+                            <Plus className="w-3.5 h-3.5" />
+                            Add Another Item
+                          </button>
+                        ) : <div />}
+
+                        <div className="flex items-center gap-3 self-end sm:self-auto text-right">
+                          <div>
+                            <span className="text-[10px] text-neutral-500 uppercase font-semibold block">Total Revenue</span>
+                            <span className="text-xs font-mono font-bold text-neutral-900 dark:text-white">
+                              ₱{(editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-neutral-500 uppercase font-semibold block">Total Profit</span>
+                            <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                              ₱{(editFormData.items || []).reduce((acc: number, it: any) => {
+                                const q = parseFloat(String(it.quantity)) || 0;
+                                const cp = parseFloat(String(it.cost_price)) || 0;
+                                const sp = parseFloat(String(it.selling_price)) || 0;
+                                return acc + ((q * sp) - (q * cp));
+                              }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Quantity
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            disabled={editingItem.status === 'filed'}
-                            value={editFormData.quantity}
-                            onChange={e => setEditFormData({ ...editFormData, quantity: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                            placeholder="1"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Unit Price (₱)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            disabled={editingItem.status === 'filed'}
-                            value={editFormData.unit_price}
-                            onChange={e => setEditFormData({ ...editFormData, unit_price: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                            placeholder="0.00"
-                          />
-                        </div>
-                      </div>
-                    </>
+                    </div>
                   ) : (
                     <>
                       <div>
@@ -3804,11 +4343,50 @@ export default function CollectionPage() {
                     )}
                   </div>
                 )}
-                {(selectedItemForModal.tab === 'sales' || (selectedItemForModal.tab === 'sales_services' && selectedItemForModal.item_name)) && (
-                  <div className="space-y-1">
-                    <p className="font-medium text-neutral-800 dark:text-neutral-200">Item: {selectedItemForModal.item_name || 'Store Item'}</p>
-                    <p className="text-neutral-500">Category: {selectedItemForModal.item_category || 'Uniform'}</p>
-                    <p className="text-neutral-500">Quantity: {selectedItemForModal.quantity || 1} pcs @ ₱{(selectedItemForModal.unit_price || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                {(selectedItemForModal.tab === 'sales' || (selectedItemForModal.tab === 'sales_services' && (selectedItemForModal.item_name || (selectedItemForModal.items && selectedItemForModal.items.length > 0)))) && (
+                  <div className="space-y-2">
+                    {selectedItemForModal.items && selectedItemForModal.items.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">
+                          Merchandise Items Sold
+                        </span>
+                        <div className="overflow-x-auto rounded-xl border border-outline-variant/60">
+                          <table className="w-full text-left text-[11px]">
+                            <thead className="bg-neutral-100 dark:bg-neutral-800 text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400">
+                              <tr>
+                                <th className="p-2">Item</th>
+                                <th className="p-2">Size</th>
+                                <th className="p-2 text-center">Qty</th>
+                                <th className="p-2 text-right">Selling</th>
+                                <th className="p-2 text-right">Revenue</th>
+                                <th className="p-2 text-right">Profit</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-outline-variant/40">
+                              {selectedItemForModal.items.map((it, idx) => (
+                                <tr key={it.id || idx}>
+                                  <td className="p-2 font-semibold">
+                                    {it.item}
+                                    {it.description && <span className="block text-[10px] text-neutral-400 font-normal">{it.description}</span>}
+                                  </td>
+                                  <td className="p-2 font-mono text-[10px] text-neutral-500">{it.size || '—'}</td>
+                                  <td className="p-2 text-center font-mono font-bold">{it.quantity}</td>
+                                  <td className="p-2 text-right font-mono">₱{(Number(it.selling_price) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                  <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white">₱{(Number(it.revenue) || (Number(it.quantity) * Number(it.selling_price)) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                  <td className="p-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">₱{(Number(it.gross_profit) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="font-medium text-neutral-800 dark:text-neutral-200">Item: {selectedItemForModal.item_name || 'Store Item'}</p>
+                        <p className="text-neutral-500">Category: {selectedItemForModal.item_category || 'Uniform'}</p>
+                        <p className="text-neutral-500">Quantity: {selectedItemForModal.quantity || 1} pcs @ ₱{(selectedItemForModal.unit_price || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
                   </div>
                 )}
                 {(selectedItemForModal.tab === 'services' || (selectedItemForModal.tab === 'sales_services' && selectedItemForModal.service_type)) && (
