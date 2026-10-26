@@ -2100,7 +2100,9 @@ export default function CollectionPage() {
                     </div>
                   </th>
                   <th className="py-3 px-3 font-bold whitespace-nowrap">Date</th>
-                  <th className="py-3 px-3 font-bold whitespace-nowrap">Member Name</th>
+                  <th className="py-3 px-3 font-bold whitespace-nowrap">
+                    {activeTab === 'sales_services' ? 'Customer Name' : 'Member Name'}
+                  </th>
                   <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Payment Method</th>
                   <th className="py-3 px-3 font-bold">Description / Details</th>
                   <th className="py-3 px-3 font-bold text-right whitespace-nowrap">Collected Amount</th>
@@ -2209,7 +2211,7 @@ export default function CollectionPage() {
                         </td>
                         <td className="py-3 px-3 font-semibold text-neutral-900 dark:text-white max-w-[200px] truncate" title={item.payor_name}>
                           <div>{item.payor_name || '—'}</div>
-                          {item.member_id && (
+                          {item.tab !== 'sales_services' && item.tab !== 'sales' && item.tab !== 'services' && item.member_id && (
                             <div className="text-[10px] text-neutral-400 font-mono">{item.member_id}</div>
                           )}
                         </td>
@@ -2554,78 +2556,95 @@ export default function CollectionPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div ref={memberComboboxRef} className="relative">
-                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                    Member Name
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      value={formData.payor_name}
-                      onFocus={() => setIsMemberDropdownOpen(true)}
-                      onChange={e => handleMemberNameChange(e.target.value)}
-                      className="w-full pl-3 pr-8 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                      placeholder="Search or enter member name..."
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setIsMemberDropdownOpen(prev => !prev)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
-                    >
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isMemberDropdownOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                  </div>
-
-                  {/* Dropdown list */}
-                  {isMemberDropdownOpen && (
-                    <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-neutral-800 border border-outline-variant/60 shadow-2xl py-1 custom-scrollbar origin-top">
-                      {filteredMembers.length === 0 ? (
-                        <div className="px-3 py-3 text-center text-xs text-neutral-400">
-                          No matching member found. You can keep typing custom name.
-                        </div>
-                      ) : (
-                        filteredMembers.map(m => {
-                          const isSelected = m.name.toLowerCase() === (formData.payor_name || '').toLowerCase();
-                          return (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() => handleSelectMember(m)}
-                              className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                                isSelected
-                                  ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-secondary font-bold'
-                                  : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700/60'
-                              }`}
-                            >
-                              <div className="flex flex-col min-w-0">
-                                <span className="font-semibold truncate">{m.name}</span>
-                                {m.member_no && (
-                                  <span className="text-[10px] font-mono text-neutral-400">ID: {m.member_no}</span>
-                                )}
-                              </div>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary shrink-0" />}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-                </div>
+              {/* Payor Name / Member Fields */}
+              {formData.tab === 'sales_services' ? (
                 <div>
                   <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                    Member ID
+                    Customer Name
                   </label>
                   <input
                     type="text"
-                    value={formData.member_id}
-                    onChange={e => setFormData({ ...formData, member_id: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent font-mono text-xs text-neutral-900 dark:text-white"
-                    placeholder="Auto-filled on member select"
+                    required
+                    value={formData.payor_name}
+                    onChange={e => setFormData({ ...formData, payor_name: e.target.value, member_id: '' })}
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                    placeholder="Enter customer / buyer name..."
                   />
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div ref={memberComboboxRef} className="relative">
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Member Name
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        value={formData.payor_name}
+                        onFocus={() => setIsMemberDropdownOpen(true)}
+                        onChange={e => handleMemberNameChange(e.target.value)}
+                        className="w-full pl-3 pr-8 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                        placeholder="Search or enter member name..."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsMemberDropdownOpen(prev => !prev)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
+                      >
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isMemberDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Dropdown list */}
+                    {isMemberDropdownOpen && (
+                      <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-neutral-800 border border-outline-variant/60 shadow-2xl py-1 custom-scrollbar origin-top">
+                        {filteredMembers.length === 0 ? (
+                          <div className="px-3 py-3 text-center text-xs text-neutral-400">
+                            No matching member found. You can keep typing custom name.
+                          </div>
+                        ) : (
+                          filteredMembers.map(m => {
+                            const isSelected = m.name.toLowerCase() === (formData.payor_name || '').toLowerCase();
+                            return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => handleSelectMember(m)}
+                                className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-secondary font-bold'
+                                    : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700/60'
+                                }`}
+                              >
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-semibold truncate">{m.name}</span>
+                                  {m.member_no && (
+                                    <span className="text-[10px] font-mono text-neutral-400">ID: {m.member_no}</span>
+                                  )}
+                                </div>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary shrink-0" />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Member ID
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.member_id}
+                      onChange={e => setFormData({ ...formData, member_id: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent font-mono text-xs text-neutral-900 dark:text-white"
+                      placeholder="Auto-filled on member select"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Dynamic Fields for Credit */}
               {formData.tab === 'credit' && (
@@ -3392,84 +3411,102 @@ export default function CollectionPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div ref={editMemberComboboxRef} className="relative">
-                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                    Member Name
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      disabled={editingItem.status === 'filed'}
-                      value={editFormData.payor_name}
-                      onFocus={() => {
-                        if (editingItem.status !== 'filed') setIsEditMemberDropdownOpen(true);
-                      }}
-                      onChange={e => handleEditMemberNameChange(e.target.value)}
-                      className="w-full pl-3 pr-8 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-                      placeholder="Search or enter member name..."
-                    />
-                    {editingItem.status !== 'filed' && (
-                      <button
-                        type="button"
-                        onClick={() => setIsEditMemberDropdownOpen(prev => !prev)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
-                      >
-                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isEditMemberDropdownOpen ? 'rotate-180' : ''}`} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Dropdown list */}
-                  {isEditMemberDropdownOpen && editingItem.status !== 'filed' && (
-                    <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-neutral-800 border border-outline-variant/60 shadow-2xl py-1 custom-scrollbar origin-top">
-                      {editFilteredMembers.length === 0 ? (
-                        <div className="px-3 py-3 text-center text-xs text-neutral-400">
-                          No matching member found. You can keep typing custom name.
-                        </div>
-                      ) : (
-                        editFilteredMembers.map(m => {
-                          const isSelected = m.name.toLowerCase() === (editFormData.payor_name || '').toLowerCase();
-                          return (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() => handleSelectEditMember(m)}
-                              className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                                isSelected
-                                  ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-secondary font-bold'
-                                  : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700/60'
-                              }`}
-                            >
-                              <div className="flex flex-col min-w-0">
-                                <span className="font-semibold truncate">{m.name}</span>
-                                {m.member_no && (
-                                  <span className="text-[10px] font-mono text-neutral-400">ID: {m.member_no}</span>
-                                )}
-                              </div>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary shrink-0" />}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-                </div>
+              {/* Payor Name / Member Fields */}
+              {editFormData.tab === 'sales_services' ? (
                 <div>
                   <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                    Member ID
+                    Customer Name
                   </label>
                   <input
                     type="text"
+                    required
                     disabled={editingItem.status === 'filed'}
-                    value={editFormData.member_id}
-                    onChange={e => setEditFormData({ ...editFormData, member_id: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent font-mono text-xs text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                    placeholder="Auto-filled on member select"
+                    value={editFormData.payor_name}
+                    onChange={e => setEditFormData({ ...editFormData, payor_name: e.target.value, member_id: '' })}
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="Enter customer / buyer name..."
                   />
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div ref={editMemberComboboxRef} className="relative">
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Member Name
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        disabled={editingItem.status === 'filed'}
+                        value={editFormData.payor_name}
+                        onFocus={() => {
+                          if (editingItem.status !== 'filed') setIsEditMemberDropdownOpen(true);
+                        }}
+                        onChange={e => handleEditMemberNameChange(e.target.value)}
+                        className="w-full pl-3 pr-8 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                        placeholder="Search or enter member name..."
+                      />
+                      {editingItem.status !== 'filed' && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditMemberDropdownOpen(prev => !prev)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
+                        >
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isEditMemberDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Dropdown list */}
+                    {isEditMemberDropdownOpen && editingItem.status !== 'filed' && (
+                      <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-neutral-800 border border-outline-variant/60 shadow-2xl py-1 custom-scrollbar origin-top">
+                        {editFilteredMembers.length === 0 ? (
+                          <div className="px-3 py-3 text-center text-xs text-neutral-400">
+                            No matching member found. You can keep typing custom name.
+                          </div>
+                        ) : (
+                          editFilteredMembers.map(m => {
+                            const isSelected = m.name.toLowerCase() === (editFormData.payor_name || '').toLowerCase();
+                            return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => handleSelectEditMember(m)}
+                                className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-secondary font-bold'
+                                    : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700/60'
+                                }`}
+                              >
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-semibold truncate">{m.name}</span>
+                                  {m.member_no && (
+                                    <span className="text-[10px] font-mono text-neutral-400">ID: {m.member_no}</span>
+                                  )}
+                                </div>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary shrink-0" />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                      Member ID
+                    </label>
+                    <input
+                      type="text"
+                      disabled={editingItem.status === 'filed'}
+                      value={editFormData.member_id}
+                      onChange={e => setEditFormData({ ...editFormData, member_id: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent font-mono text-xs text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                      placeholder="Auto-filled on member select"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Dynamic Fields for Credit */}
               {editFormData.tab === 'credit' && (
@@ -4246,9 +4283,13 @@ export default function CollectionPage() {
                   <p className="font-semibold text-primary dark:text-secondary mt-0.5">{formatCategoryBadge(selectedItemForModal.tab)}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-neutral-400">Member Name</span>
+                  <span className="text-[10px] uppercase font-bold text-neutral-400">
+                    {(selectedItemForModal.tab === 'sales_services' || selectedItemForModal.tab === 'sales' || selectedItemForModal.tab === 'services') ? 'Customer Name' : 'Member Name'}
+                  </span>
                   <p className="font-semibold text-neutral-900 dark:text-white mt-0.5">{selectedItemForModal.payor_name}</p>
-                  {selectedItemForModal.member_id && <p className="font-mono text-[10px] text-neutral-400">{selectedItemForModal.member_id}</p>}
+                  {selectedItemForModal.tab !== 'sales_services' && selectedItemForModal.tab !== 'sales' && selectedItemForModal.tab !== 'services' && selectedItemForModal.member_id && (
+                    <p className="font-mono text-[10px] text-neutral-400">{selectedItemForModal.member_id}</p>
+                  )}
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-neutral-400">Payment Method</span>
@@ -4497,7 +4538,7 @@ export default function CollectionPage() {
 
             <div className="p-3.5 rounded-2xl bg-surface-container-low/60 dark:bg-neutral-800/60 border border-outline-variant/60 text-xs space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-neutral-500">Payor / Member:</span>
+                <span className="text-neutral-500">{(itemToDelete.tab === 'sales_services' || itemToDelete.tab === 'sales' || itemToDelete.tab === 'services') ? 'Customer:' : 'Payor / Member:'}</span>
                 <span className="font-semibold text-neutral-900 dark:text-white text-right max-w-[200px] truncate">{itemToDelete.payor_name}</span>
               </div>
               <div className="flex justify-between items-center">
