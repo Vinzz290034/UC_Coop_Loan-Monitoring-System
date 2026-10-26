@@ -694,16 +694,21 @@ export default function ImportPage() {
     }
   };
 
-  // Filter members list
-  const filteredMembers = parsedMembers.filter((m) => {
+  // Filter members list (null-safe)
+  const filteredMembers = (parsedMembers || []).filter((m) => {
+    if (!m) return false;
+    const q = (searchQuery || '').trim().toLowerCase();
+    const fullName = (m.fullName || `${m.firstName || ''} ${m.lastName || ''}`).toLowerCase();
+    const sheetName = (m.sheetName || '').toLowerCase();
     const matchesSearch =
-      m.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.sheetName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.loans.some((l) => l.lafNo.toLowerCase().includes(searchQuery.toLowerCase()));
+      !q ||
+      fullName.includes(q) ||
+      sheetName.includes(q) ||
+      (m.loans || []).some((l) => (l?.lafNo || '').toLowerCase().includes(q));
 
     if (!matchesSearch) return false;
     if (selectedTab === 'to_ingest') return !m.existingMember;
-    if (selectedTab === 'linked') return m.existingMember;
+    if (selectedTab === 'linked') return !!m.existingMember;
     return true;
   });
 
@@ -959,12 +964,12 @@ export default function ImportPage() {
                   Members to Ingest
                 </div>
                 <div className="text-xl sm:text-2xl font-bold font-headline text-on-surface dark:text-white mt-1">
-                  {summary.totalParsedMembers}
+                  {summary?.totalParsedMembers || 0}
                 </div>
                 <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1 flex gap-2">
-                  <span className="text-emerald-600 font-medium">{summary.newMembersCount} to ingest</span>
+                  <span className="text-emerald-600 font-medium">{summary?.newMembersCount || 0} to ingest</span>
                   <span>•</span>
-                  <span className="text-amber-600 font-medium">{summary.existingMembersCount} linked</span>
+                  <span className="text-amber-600 font-medium">{summary?.existingMembersCount || 0} linked</span>
                 </div>
               </div>
 
@@ -973,10 +978,10 @@ export default function ImportPage() {
                   Share Capital Records
                 </div>
                 <div className="text-xl sm:text-2xl font-bold font-headline text-on-surface dark:text-white mt-1">
-                  {summary.totalShareCapitalDeposits}
+                  {summary?.totalShareCapitalDeposits || 0}
                 </div>
                 <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1">
-                  Total: ₱{summary.totalShareCapitalSum.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  Total: ₱{(Number(summary?.totalShareCapitalSum) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
               </div>
 
@@ -985,10 +990,10 @@ export default function ImportPage() {
                   Loan Applications
                 </div>
                 <div className="text-xl sm:text-2xl font-bold font-headline text-on-surface dark:text-white mt-1">
-                  {summary.totalLoans}
+                  {summary?.totalLoans || 0}
                 </div>
                 <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1">
-                  Volume: ₱{summary.totalLoanAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  Volume: ₱{(Number(summary?.totalLoanAmount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
               </div>
 
@@ -997,10 +1002,10 @@ export default function ImportPage() {
                   Payment History Logs
                 </div>
                 <div className="text-xl sm:text-2xl font-bold font-headline text-on-surface dark:text-white mt-1">
-                  {summary.totalPayments}
+                  {summary?.totalPayments || 0}
                 </div>
                 <div className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-1">
-                  Collected: ₱{summary.totalPaymentsSum.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  Collected: ₱{(Number(summary?.totalPaymentsSum) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
               </div>
             </div>
@@ -1073,13 +1078,13 @@ export default function ImportPage() {
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-primary/10 dark:bg-secondary/15 flex items-center justify-center text-primary dark:text-secondary font-bold text-xs">
-                            {member.firstName.charAt(0)}
-                            {member.lastName.charAt(0)}
+                            {((member.firstName || member.fullName || member.sheetName || 'M').charAt(0) || 'M').toUpperCase()}
+                            {((member.lastName || '').charAt(0) || '').toUpperCase()}
                           </div>
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="text-sm sm:text-base font-bold font-headline text-on-surface dark:text-white">
-                                {member.fullName}
+                                {member.fullName || `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.sheetName}
                               </h3>
                               {member.existingMember ? (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
@@ -1090,7 +1095,7 @@ export default function ImportPage() {
                                   Coop Member
                                 </span>
                               )}
-                              {member.loans.length === 0 && member.shareCapitalDeposits.length > 0 && (
+                              {(member.loans || []).length === 0 && (member.shareCapitalDeposits || []).length > 0 && (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
                                   Investment Account
                                 </span>
@@ -1111,7 +1116,7 @@ export default function ImportPage() {
                               Share Capital
                             </span>
                             <span className="font-bold text-on-surface dark:text-white">
-                              ₱{member.shareCapitalTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              ₱{(Number(member.shareCapitalTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </span>
                           </div>
 
@@ -1120,7 +1125,7 @@ export default function ImportPage() {
                               Loans Found
                             </span>
                             <span className="font-bold text-on-surface dark:text-white">
-                              {member.loans.length === 0 ? '0 Loans (Investment Only)' : `${member.loans.length} ${member.loans.length === 1 ? 'Loan' : 'Loans'}`}
+                              {(member.loans || []).length === 0 ? '0 Loans (Investment Only)' : `${(member.loans || []).length} ${(member.loans || []).length === 1 ? 'Loan' : 'Loans'}`}
                             </span>
                           </div>
 
@@ -1172,7 +1177,7 @@ export default function ImportPage() {
                                         </td>
                                         <td className="p-2.5 font-mono font-medium">{sc.invoiceNo}</td>
                                         <td className="p-2.5 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                                          ₱{sc.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                          ₱{(Number(sc.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                         </td>
                                       </tr>
                                     ))}
@@ -1224,26 +1229,26 @@ export default function ImportPage() {
                                         <div>
                                           <span className="text-neutral-400 text-[10px]">Principal: </span>
                                           <span className="font-bold">
-                                            ₱{loan.principalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                            ₱{(Number(loan.principalAmount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                           </span>
                                         </div>
                                         <div>
                                           <span className="text-neutral-400 text-[10px]">Repaid: </span>
                                           <span className="font-bold text-emerald-600">
-                                            ₱{loan.totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                            ₱{(Number(loan.totalPaid) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                           </span>
                                         </div>
                                         <div>
                                           <span className="text-neutral-400 text-[10px]">Remaining: </span>
                                           <span className="font-bold text-amber-600">
-                                            ₱{loan.remainingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                            ₱{(Number(loan.remainingBalance) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                           </span>
                                         </div>
                                       </div>
                                     </div>
 
                                     {/* Installments Table */}
-                                    {loan.installments.length > 0 && (
+                                    {(loan.installments || []).length > 0 && (
                                       <div className="overflow-x-auto rounded-lg border border-outline-variant/40">
                                         <table className="w-full text-left text-[11px]">
                                           <thead className="bg-neutral-50 dark:bg-neutral-800/60 text-neutral-600 dark:text-neutral-400 font-semibold border-b border-outline-variant/30">
@@ -1260,18 +1265,18 @@ export default function ImportPage() {
                                             </tr>
                                           </thead>
                                           <tbody className="divide-y divide-outline-variant/20">
-                                            {loan.installments.map((inst, iIdx) => (
+                                            {(loan.installments || []).map((inst, iIdx) => (
                                               <tr key={iIdx} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
                                                 <td className="p-1.5 font-mono text-neutral-400">{inst.installmentNumber}</td>
                                                 <td className="p-1.5 font-mono">{inst.datePaid || inst.dueDate}</td>
-                                                <td className="p-1.5 text-right">₱{inst.principalDue.toFixed(2)}</td>
-                                                <td className="p-1.5 text-right">₱{inst.interestDue.toFixed(2)}</td>
-                                                <td className="p-1.5 text-right font-medium">₱{inst.totalDue.toFixed(2)}</td>
+                                                <td className="p-1.5 text-right">₱{(Number(inst.principalDue) || 0).toFixed(2)}</td>
+                                                <td className="p-1.5 text-right">₱{(Number(inst.interestDue) || 0).toFixed(2)}</td>
+                                                <td className="p-1.5 text-right font-medium">₱{(Number(inst.totalDue) || 0).toFixed(2)}</td>
                                                 <td className="p-1.5 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                                                  ₱{inst.amountPaid.toFixed(2)}
+                                                  ₱{(Number(inst.amountPaid) || 0).toFixed(2)}
                                                 </td>
                                                 <td className="p-1.5 text-right font-mono text-neutral-600 dark:text-neutral-300">
-                                                  ₱{inst.balanceAfter.toFixed(2)}
+                                                  ₱{(Number(inst.balanceAfter) || 0).toFixed(2)}
                                                 </td>
                                                 <td className="p-1.5 font-mono text-neutral-500">{inst.invoiceNo}</td>
                                                 <td className="p-1.5 text-center">
@@ -2117,22 +2122,22 @@ export default function ImportPage() {
               <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-surface-container text-xs space-y-2 border border-outline-variant/40">
                 <div className="flex justify-between">
                   <span className="text-neutral-500">Members to Ingest:</span>
-                  <span className="font-bold text-emerald-600">{summary?.newMembersCount}</span>
+                  <span className="font-bold text-emerald-600">{summary?.newMembersCount || 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-500">Existing Accounts Linked:</span>
-                  <span className="font-bold text-amber-600">{summary?.existingMembersCount}</span>
+                  <span className="font-bold text-amber-600">{summary?.existingMembersCount || 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-500">Share Capital Volume:</span>
                   <span className="font-bold">
-                    ₱{summary?.totalShareCapitalSum.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    ₱{(Number(summary?.totalShareCapitalSum) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-neutral-500">Total Loan Amount:</span>
                   <span className="font-bold">
-                    ₱{summary?.totalLoanAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    ₱{(Number(summary?.totalLoanAmount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>

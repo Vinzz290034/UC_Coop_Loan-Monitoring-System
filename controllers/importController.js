@@ -502,19 +502,43 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
           const isAdvanceCutoff = lastInst && (lastInst.amountPaid < lastInst.totalDue) && (!principalDue && !interestDue && !monthlyDue);
 
           if (isAdvanceCutoff && effectivePaid > 0) {
-            lastInst.amountPaid = Math.round((lastInst.amountPaid + effectivePaid) * 100) / 100;
+            const prevAmtPaid = lastInst.amountPaid || 0;
+            const newTotalPaid = Math.round((prevAmtPaid + effectivePaid) * 100) / 100;
+            lastInst.amountPaid = newTotalPaid;
             lastInst.principalPaid = Math.min(lastInst.principalDue, Math.round((lastInst.principalPaid + effectivePaid) * 100) / 100);
             if (lastInst.amountPaid >= lastInst.principalDue) {
               lastInst.interestPaid = Math.min(lastInst.interestDue, Math.round((lastInst.amountPaid - lastInst.principalDue) * 100) / 100);
             }
             lastInst.isPaid = lastInst.amountPaid >= lastInst.totalDue;
-            if (instDatePaid) {
-              lastInst.datePaid = instDatePaid;
-            }
             lastInst.balanceAfter = balance;
             lastInst.principalBalanceAfter = principalBalance;
             currentLoan.totalPaid += effectivePaid;
+
+            if (!lastInst.payments) lastInst.payments = [];
+            const remainingP = Math.max(0, lastInst.principalDue - (lastInst.principalPaid - Math.min(lastInst.principalDue, effectivePaid)));
+            const pForCut = Math.min(remainingP, effectivePaid);
+            const iForCut = Math.max(0, effectivePaid - pForCut);
+            lastInst.payments.push({
+              date: instDatePaid || lastInst.datePaid,
+              amount: effectivePaid,
+              principal: pForCut,
+              interest: iForCut,
+              invoiceNo: invoiceNo || mode || 'SD'
+            });
           } else {
+            const initialPayments = [];
+            if (effectivePaid > 0 && instDatePaid) {
+              const pPaidForCut = principalDue > 0 && effectivePaid >= principalDue ? principalDue : (effectivePaid > 0 ? Math.min(effectivePaid, pDue) : 0);
+              const iPaidForCut = effectivePaid > pPaidForCut ? Math.min(iDue || 0, effectivePaid - pPaidForCut) : 0;
+              initialPayments.push({
+                date: instDatePaid,
+                amount: effectivePaid,
+                principal: pPaidForCut,
+                interest: iPaidForCut,
+                invoiceNo: invoiceNo || mode || 'SD'
+              });
+            }
+
             const inst = {
               installmentNumber,
               row: r + 1,
@@ -525,12 +549,13 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
               finesDue: fines,
               amountPaid: effectivePaid,
               principalPaid: principalDue > 0 && effectivePaid >= principalDue ? principalDue : (effectivePaid > 0 ? Math.min(effectivePaid, pDue) : 0),
-              interestPaid: interestDue > 0 && effectivePaid >= interestDue ? interestDue : 0,
+              interestPaid: interestDue > 0 && effectivePaid >= interestDue ? interestDue : (effectivePaid > pDue ? Math.min(iDue, effectivePaid - pDue) : 0),
               balanceAfter: balance,
               principalBalanceAfter: principalBalance,
               invoiceNo: invoiceNo || mode || 'SD',
               datePaid: instDatePaid,
-              isPaid: effectivePaid >= tDue || ((balance === 0 || principalBalance === 0) && instDatePaid !== null)
+              isPaid: effectivePaid >= tDue || ((balance === 0 || principalBalance === 0) && instDatePaid !== null),
+              payments: initialPayments
             };
 
             currentLoan.installments.push(inst);
@@ -752,6 +777,7 @@ export const executeImport = async (req, res, next) => {
     for (const p of payRes.rows) {
       const dStr = p.pdate || '';
       payMap.set(`${p.loan_id}_${parseFloat(p.amount)}_${dStr}_${p.reference_no || ''}`, p.id);
+      payMap.set(`${p.loan_id}_${parseFloat(p.amount)}_${dStr}`, p.id);
       if (p.reference_no && p.reference_no !== 'SD' && p.reference_no !== 'HAND-IN') {
         payMap.set(`${p.loan_id}_ref_${p.reference_no}`, p.id);
       }
@@ -898,17 +924,18 @@ export const executeImport = async (req, res, next) => {
               const tDue = parseFloat(inst.totalDue || (pDue + iDue));
               const finesDue = parseFloat(inst.finesDue || 0);
               const amtPaid = parseFloat(inst.amountPaid || 0);
-              const isLoanFullyPaid = l.status === 'fully_paid';
-              const isPaid = isLoanFullyPaid || (inst.isPaid && amtPaid > 0);
+              const hasPayment = amtPaid > 0 || isLoanFullyPaid;
+              const isPaid = isLoanFullyPaid || (amtPaid >= tDue && tDue > 0);
               let pPaid = parseFloat(inst.principalPaid || 0);
               let iPaid = parseFloat(inst.interestPaid || 0);
               if (isLoanFullyPaid) {
                 pPaid = pDue;
                 iPaid = iDue;
               } else if (amtPaid > 0 && pPaid === 0 && iPaid === 0) {
-                pPaid = amtPaid;
+                pPaid = Math.min(amtPaid, pDue);
+                iPaid = Math.max(0, amtPaid - pPaid);
               }
-              const instStatus = isPaid ? (isLoanFullyPaid || amtPaid >= tDue ? 'paid' : 'partially_paid') : 'unpaid';
+              const instStatus = isPaid ? 'paid' : (amtPaid > 0 ? 'partially_paid' : 'unpaid');
               const finalPDue = pDue;
               const finalTDue = Math.max(0.01, tDue > 0 ? tDue : 0.01);
 
@@ -917,7 +944,7 @@ export const executeImport = async (req, res, next) => {
               let scheduleId = schedMap.get(schedKey);
 
               if (scheduleId) {
-                if (isPaid) {
+                if (hasPayment) {
                   await client.query(
                     `UPDATE repayment_schedules
                      SET principal_due = $1, total_due = $2, principal_paid = $3, interest_paid = $4, fines_due = $5, status = $6, updated_at = CURRENT_TIMESTAMP
@@ -947,34 +974,49 @@ export const executeImport = async (req, res, next) => {
                 schedulesCreated++;
               }
 
-              // 5. Insert Loan Payment if paid
-              if (isPaid && amtPaid > 0) {
-                const payDate = safeDbDate(inst.datePaid) || dueDate;
-                const payDStr = inst.datePaid || (payDate ? payDate.toISOString().split('T')[0] : '');
-                const payRef = inst.invoiceNo || lafNo || 'EXCEL_IMPORT';
-                const payKey = `${loanId}_${amtPaid}_${payDStr}_${payRef}`;
-                const payKeyRef = (payRef && payRef !== 'SD' && payRef !== 'HAND-IN') ? `${loanId}_ref_${payRef}` : null;
+              // 5. Insert Loan Payments (supporting semi-monthly cuts if present)
+              const paymentCuts = (inst.payments && inst.payments.length > 0)
+                ? inst.payments
+                : (amtPaid > 0 ? [{
+                    date: inst.datePaid,
+                    amount: amtPaid,
+                    principal: pPaid,
+                    interest: iPaid,
+                    invoiceNo: inst.invoiceNo
+                  }] : []);
 
-                let paymentId = payMap.get(payKey) || (payKeyRef ? payMap.get(payKeyRef) : null);
+              for (const cut of paymentCuts) {
+                const cutAmt = parseFloat(cut.amount || 0);
+                if (cutAmt <= 0) continue;
+
+                const payDate = safeDbDate(cut.date) || safeDbDate(inst.datePaid) || dueDate;
+                const payDStr = cut.date || (payDate ? payDate.toISOString().split('T')[0] : '');
+                const payRef = cut.invoiceNo || inst.invoiceNo || lafNo || 'EXCEL_IMPORT';
+                const payKey = `${loanId}_${cutAmt}_${payDStr}_${payRef}`;
+                const payKeyGeneric = `${loanId}_${cutAmt}_${payDStr}`;
+
+                let paymentId = payMap.get(payKey) || payMap.get(payKeyGeneric);
                 if (!paymentId) {
                   const insertPay = await client.query(
                     `INSERT INTO loan_payments (loan_id, amount, payment_date, payment_method, reference_no)
                      VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-                    [loanId, amtPaid, payDate, inst.invoiceNo || 'SD', payRef]
+                    [loanId, cutAmt, payDate, cut.invoiceNo || 'SD', payRef]
                   );
                   paymentId = insertPay.rows[0].id;
                   payMap.set(payKey, paymentId);
-                  if (payKeyRef) payMap.set(payKeyRef, paymentId);
+                  payMap.set(payKeyGeneric, paymentId);
                   paymentsCreated++;
                 }
 
                 // Payment Allocation
                 const allocKey = `${paymentId}_${scheduleId}`;
-                if (!allocSet.has(allocKey) && (pPaid + iPaid > 0)) {
+                const cutP = parseFloat(cut.principal || 0);
+                const cutI = parseFloat(cut.interest || 0);
+                if (!allocSet.has(allocKey) && (cutP + cutI > 0 || cutAmt > 0)) {
                   await client.query(
                     `INSERT INTO loan_payment_allocations (loan_payment_id, repayment_schedule_id, principal_allocated, interest_allocated)
                      VALUES ($1, $2, $3, $4)`,
-                    [paymentId, scheduleId, pPaid, iPaid]
+                    [paymentId, scheduleId, cutP, cutI]
                   );
                   allocSet.add(allocKey);
                 }

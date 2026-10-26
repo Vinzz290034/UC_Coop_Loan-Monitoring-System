@@ -234,69 +234,6 @@ export const getBillingByLoanId = async (req, res, next) => {
       }
     });
 
-    const expandedRows = [];
-    result.rows.forEach(s => {
-      const sPayments = paymentsBySchedule[s.schedule_id] || [];
-      if (sPayments.length > 1) {
-        // Multi-cutoff semi-monthly payments (e.g. 15th and 30th salary deductions)
-        sPayments.forEach((p, pIdx) => {
-          expandedRows.push({
-            schedule_id: `${s.schedule_id}-${p.payment_id}`,
-            installment_number: s.installment_number,
-            is_sub_row: pIdx > 0,
-            due_date: pIdx === 0 ? s.due_date : null,
-            principal_due: pIdx === 0 ? s.principal_due : '0.00',
-            interest_due: pIdx === 0 ? s.interest_due : '0.00',
-            total_due: pIdx === 0 ? s.total_due : '0.00',
-            amount_paid: p.amount,
-            principal_paid: p.principal_allocated ? parseFloat(p.principal_allocated).toFixed(2) : p.amount,
-            interest_paid: p.interest_allocated ? parseFloat(p.interest_allocated).toFixed(2) : '0.00',
-            reference_no: p.reference_no || 'SD',
-            installment_status: 'paid',
-            outstanding_remaining: '0.00',
-            date_paid: p.payment_date,
-            days_overdue: 0
-          });
-        });
-      } else if (sPayments.length === 1) {
-        const p = sPayments[0];
-        expandedRows.push({
-          schedule_id: s.schedule_id,
-          installment_number: s.installment_number,
-          is_sub_row: false,
-          due_date: s.due_date,
-          principal_due: s.principal_due,
-          interest_due: s.interest_due,
-          total_due: s.total_due,
-          amount_paid: p.amount,
-          principal_paid: p.principal_allocated ? parseFloat(p.principal_allocated).toFixed(2) : s.principal_paid,
-          interest_paid: p.interest_allocated ? parseFloat(p.interest_allocated).toFixed(2) : s.interest_paid,
-          reference_no: p.reference_no || 'SD',
-          installment_status: s.installment_status,
-          outstanding_remaining: s.outstanding_remaining,
-          date_paid: p.payment_date,
-          days_overdue: s.days_overdue
-        });
-      } else {
-        expandedRows.push({
-          schedule_id: s.schedule_id,
-          installment_number: s.installment_number,
-          is_sub_row: false,
-          due_date: s.due_date,
-          principal_due: s.principal_due,
-          interest_due: s.interest_due,
-          total_due: s.total_due,
-          amount_paid: (parseFloat(s.principal_paid) + parseFloat(s.interest_paid)).toFixed(2),
-          principal_paid: s.principal_paid,
-          interest_paid: s.interest_paid,
-          installment_status: s.installment_status,
-          outstanding_remaining: s.outstanding_remaining,
-          date_paid: null,
-          days_overdue: s.days_overdue
-        });
-      }
-    });
-
     const loanQuery = `
       SELECT 
         l.id,
@@ -319,6 +256,102 @@ export const getBillingByLoanId = async (req, res, next) => {
     `;
     const loanRes = await query(loanQuery, [loanId]);
     const loanDetails = loanRes.rows[0] || null;
+    const isSd2 = loanDetails?.payment_mode === 'SD2';
+    const now = new Date();
+
+    const expandedRows = [];
+    result.rows.forEach(s => {
+      const sPayments = paymentsBySchedule[s.schedule_id] || [];
+      const remainingBal = parseFloat(s.outstanding_remaining || '0');
+
+      if (sPayments.length > 0) {
+        // Multi-cutoff semi-monthly payments or single payment
+        sPayments.forEach((p, pIdx) => {
+          expandedRows.push({
+            schedule_id: `${s.schedule_id}-${p.payment_id}`,
+            installment_number: s.installment_number,
+            is_sub_row: pIdx > 0,
+            due_date: pIdx === 0 ? s.due_date : null,
+            principal_due: pIdx === 0 ? s.principal_due : '0.00',
+            interest_due: pIdx === 0 ? s.interest_due : '0.00',
+            total_due: pIdx === 0 ? s.total_due : '0.00',
+            amount_paid: p.amount,
+            principal_paid: p.principal_allocated ? parseFloat(p.principal_allocated).toFixed(2) : p.amount,
+            interest_paid: p.interest_allocated ? parseFloat(p.interest_allocated).toFixed(2) : '0.00',
+            reference_no: p.reference_no || 'SD',
+            installment_status: 'paid', // An actual payment made is PAID
+            outstanding_remaining: '0.00',
+            date_paid: p.payment_date,
+            days_overdue: 0
+          });
+        });
+
+        // If there is still a remaining balance on this installment
+        if (remainingBal > 0) {
+          let isRemOverdue = false;
+          let remDaysOverdue = 0;
+
+          if (isSd2 && s.due_date) {
+            // In SD2, the 2nd cutoff is due at the end of the month (e.g. 30th/31st)
+            const d = new Date(s.due_date);
+            const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+            if (now > endOfMonth) {
+              isRemOverdue = true;
+              remDaysOverdue = Math.max(1, Math.floor((now.getTime() - endOfMonth.getTime()) / (1000 * 60 * 60 * 24)));
+            }
+          } else if (s.due_date) {
+            const d = new Date(s.due_date);
+            if (now > d) {
+              isRemOverdue = true;
+              remDaysOverdue = Math.max(1, Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)));
+            }
+          }
+
+          expandedRows.push({
+            schedule_id: `${s.schedule_id}-remaining`,
+            installment_number: s.installment_number,
+            is_sub_row: true,
+            due_date: null,
+            principal_due: '0.00',
+            interest_due: '0.00',
+            total_due: '0.00',
+            amount_paid: '0.00',
+            principal_paid: '0.00',
+            interest_paid: '0.00',
+            reference_no: 'SD',
+            installment_status: isRemOverdue ? 'unpaid' : 'pending',
+            outstanding_remaining: s.outstanding_remaining,
+            date_paid: null,
+            days_overdue: remDaysOverdue
+          });
+        }
+      } else {
+        const d = s.due_date ? new Date(s.due_date) : null;
+        let isOverdue = false;
+        let dOverdue = 0;
+        if (d && now > d) {
+          isOverdue = true;
+          dOverdue = Math.max(1, Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)));
+        }
+
+        expandedRows.push({
+          schedule_id: s.schedule_id,
+          installment_number: s.installment_number,
+          is_sub_row: false,
+          due_date: s.due_date,
+          principal_due: s.principal_due,
+          interest_due: s.interest_due,
+          total_due: s.total_due,
+          amount_paid: '0.00',
+          principal_paid: '0.00',
+          interest_paid: '0.00',
+          installment_status: isOverdue ? 'unpaid' : 'pending',
+          outstanding_remaining: s.outstanding_remaining,
+          date_paid: null,
+          days_overdue: dOverdue
+        });
+      }
+    });
 
     res.status(200).json({
       success: true,
