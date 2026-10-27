@@ -99,7 +99,7 @@ export async function getCollections(req, res) {
       )`;
     }
 
-    query += ` ORDER BY date DESC, or_no DESC, created_at DESC`;
+    query += ` ORDER BY NULLIF(regexp_replace(or_no, '[^0-9]', '', 'g'), '')::bigint DESC NULLS LAST, or_no DESC, date DESC, created_at DESC`;
 
     const result = await pool.query(query, params);
     const collections = result.rows.map(formatCollectionRow);

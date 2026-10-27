@@ -405,6 +405,7 @@ export default function CollectionPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'or_no' | 'date'>('or_no');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -1278,15 +1279,35 @@ export default function CollectionPage() {
       return true;
     });
 
-    // Sorting by date & receipt number
+    // Sorting primarily by receipt number or date
     result.sort((a, b) => {
-      const cmpDate = b.date.localeCompare(a.date);
-      if (cmpDate !== 0) return sortOrder === 'desc' ? cmpDate : -cmpDate;
-      return sortOrder === 'desc' ? b.or_no.localeCompare(a.or_no) : a.or_no.localeCompare(b.or_no);
+      if (sortBy === 'date') {
+        const cmpDate = (b.date || '').localeCompare(a.date || '');
+        if (cmpDate !== 0) return sortOrder === 'desc' ? cmpDate : -cmpDate;
+        const numA = parseInt(a.or_no.replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(b.or_no.replace(/\D/g, ''), 10) || 0;
+        if (numA !== numB) return sortOrder === 'desc' ? numB - numA : numA - numB;
+        return sortOrder === 'desc'
+          ? b.or_no.localeCompare(a.or_no, undefined, { numeric: true })
+          : a.or_no.localeCompare(b.or_no, undefined, { numeric: true });
+      }
+
+      // Default: Sort strictly by numeric receipt number so receipts are in order
+      const numA = parseInt(a.or_no.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.or_no.replace(/\D/g, ''), 10) || 0;
+      if (numA !== numB) {
+        return sortOrder === 'desc' ? numB - numA : numA - numB;
+      }
+      const cmpOr = b.or_no.localeCompare(a.or_no, undefined, { numeric: true });
+      if (cmpOr !== 0) {
+        return sortOrder === 'desc' ? cmpOr : -cmpOr;
+      }
+      const cmpDate = (b.date || '').localeCompare(a.date || '');
+      return sortOrder === 'desc' ? cmpDate : -cmpDate;
     });
 
     return result;
-  }, [collections, activeTab, selectedMethod, selectedStatus, searchQuery, sortOrder]);
+  }, [collections, activeTab, selectedMethod, selectedStatus, searchQuery, sortBy, sortOrder]);
 
   // Tab Stats for 4 KPI Cards (Calculated over current tab's scope or all)
   const tabStats = useMemo(() => {
@@ -1311,7 +1332,7 @@ export default function CollectionPage() {
   // Reset pagination on filter or search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, searchQuery, selectedMethod, selectedStatus, sortOrder, itemsPerPage]);
+  }, [activeTab, searchQuery, selectedMethod, selectedStatus, sortBy, sortOrder, itemsPerPage]);
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filteredCollections.length / itemsPerPage));
@@ -2121,16 +2142,39 @@ export default function CollectionPage() {
                     />
                   </th>
                   <th
-                    onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                    onClick={() => {
+                      if (sortBy === 'or_no') {
+                        setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+                      } else {
+                        setSortBy('or_no');
+                        setSortOrder('desc');
+                      }
+                    }}
                     className="py-3 px-3 font-bold cursor-pointer select-none hover:text-primary dark:hover:text-secondary transition-colors group whitespace-nowrap"
                     title="Click to sort by receipt number"
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>Receipt No.</span>
-                      <ArrowUpDown className="w-3.5 h-3.5 text-primary dark:text-secondary shrink-0" />
+                      <span className={sortBy === 'or_no' ? 'text-primary dark:text-secondary' : ''}>Receipt No.</span>
+                      <ArrowUpDown className={`w-3.5 h-3.5 shrink-0 ${sortBy === 'or_no' ? 'text-primary dark:text-secondary' : 'text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-200'}`} />
                     </div>
                   </th>
-                  <th className="py-3 px-3 font-bold whitespace-nowrap">Date</th>
+                  <th
+                    onClick={() => {
+                      if (sortBy === 'date') {
+                        setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+                      } else {
+                        setSortBy('date');
+                        setSortOrder('desc');
+                      }
+                    }}
+                    className="py-3 px-3 font-bold cursor-pointer select-none hover:text-primary dark:hover:text-secondary transition-colors group whitespace-nowrap"
+                    title="Click to sort by date"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className={sortBy === 'date' ? 'text-primary dark:text-secondary' : ''}>Date</span>
+                      <ArrowUpDown className={`w-3.5 h-3.5 shrink-0 ${sortBy === 'date' ? 'text-primary dark:text-secondary' : 'text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-200'}`} />
+                    </div>
+                  </th>
                   <th className="py-3 px-3 font-bold whitespace-nowrap">
                     {activeTab === 'sales_services' ? 'Customer Name' : 'Member Name'}
                   </th>
