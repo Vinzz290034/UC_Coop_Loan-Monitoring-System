@@ -6,7 +6,6 @@ import BackButton from '@/components/BackButton';
 import SearchInput from '@/components/SearchInput';
 import { SkeletonTable, SkeletonCard } from '@/components/ui/Skeleton';
 import LoanBillingLedgerModal from '@/components/billing/LoanBillingLedgerModal';
-import PayrollCollectionTab from '@/components/billing/PayrollCollectionTab';
 import {
   AlertTriangle,
   AlertCircle,
@@ -16,14 +15,13 @@ import {
   Mail,
   Clock,
   Filter,
-  FileSpreadsheet,
   Maximize2,
   Minimize2
 } from 'lucide-react';
 
 
 export default function BillingPage() {
-  const [activeTab, setActiveTab] = useState<'due' | 'aging' | 'payroll'>('due');
+  const [activeTab, setActiveTab] = useState<'due' | 'aging'>('due');
 
   // Dates state for billing due queue
   const getTodayStr = () => new Date().toISOString().split('T')[0];
@@ -153,16 +151,7 @@ export default function BillingPage() {
           >
             Delinquency Aging Brackets
           </button>
-          <button
-            onClick={() => setActiveTab('payroll')}
-            className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${activeTab === 'payroll'
-                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
-                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
-              }`}
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-            Payroll Collection List (METC Form)
-          </button>
+
         </div>
 
         {/* ERROR DISPLAY */}
@@ -517,7 +506,7 @@ export default function BillingPage() {
               })()
             )}
           </div>
-        ) : activeTab === 'aging' ? (
+        ) : (
           /* TAB 2: AGING REPORT BRACKETS */
           <div className="space-y-6">
             {agingLoading ? (
@@ -880,16 +869,8 @@ export default function BillingPage() {
               </div>
             )}
           </div>
-        ) : (
-          <PayrollCollectionTab
-            startDate={startDate}
-            endDate={endDate}
-            onDateChange={(start, end) => {
-              setStartDate(start);
-              setEndDate(end);
-            }}
-          />
         )}
+
         {/* Loan Billing Ledger Modal */}
         {selectedLoan && (
           <LoanBillingLedgerModal

@@ -8,6 +8,7 @@ import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import InvoiceArExcelImportModal from '@/components/collection/InvoiceArExcelImportModal';
 import CollectionReceiptPrint from '@/components/collection/CollectionReceiptPrint';
+import PayrollCollectionTab from '@/components/billing/PayrollCollectionTab';
 import { Skeleton } from '@/components/ui/Skeleton';
 import {
   HandCoins,
@@ -43,7 +44,7 @@ import {
   Loader2
 } from 'lucide-react';
 
-export type CollectionTab = 'all' | 'credit' | 'sales_services';
+export type CollectionTab = 'all' | 'credit' | 'sales_services' | 'billing';
 
 export interface TabConfig {
   id: CollectionTab;
@@ -55,6 +56,7 @@ export const COLLECTION_TABS: TabConfig[] = [
   { id: 'all', label: 'All Collections', description: 'Consolidated master collection registry across all revenue categories' },
   { id: 'credit', label: 'Credit', description: 'Daily member loan amortizations, credit repayments, share capital & deposits' },
   { id: 'sales_services', label: 'Sales & Services', description: 'Itemized merchandise sales, uniforms, store inventory, photocopying, and printing services' },
+  { id: 'billing', label: 'Billing', description: 'Official METC Coop Salary Deduction List for Accounting (Payroll Collection)' },
 ];
 
 export interface CollectionLoanPayment {
@@ -351,6 +353,25 @@ export default function CollectionPage() {
   // Active Tab: Defaults to 'all' for consolidated overview, identical to Disbursement
   const [activeTab, setActiveTab] = useState<CollectionTab>('all');
   const currentTabConfig = COLLECTION_TABS.find(t => t.id === activeTab) || COLLECTION_TABS[0];
+
+  // Billing cutoff dates for Billing (Payroll Collection) tab
+  const [billingStartDate, setBillingStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [billingEndDate, setBillingEndDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().split('T')[0];
+  });
+
+  // Support ?tab= URL query param (e.g. ?tab=billing)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'billing' || tabParam === 'credit' || tabParam === 'sales_services' || tabParam === 'all') {
+        setActiveTab(tabParam as CollectionTab);
+      }
+    }
+  }, []);
 
   // Stored collections (100% PostgreSQL database-driven)
   const [collections, setCollections] = useState<CollectionItem[]>([]);
@@ -1269,7 +1290,7 @@ export default function CollectionPage() {
 
   // Tab Stats for 4 KPI Cards (Calculated over current tab's scope or all)
   const tabStats = useMemo(() => {
-    const scopeItems = activeTab === 'all'
+    const scopeItems = (activeTab === 'all' || activeTab === 'billing')
       ? collections
       : activeTab === 'sales_services'
       ? collections.filter(c => c.tab === 'sales_services' || c.tab === 'sales' || c.tab === 'services')
@@ -1340,7 +1361,7 @@ export default function CollectionPage() {
 
   // Open Add Modal with auto-generated receipt number
   const openRecordModal = async () => {
-    const targetCategory = (activeTab === 'all' ? 'credit' : activeTab) as 'credit' | 'sales_services';
+    const targetCategory = (activeTab === 'sales_services' ? 'sales_services' : 'credit') as 'credit' | 'sales_services';
 
     // Instant optimistic calculation from loaded collections
     const maxLocalNo = collections.reduce((max, c) => {
@@ -1856,7 +1877,7 @@ export default function CollectionPage() {
         <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
           <div className="space-y-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              {activeTab === 'all' ? 'Total Collections' : `Total ${currentTabConfig.label} Collected`}
+              {activeTab === 'all' || activeTab === 'billing' ? 'Total Collections' : `Total ${currentTabConfig.label} Collected`}
             </span>
             <p className="text-xl sm:text-2xl font-headline font-black text-primary dark:text-secondary">
               ₱{tabStats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1882,7 +1903,7 @@ export default function CollectionPage() {
               {tabStats.count}
             </p>
             <p className="text-[10px] text-neutral-500">
-              {activeTab === 'all' ? 'All collections in master registry' : 'In current category registry'}
+              {activeTab === 'all' || activeTab === 'billing' ? 'All collections in master registry' : 'In current category registry'}
             </p>
           </div>
           <div className="p-3 bg-emerald-700/10 dark:bg-emerald-400/10 rounded-2xl text-emerald-700 dark:text-emerald-400">
@@ -1957,6 +1978,16 @@ export default function CollectionPage() {
       )}
 
       {/* Table Filters & Toolbar */}
+      {activeTab === 'billing' ? (
+        <PayrollCollectionTab
+          startDate={billingStartDate}
+          endDate={billingEndDate}
+          onDateChange={(start, end) => {
+            setBillingStartDate(start);
+            setBillingEndDate(end);
+          }}
+        />
+      ) : (
       <div className="space-y-4">
         <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -2465,6 +2496,7 @@ export default function CollectionPage() {
           )}
         </div>
       </div>
+      )}
 
       {/* RECORD NEW COLLECTION MODAL */}
       {isAddModalOpen && mounted && createPortal(
