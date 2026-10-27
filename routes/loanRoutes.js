@@ -80,7 +80,7 @@ router.route('/')
 router.route('/:id')
   .get(getLoanById)
   .put(restrictTo('admin', 'staff'), updateLoanDetails)
-  .delete(restrictTo('admin'), deleteLoan);
+  .delete(restrictTo('admin', 'staff'), deleteLoan);
 
 // ==========================================
 // 7. LOAN ACTIONS (DISBURSE & REJECT)

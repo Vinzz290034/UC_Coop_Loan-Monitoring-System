@@ -2010,6 +2010,37 @@ function LoansPageContent() {
     }
   }, [statusFilter]);
 
+  const handleDeleteLoan = (loan: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const borrower = loan.last_name ? `${loan.last_name}, ${loan.first_name}` : (loan.borrower_name || 'Borrower');
+    const lafDisplay = loan.laf_no ? `LAF #${loan.laf_no}` : `Contract #${String(loan.id).slice(0, 8)}`;
+    const amt = parseFloat(loan.principal_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+
+    showDialog(
+      'Delete Loan Contract',
+      `Are you sure you want to permanently delete ${lafDisplay} for ${borrower} (₱${amt})? This will delete the loan, repayment schedules, and any pending check vouchers. Loans with recorded payments cannot be deleted.`,
+      'danger',
+      async () => {
+        try {
+          await api.delete(`/loans/${loan.id}`);
+          setLoans(prev => prev.filter(l => l.id !== loan.id));
+          if (expandedLoanId === loan.id) setExpandedLoanId(null);
+          showDialog('Loan Deleted', `${lafDisplay} for ${borrower} was successfully deleted.`, 'success');
+          fetchMetrics();
+        } catch (err: any) {
+          console.error('Failed to delete loan:', err);
+          showDialog(
+            'Cannot Delete Loan',
+            err.response?.data?.error?.message || err.response?.data?.message || 'Failed to delete loan record.',
+            'error'
+          );
+        }
+      },
+      'Delete Loan',
+      'Cancel'
+    );
+  };
+
   const fetchProducts = useCallback(async () => {
     try {
       setProductsLoading(true);
@@ -3455,33 +3486,46 @@ function LoansPageContent() {
                                        </td>
                                        <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
                                        <td className="px-6 py-4 text-right">
-                                         {loan.status === 'pending_approval' || loan.status === 'approved' ? (
-                                           isAdminOrManager ? (
-                                             <button
-                                               onClick={() => toggleLoanExpand(loan.id)}
-                                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary dark:border-secondary/30 dark:bg-secondary/10 dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 transition-all text-[11px] font-bold cursor-pointer"
-                                             >
-                                               {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                               {loan.status === 'approved' ? 'Review & Disburse' : 'Review Application'}
-                                             </button>
+                                         <div className="flex items-center justify-end gap-1.5">
+                                           {loan.status === 'pending_approval' || loan.status === 'approved' ? (
+                                             isAdminOrManager ? (
+                                               <button
+                                                 onClick={() => toggleLoanExpand(loan.id)}
+                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary dark:border-secondary/30 dark:bg-secondary/10 dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 transition-all text-[11px] font-bold cursor-pointer"
+                                               >
+                                                 {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                 {loan.status === 'approved' ? 'Review & Disburse' : 'Review Application'}
+                                               </button>
+                                             ) : (
+                                               <button
+                                                 onClick={() => toggleLoanExpand(loan.id)}
+                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all text-[11px] font-bold cursor-pointer"
+                                               >
+                                                 {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                 View Details
+                                               </button>
+                                             )
                                            ) : (
                                              <button
                                                onClick={() => toggleLoanExpand(loan.id)}
                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all text-[11px] font-bold cursor-pointer"
                                              >
                                                {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                               View Details
+                                               Amortization
                                              </button>
-                                           )
-                                         ) : (
-                                           <button
-                                             onClick={() => toggleLoanExpand(loan.id)}
-                                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all text-[11px] font-bold cursor-pointer"
-                                           >
-                                             {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                             Amortization
-                                           </button>
-                                         )}
+                                           )}
+
+                                           {isAdminOrManager && (
+                                             <button
+                                               type="button"
+                                               onClick={(e) => handleDeleteLoan(loan, e)}
+                                               className="p-1.5 rounded-full text-neutral-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/40 transition-all cursor-pointer active:scale-95"
+                                               title={`Delete ${loan.laf_no ? `LAF #${loan.laf_no}` : `Contract #${String(loan.id).slice(0, 8)}`}`}
+                                             >
+                                               <Trash2 className="w-3.5 h-3.5" />
+                                             </button>
+                                           )}
+                                         </div>
                                        </td>
                                     </tr>
 

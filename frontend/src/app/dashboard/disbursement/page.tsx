@@ -6574,7 +6574,7 @@ function DisbursementPageContent() {
             })()}
 
             {/* Signature Block matching physical document */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingTop: '20px', fontSize: '9px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '16px', fontSize: '9px' }}>
               {/* Row 1: Prepared By, Checked By, Approved By */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px' }}>
                 <div>
@@ -6609,6 +6609,36 @@ function DisbursementPageContent() {
                   </p>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                 </div>
+              </div>
+
+              {/* Row 2: Received By, Date */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '28px', paddingTop: '4px' }}>
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#4b5563', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
+                    RECEIVED BY:
+                  </span>
+                  <div style={{ height: '22px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em' }}>
+                    {printingCvBreakdown.signatories?.received_by || printingCvBreakdown.payee || printingCvBreakdown.payee_name || '—'}
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                  <span style={{ fontSize: '7.5px', color: '#6b7280', display: 'block', marginTop: '2px' }}>
+                    Signature over Printed Name
+                  </span>
+                </div>
+
+                <div>
+                  <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#4b5563', fontSize: '8.5px', display: 'block', letterSpacing: '0.04em' }}>
+                    DATE:
+                  </span>
+                  <div style={{ height: '22px' }}></div>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em', minHeight: '16px' }}>
+                    &nbsp;
+                  </p>
+                  <div style={{ borderBottom: '1.5px solid #111827' }}></div>
+                </div>
+
+                <div>{/* Spacer */}</div>
               </div>
             </div>
 
