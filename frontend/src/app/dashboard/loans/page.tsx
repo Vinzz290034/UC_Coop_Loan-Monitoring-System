@@ -83,6 +83,7 @@ interface Loan {
   id: number | string;
   member_id: number | string;
   first_name?: string;
+  middle_name?: string;
   last_name?: string;
   product_name?: string;
   principal_amount: string;
@@ -1446,6 +1447,32 @@ function LoansPageContent() {
     });
   };
 
+  const formatBorrowerFullName = (loan: any) => {
+    if (!loan) return '';
+    const first = (loan.first_name || '').trim();
+    const middle = (loan.middle_name || '').trim();
+    const last = (loan.last_name || '').trim();
+
+    if (first || last) {
+      // If first_name already ends with a middle initial (e.g. "GIRLGRACE A."), avoid duplicating middle name
+      const alreadyHasMiddleInitial = /\s+[A-Za-z]\.?$/.test(first);
+      const middlePart = (!alreadyHasMiddleInitial && middle) ? middle : '';
+      return [first, middlePart, last].filter(Boolean).join(' ').trim();
+    }
+
+    if (loan.borrower_name) {
+      const raw = String(loan.borrower_name).trim();
+      if (raw.includes(',')) {
+        const parts = raw.split(',').map((s: string) => s.trim());
+        const lName = parts[0];
+        const fName = parts.slice(1).join(' ').trim();
+        return `${fName} ${lName}`.trim();
+      }
+      return raw;
+    }
+    return 'Borrower';
+  };
+
   const openVoucherModal = (loanObj: any) => {
     setPrintLoan(loanObj);
     setPrintMode('voucher');
@@ -1462,10 +1489,7 @@ function LoansPageContent() {
     setCheckNo(loanObj.check_no || '');
     setBankName(loanObj.bank || 'BDO');
 
-    const fullName = [loanObj.first_name, loanObj.middle_name, loanObj.last_name]
-      .filter(Boolean)
-      .join(' ')
-      .trim() || `${loanObj.last_name || ''}, ${loanObj.first_name || ''}`.trim();
+    const fullName = formatBorrowerFullName(loanObj);
     setPayeeName(fullName.toUpperCase());
 
     const rawDate = loanObj.disbursement_date || loanObj.disbursed_at || loanObj.created_at || new Date();
@@ -6996,7 +7020,7 @@ function LoansPageContent() {
               <div className="bg-neutral-50 dark:bg-neutral-900/40 p-4 rounded-2xl border border-outline-variant/60 space-y-3">
                 <h5 className="font-bold text-on-surface dark:text-white text-xs">Schedule Statement Summary</h5>
                 <div className="grid grid-cols-2 gap-2 text-[10px]">
-                  <p><strong>Member Name:</strong> {printLoan.last_name}, {printLoan.first_name}</p>
+                  <p><strong>Member Name:</strong> {formatBorrowerFullName(printLoan)}</p>
                   <p><strong>Loan Product:</strong> {(printLoan.product_name || 'Regular - Salary Loan').replace(/^Regular Loan\s*-\s*/i, 'Regular - ')}</p>
                   <p><strong>Principal Amount:</strong> {formatCurrency(parseFloat(printLoan.principal_amount))}</p>
                   <p><strong>Total Repayment Periods:</strong> {printLoan.term_months} Months</p>
@@ -7048,7 +7072,7 @@ function LoansPageContent() {
                 <h5 className="font-bold text-on-surface dark:text-white text-xs">Receipt Statement Details</h5>
                 <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-[10px]">
                   <p><strong>Receipt Number:</strong> OR-{new Date(printPayment.payment_date).getFullYear()}-{String(printPayment.id).padStart(6, '0')}</p>
-                  <p><strong>Member Name:</strong> {printLoan.last_name}, {printLoan.first_name}</p>
+                  <p><strong>Member Name:</strong> {formatBorrowerFullName(printLoan)}</p>
                   <p><strong>Loan Product:</strong> {printLoan.product_name}</p>
                   <p><strong>Booking Date:</strong> {new Date(printPayment.payment_date).toLocaleString()}</p>
                   <p><strong>Payment Method:</strong> {printPayment.payment_method}</p>
@@ -7517,7 +7541,7 @@ function LoansPageContent() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', backgroundColor: '#ecfdf5', padding: '16px', borderRadius: '16px', border: '1px solid #d1fae5', fontSize: '10px' }}>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Borrower Member</span>
-                  <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{printLoan.last_name}, {printLoan.first_name}</p>
+                  <p style={{ fontWeight: 'bold', color: '#1f2937', margin: '2px 0 0 0' }}>{formatBorrowerFullName(printLoan)}</p>
                   <p style={{ fontSize: '9px', color: '#6b7280', fontFamily: 'monospace', margin: '2px 0 0 0' }}>Member ID: {printLoan.member_no || (printLoan.member_id ? `#${String(printLoan.member_id).slice(0, 8)}` : 'N/A')}</p>
                 </div>
                 <div style={{ flex: 1 }}>
@@ -7638,7 +7662,7 @@ function LoansPageContent() {
               {/* Signatures */}
               <div style={{ display: 'flex', justifyContent: includeGuarantor ? 'space-between' : 'flex-start', alignItems: 'flex-end', gap: '24px', paddingTop: '20px', fontSize: '9px', textAlign: 'center', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                 <div style={{ flex: includeGuarantor ? 1 : '0 0 45%', maxWidth: includeGuarantor ? 'none' : '320px', backgroundColor: 'rgba(249, 250, 251, 0.4)', padding: '12px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{printLoan.last_name}, {printLoan.first_name}</p>
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#1f2937', margin: 0 }}>{formatBorrowerFullName(printLoan)}</p>
                   <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '8px 0' }}></div>
                   <p style={{ color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', margin: 0 }}>Signature of Borrower</p>
                 </div>
@@ -7685,7 +7709,7 @@ function LoansPageContent() {
               <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 1fr', gap: '14px', backgroundColor: '#ecfdf5', padding: '14px 18px', borderRadius: '12px', border: '1px solid #a7f3d0', fontSize: '10px' }}>
                 <div>
                   <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#047857', textTransform: 'uppercase', display: 'block', letterSpacing: '0.03em' }}>Received From (Borrower)</span>
-                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#111827', margin: '2px 0 0 0' }}>{printLoan.last_name}, {printLoan.first_name}</p>
+                  <p style={{ fontSize: '13px', fontWeight: 'bold', color: '#111827', margin: '2px 0 0 0' }}>{formatBorrowerFullName(printLoan)}</p>
                   <p style={{ fontSize: '9px', color: '#4b5563', fontFamily: 'monospace', margin: '2px 0 0 0' }}>Member ID: {printLoan.member_no || `#${printLoan.member_id || printLoan.borrower_id}`}</p>
                 </div>
                 <div>
@@ -7794,7 +7818,7 @@ function LoansPageContent() {
                   </span>
                   <div style={{ height: '28px' }}></div>
                   <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#064e3b', margin: '0 0 4px 0', fontSize: '11.5px', letterSpacing: '0.02em' }}>
-                    {printLoan.last_name}, {printLoan.first_name}
+                    {formatBorrowerFullName(printLoan)}
                   </p>
                   <div style={{ borderBottom: '1.5px solid #064e3b', margin: '0 8px 4px 8px' }}></div>
                   <span style={{ fontSize: '8.5px', color: '#047857', textTransform: 'uppercase' }}>Borrower / Payor</span>

@@ -917,6 +917,7 @@ export const getLoans = async (req, res, next) => {
           l.*, 
           lp.name as product_name,
           m.first_name,
+          m.middle_name,
           m.last_name,
           m.member_no,
           m.phone,
@@ -969,6 +970,7 @@ export const getLoans = async (req, res, next) => {
         l.*, 
         lp.name as product_name, 
         m.first_name, 
+        m.middle_name,
         m.last_name,
         m.member_no,
         m.phone,
@@ -1052,7 +1054,7 @@ export const getLoanById = async (req, res, next) => {
     const { id } = req.params;
 
     const loanResult = await query(
-      `SELECT l.*, lp.name as product_name, m.first_name, m.last_name, m.member_no, m.phone,
+      `SELECT l.*, lp.name as product_name, m.first_name, m.middle_name, m.last_name, m.member_no, m.phone,
          COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
          COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
          COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
@@ -2090,6 +2092,7 @@ export const updateLoanDetails = async (req, res, next) => {
         l.*, 
         lp.name as product_name, 
         m.first_name, 
+        m.middle_name,
         m.last_name,
         m.member_no,
         COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
