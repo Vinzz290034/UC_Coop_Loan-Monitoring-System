@@ -267,64 +267,32 @@ export const getBillingByLoanId = async (req, res, next) => {
       if (sPayments.length > 0) {
         // Multi-cutoff semi-monthly payments or single payment
         sPayments.forEach((p, pIdx) => {
+          const isSubRow = pIdx > 0;
+          const isLastPayment = pIdx === sPayments.length - 1;
+
+          // Only attribute the remaining balance to the final payment record of this installment so totals don't duplicate
+          const rowRemaining = (isLastPayment && remainingBal > 0)
+            ? parseFloat(s.outstanding_remaining).toFixed(2)
+            : '0.00';
+
           expandedRows.push({
             schedule_id: `${s.schedule_id}-${p.payment_id}`,
             installment_number: s.installment_number,
-            is_sub_row: pIdx > 0,
-            due_date: pIdx === 0 ? s.due_date : null,
-            principal_due: pIdx === 0 ? s.principal_due : '0.00',
-            interest_due: pIdx === 0 ? s.interest_due : '0.00',
-            total_due: pIdx === 0 ? s.total_due : '0.00',
+            is_sub_row: isSubRow,
+            due_date: isSubRow ? null : s.due_date,
+            principal_due: isSubRow ? '0.00' : s.principal_due,
+            interest_due: isSubRow ? '0.00' : s.interest_due,
+            total_due: isSubRow ? '0.00' : s.total_due,
             amount_paid: p.amount,
             principal_paid: p.principal_allocated ? parseFloat(p.principal_allocated).toFixed(2) : p.amount,
             interest_paid: p.interest_allocated ? parseFloat(p.interest_allocated).toFixed(2) : '0.00',
             reference_no: p.reference_no || 'SD',
-            installment_status: 'paid', // An actual payment made is PAID
-            outstanding_remaining: '0.00',
+            installment_status: remainingBal === 0 ? 'paid' : 'partially_paid',
+            outstanding_remaining: rowRemaining,
             date_paid: p.payment_date,
-            days_overdue: 0
+            days_overdue: remainingBal > 0 ? s.days_overdue : 0
           });
         });
-
-        // If there is still a remaining balance on this installment
-        if (remainingBal > 0) {
-          let isRemOverdue = false;
-          let remDaysOverdue = 0;
-
-          if (isSd2 && s.due_date) {
-            // In SD2, the 2nd cutoff is due at the end of the month (e.g. 30th/31st)
-            const d = new Date(s.due_date);
-            const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-            if (now > endOfMonth) {
-              isRemOverdue = true;
-              remDaysOverdue = Math.max(1, Math.floor((now.getTime() - endOfMonth.getTime()) / (1000 * 60 * 60 * 24)));
-            }
-          } else if (s.due_date) {
-            const d = new Date(s.due_date);
-            if (now > d) {
-              isRemOverdue = true;
-              remDaysOverdue = Math.max(1, Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)));
-            }
-          }
-
-          expandedRows.push({
-            schedule_id: `${s.schedule_id}-remaining`,
-            installment_number: s.installment_number,
-            is_sub_row: true,
-            due_date: null,
-            principal_due: '0.00',
-            interest_due: '0.00',
-            total_due: '0.00',
-            amount_paid: '0.00',
-            principal_paid: '0.00',
-            interest_paid: '0.00',
-            reference_no: 'SD',
-            installment_status: isRemOverdue ? 'unpaid' : 'pending',
-            outstanding_remaining: s.outstanding_remaining,
-            date_paid: null,
-            days_overdue: remDaysOverdue
-          });
-        }
       } else {
         const d = s.due_date ? new Date(s.due_date) : null;
         let isOverdue = false;

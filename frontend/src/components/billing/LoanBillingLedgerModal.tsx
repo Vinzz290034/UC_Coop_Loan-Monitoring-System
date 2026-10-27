@@ -280,6 +280,9 @@ export default function LoanBillingLedgerModal({
                         <th className="px-4 py-3.5 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">
                           Paid
                         </th>
+                        <th className="px-4 py-3.5 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">
+                          Remaining
+                        </th>
                         <th className="px-4 py-3.5 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-center">
                           Status
                         </th>
@@ -288,7 +291,7 @@ export default function LoanBillingLedgerModal({
                     <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/95">
                       {schedules.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="px-4 py-8 text-center text-neutral-500 text-xs italic">
+                          <td colSpan={9} className="px-4 py-8 text-center text-neutral-500 text-xs italic">
                             No installment records found for this contract.
                           </td>
                         </tr>
@@ -368,6 +371,15 @@ export default function LoanBillingLedgerModal({
                                   row.amount_paid || String(parseFloat(row.principal_paid) + parseFloat(row.interest_paid))
                                 )}
                               </td>
+                              <td className="px-4 py-3.5 font-mono whitespace-nowrap font-semibold">
+                                {parseFloat(row.outstanding_remaining || '0') > 0 ? (
+                                  <span className="text-tertiary dark:text-rose-400 font-bold">
+                                    {formatCurrency(row.outstanding_remaining)}
+                                  </span>
+                                ) : (
+                                  <span className="text-neutral-400 dark:text-neutral-500 font-normal">₱0.00</span>
+                                )}
+                              </td>
                               <td className="px-4 py-3.5 text-center whitespace-nowrap">
                               <span
                                 className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getInstallmentStatusBadge(
@@ -403,7 +415,7 @@ export default function LoanBillingLedgerModal({
         <div className="px-6 py-4 border-t border-outline-variant/40 flex items-center justify-between bg-surface-container-low/50 dark:bg-surface-container-high/20 flex-shrink-0">
           <span className="text-xs text-neutral-500 dark:text-neutral-400 font-medium">
             {schedules.length > 0
-              ? `${schedules.length} installment records scheduled`
+              ? `${schedules.length} installment ${schedules.length === 1 ? 'record' : 'records'}`
               : 'Billing ledger overview'}
           </span>
           <button
