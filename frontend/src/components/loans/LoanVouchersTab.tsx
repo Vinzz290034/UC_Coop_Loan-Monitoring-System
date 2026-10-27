@@ -1801,8 +1801,8 @@ export default function LoanVouchersTab({
               <div>
                 <span style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', display: 'block' }}>Received by:</span>
                 <div style={{ height: '24px' }}></div>
-                <p style={{ fontWeight: 'bold', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px' }}>
-                  {printingCvBreakdown.payee || printingCvBreakdown.payee_name || 'Borrower'}
+                <p style={{ fontWeight: 'bold', margin: '0 0 2px 0', borderBottom: '1px solid #111827', paddingBottom: '2px', minHeight: '16px' }}>
+                  &nbsp;
                 </p>
                 <span style={{ fontSize: '8px', color: '#9ca3af' }}>Signature over printed name</span>
               </div>

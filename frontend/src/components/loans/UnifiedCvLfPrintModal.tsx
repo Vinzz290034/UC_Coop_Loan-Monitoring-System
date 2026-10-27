@@ -2208,8 +2208,8 @@ export default function UnifiedCvLfPrintModal({
                               RECEIVED BY:
                             </span>
                             <div className="pt-2.5 pb-1">
-                              <p className="font-bold text-neutral-900 uppercase text-[11px] tracking-wide">
-                                {currentCv?.signatories?.received_by || currentCv?.payee || currentLf?.payee || '—'}
+                              <p className="font-bold text-neutral-900 uppercase text-[11px] tracking-wide min-h-[16px]">
+                                &nbsp;
                               </p>
                             </div>
                             <div className="border-b border-neutral-300"></div>
@@ -2768,8 +2768,8 @@ export default function UnifiedCvLfPrintModal({
                       RECEIVED BY:
                     </span>
                     <div style={{ paddingTop: '8px', paddingBottom: '2px' }}>
-                      <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9.5px', color: '#111827' }}>
-                        {currentCv?.signatories?.received_by || currentCv?.payee || currentLf?.payee || '—'}
+                      <p style={{ fontWeight: 'bold', textTransform: 'uppercase', margin: 0, fontSize: '9.5px', color: '#111827', minHeight: '14px' }}>
+                        &nbsp;
                       </p>
                     </div>
                     <div style={{ borderBottom: '1px solid #d1d5db', width: '100%' }}></div>

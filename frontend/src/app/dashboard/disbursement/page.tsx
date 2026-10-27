@@ -5183,8 +5183,8 @@ function DisbursementPageContent() {
                         <div>
                           <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">RECEIVED BY:</span>
                           <div className="h-4"></div>
-                          <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide">
-                            {selectedCvForModal.payee || '—'}
+                          <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide min-h-[16px]">
+                            &nbsp;
                           </p>
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                           <span className="text-[8px] text-neutral-400 block mt-0.5">Signature over Printed Name</span>
@@ -6618,8 +6618,8 @@ function DisbursementPageContent() {
                     RECEIVED BY:
                   </span>
                   <div style={{ height: '22px' }}></div>
-                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em' }}>
-                    {printingCvBreakdown.signatories?.received_by || printingCvBreakdown.payee || printingCvBreakdown.payee_name || '—'}
+                  <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em', minHeight: '16px' }}>
+                    &nbsp;
                   </p>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                   <span style={{ fontSize: '7.5px', color: '#6b7280', display: 'block', marginTop: '2px' }}>
