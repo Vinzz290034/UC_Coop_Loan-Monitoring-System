@@ -2027,6 +2027,7 @@ function LoansPageContent() {
           if (expandedLoanId === loan.id) setExpandedLoanId(null);
           showDialog('Loan Deleted', `${lafDisplay} for ${borrower} was successfully deleted.`, 'success');
           fetchMetrics();
+          fetchLoans();
         } catch (err: any) {
           console.error('Failed to delete loan:', err);
           showDialog(

@@ -835,12 +835,13 @@ export const disburseLoan = async (req, res, next) => {
     // 4. Record Audit Log
     try {
       await client.query(`
-        INSERT INTO audit_logs (user_id, action, module, entity_id, entity_type, details)
-        VALUES ($1, 'LOAN_DISBURSEMENT', 'loans', $2, 'loan', $3)
+        INSERT INTO audit_logs (user_id, username, action, module, details)
+        VALUES ($1, $2, 'LOAN_DISBURSEMENT', 'loans', $3)
       `, [
-        req.user.id,
-        String(id),
+        req.user?.id || null,
+        req.user?.username || 'admin',
         JSON.stringify({
+          loan_id: String(id),
           principal_amount: finalPrincipal,
           total_deductions: totalDeductions,
           net_proceeds: netProceeds,
@@ -2155,26 +2156,26 @@ export const deleteLoan = async (req, res, next) => {
     await client.query('DELETE FROM repayment_schedules WHERE loan_id = $1', [id]);
     await client.query('DELETE FROM loans WHERE id = $1', [id]);
 
-    // Audit log
+    await client.query('COMMIT');
+
+    // Audit log (performed post-commit with valid schema columns)
     try {
-      await client.query(`
-        INSERT INTO audit_logs (user_id, action, module, entity_id, entity_type, details)
-        VALUES ($1, $2, $3, $4, $5, $6)
+      await pool.query(`
+        INSERT INTO audit_logs (user_id, username, action, module, details)
+        VALUES ($1, $2, $3, $4, $5)
       `, [
-        req.user.id,
+        req.user?.id || null,
+        req.user?.username || 'admin',
         'LOAN_MANUAL_DELETE',
         'loans',
-        String(id),
-        'loan',
         JSON.stringify({
+          loan_id: String(id),
           deleted_loan: loan
         })
       ]);
     } catch (auditErr) {
       console.warn('Audit log write warning:', auditErr.message);
     }
-
-    await client.query('COMMIT');
 
     res.status(200).json({
       success: true,
