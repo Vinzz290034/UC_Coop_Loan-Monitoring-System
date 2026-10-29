@@ -2170,8 +2170,6 @@ function DisbursementPageContent() {
     const particulars = (cv.particulars || '').toLowerCase();
     return folder === 'revolving fund' || 
            folder.includes('revolving') || 
-           folder === 'operation' ||
-           folder.includes('operation') ||
            folder === 'petty cash' ||
            folder.includes('petty') ||
            particulars.includes('revolving fund') || 
@@ -2198,7 +2196,6 @@ function DisbursementPageContent() {
         f !== 'stl' &&
         !f.includes('stl') &&
         !f.includes('revolving') &&
-        !f.includes('operation') &&
         !f.includes('petty')
       ) {
         return false;
@@ -2207,6 +2204,7 @@ function DisbursementPageContent() {
     }
 
     if (
+      activeTab === 'operation_expense' ||
       activeTab === 'merchandise_payment' || 
       activeTab === 'services_expense'
     ) {
@@ -2216,8 +2214,7 @@ function DisbursementPageContent() {
     if (
       activeTab === 'stl_replenishment' ||
       activeTab === 'revolving_fund_replenishment' ||
-      activeTab === 'petty_cash_replenishment' ||
-      activeTab === 'operation_expense'
+      activeTab === 'petty_cash_replenishment'
     ) {
       return true;
     }
@@ -2229,10 +2226,11 @@ function DisbursementPageContent() {
     const cat = (folderOrCat || cv?.folder_name || '').toLowerCase();
     if (cat) {
       if (cat === 'stl' || cat.includes('stl')) return 'stl';
-      if (cat.includes('revolving') || cat.includes('operation') || cat.includes('petty')) return 'rf';
+      if (cat.includes('revolving') || cat.includes('petty')) return 'rf';
       return null;
     }
     if (
+      activeTab === 'operation_expense' ||
       activeTab === 'merchandise_payment' || 
       activeTab === 'services_expense'
     ) {
@@ -2248,8 +2246,7 @@ function DisbursementPageContent() {
     if (activeTab === 'stl_replenishment') return 'stl';
     if (
       activeTab === 'revolving_fund_replenishment' ||
-      activeTab === 'petty_cash_replenishment' ||
-      activeTab === 'operation_expense'
+      activeTab === 'petty_cash_replenishment'
     ) {
       return 'rf';
     }

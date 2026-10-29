@@ -1167,7 +1167,7 @@ export default function UnifiedCvLfPrintModal({
         if (cvObj) {
           const folder = (cvObj.folder_name || '').toLowerCase();
           const part = (cvObj.particulars || '').toLowerCase();
-          if (folder.includes('revolving') || folder.includes('operation') || folder.includes('petty') || part.includes('revolving') || cvObj.revolving_fund) {
+          if (folder.includes('revolving') || folder.includes('petty') || part.includes('revolving') || cvObj.revolving_fund) {
             detectedType = 'rf';
           } else {
             detectedType = 'stl';
@@ -1189,7 +1189,7 @@ export default function UnifiedCvLfPrintModal({
           : (cvObj.revolving_fund?.id || null);
 
         const cvFolderLower = (cvObj.folder_name || '').toLowerCase();
-        const isNonRfReplenish = cvFolderLower.includes('operation') || cvFolderLower.includes('petty');
+        const isNonRfReplenish = cvFolderLower.includes('petty');
 
         // If no explicit linked ID, try to find an LF matching voucher_no or particulars
         if (!linkedLfId && !isNonRfReplenish) {
@@ -1480,11 +1480,6 @@ export default function UnifiedCvLfPrintModal({
     return Number(currentLf?.total_liquidated || categoryBreakdown.total || 0);
   }, [detailedCvData.debitTotal, currentLf, resolvedType, categoryBreakdown.total]);
 
-  const isOperationVoucher = useMemo(() => {
-    const f = (currentCv?.folder_name || '').toLowerCase();
-    return f.includes('operation');
-  }, [currentCv]);
-
   const isPettyCashVoucher = useMemo(() => {
     const f = (currentCv?.folder_name || '').toLowerCase();
     return f.includes('petty');
@@ -1492,20 +1487,16 @@ export default function UnifiedCvLfPrintModal({
 
   const voucherCategoryLabel = useMemo(() => {
     if (resolvedType === 'stl') return 'STL Replenishment';
-    if (isOperationVoucher) return 'Operation Expense';
     if (isPettyCashVoucher) return 'Petty Cash Replenishment';
     return 'Revolving Fund Replenishment';
-  }, [resolvedType, isOperationVoucher, isPettyCashVoucher]);
+  }, [resolvedType, isPettyCashVoucher]);
 
   const authorizedAmount = useMemo(() => {
-    if (isOperationVoucher) {
-      return Number(currentCv?.fund_amount || currentCv?.authorized_amount || 0);
-    }
     if (isPettyCashVoucher) {
       return Number(currentCv?.fund_amount || currentCv?.authorized_amount || 3000);
     }
     return Number(currentCv?.fund_amount || currentCv?.authorized_amount || currentLf?.authorized_amount || 100000);
-  }, [currentCv, currentLf, isOperationVoucher, isPettyCashVoucher]);
+  }, [currentCv, currentLf, isPettyCashVoucher]);
 
   const balanceNetDue = useMemo(() => {
     return authorizedAmount - totalExpenseAmount;
@@ -2226,7 +2217,7 @@ export default function UnifiedCvLfPrintModal({
                     </div>
 
                     {/* 3 Summary Cards */}
-                    {!(cvViewMode === 'summary' && isHonorariumAndWages) && (!isOperationVoucher || authorizedAmount > 0) && (
+                    {!(cvViewMode === 'summary' && isHonorariumAndWages) && (
                       <div className="grid grid-cols-3 gap-2.5 text-xs">
                         <div className="p-2.5 border border-neutral-200 rounded-lg bg-white">
                           <span className="text-[8px] font-bold uppercase text-neutral-400 block tracking-wider">FUND AMOUNT</span>
@@ -2798,7 +2789,7 @@ export default function UnifiedCvLfPrintModal({
             </div>
 
             {/* 3 Summary Cards */}
-            {!(cvViewMode === 'summary' && isHonorariumAndWages) && (!isOperationVoucher || authorizedAmount > 0) && (
+            {!(cvViewMode === 'summary' && isHonorariumAndWages) && (
               <div className="no-print-split" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
                 <div style={{ padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: '#ffffff' }}>
                   <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>FUND AMOUNT</span>
