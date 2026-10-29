@@ -171,7 +171,7 @@ function getCvDisbursedAmount(cv: any): number {
     let cSum = 0;
     for (const item of details) {
       const desc = (item.book_of_account || item.description || '').trim();
-      if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+      if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank|revolving\s*fund\s*-)/i.test(desc)) continue;
       const val = typeof item.amount === 'number' ? item.amount : parseFloat(String(item.amount || item.debit || 0).replace(/,/g, ''));
       const isCredit = item.is_credit === true ||
                        item.isAutoCredit === true ||
@@ -185,7 +185,7 @@ function getCvDisbursedAmount(cv: any): number {
         dSum += val;
       }
     }
-    if (dSum > 0 && cSum > 0 && dSum > cSum) {
+    if (dSum > 0 && cSum > 0 && dSum >= cSum) {
       return dSum - cSum;
     }
     if (dSum > 0) return dSum;

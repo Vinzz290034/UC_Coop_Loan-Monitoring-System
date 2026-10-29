@@ -347,7 +347,7 @@ export default function LoanVouchersTab({
       let cSum = 0;
       for (const item of details) {
         const desc = (item.book_of_account || item.description || '').trim();
-        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank|revolving\s*fund\s*-)/i.test(desc)) continue;
         const val = typeof item.amount === 'number' ? item.amount : parseFloat(String(item.amount || item.debit || 0).replace(/,/g, ''));
         const isCredit = item.is_credit === true ||
                          item.isAutoCredit === true ||
@@ -361,7 +361,7 @@ export default function LoanVouchersTab({
           dSum += val;
         }
       }
-      if (dSum > 0 && cSum > 0 && dSum > cSum) {
+      if (dSum > 0 && cSum > 0 && dSum >= cSum) {
         return dSum - cSum;
       }
       if (dSum > 0) return dSum;
@@ -1710,7 +1710,7 @@ export default function LoanVouchersTab({
             {/* Accounting Table */}
             {(() => {
               const { rows, debitTotal, creditTotal } = getBalancedCvRows(printingCvBreakdown);
-              const printAmt = getCvDisbursedAmount(printingCvBreakdown) || debitTotal;
+              const printAmt = getCvDisbursedAmount(printingCvBreakdown);
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div style={{ border: '1px solid #a7f3d0', borderRadius: '8px', overflow: 'hidden' }}>

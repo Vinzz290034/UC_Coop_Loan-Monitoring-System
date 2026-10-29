@@ -1369,12 +1369,19 @@ function DisbursementPageContent() {
         const val = parseFloat(String(r.credit || (isCred && r.debit ? r.debit : '0') || '0')) || 0;
         if (isCib) {
           cibCreditTotal += val;
-        } else {
+        } else if (!/^revolving\s*fund\s*-/i.test((r.description || '').trim())) {
           nonCibCreditTotal += val;
         }
       } else {
         debitTotal += parseFloat(String(r.debit || '0')) || 0;
       }
+    }
+    if (!replenishType) {
+      if (cibCreditTotal > 0) return cibCreditTotal;
+      if (debitTotal > 0 && nonCibCreditTotal > 0 && debitTotal >= nonCibCreditTotal) {
+        return debitTotal - nonCibCreditTotal;
+      }
+      if (debitTotal > 0) return debitTotal;
     }
     const cibVal = parseFloat(editCvCibAmount || '0') || cibCreditTotal;
     const overallCredit = nonCibCreditTotal + cibVal;
@@ -1489,7 +1496,7 @@ function DisbursementPageContent() {
       let cSum = 0;
       for (const item of details) {
         const desc = (item.book_of_account || item.description || '').trim();
-        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
+        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank|revolving\s*fund\s*-)/i.test(desc)) continue;
         const val = typeof item.amount === 'number' ? item.amount : parseFloat(String(item.amount || item.debit || 0).replace(/,/g, ''));
         const isCredit = item.is_credit === true ||
                          item.isAutoCredit === true ||
@@ -1503,7 +1510,7 @@ function DisbursementPageContent() {
           dSum += val;
         }
       }
-      if (dSum > 0 && cSum > 0 && dSum > cSum) {
+      if (dSum > 0 && cSum > 0 && dSum >= cSum) {
         return dSum - cSum;
       }
       if (dSum > 0) return dSum;
@@ -5174,7 +5181,7 @@ function DisbursementPageContent() {
                 const cibRow = detailedData.rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
                 const actualDisbursedAmount = (cibRow && cibRow.credit !== null && cibRow.credit !== undefined && Number(cibRow.credit) > 0)
                   ? Number(cibRow.credit)
-                  : (getCvDisbursedAmount(selectedCvForModal) || summaryData.debitTotal || debitTotal);
+                  : (isReplenish ? (getCvDisbursedAmount(selectedCvForModal) || summaryData.debitTotal || debitTotal) : getCvDisbursedAmount(selectedCvForModal));
 
                 return (
                   <div className="space-y-3">
@@ -6663,7 +6670,7 @@ function DisbursementPageContent() {
               const cibRow = rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
               const actualPrintDisbursedAmount = (cibRow && cibRow.credit !== null && cibRow.credit !== undefined && Number(cibRow.credit) > 0)
                 ? Number(cibRow.credit)
-                : (getCvDisbursedAmount(printingCvBreakdown) || debitTotal);
+                : (isReplenish ? (getCvDisbursedAmount(printingCvBreakdown) || debitTotal) : getCvDisbursedAmount(printingCvBreakdown));
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{ border: '1px solid #6ee7b7', borderRadius: '10px', overflow: 'hidden', backgroundColor: '#ffffff' }}>
