@@ -41,6 +41,8 @@ import {
   Minimize2,
   Edit3,
   Lock,
+  Unlock,
+  ShieldAlert,
   Loader2
 } from 'lucide-react';
 
@@ -424,6 +426,8 @@ export default function CollectionPage() {
   const [editingItem, setEditingItem] = useState<CollectionItem | null>(null);
   const [editFormData, setEditFormData] = useState<any>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isEditOverride, setIsEditOverride] = useState(false);
+  const isEditLocked = editingItem?.status === 'filed' && !isEditOverride;
   const [isEditCustomBank, setIsEditCustomBank] = useState(false);
   const [isEditMemberDropdownOpen, setIsEditMemberDropdownOpen] = useState(false);
   const editMemberComboboxRef = useRef<HTMLDivElement>(null);
@@ -934,6 +938,7 @@ export default function CollectionPage() {
       collected_by: item.collected_by || 'CHINNETTE A. LAMOSTE',
     });
 
+    setIsEditOverride(false);
     setEditingItem(item);
   };
 
@@ -1089,11 +1094,11 @@ export default function CollectionPage() {
   };
 
   // Update or Seal & File collection
-  const handleUpdateCollection = async (markAsFiled: boolean = false) => {
+  const handleUpdateCollection = async (markAsFiled: boolean = false, unsealToCompleted: boolean = false) => {
     if (!editFormData || !editingItem) return;
 
-    if (editingItem.status === 'filed') {
-      setActionFeedback({ type: 'error', message: 'Filed collection entries are permanently locked and cannot be edited.' });
+    if (editingItem.status === 'filed' && !isEditOverride) {
+      setActionFeedback({ type: 'error', message: 'Filed collection entries are locked. Click "Override Lock" to edit.' });
       setTimeout(() => setActionFeedback(null), 4000);
       return;
     }
@@ -1244,7 +1249,7 @@ export default function CollectionPage() {
         ? editFormData.reference_no?.trim() || undefined
         : undefined,
       bank_name: editFormData.payment_method === 'Cheque' ? editFormData.bank_name?.trim() || undefined : undefined,
-      status: markAsFiled ? 'filed' : (editFormData.status || 'completed'),
+      status: unsealToCompleted ? 'completed' : markAsFiled ? 'filed' : (editFormData.status || 'completed'),
       remarks: editFormData.remarks?.trim() || undefined,
       collected_by: editFormData.collected_by?.trim() || 'CHINNETTE A. LAMOSTE',
     };
@@ -1256,14 +1261,19 @@ export default function CollectionPage() {
       setCollections(prev => prev.map(c => c.id === updated.id ? updated : c));
       setEditingItem(null);
       setEditFormData(null);
+      setIsEditOverride(false);
       setIsSealModalOpen(false);
       if (selectedItemForModal?.id === updated.id) {
         setSelectedItemForModal(updated);
       }
       setActionFeedback({
         type: 'success',
-        message: markAsFiled
+        message: unsealToCompleted
+          ? `Collection receipt #${updated.or_no} unsealed and reverted to Completed via Admin Override.`
+          : markAsFiled
           ? `Collection receipt #${updated.or_no} is now sealed & filed (locked).`
+          : editingItem.status === 'filed'
+          ? `Filed collection receipt #${updated.or_no} updated via Admin Override.`
           : `Collection receipt #${updated.or_no} updated successfully.`
       });
       setTimeout(() => setActionFeedback(null), 4000);
@@ -1671,11 +1681,11 @@ export default function CollectionPage() {
   };
 
   // Open single collection delete confirmation modal
-  const handleDeleteItem = (idOrItem: string | CollectionItem, e?: React.MouseEvent) => {
+  const handleDeleteItem = (idOrItem: string | CollectionItem, e?: React.MouseEvent, allowOverride: boolean = false) => {
     if (e) e.stopPropagation();
     const target = typeof idOrItem === 'string' ? collections.find(c => c.id === idOrItem) : idOrItem;
     if (!target) return;
-    if (target.status === 'filed') {
+    if (target.status === 'filed' && !isAdmin && !allowOverride) {
       setActionFeedback({ type: 'error', message: 'Filed collection receipts are permanently locked and cannot be deleted.' });
       setTimeout(() => setActionFeedback(null), 4000);
       return;
@@ -1686,7 +1696,7 @@ export default function CollectionPage() {
   // Perform single collection deletion after modal confirmation
   const confirmDeleteSingleItem = async () => {
     if (!itemToDelete) return;
-    if (itemToDelete.status === 'filed') {
+    if (itemToDelete.status === 'filed' && !isAdmin) {
       setActionFeedback({ type: 'error', message: 'Filed collection receipts are permanently locked and cannot be deleted.' });
       setTimeout(() => setActionFeedback(null), 4000);
       setItemToDelete(null);
@@ -1695,12 +1705,24 @@ export default function CollectionPage() {
 
     setIsDeletingItem(true);
     try {
-      await api.delete(`/collections/${itemToDelete.id}`);
+      const url = itemToDelete.status === 'filed'
+        ? `/collections/${itemToDelete.id}?override=true`
+        : `/collections/${itemToDelete.id}`;
+      await api.delete(url);
       setCollections(prev => prev.filter(c => c.id !== itemToDelete.id));
       if (selectedItemForModal?.id === itemToDelete.id) setSelectedItemForModal(null);
-      if (editingItem?.id === itemToDelete.id) setEditingItem(null);
+      if (editingItem?.id === itemToDelete.id) {
+        setEditingItem(null);
+        setEditFormData(null);
+        setIsEditOverride(false);
+      }
       setSelectedIds(prev => prev.filter(x => x !== itemToDelete.id));
-      setActionFeedback({ type: 'success', message: `Collection receipt #${itemToDelete.or_no} removed successfully.` });
+      setActionFeedback({
+        type: 'success',
+        message: itemToDelete.status === 'filed'
+          ? `Filed collection receipt #${itemToDelete.or_no} removed via Admin Override.`
+          : `Collection receipt #${itemToDelete.or_no} removed successfully.`
+      });
       setTimeout(() => setActionFeedback(null), 4000);
       setItemToDelete(null);
     } catch (err: any) {
@@ -1714,22 +1736,24 @@ export default function CollectionPage() {
 
   // Bulk delete selected
   const handleBulkDelete = async () => {
-    const nonFiledIds = selectedIds.filter(id => {
-      const c = collections.find(item => item.id === id);
-      return c && c.status !== 'filed';
-    });
-    if (nonFiledIds.length === 0) {
+    const deletableIds = isAdmin
+      ? selectedIds
+      : selectedIds.filter(id => {
+          const c = collections.find(item => item.id === id);
+          return c && c.status !== 'filed';
+        });
+    if (deletableIds.length === 0) {
       setIsBulkDeleteModalOpen(false);
       setActionFeedback({ type: 'error', message: 'Filed collection receipts cannot be deleted.' });
       setTimeout(() => setActionFeedback(null), 4000);
       return;
     }
     try {
-      await api.post('/collections/bulk-delete', { ids: nonFiledIds });
-      setCollections(prev => prev.filter(c => !nonFiledIds.includes(c.id)));
+      await api.post('/collections/bulk-delete', { ids: deletableIds, override: isAdmin });
+      setCollections(prev => prev.filter(c => !deletableIds.includes(c.id)));
       setSelectedIds([]);
       setIsBulkDeleteModalOpen(false);
-      setActionFeedback({ type: 'success', message: `${nonFiledIds.length} collection entries deleted.` });
+      setActionFeedback({ type: 'success', message: `${deletableIds.length} collection entries deleted.` });
       setTimeout(() => setActionFeedback(null), 4000);
     } catch (err: any) {
       console.error('Failed to bulk delete collections:', err);
@@ -2400,19 +2424,21 @@ export default function CollectionPage() {
                                       ? 'border-emerald-300/80 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
                                       : 'border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-primary dark:text-secondary'
                                   }`}
-                                  title={item.status === 'filed' ? 'View Sealed & Filed Collection' : 'Edit Collection & Seal/File'}
+                                  title={item.status === 'filed' ? 'View or Override Sealed & Filed Collection' : 'Edit Collection & Seal/File'}
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
 
-                                {/* Delete or Locked Indicator */}
+                                {/* Delete or Override Delete Button */}
                                 {item.status === 'filed' ? (
-                                  <span
-                                    className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 cursor-not-allowed inline-flex items-center justify-center"
-                                    title="Collection receipt is Sealed & Filed (Locked - cannot be deleted)"
+                                  <button
+                                    type="button"
+                                    onClick={e => handleDeleteItem(item.id, e, true)}
+                                    className="p-1.5 rounded-lg border border-amber-300/80 dark:border-amber-800/80 bg-amber-50/70 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 transition-all cursor-pointer inline-flex items-center justify-center"
+                                    title="Sealed & Filed — Click to Delete via Admin Override"
                                   >
-                                    <Lock className="w-3.5 h-3.5" />
-                                  </span>
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
                                 ) : (
                                   <button
                                     type="button"
@@ -3462,11 +3488,13 @@ export default function CollectionPage() {
               <div className="flex items-center gap-2.5">
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                   editingItem.status === 'filed'
-                    ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300'
+                    ? isEditOverride
+                      ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                      : 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300'
                     : 'bg-primary/10 text-primary dark:text-secondary'
                 }`}>
                   {editingItem.status === 'filed' ? (
-                    <Lock className="w-5 h-5" />
+                    isEditOverride ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />
                   ) : (
                     <Edit3 className="w-5 h-5" />
                   )}
@@ -3474,15 +3502,24 @@ export default function CollectionPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-black text-neutral-900 dark:text-white">
-                      {editingItem.status === 'filed' ? 'Sealed & Filed Collection' : 'Edit Collection Receipt'}
+                      {editingItem.status === 'filed'
+                        ? (isEditOverride ? 'Override Sealed Collection' : 'Sealed & Filed Collection')
+                        : 'Edit Collection Receipt'}
                     </h3>
                     <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 font-bold text-primary dark:text-secondary">
                       {editFormData.or_no}
                     </span>
+                    {editingItem.status === 'filed' && isEditOverride && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                        Override Active
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-neutral-500">
                     {editingItem.status === 'filed'
-                      ? 'This collection entry is permanently filed and locked in the official registry.'
+                      ? (isEditOverride
+                          ? 'Admin Override is enabled. You can now modify or delete this filed collection entry.'
+                          : 'This collection entry is filed and locked in the official registry. Use Override to edit or delete.')
                       : 'Modify collection receipt details or seal as filed into master registry.'}
                   </p>
                 </div>
@@ -3492,6 +3529,7 @@ export default function CollectionPage() {
                 onClick={() => {
                   setEditingItem(null);
                   setEditFormData(null);
+                  setIsEditOverride(false);
                 }}
                 className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 cursor-pointer"
               >
@@ -3507,19 +3545,75 @@ export default function CollectionPage() {
               }}
               className="p-5 overflow-y-auto space-y-4 text-xs"
             >
-              {/* Permanent Lock Banner if already filed */}
+              {/* Permanent Lock Banner & Admin Override Controls if already filed */}
               {editingItem.status === 'filed' && (
-                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-3">
-                  <Lock className="w-5 h-5 text-emerald-700 dark:text-emerald-300 shrink-0 mt-0.5" />
-                  <div className="text-xs">
-                    <p className="font-bold text-emerald-900 dark:text-emerald-200">
-                      Collection Entry is Sealed &amp; Filed (Locked)
-                    </p>
-                    <p className="text-emerald-700 dark:text-emerald-300 text-[11px] mt-0.5">
-                      Identical to the disbursement registry, this entry cannot be edited or deleted once filed.
-                    </p>
+                isEditOverride ? (
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <Unlock className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <p className="font-bold text-amber-900 dark:text-amber-200">
+                          Admin Override Unlocked — Editing Enabled
+                        </p>
+                        <p className="text-amber-800 dark:text-amber-300/90 text-[11px] mt-0.5">
+                          All fields are unlocked. You can save modifications while keeping it filed, unseal it back to Completed, or delete it.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteItem(editingItem, undefined, true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] transition-all shadow-xs cursor-pointer active:scale-95"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Entry</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditOverride(false)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/40 bg-white/80 dark:bg-neutral-900/80 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold text-[11px] transition-all cursor-pointer"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Re-Lock</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <Lock className="w-5 h-5 text-emerald-700 dark:text-emerald-300 shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <p className="font-bold text-emerald-900 dark:text-emerald-200">
+                          Collection Entry is Sealed &amp; Filed (Locked)
+                        </p>
+                        <p className="text-emerald-700 dark:text-emerald-300 text-[11px] mt-0.5">
+                          This entry is sealed in the registry. Use Admin Override to unlock editing or delete this entry.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditOverride(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] transition-all shadow-xs cursor-pointer active:scale-95"
+                        title="Unlock fields to edit this filed collection receipt"
+                      >
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>Override &amp; Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteItem(editingItem, undefined, true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-500/40 bg-rose-500/10 hover:bg-rose-600 hover:text-white text-rose-700 dark:text-rose-300 font-bold text-[11px] transition-all cursor-pointer active:scale-95"
+                        title="Delete this filed collection receipt via Admin Override"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Override Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                )
               )}
 
 
@@ -3532,7 +3626,7 @@ export default function CollectionPage() {
                   <input
                     type="text"
                     required
-                    disabled={editingItem.status === 'filed'}
+                    disabled={isEditLocked}
                     value={editFormData.or_no}
                     onChange={e => setEditFormData({ ...editFormData, or_no: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent font-mono font-bold text-xs text-neutral-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60 disabled:cursor-not-allowed"
@@ -3546,7 +3640,7 @@ export default function CollectionPage() {
                   <input
                     type="date"
                     required
-                    disabled={editingItem.status === 'filed'}
+                    disabled={isEditLocked}
                     value={editFormData.date}
                     onChange={e => setEditFormData({ ...editFormData, date: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -3563,7 +3657,7 @@ export default function CollectionPage() {
                   <input
                     type="text"
                     required
-                    disabled={editingItem.status === 'filed'}
+                    disabled={isEditLocked}
                     value={editFormData.payor_name}
                     onChange={e => setEditFormData({ ...editFormData, payor_name: e.target.value, member_id: '' })}
                     className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60 disabled:cursor-not-allowed"
@@ -3580,16 +3674,16 @@ export default function CollectionPage() {
                       <input
                         type="text"
                         required
-                        disabled={editingItem.status === 'filed'}
+                        disabled={isEditLocked}
                         value={editFormData.payor_name}
                         onFocus={() => {
-                          if (editingItem.status !== 'filed') setIsEditMemberDropdownOpen(true);
+                          if (!isEditLocked) setIsEditMemberDropdownOpen(true);
                         }}
                         onChange={e => handleEditMemberNameChange(e.target.value)}
                         className="w-full pl-3 pr-8 py-2 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                         placeholder="Search or enter member name..."
                       />
-                      {editingItem.status !== 'filed' && (
+                      {!isEditLocked && (
                         <button
                           type="button"
                           onClick={() => setIsEditMemberDropdownOpen(prev => !prev)}
@@ -3601,7 +3695,7 @@ export default function CollectionPage() {
                     </div>
 
                     {/* Dropdown list */}
-                    {isEditMemberDropdownOpen && editingItem.status !== 'filed' && (
+                    {isEditMemberDropdownOpen && !isEditLocked && (
                       <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl bg-white dark:bg-neutral-800 border border-outline-variant/60 shadow-2xl py-1 custom-scrollbar origin-top">
                         {editFilteredMembers.length === 0 ? (
                           <div className="px-3 py-3 text-center text-xs text-neutral-400">
@@ -3641,7 +3735,7 @@ export default function CollectionPage() {
                     </label>
                     <input
                       type="text"
-                      disabled={editingItem.status === 'filed'}
+                      disabled={isEditLocked}
                       value={editFormData.member_id}
                       onChange={e => setEditFormData({ ...editFormData, member_id: e.target.value })}
                       className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-transparent font-mono text-xs text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -3682,7 +3776,7 @@ export default function CollectionPage() {
                             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
                               Loan / Payment Item #{idx + 1}
                             </span>
-                            {editingItem.status !== 'filed' && (
+                            {!isEditLocked && (
                               <button
                                 type="button"
                                 onClick={() => handleRemoveEditLoan(idx)}
@@ -3707,7 +3801,7 @@ export default function CollectionPage() {
                               onChange={val => handleEditLoanFieldChange(idx, 'loan_account', val)}
                               options={LOANS_PAYABLE_OPTIONS}
                               placeholder="Select Loans Payable..."
-                              disabled={editingItem.status === 'filed'}
+                              disabled={isEditLocked}
                               buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
                             />
                             <div className="relative">
@@ -3716,7 +3810,7 @@ export default function CollectionPage() {
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                disabled={editingItem.status === 'filed'}
+                                disabled={isEditLocked}
                                 value={loan.principal_amount}
                                 onChange={e => handleEditLoanFieldChange(idx, 'principal_amount', e.target.value)}
                                 className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -3737,7 +3831,7 @@ export default function CollectionPage() {
                               onChange={val => handleEditLoanFieldChange(idx, 'interest_account', val)}
                               options={INTEREST_RECEIVED_OPTIONS}
                               placeholder="Select Interest Received..."
-                              disabled={editingItem.status === 'filed'}
+                              disabled={isEditLocked}
                               buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
                             />
                             <div className="relative">
@@ -3746,7 +3840,7 @@ export default function CollectionPage() {
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                disabled={editingItem.status === 'filed'}
+                                disabled={isEditLocked}
                                 value={loan.interest_amount}
                                 onChange={e => handleEditLoanFieldChange(idx, 'interest_amount', e.target.value)}
                                 className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -3767,7 +3861,7 @@ export default function CollectionPage() {
                               onChange={val => handleEditLoanFieldChange(idx, 'fines_account', val)}
                               options={FINES_OPTIONS}
                               placeholder="Select Fines..."
-                              disabled={editingItem.status === 'filed'}
+                              disabled={isEditLocked}
                               buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
                             />
                             <div className="relative">
@@ -3776,7 +3870,7 @@ export default function CollectionPage() {
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                disabled={editingItem.status === 'filed'}
+                                disabled={isEditLocked}
                                 value={loan.fines_amount}
                                 onChange={e => handleEditLoanFieldChange(idx, 'fines_amount', e.target.value)}
                                 className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -3790,7 +3884,7 @@ export default function CollectionPage() {
                   </div>
 
                   {/* Add Another Loan Item */}
-                  {editingItem.status !== 'filed' && (
+                  {!isEditLocked && (
                     <div className="flex justify-end pt-0.5">
                       <button
                         type="button"
@@ -3818,7 +3912,7 @@ export default function CollectionPage() {
                           type="number"
                           step="0.01"
                           min="0"
-                          disabled={editingItem.status === 'filed'}
+                          disabled={isEditLocked}
                           value={editFormData.common_share_amount}
                           onChange={e => setEditFormData({ ...editFormData, common_share_amount: e.target.value })}
                           className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -3843,7 +3937,7 @@ export default function CollectionPage() {
                           type="number"
                           step="0.01"
                           min="0"
-                          disabled={editingItem.status === 'filed'}
+                          disabled={isEditLocked}
                           value={editFormData.membership_fee}
                           onChange={e => setEditFormData({ ...editFormData, membership_fee: e.target.value })}
                           className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -3868,7 +3962,7 @@ export default function CollectionPage() {
                           type="number"
                           step="0.01"
                           min="0"
-                          disabled={editingItem.status === 'filed'}
+                          disabled={isEditLocked}
                           value={editFormData.billing_amount}
                           onChange={e => setEditFormData({ ...editFormData, billing_amount: e.target.value })}
                           className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -3911,7 +4005,7 @@ export default function CollectionPage() {
                             Enter item name, category, size, quantity, cost, and selling price. Revenue and gross profit are calculated automatically.
                           </span>
                         </div>
-                        {editingItem.status !== 'filed' && (
+                        {!isEditLocked && (
                           <div className="flex items-center gap-1.5 self-end sm:self-auto">
                             <button
                               type="button"
@@ -3975,7 +4069,7 @@ export default function CollectionPage() {
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
                                       <input
                                         type="text"
-                                        disabled={editingItem.status === 'filed'}
+                                        disabled={isEditLocked}
                                         value={it.item}
                                         onChange={e => handleEditItemFieldChange(idx, 'item', e.target.value)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
@@ -3985,7 +4079,7 @@ export default function CollectionPage() {
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
                                       <input
                                         type="text"
-                                        disabled={editingItem.status === 'filed'}
+                                        disabled={isEditLocked}
                                         value={it.description}
                                         onChange={e => handleEditItemFieldChange(idx, 'description', e.target.value)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
@@ -3995,7 +4089,7 @@ export default function CollectionPage() {
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
                                       <input
                                         type="text"
-                                        disabled={editingItem.status === 'filed'}
+                                        disabled={isEditLocked}
                                         value={it.size}
                                         onChange={e => handleEditItemFieldChange(idx, 'size', e.target.value)}
                                         className="w-full px-1.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-center font-mono font-medium text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4006,7 +4100,7 @@ export default function CollectionPage() {
                                       <input
                                         type="number"
                                         min="1"
-                                        disabled={editingItem.status === 'filed'}
+                                        disabled={isEditLocked}
                                         value={it.quantity}
                                         onChange={e => handleEditItemFieldChange(idx, 'quantity', e.target.value)}
                                         className="w-full px-1 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-center font-mono font-bold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4018,7 +4112,7 @@ export default function CollectionPage() {
                                         type="number"
                                         step="0.01"
                                         min="0"
-                                        disabled={editingItem.status === 'filed'}
+                                        disabled={isEditLocked}
                                         value={it.cost_price}
                                         onChange={e => handleEditItemFieldChange(idx, 'cost_price', e.target.value)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-right font-mono font-medium text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4030,7 +4124,7 @@ export default function CollectionPage() {
                                         type="number"
                                         step="0.01"
                                         min="0"
-                                        disabled={editingItem.status === 'filed'}
+                                        disabled={isEditLocked}
                                         value={it.selling_price}
                                         onChange={e => handleEditItemFieldChange(idx, 'selling_price', e.target.value)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-right font-mono font-bold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4044,7 +4138,7 @@ export default function CollectionPage() {
                                       ₱{gp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </td>
                                     <td className="p-1.5 text-center">
-                                      {(editFormData.items || []).length > 1 && editingItem.status !== 'filed' ? (
+                                      {(editFormData.items || []).length > 1 && !isEditLocked ? (
                                         <button
                                           type="button"
                                           onClick={() => handleEditRemoveItem(idx)}
@@ -4104,7 +4198,7 @@ export default function CollectionPage() {
                           Service Type
                         </label>
                         <select
-                          disabled={editingItem.status === 'filed'}
+                          disabled={isEditLocked}
                           value={editFormData.service_type}
                           onChange={e => setEditFormData({ ...editFormData, service_type: e.target.value })}
                           className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4125,7 +4219,7 @@ export default function CollectionPage() {
                           <input
                             type="number"
                             min="1"
-                            disabled={editingItem.status === 'filed'}
+                            disabled={isEditLocked}
                             value={editFormData.service_copies}
                             onChange={e => setEditFormData({ ...editFormData, service_copies: e.target.value })}
                             className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4139,7 +4233,7 @@ export default function CollectionPage() {
                           <input
                             type="number"
                             step="0.01"
-                            disabled={editingItem.status === 'filed'}
+                            disabled={isEditLocked}
                             value={editFormData.service_rate}
                             onChange={e => setEditFormData({ ...editFormData, service_rate: e.target.value })}
                             className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4164,7 +4258,7 @@ export default function CollectionPage() {
                       onChange={val => setEditFormData({ ...editFormData, payment_method: val as PaymentMethod })}
                       options={PAYMENT_METHOD_OPTIONS}
                       placeholder="Select Payment Method..."
-                      disabled={editingItem.status === 'filed'}
+                      disabled={isEditLocked}
                       buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2"
                     />
                   </div>
@@ -4177,7 +4271,7 @@ export default function CollectionPage() {
                       onChange={val => setEditFormData({ ...editFormData, collected_by: val })}
                       options={CASHIER_OPTIONS}
                       placeholder="Select Cashier..."
-                      disabled={editingItem.status === 'filed'}
+                      disabled={isEditLocked}
                       buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2"
                     />
                   </div>
@@ -4191,7 +4285,7 @@ export default function CollectionPage() {
                     <input
                       type="text"
                       maxLength={4}
-                      disabled={editingItem.status === 'filed'}
+                      disabled={isEditLocked}
                       value={editFormData.reference_no}
                       onChange={e => setEditFormData({ ...editFormData, reference_no: e.target.value.replace(/\D/g, '') })}
                       className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4207,7 +4301,7 @@ export default function CollectionPage() {
                     </label>
                     <input
                       type="text"
-                      disabled={editingItem.status === 'filed'}
+                      disabled={isEditLocked}
                       value={editFormData.reference_no}
                       onChange={e => setEditFormData({ ...editFormData, reference_no: e.target.value })}
                       className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4226,7 +4320,7 @@ export default function CollectionPage() {
                         <input
                           type="text"
                           required
-                          disabled={editingItem.status === 'filed'}
+                          disabled={isEditLocked}
                           value={editFormData.reference_no}
                           onChange={e => setEditFormData({ ...editFormData, reference_no: e.target.value })}
                           className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4258,7 +4352,7 @@ export default function CollectionPage() {
                           }}
                           options={BANK_OPTIONS}
                           placeholder="Select Bank"
-                          disabled={editingItem.status === 'filed'}
+                          disabled={isEditLocked}
                           buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2.5 text-xs"
                           menuClassName="w-72"
                         />
@@ -4274,7 +4368,7 @@ export default function CollectionPage() {
                           type="text"
                           required
                           autoFocus
-                          disabled={editingItem.status === 'filed'}
+                          disabled={isEditLocked}
                           value={editFormData.bank_name}
                           onChange={e => setEditFormData({ ...editFormData, bank_name: e.target.value })}
                           className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs font-bold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4292,7 +4386,7 @@ export default function CollectionPage() {
                   </label>
                   <textarea
                     rows={3}
-                    disabled={editingItem.status === 'filed'}
+                    disabled={isEditLocked}
                     value={editFormData.remarks}
                     onChange={e => setEditFormData({ ...editFormData, remarks: e.target.value })}
                     className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs text-neutral-900 dark:text-white resize-y min-h-[72px] disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4302,29 +4396,89 @@ export default function CollectionPage() {
               </div>
 
               {/* Modal Actions */}
-              <div className="pt-3 border-t border-outline-variant/60 flex items-center justify-between gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => handlePrintReceipt(editingItem)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
-                  title="Print collection receipt"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Receipt</span>
-                </button>
-
+              <div className="pt-3 border-t border-outline-variant/60 flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2">
-                  {editingItem.status === 'filed' ? (
+                  <button
+                    type="button"
+                    onClick={() => handlePrintReceipt(editingItem)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
+                    title="Print collection receipt"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print Receipt</span>
+                  </button>
+
+                  {(!isEditLocked) && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingItem(null);
-                        setEditFormData(null);
-                      }}
-                      className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 hover:opacity-90 transition-all cursor-pointer"
+                      onClick={() => handleDeleteItem(editingItem, undefined, true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition-all cursor-pointer"
+                      title={editingItem.status === 'filed' ? 'Delete filed collection entry via Admin Override' : 'Delete collection entry'}
                     >
-                      Close
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{editingItem.status === 'filed' ? 'Override Delete' : 'Delete'}</span>
                     </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {isEditLocked ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditOverride(true)}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>Override Lock</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingItem(null);
+                          setEditFormData(null);
+                          setIsEditOverride(false);
+                        }}
+                        className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 hover:opacity-90 transition-all cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </>
+                  ) : editingItem.status === 'filed' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingItem(null);
+                          setEditFormData(null);
+                          setIsEditOverride(false);
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isSavingEdit}
+                        onClick={() => handleUpdateCollection(false, true)}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 transition-all cursor-pointer flex items-center gap-1.5"
+                        title="Save changes and unseal status back to Completed"
+                      >
+                        {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
+                        <span>Unseal &amp; Save</span>
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={isSavingEdit}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                        title="Save override changes and keep status as Filed"
+                      >
+                        {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        <span>Save Override (Keep Filed)</span>
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button
@@ -4332,6 +4486,7 @@ export default function CollectionPage() {
                         onClick={() => {
                           setEditingItem(null);
                           setEditFormData(null);
+                          setIsEditOverride(false);
                         }}
                         className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-all cursor-pointer"
                       >
@@ -4594,13 +4749,25 @@ export default function CollectionPage() {
               {/* Actions inside Detail Modal */}
               <div className="pt-3 border-t border-outline-variant/60 flex items-center justify-between">
                 {selectedItemForModal.status === 'filed' ? (
-                  <span
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-neutral-400 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed border border-neutral-200 dark:border-neutral-700"
-                    title="Filed collections cannot be deleted"
-                  >
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Locked / Filed</span>
-                  </span>
+                  isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteItem(selectedItemForModal, undefined, true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition-all cursor-pointer"
+                      title="Delete filed collection entry via Admin Override"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Override Delete</span>
+                    </button>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-neutral-400 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed border border-neutral-200 dark:border-neutral-700"
+                      title="Filed collections cannot be deleted"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Locked / Filed</span>
+                    </span>
+                  )
                 ) : (
                   <button
                     type="button"
@@ -4611,18 +4778,24 @@ export default function CollectionPage() {
                   </button>
                 )}
                 <div className="flex items-center gap-2">
-                  {isAdmin && selectedItemForModal.status !== 'filed' && (
+                  {isAdmin && (
                     <button
                       type="button"
                       onClick={() => {
                         const itemToEdit = selectedItemForModal;
+                        const wasFiled = itemToEdit.status === 'filed';
                         setSelectedItemForModal(null);
                         handleOpenEditModal(itemToEdit);
+                        if (wasFiled) setIsEditOverride(true);
                       }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-primary text-white dark:bg-secondary dark:text-neutral-950 hover:brightness-110 transition-all cursor-pointer"
+                      className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        selectedItemForModal.status === 'filed'
+                          ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                          : 'bg-primary text-white dark:bg-secondary dark:text-neutral-950 hover:brightness-110'
+                      }`}
                     >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>Edit &amp; Seal</span>
+                      {selectedItemForModal.status === 'filed' ? <Unlock className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
+                      <span>{selectedItemForModal.status === 'filed' ? 'Override & Edit' : 'Edit & Seal'}</span>
                     </button>
                   )}
                   <button
@@ -4657,10 +4830,26 @@ export default function CollectionPage() {
                 <Trash2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-bold text-base text-neutral-900 dark:text-white">Delete Collection Entry</h3>
+                <h3 className="font-bold text-base text-neutral-900 dark:text-white">
+                  {itemToDelete.status === 'filed' ? 'Override Delete Filed Collection' : 'Delete Collection Entry'}
+                </h3>
                 <p className="text-xs text-neutral-500 font-mono">Receipt #{itemToDelete.or_no}</p>
               </div>
             </div>
+
+            {itemToDelete.status === 'filed' && (
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs">
+                <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-900 dark:text-amber-200">
+                    Admin Override Required
+                  </p>
+                  <p className="text-amber-800 dark:text-amber-300/90 text-[11px] mt-0.5">
+                    This collection receipt is already marked as <span className="font-bold uppercase">Sealed &amp; Filed</span>. Proceeding will bypass the registry lock and permanently delete it.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="p-3.5 rounded-2xl bg-surface-container-low/60 dark:bg-neutral-800/60 border border-outline-variant/60 text-xs space-y-2">
               <div className="flex justify-between items-center">
@@ -4703,7 +4892,7 @@ export default function CollectionPage() {
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
               >
                 {isDeletingItem ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                <span>Confirm Delete</span>
+                <span>{itemToDelete.status === 'filed' ? 'Override & Delete' : 'Confirm Delete'}</span>
               </button>
             </div>
           </div>

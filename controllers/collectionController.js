@@ -600,10 +600,11 @@ export async function deleteCollection(req, res) {
       });
     }
 
-    if (check.rows[0].status === 'filed') {
+    const isOverride = req.query.override === 'true' || req.body?.override === true || req.user?.role === 'admin';
+    if (check.rows[0].status === 'filed' && !isOverride) {
       return res.status(403).json({
         success: false,
-        error: { message: 'This collection entry is Sealed & Filed and cannot be deleted.' }
+        error: { message: 'This collection entry is Sealed & Filed and cannot be deleted without Admin Override.' }
       });
     }
 
@@ -629,7 +630,7 @@ export async function deleteCollection(req, res) {
  */
 export async function bulkDeleteCollections(req, res) {
   try {
-    const { ids } = req.body;
+    const { ids, override } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({
         success: false,
@@ -637,8 +638,11 @@ export async function bulkDeleteCollections(req, res) {
       });
     }
 
+    const allowFiled = override === true || req.user?.role === 'admin';
     const result = await pool.query(
-      "DELETE FROM collections WHERE id = ANY($1::text[]) AND status != 'filed' RETURNING id",
+      allowFiled
+        ? "DELETE FROM collections WHERE id = ANY($1::text[]) RETURNING id"
+        : "DELETE FROM collections WHERE id = ANY($1::text[]) AND status != 'filed' RETURNING id",
       [ids]
     );
 
