@@ -1702,35 +1702,39 @@ export default function CollectionPage() {
   const handleExportCsv = () => {
     const headers = ['Date', 'Receipt #', 'Payor / Member', 'Category', 'Particulars / Description', 'Amount', 'Payment Method', 'Reference #', 'Status', 'Collected By', 'Remarks'];
     const rows = filteredCollections.map(item => {
-      let desc = '';
-      if (item.tab === 'credit') {
-        const parts: string[] = [];
-        if (item.loans && item.loans.length > 0) {
-          for (const loan of item.loans) {
-            if (loan.principal_amount && loan.principal_amount > 0) parts.push(loan.loan_account);
-            if (loan.interest_amount && loan.interest_amount > 0) parts.push(loan.interest_account || 'Interest');
-            if (loan.fines_amount && loan.fines_amount > 0) parts.push(loan.fines_account || 'Fines & Late Charges');
+      let desc = (item.remarks || '').trim();
+      if (!desc) {
+        if (item.tab === 'credit') {
+          const parts: string[] = [];
+          if (item.loans && item.loans.length > 0) {
+            for (const loan of item.loans) {
+              if (loan.principal_amount && loan.principal_amount > 0) parts.push(loan.loan_account);
+              if (loan.interest_amount && loan.interest_amount > 0) parts.push(loan.interest_account || 'Interest');
+              if (loan.fines_amount && loan.fines_amount > 0) parts.push(loan.fines_account || 'Fines & Late Charges');
+            }
+          } else {
+            if (item.principal_amount && item.principal_amount > 0) parts.push(item.loan_account || 'Principal');
+            if (item.interest_amount && item.interest_amount > 0) parts.push(item.interest_account || 'Interest');
+            if (item.fines_amount && item.fines_amount > 0) parts.push(item.fines_account || 'Fines & Late Charges');
           }
-        } else {
-          if (item.principal_amount && item.principal_amount > 0) parts.push(item.loan_account || 'Principal');
-          if (item.interest_amount && item.interest_amount > 0) parts.push(item.interest_account || 'Interest');
-          if (item.fines_amount && item.fines_amount > 0) parts.push(item.fines_account || 'Fines & Late Charges');
+          if (item.fines_amount && item.fines_amount > 0 && !parts.some(p => /fine|penalty|charge/i.test(p))) {
+            parts.push(item.fines_account || 'Fines & Late Charges');
+          }
+          if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
+          if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
+          if (item.billing_amount && item.billing_amount > 0) parts.push('University of Cebu Inc. (Billing)');
+          desc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || 'Credit Collection');
+        } else if (item.items && item.items.length > 1) {
+          desc = `${item.items.length} items (${item.item_name || item.items[0]?.item || 'Item'} + ${item.items.length - 1} more)`;
+        } else if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
+          desc = `${item.item_name || 'Store Item'} (${item.quantity || 1} pcs @ ₱${item.unit_price || 0})`;
+        } else if (item.tab === 'services' || (item.tab === 'sales_services' && item.service_type)) {
+          desc = `${item.service_type || 'Service'} (${item.service_copies || 1} @ ₱${item.service_rate || 0})`;
+        } else if (item.tab === 'sales_services') {
+          desc = item.particulars || item.item_name || item.service_type || 'Sales & Services';
+        } else if (item.tab === 'others') {
+          desc = item.particulars || 'Miscellaneous';
         }
-        if (item.fines_amount && item.fines_amount > 0 && !parts.some(p => /fine|penalty|charge/i.test(p))) {
-          parts.push(item.fines_account || 'Fines & Late Charges');
-        }
-        if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
-        if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
-        if (item.billing_amount && item.billing_amount > 0) parts.push('University of Cebu Inc. (Billing)');
-        desc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || 'Credit Collection');
-      } else if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
-        desc = `${item.item_name || 'Store Item'} (${item.quantity || 1} pcs @ ₱${item.unit_price || 0})`;
-      } else if (item.tab === 'services' || (item.tab === 'sales_services' && item.service_type)) {
-        desc = `${item.service_type || 'Service'} (${item.service_copies || 1} @ ₱${item.service_rate || 0})`;
-      } else if (item.tab === 'sales_services') {
-        desc = item.particulars || item.item_name || item.service_type || 'Sales & Services';
-      } else if (item.tab === 'others') {
-        desc = item.particulars || 'Miscellaneous';
       }
 
       const catLabel = (item.tab === 'sales' || item.tab === 'services' || item.tab === 'sales_services')
@@ -2221,8 +2225,8 @@ export default function CollectionPage() {
                   paginatedCollections.map(item => {
                     const isSelected = selectedIds.includes(item.id);
 
-                    // Formulate primary description
-                    let primaryDesc = '';
+                    // Formulate primary description (prioritize remarks if provided)
+                    let detailsDesc = '';
                     if (item.tab === 'credit') {
                       const parts: string[] = [];
                       if (item.loans && item.loans.length > 0) {
@@ -2242,16 +2246,21 @@ export default function CollectionPage() {
                       if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
                       if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
                       if (item.billing_amount && item.billing_amount > 0) parts.push('University of Cebu Inc. (Billing)');
-                      primaryDesc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || item.particulars || 'Loan Repayment');
+                      detailsDesc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || item.particulars || 'Loan Repayment');
+                    } else if (item.items && item.items.length > 1) {
+                      detailsDesc = `${item.items.length} items (${item.item_name || item.items[0]?.item || 'Item'} + ${item.items.length - 1} more)`;
                     } else if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
-                      primaryDesc = `${item.item_name || 'Store Item'}${item.quantity ? ` (${item.quantity} pcs)` : ''}`;
+                      detailsDesc = `${item.item_name || 'Store Item'}${item.quantity ? ` (${item.quantity} pcs)` : ''}`;
                     } else if (item.tab === 'services' || (item.tab === 'sales_services' && item.service_type)) {
-                      primaryDesc = `${item.service_type || 'Service'}${item.service_copies ? ` (${item.service_copies} units)` : ''}`;
+                      detailsDesc = `${item.service_type || 'Service'}${item.service_copies ? ` (${item.service_copies} units)` : ''}`;
                     } else if (item.tab === 'sales_services') {
-                      primaryDesc = item.particulars || item.item_name || item.service_type || 'Sales & Services';
+                      detailsDesc = item.particulars || item.item_name || item.service_type || 'Sales & Services';
                     } else {
-                      primaryDesc = item.particulars || 'Collection Receipt';
+                      detailsDesc = item.particulars || 'Collection Receipt';
                     }
+
+                    const remarksText = (item.remarks || '').trim();
+                    const primaryDesc = remarksText || detailsDesc;
 
                     return (
                       <tr
@@ -2305,7 +2314,7 @@ export default function CollectionPage() {
                             </div>
                           ) : null}
                         </td>
-                        <td className="py-3 px-3 text-neutral-700 dark:text-neutral-300" title={primaryDesc}>
+                        <td className="py-3 px-3 text-neutral-700 dark:text-neutral-300" title={remarksText && detailsDesc && remarksText !== detailsDesc ? `${remarksText} (${detailsDesc})` : (remarksText || detailsDesc)}>
                           <div className="truncate font-medium">{primaryDesc}</div>
                           <div className="mt-1">
                             <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700">
