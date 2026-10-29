@@ -376,6 +376,8 @@ export default function CollectionPage() {
   // Stored collections (100% PostgreSQL database-driven)
   const [collections, setCollections] = useState<CollectionItem[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(true);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const rowCounterRef = useRef(0);
 
   // Fetch collections strictly from server database
   const fetchCollections = async () => {
@@ -408,7 +410,6 @@ export default function CollectionPage() {
   const [sortBy, setSortBy] = useState<'or_no' | 'date'>('or_no');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isCustomBank, setIsCustomBank] = useState(false);
 
   // Pagination States
@@ -823,7 +824,7 @@ export default function CollectionPage() {
     } else if (item.tab === 'credit') {
       initialLoans = [
         {
-          id: `edit-loan-0-${Date.now()}`,
+          id: `edit-loan-0-${++rowCounterRef.current}`,
           loan_account: item.loan_account || 'Loans Payable - Salary',
           principal_amount: item.principal_amount ? String(item.principal_amount) : '',
           interest_account: item.interest_account || 'Interest Received - Salary',
@@ -835,7 +836,7 @@ export default function CollectionPage() {
     } else {
       initialLoans = [
         {
-          id: `edit-loan-0-${Date.now()}`,
+          id: `edit-loan-0-${++rowCounterRef.current}`,
           loan_account: 'Loans Payable - Salary',
           principal_amount: '',
           interest_account: 'Interest Received - Salary',
@@ -866,7 +867,7 @@ export default function CollectionPage() {
         }))
       : [
           {
-            id: `edit-item-0-${Date.now()}`,
+            id: `edit-item-0-${++rowCounterRef.current}`,
             item: item.item_name || '',
             description: item.item_category || '',
             size: (item as any).size || '',
@@ -1240,7 +1241,7 @@ export default function CollectionPage() {
 
   // Filtered and Sorted Collections
   const filteredCollections = useMemo(() => {
-    let result = collections.filter(item => {
+    const result = collections.filter(item => {
       // Tab filter
       if (activeTab !== 'all') {
         if (activeTab === 'sales_services') {

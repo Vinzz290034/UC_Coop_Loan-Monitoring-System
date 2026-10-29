@@ -1761,12 +1761,14 @@ export const parseCheckVouchersFromSheet = (sheet, sheetName = '') => {
         })
         .map(item => ({
           book_of_account: item.bookOfAccount || 'Disbursed Item',
-          amount: item.amount
+          amount: item.amount,
+          ...(item.remarks ? { remarks: item.remarks } : {})
         }));
     } else if (v.subRows && v.subRows.length === 1 && v.subRows[0].bookOfAccount && v.subRows[0].bookOfAccount.trim()) {
       details = [{
         book_of_account: v.subRows[0].bookOfAccount,
-        amount: v.amount
+        amount: v.amount,
+        ...(v.subRows[0].remarks ? { remarks: v.subRows[0].remarks } : {})
       }];
     }
 
@@ -1848,7 +1850,7 @@ export const parseCheckVouchersFromSheet = (sheet, sheetName = '') => {
       if (box_name && !currentVoucher.box_name) {
         currentVoucher.box_name = box_name;
       }
-      currentVoucher.subRows.push({ bookOfAccount, amount });
+      currentVoucher.subRows.push({ bookOfAccount, amount, remarks: particulars || null });
     }
   }
 

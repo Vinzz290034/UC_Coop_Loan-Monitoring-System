@@ -474,7 +474,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
 
   const isBroadCategoryDesc = (desc: string) => {
     const d = (desc || '').trim().toLowerCase();
-    return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'revolving fund', 'loan', 'petty cash'].includes(d) ||
+    return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'short term loan replenishment', 'stl replenishment', 'stl fund replenishment', 'revolving fund', 'revolving fund replenishment', 'loan', 'loans receivable', 'petty cash', 'petty cash replenishment'].includes(d) ||
            /^(revolving\s*fund|stl|short\s*term\s*loan)\s*-\s*(operation|operations|service|services|stl|cdf|cetf|merchandise)$/i.test(d);
   };
 
@@ -485,11 +485,15 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
     return !isCredit && val > 0;
   });
 
-  const detailsAreOnlyCategories = debitDetails.length > 0 && debitDetails.every(d => isBroadCategoryDesc(d.book_of_account || d.description || ''));
+  const hasAnyRemarksInDetails = details.some(d => Boolean((d.remarks || d.particulars || d.note || '').toString().trim()));
+  const detailsAreOnlyCategories =
+    debitDetails.length > 0 &&
+    !hasAnyRemarksInDetails &&
+    debitDetails.every(d => isBroadCategoryDesc(d.book_of_account || d.description || ''));
 
   // Prioritize activeItems from attached liquidation schedule when:
   // 1. cv details is empty, OR
-  // 2. stored details only contain broad category labels (Operation/Service/etc.) — treat those as summary-level, not truly detailed
+  // 2. stored details only contain broad category labels (Operation/Service/etc.) without custom remarks — treat those as summary-level, not truly detailed
   const shouldUseActiveItems = activeItems.length > 0 && (debitDetails.length === 0 || detailsAreOnlyCategories);
 
   if (shouldUseActiveItems) {
@@ -536,6 +540,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
                            (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit && !item.book_of_account && !item.description);
       const dateStr = item.date ? formatIsoDate(item.date) : (cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—');
       const vNo = item.voucher_no || (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—';
+      const itemRemarks = item.remarks || item.particulars || item.note || '';
 
       if (isCreditItem) {
         const creditVal = rawVal < 0
@@ -557,7 +562,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           date: dateStr,
           voucher_no: vNo,
           description: desc || 'Credit / Deduction',
-          remarks: item.remarks || '',
+          remarks: itemRemarks,
           debit: null,
           credit: creditVal,
           category: creditCat || undefined
@@ -571,7 +576,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           date: dateStr,
           voucher_no: vNo,
           description: desc || 'Disbursement Line',
-          remarks: item.remarks || '',
+          remarks: itemRemarks,
           debit: rawVal,
           credit: null,
           category: resolvedCat
@@ -582,10 +587,35 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           date: dateStr,
           voucher_no: vNo,
           description: desc,
-          remarks: item.remarks || '',
+          remarks: itemRemarks,
           debit: null,
           credit: null
         });
+      }
+    }
+
+    // If resolvedType === 'rf' and rows only have debit rows (no non-CIB credit rows), pair each debit row with its Revolving Fund - <Category> credit row
+    if (resolvedType === 'rf') {
+      const hasCreditRow = rows.some(r => r.credit !== null && r.credit > 0);
+      if (!hasCreditRow && rows.some(r => r.debit !== null && r.debit > 0)) {
+        const pairedRows: typeof rows = [];
+        for (const r of rows) {
+          pairedRows.push(r);
+          if (r.debit !== null && r.debit > 0) {
+            const cat = r.category || cleanCategoryName(getCategoryForAccount(r.description));
+            pairedRows.push({
+              date: r.date,
+              voucher_no: r.voucher_no,
+              description: `Revolving Fund - ${cat}`,
+              remarks: '',
+              debit: null,
+              credit: r.debit,
+              category: cat
+            });
+            creditTotal += r.debit;
+          }
+        }
+        return { rows: pairedRows, debitTotal, creditTotal };
       }
     }
 
@@ -965,14 +995,60 @@ function getSummaryCvRows(
     }
   }
 
+  // Extract non-CIB, non-Revolving Fund deduction credits (e.g. salary deductions) so Summary Voucher balances accurately
+  const deductionCreditMap: Record<string, number> = {};
+  {
+    let rawDetails: any[] = [];
+    if (Array.isArray(cv?.details)) {
+      rawDetails = cv.details;
+    } else if (typeof cv?.details === 'string') {
+      try {
+        const parsed = JSON.parse(cv.details);
+        if (Array.isArray(parsed)) rawDetails = parsed;
+      } catch {}
+    }
+    for (const item of rawDetails) {
+      const desc = (item.book_of_account || item.description || '').trim();
+      const isCib = /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc);
+      const isRfAutoCredit = /^revolving\s*fund\s*-/i.test(desc);
+      const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
+      const isCred =
+        item.is_credit === true ||
+        item.isAutoCredit === true ||
+        rawVal < 0 ||
+        (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+      if (isCred && !isCib && !isRfAutoCredit && desc) {
+        const cVal = rawVal < 0 ? Math.abs(rawVal) : (parseFloat(item.credit || item.amount || 0) || 0);
+        if (cVal > 0) {
+          deductionCreditMap[desc] = (deductionCreditMap[desc] || 0) + cVal;
+        }
+      }
+    }
+  }
+
+  let deductionCreditTotal = 0;
+  for (const [desc, amt] of Object.entries(deductionCreditMap)) {
+    if (amt > 0) {
+      rows.push({
+        description: desc,
+        debit: null,
+        credit: amt
+      });
+      deductionCreditTotal += amt;
+      creditTotal += amt;
+    }
+  }
+
   // Balancing Credit row: CIB-MBTC
   if (debitTotal > 0) {
+    const balancingCib = Math.max(0, debitTotal - deductionCreditTotal);
+    const cibCreditAmt = balancingCib > 0 ? balancingCib : debitTotal;
     rows.push({
       description: cibName,
       debit: null,
-      credit: debitTotal
+      credit: cibCreditAmt
     });
-    creditTotal = debitTotal;
+    creditTotal += cibCreditAmt;
   }
 
   return { rows, debitTotal, creditTotal };
@@ -1091,7 +1167,7 @@ export default function UnifiedCvLfPrintModal({
         if (cvObj) {
           const folder = (cvObj.folder_name || '').toLowerCase();
           const part = (cvObj.particulars || '').toLowerCase();
-          if (folder.includes('revolving') || part.includes('revolving') || cvObj.revolving_fund) {
+          if (folder.includes('revolving') || folder.includes('operation') || folder.includes('petty') || part.includes('revolving') || cvObj.revolving_fund) {
             detectedType = 'rf';
           } else {
             detectedType = 'stl';
@@ -1112,8 +1188,11 @@ export default function UnifiedCvLfPrintModal({
           ? (cvObj.stl_liquidation?.id || null)
           : (cvObj.revolving_fund?.id || null);
 
+        const cvFolderLower = (cvObj.folder_name || '').toLowerCase();
+        const isNonRfReplenish = cvFolderLower.includes('operation') || cvFolderLower.includes('petty');
+
         // If no explicit linked ID, try to find an LF matching voucher_no or particulars
-        if (!linkedLfId) {
+        if (!linkedLfId && !isNonRfReplenish) {
           try {
             if (detectedType === 'stl') {
               const resStl = await api.get('/stl-liquidations', { params: { search: cvObj.voucher_no, limit: 25 } });
@@ -1401,9 +1480,32 @@ export default function UnifiedCvLfPrintModal({
     return Number(currentLf?.total_liquidated || categoryBreakdown.total || 0);
   }, [detailedCvData.debitTotal, currentLf, resolvedType, categoryBreakdown.total]);
 
+  const isOperationVoucher = useMemo(() => {
+    const f = (currentCv?.folder_name || '').toLowerCase();
+    return f.includes('operation');
+  }, [currentCv]);
+
+  const isPettyCashVoucher = useMemo(() => {
+    const f = (currentCv?.folder_name || '').toLowerCase();
+    return f.includes('petty');
+  }, [currentCv]);
+
+  const voucherCategoryLabel = useMemo(() => {
+    if (resolvedType === 'stl') return 'STL Replenishment';
+    if (isOperationVoucher) return 'Operation Expense';
+    if (isPettyCashVoucher) return 'Petty Cash Replenishment';
+    return 'Revolving Fund Replenishment';
+  }, [resolvedType, isOperationVoucher, isPettyCashVoucher]);
+
   const authorizedAmount = useMemo(() => {
+    if (isOperationVoucher) {
+      return Number(currentCv?.fund_amount || currentCv?.authorized_amount || 0);
+    }
+    if (isPettyCashVoucher) {
+      return Number(currentCv?.fund_amount || currentCv?.authorized_amount || 3000);
+    }
     return Number(currentCv?.fund_amount || currentCv?.authorized_amount || currentLf?.authorized_amount || 100000);
-  }, [currentCv, currentLf]);
+  }, [currentCv, currentLf, isOperationVoucher, isPettyCashVoucher]);
 
   const balanceNetDue = useMemo(() => {
     return authorizedAmount - totalExpenseAmount;
@@ -1689,7 +1791,7 @@ export default function UnifiedCvLfPrintModal({
                     Check Voucher {currentCv?.voucher_no ? `• CV #${cleanCvNumber(currentCv.voucher_no)}` : ''}
                   </h3>
                   <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
-                    {resolvedType === 'stl' ? 'STL Replenishment' : 'Revolving Fund'}
+                    {voucherCategoryLabel}
                   </span>
                 </div>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -1812,7 +1914,7 @@ export default function UnifiedCvLfPrintModal({
                       <div>
                         <span className="text-[9px] font-bold text-emerald-800 uppercase block tracking-wider">Transaction Type</span>
                         <strong className="text-neutral-900 font-medium text-[11.5px] whitespace-nowrap">
-                          {resolvedType === 'stl' ? 'STL Replenishment' : 'Revolving Fund Replenishment'}
+                          {voucherCategoryLabel}
                         </strong>
                       </div>
                       <div>
@@ -1893,7 +1995,7 @@ export default function UnifiedCvLfPrintModal({
                       <div className="text-xs bg-neutral-50 p-2.5 rounded border border-neutral-200">
                         <strong className="text-neutral-700 uppercase text-[10px] tracking-wide">Description:</strong>{' '}
                         <span className="italic text-neutral-800 font-medium">
-                          {currentCv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment Disbursement' : 'Revolving Fund Replenishment')}
+                          {currentCv?.particulars || voucherCategoryLabel}
                         </span>
                       </div>
                     )}
@@ -2124,7 +2226,7 @@ export default function UnifiedCvLfPrintModal({
                     </div>
 
                     {/* 3 Summary Cards */}
-                    {!(cvViewMode === 'summary' && isHonorariumAndWages) && (
+                    {!(cvViewMode === 'summary' && isHonorariumAndWages) && (!isOperationVoucher || authorizedAmount > 0) && (
                       <div className="grid grid-cols-3 gap-2.5 text-xs">
                         <div className="p-2.5 border border-neutral-200 rounded-lg bg-white">
                           <span className="text-[8px] font-bold uppercase text-neutral-400 block tracking-wider">FUND AMOUNT</span>
@@ -2488,7 +2590,7 @@ export default function UnifiedCvLfPrintModal({
               <div>
                 <span style={{ fontSize: '8px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', display: 'block' }}>Transaction Type</span>
                 <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#1f2937', margin: '1px 0 0 0', whiteSpace: 'nowrap' }}>
-                  {resolvedType === 'stl' ? 'STL Replenishment' : 'Revolving Fund Replenishment'}
+                  {voucherCategoryLabel}
                 </p>
               </div>
               <div>
@@ -2530,7 +2632,7 @@ export default function UnifiedCvLfPrintModal({
               <div style={{ backgroundColor: '#f9fafb', padding: '5px 8px', borderRadius: '4px', border: '1px solid #e5e7eb', fontSize: '9px' }}>
                 <strong style={{ color: '#374151' }}>DESCRIPTION:</strong>{' '}
                 <span style={{ color: '#1f2937', fontStyle: 'italic' }}>
-                  {currentCv?.particulars || (resolvedType === 'stl' ? 'STL Replenishment Disbursement' : 'Revolving Fund Replenishment')}
+                  {currentCv?.particulars || voucherCategoryLabel}
                 </span>
               </div>
             )}
@@ -2696,7 +2798,7 @@ export default function UnifiedCvLfPrintModal({
             </div>
 
             {/* 3 Summary Cards */}
-            {!(cvViewMode === 'summary' && isHonorariumAndWages) && (
+            {!(cvViewMode === 'summary' && isHonorariumAndWages) && (!isOperationVoucher || authorizedAmount > 0) && (
               <div className="no-print-split" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
                 <div style={{ padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: '#ffffff' }}>
                   <span style={{ fontSize: '7px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', display: 'block' }}>FUND AMOUNT</span>

@@ -1074,7 +1074,7 @@ export default function InvoiceArExcelImportModal({
                 <Upload className="w-7 h-7" />
               </div>
               <h3 className="text-base font-bold text-neutral-900 dark:text-white mb-1">
-                Upload your "INVOICE & Acknowledgement Receipt 2026.xlsx"
+                Upload your &quot;INVOICE &amp; Acknowledgement Receipt 2026.xlsx&quot;
               </h3>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-md mx-auto mb-4">
                 Drag and drop your Excel spreadsheet here, or click to browse files. The parser automatically detects all columns (Regular, Calamity, Utility, Rice, Shared Capital, etc.).

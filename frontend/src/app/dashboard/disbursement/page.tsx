@@ -16,7 +16,6 @@ import {
   Plus,
   Trash2,
   ChevronDown,
-  ChevronRight,
   Printer,
   FileCheck,
   Receipt,
@@ -26,18 +25,13 @@ import {
   ExternalLink,
   CheckCircle2,
   Layers,
-  Banknote,
   DollarSign,
   Calendar,
-  ChevronUp,
   PieChart,
   Sparkles,
   Edit3,
   FileSpreadsheet,
-  Building2,
   ArrowUpDown,
-  Filter,
-  Eye,
   RotateCcw,
   AlertTriangle,
   FolderOpen,
@@ -45,7 +39,6 @@ import {
   Clock,
   Send,
   Check,
-  Link2,
   GripVertical,
   Unlock
 } from 'lucide-react';
@@ -873,7 +866,6 @@ function ReplenishmentAccountDropdown({
                   filtered.map(acct => {
                     const cat = getCategoryForAccount(acct, categoryMap);
                     const isSelected = value.trim().toLowerCase() === acct.trim().toLowerCase();
-                    const isCustom = !REPLENISHMENT_ACCOUNT_OPTIONS.includes(acct);
                     return (
                       <div
                         key={acct}
@@ -963,8 +955,9 @@ function DisbursementPageContent() {
   const router = useRouter();
 
   const isAdmin = user?.role === 'admin';
-  const isAdminOrManager = user?.role === 'admin';
   const isAdminOrStaff = user?.role === 'admin' || user?.role === 'staff';
+  const rowIdCounterRef = useRef(0);
+  const nextRowId = (prefix: string = 'row') => `${prefix}-${++rowIdCounterRef.current}`;
 
   // Active Tab state (defaults to master summary tab)
   const [activeTab, setActiveTab] = useState<DisbursementTab>('summary');
@@ -1055,7 +1048,8 @@ function DisbursementPageContent() {
 
   // View / Edit / Print State
   const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
-  const [modalCvViewMode, setModalCvViewMode] = useState<'summary' | 'detailed'>('detailed');
+  const [modalCvViewMode, setModalCvViewMode] = useState<'summary' | 'detailed'>('summary');
+  const [modalCategoryFilter, setModalCategoryFilter] = useState<string | null>(null);
   const [printingCvBreakdown, setPrintingCvBreakdown] = useState<any | null>(null);
   const [unifiedPrintModal, setUnifiedPrintModal] = useState<{
     isOpen: boolean;
@@ -1823,13 +1817,27 @@ function DisbursementPageContent() {
     }
 
     const catMap: Record<string, number> = {};
+    const deductionCreditMap: Record<string, number> = {};
     if (details.length > 0) {
       for (const item of details) {
-        const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
-        const desc = item.book_of_account || item.description || '';
-        if (val > 0 && !/cib\b|cash\s*in\s*bank/i.test(desc)) {
+        const rawVal = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || item.debit || 0);
+        const desc = (item.book_of_account || item.description || '').trim();
+        const isCib = /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc);
+        const isRfAutoCredit = /^revolving\s*fund\s*-/i.test(desc);
+        const isCred =
+          item.is_credit === true ||
+          item.isAutoCredit === true ||
+          rawVal < 0 ||
+          isRfAutoCredit ||
+          (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+        if (!isCred && rawVal > 0 && !isCib) {
           const cat = resolveItemCategory(item, details);
-          catMap[cat] = (catMap[cat] || 0) + val;
+          catMap[cat] = (catMap[cat] || 0) + rawVal;
+        } else if (isCred && !isCib && !isRfAutoCredit) {
+          const cVal = rawVal < 0 ? Math.abs(rawVal) : (parseFloat(item.credit || item.amount || 0) || 0);
+          if (cVal > 0 && desc) {
+            deductionCreditMap[desc] = (deductionCreditMap[desc] || 0) + cVal;
+          }
         }
       }
     } else if (Array.isArray(cv.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
@@ -1843,7 +1851,7 @@ function DisbursementPageContent() {
       }
     }
 
-    const preferredOrder = ['Operation', 'CDF', 'Service', 'Merchandise', 'CETF'];
+    const preferredOrder = ['Honorarium', 'Allowances', 'Wages', 'Operation', 'CDF', 'Service', 'Merchandise', 'CETF'];
     const sortedCats = Object.keys(catMap).sort((a, b) => {
       const idxA = preferredOrder.indexOf(a);
       const idxB = preferredOrder.indexOf(b);
@@ -1884,7 +1892,27 @@ function DisbursementPageContent() {
       }
     }
 
+    let deductionCreditTotal = 0;
+    let dedIdx = 0;
+    for (const [desc, amt] of Object.entries(deductionCreditMap)) {
+      if (amt > 0) {
+        rows.push({
+          id: `ded-${dedIdx++}`,
+          date: dateStr,
+          voucher_no: vNo,
+          description: desc,
+          remarks: '',
+          debit: null,
+          credit: amt
+        });
+        deductionCreditTotal += amt;
+        creditTotal += amt;
+      }
+    }
+
     if (debitTotal > 0) {
+      const balancingCib = Math.max(0, debitTotal - deductionCreditTotal);
+      const cibCreditAmt = balancingCib > 0 ? balancingCib : debitTotal;
       rows.push({
         id: 'credit-cib',
         date: dateStr,
@@ -1892,9 +1920,9 @@ function DisbursementPageContent() {
         description: cibName,
         remarks: '',
         debit: null,
-        credit: debitTotal
+        credit: cibCreditAmt
       });
-      creditTotal = debitTotal;
+      creditTotal += cibCreditAmt;
     }
 
     return { rows, debitTotal, creditTotal };
@@ -1916,7 +1944,7 @@ function DisbursementPageContent() {
 
     const isBroadCategoryDesc = (desc: string) => {
       const d = (desc || '').trim().toLowerCase();
-      return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'revolving fund', 'loan', 'petty cash'].includes(d) ||
+      return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'short term loan replenishment', 'stl replenishment', 'stl fund replenishment', 'revolving fund', 'revolving fund replenishment', 'loan', 'loans receivable', 'petty cash', 'petty cash replenishment'].includes(d) ||
              /^(revolving\s*fund|stl|short\s*term\s*loan)\s*-\s*(operation|operations|service|services|stl|cdf|cetf|merchandise)$/i.test(d);
     };
 
@@ -1927,7 +1955,11 @@ function DisbursementPageContent() {
       return !isCredit && val > 0;
     });
 
-    const detailsAreOnlyCategories = debitDetails.length > 0 && debitDetails.every(d => isBroadCategoryDesc(d.book_of_account || d.description || ''));
+    const hasAnyRemarksOrDeductions = details.some(d => Boolean((d.remarks || d.particulars || d.note || '').toString().trim()));
+    const detailsAreOnlyCategories =
+      debitDetails.length > 0 &&
+      !hasAnyRemarksOrDeductions &&
+      debitDetails.every(d => isBroadCategoryDesc(d.book_of_account || d.description || ''));
 
     const rfItems = Array.isArray(cv.revolving_fund?.items) ? cv.revolving_fund.items.filter((it: any) => !it.is_cancelled) : [];
     const stlItems = Array.isArray(cv.stl_liquidation?.items) ? cv.stl_liquidation.items.filter((it: any) => !it.is_cancelled) : [];
@@ -2068,6 +2100,37 @@ function DisbursementPageContent() {
       }
     }
 
+    // For RF replenishment vouchers (Revolving Fund, Petty Cash, Operation) that only have debit rows + CIB row
+    // (no non-CIB Revolving Fund credit rows yet), pair each debit row with its Revolving Fund - <Category> credit row
+    const replenishTypeForRows = getReplenishmentType(cv?.folder_name, cv);
+    if (replenishTypeForRows === 'rf') {
+      const hasNonCibCredit = rows.some(
+        r => (r.is_credit || r.isAutoCredit) && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim())
+      );
+      if (!hasNonCibCredit && rows.some(r => !r.is_credit && !r.isAutoCredit && (r.debit || 0) > 0)) {
+        const pairedRows: typeof rows = [];
+        for (const r of rows) {
+          pairedRows.push(r);
+          if (!r.is_credit && !r.isAutoCredit && r.debit && r.debit > 0) {
+            const cat = getCategoryForAccount(r.description, accountCategoryMap);
+            pairedRows.push({
+              id: `credit-${r.id}`,
+              date: r.date,
+              voucher_no: r.voucher_no,
+              description: `Revolving Fund - ${cat}`,
+              remarks: '',
+              debit: null,
+              credit: r.debit,
+              isAutoCredit: true,
+              is_credit: true
+            });
+            creditTotal += r.debit;
+          }
+        }
+        rows.splice(0, rows.length, ...pairedRows);
+      }
+    }
+
     // Auto-balance credit with CIB row if creditTotal is 0 and debitTotal > 0
     if (debitTotal > 0 && creditTotal === 0) {
       const rawDate = cv?.voucher_date || cv?.date;
@@ -2092,13 +2155,27 @@ function DisbursementPageContent() {
     return { rows, debitTotal, creditTotal };
   };
 
+  const isTrueRevolvingFundVoucher = (cv?: any, folderOverride?: string) => {
+    const folder = (folderOverride ?? cv?.folder_name ?? '').toLowerCase();
+    const particulars = (cv?.particulars || '').toLowerCase();
+    if (folder) {
+      return folder === 'revolving fund' || folder.includes('revolving');
+    }
+    return particulars.includes('revolving fund') || Boolean(cv?.revolving_fund?.id);
+  };
+
   const isRevolvingVoucher = (cv: any) => {
     if (!cv) return false;
     const folder = (cv.folder_name || '').toLowerCase();
     const particulars = (cv.particulars || '').toLowerCase();
     return folder === 'revolving fund' || 
            folder.includes('revolving') || 
+           folder === 'operation' ||
+           folder.includes('operation') ||
+           folder === 'petty cash' ||
+           folder.includes('petty') ||
            particulars.includes('revolving fund') || 
+           particulars.includes('petty cash') ||
            Boolean(cv.revolving_fund?.id);
   };
 
@@ -2113,23 +2190,35 @@ function DisbursementPageContent() {
   };
 
   const isStlOrRfTabOrVoucher = (cv: any) => {
-    // If the voucher explicitly has a non-replenishment folder, it is NOT STL or RF!
+    // If the voucher explicitly has a non-replenishment/non-supported folder, return false
     if (cv) {
       const f = (cv.folder_name || '').toLowerCase();
-      if (f && f !== 'stl' && !f.includes('stl') && !f.includes('revolving')) {
+      if (
+        f &&
+        f !== 'stl' &&
+        !f.includes('stl') &&
+        !f.includes('revolving') &&
+        !f.includes('operation') &&
+        !f.includes('petty')
+      ) {
         return false;
       }
       if (isStlVoucher(cv) || isRevolvingVoucher(cv)) return true;
     }
 
-    if (activeTab === 'petty_cash_replenishment' || 
-        activeTab === 'merchandise_payment' || 
-        activeTab === 'operation_expense' || 
-        activeTab === 'services_expense') {
+    if (
+      activeTab === 'merchandise_payment' || 
+      activeTab === 'services_expense'
+    ) {
       return false;
     }
 
-    if (activeTab === 'stl_replenishment' || activeTab === 'revolving_fund_replenishment') {
+    if (
+      activeTab === 'stl_replenishment' ||
+      activeTab === 'revolving_fund_replenishment' ||
+      activeTab === 'petty_cash_replenishment' ||
+      activeTab === 'operation_expense'
+    ) {
       return true;
     }
 
@@ -2140,24 +2229,30 @@ function DisbursementPageContent() {
     const cat = (folderOrCat || cv?.folder_name || '').toLowerCase();
     if (cat) {
       if (cat === 'stl' || cat.includes('stl')) return 'stl';
-      if (cat.includes('revolving')) return 'rf';
+      if (cat.includes('revolving') || cat.includes('operation') || cat.includes('petty')) return 'rf';
       return null;
     }
-    if (activeTab === 'petty_cash_replenishment' || 
-        activeTab === 'merchandise_payment' || 
-        activeTab === 'operation_expense' || 
-        activeTab === 'services_expense') {
+    if (
+      activeTab === 'merchandise_payment' || 
+      activeTab === 'services_expense'
+    ) {
       return null;
     }
     const part = (cv?.particulars || '').toLowerCase();
     if (part.includes('stl') || Boolean(cv?.stl_liquidation?.id)) {
       return 'stl';
     }
-    if (part.includes('revolving') || Boolean(cv?.revolving_fund?.id)) {
+    if (part.includes('revolving') || part.includes('petty cash') || Boolean(cv?.revolving_fund?.id)) {
       return 'rf';
     }
     if (activeTab === 'stl_replenishment') return 'stl';
-    if (activeTab === 'revolving_fund_replenishment') return 'rf';
+    if (
+      activeTab === 'revolving_fund_replenishment' ||
+      activeTab === 'petty_cash_replenishment' ||
+      activeTab === 'operation_expense'
+    ) {
+      return 'rf';
+    }
     return null;
   };
 
@@ -2186,10 +2281,10 @@ function DisbursementPageContent() {
       const isCurrentCredit = checkIsCreditRow(currentRow);
       const nextRows = prev.map((r, i) => (i === rowIdx ? updatedRow : r));
 
-      // If description was edited on a debit row, auto-fill matching category on the credit row directly below it (or paired credit row)
-      if (field === 'description' && !isCurrentCredit) {
+      // If description was edited on a debit row in RF mode, auto-fill matching category on the credit row directly below it (or paired credit row)
+      if (field === 'description' && !isCurrentCredit && replenishType === 'rf') {
         const cat = getCategoryForAccount(val, accountCategoryMap);
-        const autoCreditDesc = replenishType === 'stl' ? 'Revolving Fund - STL' : `Revolving Fund - ${cat}`;
+        const autoCreditDesc = `Revolving Fund - ${cat}`;
         
         let targetCreditIdx = -1;
         if (rowIdx + 1 < nextRows.length && checkIsCreditRow(nextRows[rowIdx + 1])) {
@@ -2204,6 +2299,26 @@ function DisbursementPageContent() {
             nextRows[targetCreditIdx] = {
               ...nextRows[targetCreditIdx],
               description: autoCreditDesc
+            };
+          }
+        }
+      }
+
+      // If debit was edited on a debit row in RF mode, auto-sync the paired credit row's credit amount
+      if (field === 'debit' && !isCurrentCredit && replenishType === 'rf') {
+        let targetCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
+        if (targetCreditIdx === -1 && rowIdx + 1 < nextRows.length && checkIsCreditRow(nextRows[rowIdx + 1])) {
+          const nextRow = nextRows[rowIdx + 1];
+          if (!nextRow.credit || nextRow.credit === currentRow.debit) {
+            targetCreditIdx = rowIdx + 1;
+          }
+        }
+        if (targetCreditIdx !== -1) {
+          const currentCreditDesc = nextRows[targetCreditIdx]?.description || '';
+          if (!/cib\b|cash\s*in\s*bank/i.test(currentCreditDesc)) {
+            nextRows[targetCreditIdx] = {
+              ...nextRows[targetCreditIdx],
+              credit: val
             };
           }
         }
@@ -2294,7 +2409,7 @@ function DisbursementPageContent() {
         ...target.row,
         id: target.row.id && !copy.some(r => r.id === target.row.id)
           ? target.row.id
-          : 'row-restored-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6)
+          : nextRowId('row-restored')
       };
       const insertAt = Math.min(target.index, copy.length);
       copy.splice(insertAt, 0, restoredRow);
@@ -2303,7 +2418,7 @@ function DisbursementPageContent() {
   };
 
   const addCvRow = (isEdit: boolean, replenishType: 'stl' | 'rf' | null, isCredit: boolean = false) => {
-    const newId = 'row-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    const newId = nextRowId('row');
     const defaultDate = isEdit
       ? (editCvFormData.voucher_date || new Date().toISOString().split('T')[0])
       : (newCvDate || new Date().toISOString().split('T')[0]);
@@ -2347,16 +2462,32 @@ function DisbursementPageContent() {
       is_credit: isCredit
     };
 
+    const pairedCreditRow: CvRowItem | null = (!isCredit && replenishType === 'rf')
+      ? {
+          id: `credit-${newId}`,
+          date: defaultDate,
+          voucher_no: defaultVoucherNo,
+          description: `Revolving Fund - ${getCategoryForAccount(defaultDesc, accountCategoryMap)}`,
+          remarks: '',
+          debit: '',
+          credit: '',
+          isAutoCredit: true,
+          is_credit: true,
+          pairedWithId: newId
+        }
+      : null;
+
     const setRows = isEdit ? setEditCvRows : setNewCvRows;
     setRows(prev => {
       const copy = [...prev];
+      const rowsToInsert = pairedCreditRow ? [newRow, pairedCreditRow] : [newRow];
       // Keep CIB balancing row at the bottom by inserting before it
       const cibIdx = copy.findIndex(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
       if (cibIdx !== -1) {
-        copy.splice(cibIdx, 0, newRow);
+        copy.splice(cibIdx, 0, ...rowsToInsert);
         return copy;
       }
-      copy.push(newRow);
+      copy.push(...rowsToInsert);
       return copy;
     });
   };
@@ -2373,7 +2504,7 @@ function DisbursementPageContent() {
       modeOrEvent.stopPropagation();
     }
     if (e) e.stopPropagation();
-    const type: 'stl' | 'rf' = (activeTab === 'revolving_fund_replenishment' || isRevolvingVoucher(cv)) ? 'rf' : 'stl';
+    const type: 'stl' | 'rf' = getReplenishmentType(cv?.folder_name, cv) === 'stl' ? 'stl' : 'rf';
     setUnifiedPrintModal({
       isOpen: true,
       cv,
@@ -2397,6 +2528,8 @@ function DisbursementPageContent() {
     const directMatch = checkVouchers.find(v => v.id === voucherIdOrNo || v.voucher_no === voucherIdOrNo);
     if (directMatch) {
       setSelectedCvForModal(directMatch);
+      setModalCvViewMode('summary');
+      setModalCategoryFilter(null);
       setIsEditingCvModal(false);
       return;
     }
@@ -2407,6 +2540,8 @@ function DisbursementPageContent() {
         const res = await api.get(`/accounts/check-vouchers`, { params: { id: voucherIdOrNo } });
         if (res.data?.data?.[0]) {
           setSelectedCvForModal(res.data.data[0]);
+          setModalCvViewMode('summary');
+          setModalCategoryFilter(null);
           setIsEditingCvModal(false);
           return;
         }
@@ -2416,6 +2551,8 @@ function DisbursementPageContent() {
       if (res.data?.data?.length > 0) {
         const matched = res.data.data.find((v: any) => v.voucher_no === searchTarget || v.id === searchTarget) || res.data.data[0];
         setSelectedCvForModal(matched);
+        setModalCvViewMode('summary');
+        setModalCategoryFilter(null);
         setIsEditingCvModal(false);
       } else {
         showAppAlert('Voucher Not Found', `Check Voucher "${searchTarget}" was not found.`);
@@ -2724,6 +2861,9 @@ function DisbursementPageContent() {
     // Determine the rows to edit:
     // Check if the voucher has detailed itemized transactions (not just category totals)
     const isCategoryOnlyRows = (rows: any[]) => {
+      if ((rows || []).some(r => Boolean((r.remarks || '').toString().trim()))) {
+        return false;
+      }
       const debitRows = (rows || []).filter(r => {
         const val = parseFloat(r.debit || r.amount || 0);
         const desc = (r.description || r.book_of_account || '').toLowerCase();
@@ -2731,7 +2871,7 @@ function DisbursementPageContent() {
       });
       return debitRows.length > 0 && debitRows.every(r => {
         const d = (r.description || r.book_of_account || '').trim().toLowerCase();
-        return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'revolving fund', 'loan', 'petty cash'].includes(d);
+        return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'short term loan replenishment', 'stl replenishment', 'stl fund replenishment', 'revolving fund', 'revolving fund replenishment', 'loan', 'loans receivable', 'petty cash', 'petty cash replenishment'].includes(d);
       });
     };
 
@@ -2788,10 +2928,14 @@ function DisbursementPageContent() {
     if (!detectedBank) detectedBank = 'BDO';
 
     const detectedRfClass = detectRfClassification(cv, rowsToUse);
+    const isTrueRf = isTrueRevolvingFundVoucher(cv);
+    const isPettyCashVoucher = (cv.folder_name || '').toLowerCase().includes('petty');
     let initialFundAmount = cv.fund_amount !== undefined && cv.fund_amount !== null && cv.fund_amount !== '' ? String(cv.fund_amount) : '';
-    if (getReplenishmentType(cv.folder_name, cv) === 'rf' && !initialFundAmount && detectedRfClass) {
+    if (isTrueRf && !initialFundAmount && detectedRfClass) {
       const match = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.name === detectedRfClass);
       if (match) initialFundAmount = String(match.defaultAmount);
+    } else if (isPettyCashVoucher && !initialFundAmount) {
+      initialFundAmount = '3000';
     }
 
     const initialForm = {
@@ -2806,7 +2950,7 @@ function DisbursementPageContent() {
       particulars: cv.particulars || '',
       folder_name: cv.folder_name || currentTabConfig.defaultCategory,
       fund_amount: initialFundAmount,
-      rf_classification: detectedRfClass,
+      rf_classification: isTrueRf ? detectedRfClass : '',
       prepared_by: formatSignatoryName(cv.signatories?.prepared_by, 'CHINNETTE A. LAMOSTE'),
       checked_by: formatSignatoryName(cv.signatories?.checked_by, 'MARILOU LARIOSA'),
       approved_by: formatSignatoryName(cv.signatories?.approved_by, 'MICHELLE M. PABLE'),
@@ -2824,7 +2968,7 @@ function DisbursementPageContent() {
     let initialRowsList: CvRowItem[] = [];
     if (rowsToUse.length > 0) {
       initialRowsList = rowsToUse.map((r, i) => {
-        const rowId = r.id || `edit-row-${i}-${Date.now()}`;
+        const rowId = r.id || nextRowId(`edit-row-${i}`);
         const isCredit = checkIsCreditRow(r);
         const rawCredit = r.credit !== null && r.credit !== undefined && r.credit !== '' ? String(r.credit) : '';
         const rawDebit = r.debit !== null && r.debit !== undefined && r.debit !== '' ? String(r.debit) : '';
@@ -2861,7 +3005,7 @@ function DisbursementPageContent() {
       const amt = parseFloat(cv.amount || 0);
       const defaultDate = cv.voucher_date ? cv.voucher_date.split('T')[0] : '';
       const defaultVoucherNo = cv.voucher_no || '';
-      const row0Id = `row-0-${Date.now()}`;
+      const row0Id = nextRowId('row-0');
 
       if (isReplenish) {
         const defaultBank = formatCibAccountName(detectedBank);
@@ -2925,6 +3069,33 @@ function DisbursementPageContent() {
 
       // For Revolving Fund replenishment: CIB amount is always the full disbursed/debit total
       if (replenishType !== 'stl') {
+        // If existing voucher only had debit rows + CIB row (no paired Revolving Fund credit rows),
+        // automatically pair each debit row with its matching Revolving Fund - <Category> credit row
+        const hasNonCibCreditRow = initialRowsList.some(r => checkIsCreditRow(r));
+        if (!hasNonCibCreditRow && initialRowsList.length > 0) {
+          const pairedList: CvRowItem[] = [];
+          for (const r of initialRowsList) {
+            pairedList.push(r);
+            const dVal = parseFloat(r.debit || '0') || 0;
+            if (dVal > 0) {
+              const cat = getCategoryForAccount(r.description, accountCategoryMap);
+              pairedList.push({
+                id: `credit-${r.id}`,
+                date: r.date,
+                voucher_no: r.voucher_no,
+                description: `Revolving Fund - ${cat}`,
+                remarks: '',
+                debit: '',
+                credit: r.debit,
+                isAutoCredit: true,
+                is_credit: true,
+                pairedWithId: r.id
+              });
+            }
+          }
+          initialRowsList = pairedList;
+        }
+
         let dSum = 0;
         for (const r of initialRowsList) {
           const isCred = checkIsCreditRow(r);
@@ -3311,18 +3482,25 @@ function DisbursementPageContent() {
 
     const defaultRfClass = REVOLVING_FUND_CLASSIFICATIONS[0].name;
     const defaultRfAmt = String(REVOLVING_FUND_CLASSIFICATIONS[0].defaultAmount);
-    setNewCvRfClassification(defaultRfClass);
+    const isTrueRf = isTrueRevolvingFundVoucher(null, defaultCat);
+    const isPettyCashCat = defaultCat.toLowerCase().includes('petty');
 
     const isReplenish = getReplenishmentType(defaultCat);
-    if (isReplenish === 'rf') {
+    if (isTrueRf) {
+      setNewCvRfClassification(defaultRfClass);
       setNewCvFundAmount(defaultRfAmt);
       setNewCvParticulars(`Revolving Fund Replenishment - ${REVOLVING_FUND_CLASSIFICATIONS[0].shortName}`);
+    } else if (isPettyCashCat) {
+      setNewCvRfClassification('');
+      setNewCvFundAmount('3000');
+      setNewCvParticulars('');
     } else {
+      setNewCvRfClassification('');
       setNewCvFundAmount('');
       setNewCvParticulars('');
     }
 
-    const row0Id = `new-row-0-${Date.now()}`;
+    const row0Id = nextRowId('new-row-0');
     if (isReplenish) {
       const defaultBank = formatCibAccountName(newCvBankName || 'MBTC');
       const initialDebitDesc = isReplenish === 'stl' ? 'Short Term Loan' : 'Communication';
@@ -3388,6 +3566,25 @@ function DisbursementPageContent() {
             isAutoCredit: isCredit
           };
         });
+
+      const replenishType = getReplenishmentType(newCvCategory);
+      if (replenishType && calculatedAmount > 0) {
+        const existingCibIdx = detailsArray.findIndex(d => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((d.book_of_account || '').trim()));
+        if (existingCibIdx < 0) {
+          const cibName = formatCibAccountName(newCvBankName);
+          detailsArray.push({
+            date: newCvDate || null,
+            voucher_no: newCvVoucherNo.trim() || null,
+            book_of_account: cibName,
+            remarks: null,
+            amount: -calculatedAmount,
+            debit: null,
+            credit: calculatedAmount,
+            is_credit: true,
+            isAutoCredit: true
+          });
+        }
+      }
 
       const matchedCat = CATEGORY_TABS.find(t => t.defaultCategory === newCvCategory);
       const payload = {
@@ -3863,6 +4060,8 @@ function DisbursementPageContent() {
                           key={cv.id}
                           onClick={() => {
                             setSelectedCvForModal(cv);
+                            setModalCvViewMode('summary');
+                            setModalCategoryFilter(null);
                             setIsEditingCvModal(false);
                           }}
                           className={`hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors cursor-pointer ${
@@ -4088,13 +4287,23 @@ function DisbursementPageContent() {
                         setNewCvCategory(selected);
                         const matched = CATEGORY_TABS.find(t => t.defaultCategory === selected);
                         const isRepl = getReplenishmentType(selected);
+                        const isTrueRf = isTrueRevolvingFundVoucher(null, selected);
+                        const isPettyCashCat = selected.toLowerCase().includes('petty');
                         if (isRepl === 'rf') {
-                          const defaultRfClass = REVOLVING_FUND_CLASSIFICATIONS[0].name;
-                          const defaultRfAmt = String(REVOLVING_FUND_CLASSIFICATIONS[0].defaultAmount);
-                          setNewCvRfClassification(defaultRfClass);
-                          setNewCvFundAmount(defaultRfAmt);
-                          if (!newCvParticulars || newCvParticulars.startsWith('Revolving Fund Replenishment')) {
-                            setNewCvParticulars(`Revolving Fund Replenishment - ${REVOLVING_FUND_CLASSIFICATIONS[0].shortName}`);
+                          if (isTrueRf) {
+                            const defaultRfClass = REVOLVING_FUND_CLASSIFICATIONS[0].name;
+                            const defaultRfAmt = String(REVOLVING_FUND_CLASSIFICATIONS[0].defaultAmount);
+                            setNewCvRfClassification(defaultRfClass);
+                            setNewCvFundAmount(defaultRfAmt);
+                            if (!newCvParticulars || newCvParticulars.startsWith('Revolving Fund Replenishment')) {
+                              setNewCvParticulars(`Revolving Fund Replenishment - ${REVOLVING_FUND_CLASSIFICATIONS[0].shortName}`);
+                            }
+                          } else {
+                            setNewCvRfClassification('');
+                            setNewCvFundAmount(isPettyCashCat ? '3000' : '');
+                            if (newCvParticulars && newCvParticulars.startsWith('Revolving Fund Replenishment')) {
+                              setNewCvParticulars('');
+                            }
                           }
                           setNewCvRows(prev => {
                             // If rows already exist, update every credit row whose row above is a debit row
@@ -4292,7 +4501,7 @@ function DisbursementPageContent() {
                 </div>
 
                 {/* Revolving Fund Classification & Fund Amount */}
-                {getReplenishmentType(newCvCategory) === 'rf' ? (
+                {isTrueRevolvingFundVoucher(null, newCvCategory) ? (
                   <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-500/30 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
@@ -4953,11 +5162,11 @@ function DisbursementPageContent() {
                 </div>
 
                 {/* Fund Amount Card */}
-                {(selectedCvForModal.fund_amount || getReplenishmentType(selectedCvForModal.folder_name, selectedCvForModal) === 'rf') && (
+                {(Number(selectedCvForModal.fund_amount) > 0 || isTrueRevolvingFundVoucher(selectedCvForModal) || (selectedCvForModal.folder_name || '').toLowerCase().includes('petty')) && (
                   <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
                     <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Fund Amount</span>
                     <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
-                      ₱{parseFloat(String(selectedCvForModal.fund_amount || '0')).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      ₱{parseFloat(String(selectedCvForModal.fund_amount || ((selectedCvForModal.folder_name || '').toLowerCase().includes('petty') ? '3000' : '0'))).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 )}
@@ -5007,26 +5216,10 @@ function DisbursementPageContent() {
                 const detailedData = getBalancedCvRows(selectedCvForModal);
                 const activeData = isReplenish ? summaryData : detailedData;
                 const { rows, debitTotal, creditTotal } = activeData;
-                const isStl = getReplenishmentType(selectedCvForModal?.folder_name, selectedCvForModal) === 'stl';
-                const isHonWagesModal = (
-                  selectedCvForModal?.rf_classification ||
-                  selectedCvForModal?.revolving_fund_classification ||
-                  selectedCvForModal?.folder_name ||
-                  selectedCvForModal?.particulars ||
-                  selectedCvForModal?.description ||
-                  ''
-                ).toLowerCase().includes('honorarium') || (
-                  selectedCvForModal?.rf_classification ||
-                  selectedCvForModal?.revolving_fund_classification ||
-                  selectedCvForModal?.folder_name ||
-                  selectedCvForModal?.particulars ||
-                  selectedCvForModal?.description ||
-                  ''
-                ).toLowerCase().includes('wages') || Number(selectedCvForModal?.fund_amount) === 56100;
-                const cibRow = rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+                const cibRow = detailedData.rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
                 const actualDisbursedAmount = (cibRow && cibRow.credit !== null && cibRow.credit !== undefined && Number(cibRow.credit) > 0)
                   ? Number(cibRow.credit)
-                  : (getCvDisbursedAmount(selectedCvForModal) || debitTotal);
+                  : (getCvDisbursedAmount(selectedCvForModal) || summaryData.debitTotal || debitTotal);
 
                 return (
                   <div className="space-y-3">
@@ -5042,7 +5235,6 @@ function DisbursementPageContent() {
                           <thead className="bg-[#ecfdf5] dark:bg-emerald-950/40 text-[#064e3b] dark:text-emerald-300 font-extrabold uppercase text-[9px] border-b border-emerald-200 dark:border-emerald-800">
                             <tr>
                               <th className="p-2.5 w-12 text-center border-r border-emerald-200 dark:border-emerald-800">#</th>
-                              <th className="p-2.5 w-28 border-r border-emerald-200 dark:border-emerald-800">{isHonWagesModal ? 'Cash Release Form No.' : (isStl ? 'LAF NO.' : 'RF VOUCHER #')}</th>
                               <th className="p-2.5 border-r border-emerald-200 dark:border-emerald-800">BOOK OF ACCOUNTS</th>
                               <th className="p-2.5 w-36 text-right border-r border-emerald-200 dark:border-emerald-800">DEBIT (₱)</th>
                               <th className="p-2.5 w-36 text-right">CREDIT (₱)</th>
@@ -5053,9 +5245,6 @@ function DisbursementPageContent() {
                               <tr key={idx} className="border-b border-neutral-200 dark:border-neutral-800 hover:bg-emerald-50/30">
                                 <td className="p-2.5 text-center font-mono font-medium text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
                                   {idx + 1}
-                                </td>
-                                <td className="p-2.5 font-mono text-[10px] font-bold text-neutral-800 dark:text-neutral-200 border-r border-neutral-200 dark:border-neutral-800">
-                                  {item.voucher_no || selectedCvForModal.voucher_no || '—'}
                                 </td>
                                 <td className="p-2.5 border-r border-neutral-200 dark:border-neutral-800 font-bold text-neutral-900 dark:text-white">
                                   {item.description}
@@ -5069,7 +5258,7 @@ function DisbursementPageContent() {
                               </tr>
                             ))}
                             <tr className="bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold border-t border-emerald-300 dark:border-emerald-700 text-[10px]">
-                              <td colSpan={3} className="p-2.5 text-right uppercase tracking-wider text-neutral-900 dark:text-white font-extrabold">TOTAL:</td>
+                              <td colSpan={2} className="p-2.5 text-right uppercase tracking-wider text-neutral-900 dark:text-white font-extrabold">TOTAL:</td>
                               <td className="p-2.5 text-right font-mono font-extrabold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
                                 ₱{summaryData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </td>
@@ -5324,7 +5513,7 @@ function DisbursementPageContent() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => openUnifiedPrintModalForCv(selectedCvForModal)}
+                      onClick={() => openUnifiedPrintModalForCv(selectedCvForModal, modalCvViewMode)}
                       className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-full bg-emerald-700 hover:bg-emerald-800 text-white shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
                       title="Print Check Voucher with integrated itemized expense breakdown"
                     >
@@ -5500,13 +5689,18 @@ function DisbursementPageContent() {
                     value={editCvFormData.folder_name}
                     onChange={val => {
                       const isRf = getReplenishmentType(val) === 'rf';
+                      const isTrueRf = isTrueRevolvingFundVoucher(null, val);
+                      const isPettyCashCat = val.toLowerCase().includes('petty');
                       const defaultRf = REVOLVING_FUND_CLASSIFICATIONS[0];
                       setEditCvFormData(prev => ({
                         ...prev,
                         folder_name: val,
-                        ...(isRf && !prev.fund_amount ? {
+                        ...(isTrueRf && !prev.fund_amount ? {
                           fund_amount: String(defaultRf.defaultAmount),
                           rf_classification: defaultRf.name
+                        } : !isTrueRf ? {
+                          rf_classification: '',
+                          fund_amount: isPettyCashCat && !prev.fund_amount ? '3000' : prev.fund_amount
                         } : {})
                       }));
                       if (isRf) {
@@ -5567,7 +5761,7 @@ function DisbursementPageContent() {
               </div>
 
               {/* Revolving Fund Classification & Fund Amount (Edit Mode) */}
-              {getReplenishmentType(editCvFormData.folder_name, selectedCvForModal) === 'rf' && (
+              {isTrueRevolvingFundVoucher(selectedCvForModal, editCvFormData.folder_name) ? (
                 <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-500/30 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
@@ -5615,7 +5809,25 @@ function DisbursementPageContent() {
                     </div>
                   </div>
                 </div>
-              )}
+              ) : getReplenishmentType(editCvFormData.folder_name, selectedCvForModal) === 'rf' ? (
+                <div>
+                  <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
+                    Fund Amount (₱) <span className="text-neutral-400 font-normal normal-case">(Optional / Total fund amount)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-sm">₱</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={editCvFormData.fund_amount}
+                      onChange={e => setEditCvFormData({ ...editCvFormData, fund_amount: e.target.value })}
+                      className="w-full pl-7 pr-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 font-mono font-bold"
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               {/* Rows */}
               {(() => {

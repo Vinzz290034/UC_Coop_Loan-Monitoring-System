@@ -34,8 +34,6 @@ export default function LoanApprovalModal({
   loan,
   onSuccess,
 }: LoanApprovalModalProps) {
-  if (!isOpen || !loan) return null;
-
   // Slip Header
   const [applyDate, setApplyDate] = useState<string>('');
   const [applyLafNo, setApplyLafNo] = useState<string>('');
@@ -525,7 +523,9 @@ export default function LoanApprovalModal({
       remaining = Math.max(0, remaining - monthlyPrincipal);
     }
     return schedule;
-  }, [applyAmount, applyTermMonths, loan?.interest_rate, loan?.amortization_type]);
+  }, [applyAmount, applyTermMonths, effectiveRate, loan?.amortization_type]);
+
+  if (!isOpen || !loan) return null;
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', {

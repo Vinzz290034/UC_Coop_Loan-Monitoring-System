@@ -47,6 +47,9 @@ export default function AppointmentsSection({ onPendingCountChange, initialOpenC
   const { user } = useAuth();
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff';
 
+  // Create appointment modal state
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -71,9 +74,6 @@ export default function AppointmentsSection({ onPendingCountChange, initialOpenC
 
   // Action loading state
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
-
-  // Create appointment modal state
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
     purpose: 'Discuss a Loan Application',
     specific_reason: '',

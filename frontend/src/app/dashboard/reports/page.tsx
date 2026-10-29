@@ -48,6 +48,7 @@ export default function ReportsPage() {
   const [sortBy, setSortBy] = useState('date-desc');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [isExpandedAll, setIsExpandedAll] = useState(false);
 
   // Clear filters on tab change
   useEffect(() => {
@@ -143,7 +144,6 @@ export default function ReportsPage() {
 
   // Pagination & Expand state
   const [currentPage, setCurrentPage] = useState(1);
-  const [isExpandedAll, setIsExpandedAll] = useState(false);
   const itemsPerPage = 8;
 
   // Smart windowed pagination helper matching Members Directory

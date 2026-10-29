@@ -17,7 +17,7 @@ export default function SessionTimeoutHandler() {
   const [showWarning, setShowWarning] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(WARNING_SECONDS);
 
-  const lastActivityRef = useRef<number>(Date.now());
+  const lastActivityRef = useRef<number>(0);
   const throttleRef = useRef<number>(0);
 
   // Per-user localStorage key — each user has their own timeout preference

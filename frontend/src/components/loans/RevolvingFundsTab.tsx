@@ -613,40 +613,6 @@ export default function RevolvingFundsTab({
     }
   }, [initialSearch]);
 
-  // Auto-expand targeted liquidation form once loaded
-  useEffect(() => {
-    if ((targetLiquidationId || initialSearch) && liquidations.length > 0) {
-      const match = liquidations.find(l => 
-        (targetLiquidationId && l.id === targetLiquidationId) || 
-        (initialSearch && (
-          l.lf_no.toLowerCase().includes(initialSearch.toLowerCase()) || 
-          (l.sheet_name && l.sheet_name.toLowerCase().includes(initialSearch.toLowerCase())) ||
-          (l.voucher_no && l.voucher_no.toLowerCase().includes(initialSearch.toLowerCase()))
-        ))
-      );
-      if (match && !expandedIds.includes(match.id)) {
-        toggleExpand(match);
-      }
-    }
-  }, [liquidations, targetLiquidationId, initialSearch]);
-
-  // Close active dropdowns when clicking outside
-  useEffect(() => {
-    if (openAccountIdx === null && openCategoryIdx === null) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && target.closest('[data-dropdown-container]')) {
-        return;
-      }
-      setOpenAccountIdx(null);
-      setOpenCategoryIdx(null);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [openAccountIdx, openCategoryIdx]);
-
   // Toggle inline expansion & fetch full items
   const toggleExpand = async (lf: LiquidationForm) => {
     const isExpanded = expandedIds.includes(lf.id);
@@ -687,6 +653,40 @@ export default function RevolvingFundsTab({
       }
     }
   };
+
+  // Auto-expand targeted liquidation form once loaded
+  useEffect(() => {
+    if ((targetLiquidationId || initialSearch) && liquidations.length > 0) {
+      const match = liquidations.find(l => 
+        (targetLiquidationId && l.id === targetLiquidationId) || 
+        (initialSearch && (
+          l.lf_no.toLowerCase().includes(initialSearch.toLowerCase()) || 
+          (l.sheet_name && l.sheet_name.toLowerCase().includes(initialSearch.toLowerCase())) ||
+          (l.voucher_no && l.voucher_no.toLowerCase().includes(initialSearch.toLowerCase()))
+        ))
+      );
+      if (match && !expandedIds.includes(match.id)) {
+        toggleExpand(match);
+      }
+    }
+  }, [liquidations, targetLiquidationId, initialSearch]);
+
+  // Close active dropdowns when clicking outside
+  useEffect(() => {
+    if (openAccountIdx === null && openCategoryIdx === null) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('[data-dropdown-container]')) {
+        return;
+      }
+      setOpenAccountIdx(null);
+      setOpenCategoryIdx(null);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openAccountIdx, openCategoryIdx]);
 
   // Open Link Voucher modal
   const openLinkModal = async (lf: LiquidationForm) => {
