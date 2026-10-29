@@ -663,7 +663,9 @@ function checkIsHonorariumAndWages(cv: any): boolean {
     cv?.revolving_fund_classification ||
     ''
   ).toLowerCase();
-  if (rfClass.includes('honorarium') || rfClass.includes('wages')) return true;
+  if (rfClass) {
+    return rfClass.includes('honorarium') || rfClass.includes('wages');
+  }
 
   const folder = String(cv?.folder_name || '').toLowerCase();
   if (folder.includes('honorarium') || folder.includes('wages')) return true;
@@ -673,6 +675,7 @@ function checkIsHonorariumAndWages(cv: any): boolean {
 
   const fa = Number(cv?.fund_amount || cv?.authorized_amount);
   if (fa === 56100) return true;
+  if (fa > 0 && fa !== 56100) return false;
 
   let detailsArr: any[] = [];
   if (Array.isArray(cv?.details)) {

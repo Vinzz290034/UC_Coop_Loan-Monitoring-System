@@ -140,45 +140,69 @@ export const REVOLVING_FUND_CLASSIFICATIONS: RevolvingFundClassification[] = [
 ];
 
 export const detectRfClassification = (cv?: any, rows?: any[]): string => {
-  let detailsText = '';
-  if (cv?.details) {
-    if (typeof cv.details === 'string') {
-      detailsText = cv.details;
-    } else if (Array.isArray(cv.details)) {
-      detailsText = cv.details.map((d: any) => `${d.book_of_account || ''} ${d.description || ''}`).join(' ');
+  const directClass = String(cv?.rf_classification || cv?.revolving_fund_classification || '').trim();
+  if (directClass) {
+    for (const c of REVOLVING_FUND_CLASSIFICATIONS) {
+      if (directClass.toLowerCase().includes(c.name.toLowerCase()) || directClass.toLowerCase().includes(c.shortName.toLowerCase())) {
+        return c.name;
+      }
     }
-  }
-
-  const textToScan = [
-    cv?.particulars || '',
-    detailsText,
-    ...(rows || []).map((r: any) => r.description || r.book_of_account || '')
-  ].join(' ').toLowerCase();
-
-  for (const c of REVOLVING_FUND_CLASSIFICATIONS) {
-    if (textToScan.includes(c.name.toLowerCase()) || textToScan.includes(c.shortName.toLowerCase())) {
-      return c.name;
-    }
-  }
-
-  // Check specific keywords in particulars or details
-  if (textToScan.includes('honorarium')) {
-    return 'Revolving Fund - Honorarium & Wages';
-  }
-  if (textToScan.includes('petty cash') || textToScan.includes('petty')) {
-    return 'Revolving Fund - Petty Cash';
-  }
-  if (textToScan.includes('manager')) {
-    return 'Revolving Fund - Manager';
-  }
-  if (textToScan.includes('rice')) {
-    return 'Revolving Fund - Rice';
   }
 
   const fa = cv?.fund_amount !== undefined && cv?.fund_amount !== null && cv?.fund_amount !== '' ? parseFloat(cv.fund_amount) : NaN;
   if (!isNaN(fa)) {
     const matchByAmount = REVOLVING_FUND_CLASSIFICATIONS.find(c => c.defaultAmount === fa);
     if (matchByAmount) return matchByAmount.name;
+  }
+
+  const headerText = [
+    cv?.folder_name || '',
+    cv?.particulars || ''
+  ].join(' ').toLowerCase();
+
+  for (const c of REVOLVING_FUND_CLASSIFICATIONS) {
+    if (headerText.includes(c.name.toLowerCase()) || headerText.includes(c.shortName.toLowerCase())) {
+      return c.name;
+    }
+  }
+
+  if (headerText.includes('honorarium')) {
+    return 'Revolving Fund - Honorarium & Wages';
+  }
+  if (headerText.includes('petty cash') || headerText.includes('petty')) {
+    return 'Revolving Fund - Petty Cash';
+  }
+  if (headerText.includes('manager')) {
+    return 'Revolving Fund - Manager';
+  }
+  if (headerText.includes('rice')) {
+    return 'Revolving Fund - Rice';
+  }
+
+  let detailsArr: any[] = [];
+  if (Array.isArray(cv?.details)) {
+    detailsArr = cv.details;
+  } else if (typeof cv?.details === 'string') {
+    try {
+      const parsed = JSON.parse(cv.details);
+      if (Array.isArray(parsed)) detailsArr = parsed;
+    } catch {}
+  }
+  const sourceItems = detailsArr.length > 0 ? detailsArr : (rows || []);
+  const debitItems = sourceItems.filter((d: any) => {
+    const desc = (d.book_of_account || d.description || '').trim();
+    const val = typeof d.amount === 'number' ? d.amount : parseFloat(d.amount || d.debit || 0);
+    const isCred = d.is_credit === true || d.isAutoCredit === true || /^(cib\b|cash\s*in\s*bank|revolving\s*fund\s*-)/i.test(desc) || val < 0;
+    return !isCred && val > 0;
+  });
+  if (
+    debitItems.length > 0 &&
+    debitItems.every((d: any) => {
+      const text = `${d.book_of_account || ''} ${d.description || ''}`.toLowerCase();
+      return text.includes('honorarium') || text.includes('allowance') || text.includes('wage');
+    })
+  ) {
+    return 'Revolving Fund - Honorarium & Wages';
   }
 
   return '';
