@@ -1610,6 +1610,22 @@ function DisbursementPageContent() {
       if (cleaned) return cleaned;
     }
 
+    // 1b. Direct account inspection for Honorarium, Allowances, Wages
+    const descDirect = (it.book_of_account || it.description || it.particulars || '').trim();
+    const lowerDirect = descDirect.toLowerCase();
+    if (lowerDirect === 'honorarium' || (lowerDirect.includes('honorarium') && !lowerDirect.includes('allowance'))) {
+      return 'Honorarium';
+    }
+    if (lowerDirect === 'allowances' || lowerDirect === 'allowance' || (lowerDirect.includes('allowance') && !lowerDirect.includes('honorarium'))) {
+      return 'Allowances';
+    }
+    if (lowerDirect === 'honorarium and allowances') {
+      return 'Honorarium';
+    }
+    if (lowerDirect.includes('wage')) {
+      return 'Wages';
+    }
+
     const vKey = it.voucher_no ? String(it.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
 
     // 2. Look for paired credit row in cvDetails with matching voucher_no or adjacent index
@@ -1858,7 +1874,7 @@ function DisbursementPageContent() {
       }
     }
 
-    const preferredOrder = ['Honorarium', 'Allowances', 'Wages', 'Operation', 'CDF', 'Service', 'Merchandise', 'CETF'];
+    const preferredOrder = ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
     const sortedCats = Object.keys(catMap).sort((a, b) => {
       const idxA = preferredOrder.indexOf(a);
       const idxB = preferredOrder.indexOf(b);

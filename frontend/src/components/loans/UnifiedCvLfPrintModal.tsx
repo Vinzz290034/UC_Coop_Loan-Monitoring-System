@@ -671,17 +671,33 @@ function checkIsHonorariumAndWages(cv: any): boolean {
   const particulars = String(cv?.particulars || cv?.description || '').toLowerCase();
   if (particulars.includes('honorarium') || particulars.includes('wages')) return true;
 
-  let detailsText = '';
-  const details = cv?.details;
-  if (Array.isArray(details)) {
-    detailsText = details.map((d: any) => `${d.book_of_account || ''} ${d.description || ''} ${d.particulars || ''} ${d.remarks || ''}`).join(' ');
-  } else if (typeof details === 'string') {
-    detailsText = details;
-  }
-  if (detailsText.toLowerCase().includes('honorarium') || detailsText.toLowerCase().includes('wages')) return true;
-
   const fa = Number(cv?.fund_amount || cv?.authorized_amount);
   if (fa === 56100) return true;
+
+  let detailsArr: any[] = [];
+  if (Array.isArray(cv?.details)) {
+    detailsArr = cv.details;
+  } else if (typeof cv?.details === 'string') {
+    try {
+      const parsed = JSON.parse(cv.details);
+      if (Array.isArray(parsed)) detailsArr = parsed;
+    } catch {}
+  }
+  const debitItems = detailsArr.filter((d: any) => {
+    const desc = (d.book_of_account || d.description || '').trim();
+    const val = typeof d.amount === 'number' ? d.amount : parseFloat(d.amount || d.debit || 0);
+    const isCred = d.is_credit === true || d.isAutoCredit === true || /^(cib\b|cash\s*in\s*bank|revolving\s*fund\s*-)/i.test(desc) || val < 0;
+    return !isCred && val > 0;
+  });
+  if (
+    debitItems.length > 0 &&
+    debitItems.every((d: any) => {
+      const text = `${d.book_of_account || ''} ${d.description || ''} ${d.category || ''}`.toLowerCase();
+      return text.includes('honorarium') || text.includes('allowance') || text.includes('wage');
+    })
+  ) {
+    return true;
+  }
 
   return false;
 }
@@ -829,95 +845,9 @@ function getSummaryCvRows(
     return { rows, debitTotal, creditTotal };
   }
 
-  // Revolving Fund (resolvedType === 'rf')
-  if (isHonorarium) {
-    // For Revolving Fund Replenishment - Honorarium & Wages:
-    // Separate by specific account (e.g. Honorarium and Allowances, Wages, Allowances) instead of collapsing into a single category
-    const honorariumMap: Record<string, number> = {};
-
-    let sourceItems: any[] = [];
-    if (detailedRows && detailedRows.length > 0) {
-      sourceItems = detailedRows;
-    } else {
-      let rawDetails: any[] = [];
-      if (Array.isArray(cv?.details)) {
-        rawDetails = cv.details;
-      } else if (typeof cv?.details === 'string') {
-        try {
-          const parsed = JSON.parse(cv.details);
-          if (Array.isArray(parsed)) rawDetails = parsed;
-        } catch {}
-      }
-      if (rawDetails.length > 0) {
-        sourceItems = rawDetails;
-      } else if (Array.isArray(cv?.revolving_fund?.items) && cv.revolving_fund.items.length > 0) {
-        sourceItems = cv.revolving_fund.items.filter((it: any) => !it.is_cancelled);
-      }
-    }
-
-    if (sourceItems.length > 0) {
-      for (const it of sourceItems) {
-        const desc = (it.book_of_account || it.description || it.particulars || '').trim();
-        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) continue;
-
-        const val = typeof it.amount === 'number'
-          ? it.amount
-          : (it.debit !== null && it.debit !== undefined && it.debit !== ''
-              ? parseFloat(it.debit)
-              : parseFloat(it.amount || 0));
-
-        const isCredit = it.is_credit === true || it.isAutoCredit === true || val < 0;
-        if (!isCredit && val > 0) {
-          let acctName = desc;
-          const lowerAcct = acctName.toLowerCase();
-          if (!acctName || lowerAcct === 'operation') {
-            acctName = 'Honorarium';
-          } else if (lowerAcct === 'honorarium and allowances') {
-            acctName = 'Honorarium';
-          } else if (lowerAcct.includes('honorarium') && !lowerAcct.includes('allowance')) {
-            acctName = 'Honorarium';
-          } else if (lowerAcct.includes('allowance') && !lowerAcct.includes('honorarium')) {
-            acctName = 'Allowances';
-          } else if (lowerAcct.includes('wage')) {
-            acctName = 'Wages';
-          }
-          honorariumMap[acctName] = (honorariumMap[acctName] || 0) + val;
-        }
-      }
-    }
-
-    if (Object.keys(honorariumMap).length === 0) {
-      const fallbackAmt = parseFloat(cv?.amount || 0);
-      if (fallbackAmt > 0) {
-        honorariumMap['Honorarium'] = fallbackAmt;
-      }
-    }
-
-    const preferredOrder = [
-      'Honorarium',
-      'Allowances',
-      'Wages'
-    ];
-
-    const sortedKeys = Object.keys(honorariumMap).sort((a, b) => {
-      const idxA = preferredOrder.indexOf(a);
-      const idxB = preferredOrder.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.localeCompare(b);
-    });
-
-    for (const acct of sortedKeys) {
-      const amt = honorariumMap[acct];
-      rows.push({
-        description: acct,
-        debit: amt,
-        credit: null
-      });
-      debitTotal += amt;
-    }
-  } else if (categoryBreakdown.list.length > 0) {
+  // Revolving Fund (resolvedType === 'rf'):
+  // Always reflect the exact Category Breakdown displayed on the Detailed Transaction
+  if (categoryBreakdown.list.length > 0) {
     for (const cat of categoryBreakdown.list) {
       const cleanName = cleanCategoryName(cat.name);
       rows.push({
@@ -1441,9 +1371,7 @@ export default function UnifiedCvLfPrintModal({
       }
     }
 
-    const preferredOrder = checkIsHonorariumAndWages(currentCv)
-      ? ['Honorarium', 'Allowances', 'Wages', 'Operation', 'CDF', 'Service', 'Merchandise', 'CETF']
-      : ['Operation', 'CDF', 'Service', 'Merchandise', 'CETF'];
+    const preferredOrder = ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
     const list = Object.entries(map).map(([name, amount]) => ({
       name,
       amount,
@@ -1614,54 +1542,15 @@ export default function UnifiedCvLfPrintModal({
   }, [resolvedType, currentCv, currentLf]);
 
   const isHonorariumAndWages = useMemo(() => {
-    // 1. Check direct classification properties
-    const rfClass = String(
-      currentCv?.rf_classification ||
-      currentCv?.revolving_fund_classification ||
-      currentLf?.rf_classification ||
-      ''
-    ).toLowerCase();
-    if (rfClass.includes('honorarium') || rfClass.includes('wages')) return true;
-
-    // 2. Check folder name
-    const folder = String(currentCv?.folder_name || currentLf?.folder_name || '').toLowerCase();
-    if (folder.includes('honorarium') || folder.includes('wages')) return true;
-
-    // 3. Check particulars and description
-    const particulars = String(currentCv?.particulars || currentCv?.description || currentLf?.particulars || '').toLowerCase();
-    if (particulars.includes('honorarium') || particulars.includes('wages')) return true;
-
-    // 4. Check details / rows
-    let detailsText = '';
-    const details = currentCv?.details;
-    if (Array.isArray(details)) {
-      detailsText = details.map((d: any) => `${d.book_of_account || ''} ${d.description || ''} ${d.particulars || ''} ${d.remarks || ''}`).join(' ');
-    } else if (typeof details === 'string') {
-      detailsText = details;
-    }
-    if (detailsText.toLowerCase().includes('honorarium') || detailsText.toLowerCase().includes('wages')) return true;
-
-    // 5. Check rows in summaryCvData and detailedCvData
-    if (summaryCvData.rows.some(r => (r.description || '').toLowerCase().includes('honorarium') || (r.description || '').toLowerCase().includes('wages'))) {
-      return true;
-    }
-    if (detailedCvData.rows.some(r => (r.description || '').toLowerCase().includes('honorarium') || (r.remarks || '').toLowerCase().includes('honorarium'))) {
-      return true;
-    }
-
-    // 6. Fund amount: 56100 is specifically defined for Revolving Fund - Honorarium & Wages
-    const fa = Number(currentCv?.fund_amount || currentLf?.fund_amount || currentLf?.authorized_amount);
-    if (fa === 56100) return true;
-
+    if (checkIsHonorariumAndWages(currentCv)) return true;
+    if (checkIsHonorariumAndWages(currentLf)) return true;
     return false;
-  }, [currentCv, currentLf, summaryCvData.rows, detailedCvData.rows]);
+  }, [currentCv, currentLf]);
 
   const rfDetailedCategoryBreakdown = useMemo(() => {
     if (!isRevolvingFund) return [];
 
-    const preferredOrder = isHonorariumAndWages
-      ? ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF']
-      : ['Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
+    const preferredOrder = ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
     const catMap: Record<string, number> = {};
 
     const nonCibRows = (detailedCvData.rows || []).filter(r => !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
