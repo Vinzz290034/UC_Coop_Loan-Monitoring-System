@@ -784,7 +784,7 @@ function getSummaryCvRows(
         } else if (/insurance/i.test(desc)) {
           acct = 'Insurance Payable';
         } else if (/interest/i.test(desc)) {
-          acct = 'Interest Receive';
+          acct = 'Interest Received';
         } else if (/loans?\s*receivable/i.test(desc)) {
           acct = 'Loans Receivable';
         } else {
@@ -812,7 +812,7 @@ function getSummaryCvRows(
       }
     }
 
-    const preferredOrder = ['Service Fee', 'Insurance Payable', 'Interest Receive', 'Loans Receivable'];
+    const preferredOrder = ['Service Fee', 'Insurance Payable', 'Interest Received', 'Loans Receivable'];
     const sortedCreditKeys = Object.keys(creditMap).sort((a, b) => {
       const idxA = preferredOrder.indexOf(a);
       const idxB = preferredOrder.indexOf(b);

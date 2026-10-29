@@ -1773,7 +1773,7 @@ function DisbursementPageContent() {
               let acct = 'Other Deductions';
               if (/service\s*fee/i.test(desc)) acct = 'Service Fee';
               else if (/insurance/i.test(desc)) acct = 'Insurance Payable';
-              else if (/interest/i.test(desc)) acct = 'Interest Receive';
+              else if (/interest/i.test(desc)) acct = 'Interest Received';
               else if (/loans?\s*receivable/i.test(desc)) acct = 'Loans Receivable';
               else acct = desc.replace(/;.*$/, '').trim() || 'Other Deductions';
               creditMap[acct] = (creditMap[acct] || 0) + cVal;
@@ -1819,7 +1819,7 @@ function DisbursementPageContent() {
         }
       }
 
-      const preferredOrder = ['Service Fee', 'Insurance Payable', 'Interest Receive', 'Loans Receivable'];
+      const preferredOrder = ['Service Fee', 'Insurance Payable', 'Interest Received', 'Loans Receivable'];
       const sortedCreditKeys = Object.keys(creditMap).sort((a, b) => {
         const idxA = preferredOrder.indexOf(a);
         const idxB = preferredOrder.indexOf(b);
