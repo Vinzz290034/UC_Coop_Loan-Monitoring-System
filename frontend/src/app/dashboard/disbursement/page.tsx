@@ -4613,7 +4613,7 @@ function DisbursementPageContent() {
                               <div>Date</div>
                               <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}</div>
                               <div>Book of Accounts</div>
-                              <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Recipient' : 'Remarks'}</div>
+                              <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
                               <div className="text-right">Debit (₱)</div>
                               <div className="text-right">Credit (₱)</div>
                               <div className="text-center">Action</div>
@@ -4697,7 +4697,7 @@ function DisbursementPageContent() {
                                     <div>
                                       <input
                                         type="text"
-                                        placeholder={isHonWagesRow ? 'Recipient...' : 'Remarks...'}
+                                        placeholder={isHonWagesRow ? 'Recipient...' : (replenishType === 'stl' ? 'Borrower...' : 'Remarks...')}
                                         value={row.remarks || ''}
                                         onChange={e => updateCvRowField(false, row.id!, 'remarks', e.target.value, replenishType)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -5869,7 +5869,7 @@ function DisbursementPageContent() {
                             <div>Date</div>
                             <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}</div>
                             <div>Book of Accounts</div>
-                            <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Recipient' : 'Remarks'}</div>
+                            <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
                             <div className="text-right">Debit (₱)</div>
                             <div className="text-right">Credit (₱)</div>
                             <div className="text-center">Action</div>
@@ -5955,7 +5955,7 @@ function DisbursementPageContent() {
                                   <div>
                                     <input
                                       type="text"
-                                      placeholder={isHonWagesRow ? 'Recipient...' : 'Remarks...'}
+                                      placeholder={isHonWagesRow ? 'Recipient...' : (replenishType === 'stl' ? 'Borrower...' : 'Remarks...')}
                                       value={row.remarks || ''}
                                       onChange={e => updateCvRowField(true, row.id!, 'remarks', e.target.value, replenishType)}
                                       className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"

@@ -2090,7 +2090,7 @@ export default function UnifiedCvLfPrintModal({
                                 <th className="p-2.5 w-28 text-left border-r border-emerald-700/60 text-white whitespace-nowrap">DATE</th>
                                 <th className="p-2.5 w-28 text-left border-r border-emerald-700/60 text-white whitespace-nowrap">{isHonorariumAndWages ? 'Cash Release Form No.' : (resolvedType === 'stl' ? 'LAF No.' : 'RF VOUCHER #')}</th>
                                 <th className="p-2.5 w-1/3 text-left border-r border-emerald-700/60 text-white">BOOK OF ACCOUNTS</th>
-                                <th className="p-2.5 w-1/3 text-left border-r border-emerald-700/60 text-white">{isHonorariumAndWages ? 'RECIPIENT' : 'REMARKS'}</th>
+                                <th className="p-2.5 w-1/3 text-left border-r border-emerald-700/60 text-white">{isHonorariumAndWages ? 'RECIPIENT' : (resolvedType === 'stl' || isStlFund ? 'BORROWER' : 'REMARKS')}</th>
                                 <th className="p-2.5 w-32 text-right border-r border-emerald-700/60 text-white whitespace-nowrap">DEBIT (₱)</th>
                                 <th className="p-2.5 w-32 text-right text-white whitespace-nowrap">CREDIT (₱)</th>
                               </tr>
@@ -2699,7 +2699,7 @@ export default function UnifiedCvLfPrintModal({
                         <th style={{ padding: '2.5px 5px', width: '75px', borderRight: '1px solid #047857', color: '#ffffff', whiteSpace: 'nowrap' }}>DATE</th>
                         <th style={{ padding: '2.5px 5px', width: isHonorariumAndWages ? '95px' : '65px', borderRight: '1px solid #047857', color: '#ffffff', whiteSpace: 'nowrap' }}>{isHonorariumAndWages ? 'Cash Release Form No.' : (resolvedType === 'stl' ? 'LAF No.' : 'RF VOUCHER #')}</th>
                         <th style={{ padding: '2.5px 5px', width: '30%', borderRight: '1px solid #047857', color: '#ffffff' }}>BOOK OF ACCOUNTS</th>
-                        <th style={{ padding: '2.5px 5px', width: '30%', borderRight: '1px solid #047857', color: '#ffffff' }}>{isHonorariumAndWages ? 'RECIPIENT' : 'REMARKS'}</th>
+                        <th style={{ padding: '2.5px 5px', width: '30%', borderRight: '1px solid #047857', color: '#ffffff' }}>{isHonorariumAndWages ? 'RECIPIENT' : (resolvedType === 'stl' || isStlFund ? 'BORROWER' : 'REMARKS')}</th>
                         <th style={{ padding: '2.5px 5px', textAlign: 'right', width: '85px', borderRight: '1px solid #047857', color: '#ffffff' }}>DEBIT (₱)</th>
                         <th style={{ padding: '2.5px 5px', textAlign: 'right', width: '85px', color: '#ffffff' }}>CREDIT (₱)</th>
                       </tr>
