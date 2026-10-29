@@ -872,7 +872,7 @@ export default function CollectionPage() {
       : false;
     setIsEditCustomBank(isCustom);
 
-    const isService = item.tab === 'services' || (Boolean(item.service_type) && !item.item_name);
+    const isService = item.tab === 'services' || (Boolean(item.service_type) && !item.item_name && !(item.items && item.items.length > 0));
     const initialItems: CollectionMerchandiseItem[] = (item.items && item.items.length > 0)
       ? item.items.map((it, idx) => ({
           id: it.id || `edit-item-${idx}-${Date.now()}`,
@@ -3888,30 +3888,15 @@ export default function CollectionPage() {
                       Transaction Type
                     </span>
                     <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-emerald-100/70 dark:bg-emerald-900/40 border border-emerald-300/40 dark:border-emerald-700/40 text-[11px]">
-                      <button
-                        type="button"
-                        disabled={editingItem.status === 'filed'}
-                        onClick={() => setEditFormData((prev: any) => ({ ...prev, sales_service_type: 'merchandise' }))}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
-                          editFormData.sales_service_type !== 'service'
-                            ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
-                            : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
-                        }`}
-                      >
-                        Store Merchandise / Sales
-                      </button>
-                      <button
-                        type="button"
-                        disabled={editingItem.status === 'filed'}
-                        onClick={() => setEditFormData((prev: any) => ({ ...prev, sales_service_type: 'service' }))}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
-                          editFormData.sales_service_type === 'service'
-                            ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
-                            : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
-                        }`}
-                      >
-                        Coop Services / Fees
-                      </button>
+                      {editFormData.sales_service_type !== 'service' ? (
+                        <span className="px-2.5 py-1 rounded-lg font-bold bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs">
+                          Store Merchandise / Sales
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-lg font-bold bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs">
+                          Coop Services / Fees
+                        </span>
+                      )}
                     </div>
                   </div>
 
