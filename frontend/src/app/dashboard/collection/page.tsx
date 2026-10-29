@@ -616,6 +616,26 @@ export default function CollectionPage() {
     }));
   };
 
+  const handleAddMultipleItems = (count: number = 1) => {
+    setFormData(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        ...Array.from({ length: count }, (_, i) => ({
+          id: `item-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }))
+      ]
+    }));
+  };
+
   const handleRemoveItem = (index: number) => {
     setFormData(prev => {
       if (prev.items.length <= 1) {
@@ -934,6 +954,26 @@ export default function CollectionPage() {
           revenue: 0,
           gross_profit: 0
         }
+      ]
+    }));
+  };
+
+  const handleEditAddMultipleItems = (count: number = 1) => {
+    setEditFormData((prev: any) => ({
+      ...prev,
+      items: [
+        ...(prev.items || []),
+        ...Array.from({ length: count }, (_, i) => ({
+          id: `edit-item-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }))
       ]
     }));
   };
@@ -2314,8 +2354,27 @@ export default function CollectionPage() {
                             </div>
                           ) : null}
                         </td>
-                        <td className="py-3 px-3 text-neutral-700 dark:text-neutral-300" title={remarksText && detailsDesc && remarksText !== detailsDesc ? `${remarksText} (${detailsDesc})` : (remarksText || detailsDesc)}>
-                          <div className="truncate font-medium">{primaryDesc}</div>
+                        <td
+                          className="py-3 px-3 text-neutral-700 dark:text-neutral-300"
+                          title={
+                            item.items && item.items.length > 1
+                              ? `${item.items.length} items:\n` + item.items.map((it: any) => `• ${it.item || 'Item'} (${it.quantity || 1} pcs)`).join('\n') + (remarksText ? `\n\nRemarks: ${remarksText}` : '')
+                              : (remarksText && detailsDesc && remarksText !== detailsDesc ? `${remarksText} (${detailsDesc})` : (remarksText || detailsDesc))
+                          }
+                        >
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {item.items && item.items.length > 1 && (
+                              <span className="px-1.5 py-0.5 rounded font-mono text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
+                                {item.items.length} Items
+                              </span>
+                            )}
+                            <span className="truncate font-medium text-neutral-900 dark:text-white">{primaryDesc}</span>
+                          </div>
+                          {remarksText && detailsDesc && remarksText !== detailsDesc && (
+                            <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                              {detailsDesc}
+                            </div>
+                          )}
                           <div className="mt-1">
                             <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700">
                               {formatCategoryBadge(item.tab)}
@@ -2555,7 +2614,7 @@ export default function CollectionPage() {
       {/* RECORD NEW COLLECTION MODAL */}
       {isAddModalOpen && mounted && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
-          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-modal-pop">
+          <div className={`bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl ${formData.tab === 'sales_services' ? 'max-w-5xl' : 'max-w-2xl'} w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-modal-pop transition-all duration-200`}>
             {/* Modal Header */}
             <div className="p-5 border-b border-outline-variant/60 flex items-center justify-between bg-surface-container-lowest dark:bg-neutral-900">
               <div className="flex items-center gap-2.5">
@@ -2983,191 +3042,189 @@ export default function CollectionPage() {
 
                   {formData.sales_service_type !== 'service' ? (
                     <div className="space-y-3 pt-1">
-                      <div className="flex items-center justify-between pb-1 border-b border-emerald-200/60 dark:border-emerald-800/40">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-emerald-200/60 dark:border-emerald-800/40">
                         <div>
                           <span className="text-[11px] font-bold uppercase text-emerald-900 dark:text-emerald-300 block">
-                            Merchandise Items & Sales Breakdown
+                            Merchandise Items &amp; Sales Breakdown
                           </span>
                           <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400">
-                            Enter item, description, size, cost, and selling price. Revenue and gross profit are calculated automatically.
+                            Enter item name, category, size, quantity, cost, and selling price. Revenue and gross profit are calculated automatically.
                           </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => handleAddMultipleItems(5)}
+                            className="px-2.5 py-1 rounded-lg border border-emerald-400/80 bg-emerald-50 dark:bg-emerald-950/40 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                            title="Add 5 empty rows"
+                          >
+                            + 5 Rows
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAddMultipleItems(10)}
+                            className="px-2.5 py-1 rounded-lg border border-emerald-400/80 bg-emerald-50 dark:bg-emerald-950/40 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                            title="Add 10 empty rows"
+                          >
+                            + 10 Rows
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddItem}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-[10.5px] font-bold text-white transition-all shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Item</span>
+                          </button>
                         </div>
                       </div>
 
-                      {/* Items List */}
-                      <div className="space-y-3">
-                        {formData.items.map((it, idx) => {
-                          const q = parseFloat(String(it.quantity)) || 0;
-                          const cp = parseFloat(String(it.cost_price)) || 0;
-                          const sp = parseFloat(String(it.selling_price)) || 0;
-                          const rev = q * sp;
-                          const gp = rev - (q * cp);
-
-                          return (
-                            <div
-                              key={it.id || idx}
-                              className="p-3 rounded-xl bg-white/90 dark:bg-neutral-900/80 border border-emerald-200/90 dark:border-emerald-800/50 space-y-2.5 shadow-2xs"
-                            >
-                              <div className="flex items-center justify-between border-b border-emerald-100 dark:border-emerald-900/50 pb-1.5">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                                  Item #{idx + 1}
-                                </span>
-                                {formData.items.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveItem(idx)}
-                                    className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 flex items-center gap-1 cursor-pointer transition-colors"
-                                    title="Remove this item"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                    Remove
-                                  </button>
-                                )}
-                              </div>
-
-                              {/* Row 1: Item, Description, Size */}
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Item
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={it.item}
-                                    onChange={e => handleItemFieldChange(idx, 'item', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
-                                    placeholder="e.g. Uniform Polo"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Description
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={it.description}
-                                    onChange={e => handleItemFieldChange(idx, 'description', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
-                                    placeholder="e.g. BSMT Gala Set"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Size
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={it.size}
-                                    onChange={e => handleItemFieldChange(idx, 'size', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
-                                    placeholder="e.g. XS, S, M, L, XL"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Row 2: Quantity, Cost Price, Selling Price */}
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Quantity
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    value={it.quantity}
-                                    onChange={e => handleItemFieldChange(idx, 'quantity', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white"
-                                    placeholder="1"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Cost Price (₱)
-                                  </label>
-                                  <div className="relative">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      value={it.cost_price}
-                                      onChange={e => handleItemFieldChange(idx, 'cost_price', e.target.value)}
-                                      className="w-full pl-6 pr-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
-                                      placeholder="0.00"
-                                    />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Selling Price (₱)
-                                  </label>
-                                  <div className="relative">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      value={it.selling_price}
-                                      onChange={e => handleItemFieldChange(idx, 'selling_price', e.target.value)}
-                                      className="w-full pl-6 pr-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
-                                      placeholder="0.00"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Row 3: Auto-calculated Revenue & Gross Profit */}
-                              <div className="grid grid-cols-2 gap-2.5 pt-1.5 border-t border-dashed border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-2 rounded-lg">
-                                <div>
-                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block">
-                                    Revenue (Qty × Selling)
-                                  </span>
-                                  <span className="text-xs font-mono font-bold text-emerald-900 dark:text-emerald-200">
-                                    ₱{rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                                <div className="text-right">
-                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block">
-                                    Gross Profit (Revenue - Cost)
-                                  </span>
-                                  <span className={`text-xs font-mono font-bold ${gp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                                    ₱{gp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* "+ Add Another Item" button & Summary */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={handleAddItem}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-emerald-500/70 dark:border-emerald-500/50 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30 transition-all cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          Add Another Item
-                        </button>
-
-                        <div className="flex items-center gap-3 self-end sm:self-auto text-right">
-                          <div>
-                            <span className="text-[10px] text-neutral-500 uppercase font-semibold block">Total Revenue</span>
-                            <span className="text-xs font-mono font-bold text-neutral-900 dark:text-white">
-                              ₱{formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] text-neutral-500 uppercase font-semibold block">Total Profit</span>
-                            <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                              ₱{formData.items.reduce((acc, it) => {
+                      {/* Items Table (Spacious Horizontal Layout for 50+ items) */}
+                      <div className="border border-emerald-300 dark:border-emerald-800/80 rounded-2xl overflow-hidden shadow-2xs">
+                        <div className="overflow-x-auto max-h-[440px] overflow-y-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
+                              <tr>
+                                <th className="p-2 w-9 text-center border-r border-emerald-700/60">#</th>
+                                <th className="p-2 min-w-[170px] border-r border-emerald-700/60">Item Name</th>
+                                <th className="p-2 min-w-[140px] border-r border-emerald-700/60">Description / Category</th>
+                                <th className="p-2 w-24 border-r border-emerald-700/60 text-center">Size</th>
+                                <th className="p-2 w-16 text-center border-r border-emerald-700/60">Qty</th>
+                                <th className="p-2 w-24 text-right border-r border-emerald-700/60">Cost (₱)</th>
+                                <th className="p-2 w-24 text-right border-r border-emerald-700/60">Selling (₱)</th>
+                                <th className="p-2 w-28 text-right border-r border-emerald-700/60">Revenue (₱)</th>
+                                <th className="p-2 w-28 text-right border-r border-emerald-700/60">Profit (₱)</th>
+                                <th className="p-2 w-10 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-neutral-900 text-xs">
+                              {formData.items.map((it, idx) => {
                                 const q = parseFloat(String(it.quantity)) || 0;
                                 const cp = parseFloat(String(it.cost_price)) || 0;
                                 const sp = parseFloat(String(it.selling_price)) || 0;
-                                return acc + ((q * sp) - (q * cp));
-                              }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                const rev = q * sp;
+                                const gp = rev - (q * cp);
+
+                                return (
+                                  <tr key={it.id || idx} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors">
+                                    <td className="p-1.5 text-center font-mono font-bold text-neutral-500 border-r border-neutral-200 dark:border-neutral-800">
+                                      {idx + 1}
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="text"
+                                        value={it.item}
+                                        onChange={e => handleItemFieldChange(idx, 'item', e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                        placeholder="e.g. Uniform Polo"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="text"
+                                        value={it.description}
+                                        onChange={e => handleItemFieldChange(idx, 'description', e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                        placeholder="e.g. BSMT Gala Set"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="text"
+                                        value={it.size}
+                                        onChange={e => handleItemFieldChange(idx, 'size', e.target.value)}
+                                        className="w-full px-1.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-center font-mono font-medium text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                        placeholder="M, L, XL"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={it.quantity}
+                                        onChange={e => handleItemFieldChange(idx, 'quantity', e.target.value)}
+                                        className="w-full px-1 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-center font-mono font-bold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                        placeholder="1"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={it.cost_price}
+                                        onChange={e => handleItemFieldChange(idx, 'cost_price', e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-right font-mono font-medium text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                        placeholder="0.00"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={it.selling_price}
+                                        onChange={e => handleItemFieldChange(idx, 'selling_price', e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-right font-mono font-bold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                        placeholder="0.00"
+                                      />
+                                    </td>
+                                    <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                                      ₱{rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className={`p-2 text-right font-mono font-bold border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap ${gp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                      ₱{gp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-1.5 text-center">
+                                      {formData.items.length > 1 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveItem(idx)}
+                                          className="p-1 text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                          title="Remove row"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                                        </button>
+                                      ) : (
+                                        <span className="text-neutral-300 dark:text-neutral-700 text-xs">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Summary Bar Footer */}
+                        <div className="bg-[#ecfdf5] dark:bg-emerald-950/50 p-2.5 px-4 border-t border-emerald-300 dark:border-emerald-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider text-[10.5px]">
+                              Total Items: {formData.items.length}
                             </span>
+                            <span className="text-neutral-400">•</span>
+                            <span className="font-medium text-emerald-800 dark:text-emerald-300 text-[10.5px]">
+                              Total Qty: {formData.items.reduce((acc, it) => acc + (parseFloat(String(it.quantity)) || 0), 0)} pcs
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 text-right">
+                            <div>
+                              <span className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-bold block">Total Revenue</span>
+                              <span className="text-sm font-mono font-extrabold text-neutral-900 dark:text-white">
+                                ₱{formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-bold block">Total Profit</span>
+                              <span className="text-sm font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                                ₱{formData.items.reduce((acc, it) => {
+                                  const q = parseFloat(String(it.quantity)) || 0;
+                                  const cp = parseFloat(String(it.cost_price)) || 0;
+                                  const sp = parseFloat(String(it.selling_price)) || 0;
+                                  return acc + ((q * sp) - (q * cp));
+                                }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -3399,7 +3456,7 @@ export default function CollectionPage() {
       {/* EDIT & SEAL/FILE COLLECTION MODAL (ADMIN ONLY) */}
       {editingItem && editFormData && mounted && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
-          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-modal-pop">
+          <div className={`bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl ${editFormData.tab === 'sales_services' ? 'max-w-5xl' : 'max-w-2xl'} w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-modal-pop transition-all duration-200`}>
             {/* Modal Header */}
             <div className="p-5 border-b border-outline-variant/60 flex items-center justify-between bg-surface-container-lowest dark:bg-neutral-900">
               <div className="flex items-center gap-2.5">
@@ -3860,199 +3917,197 @@ export default function CollectionPage() {
 
                   {editFormData.sales_service_type !== 'service' ? (
                     <div className="space-y-3 pt-1">
-                      <div className="flex items-center justify-between pb-1 border-b border-emerald-200/60 dark:border-emerald-800/40">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-emerald-200/60 dark:border-emerald-800/40">
                         <div>
                           <span className="text-[11px] font-bold uppercase text-emerald-900 dark:text-emerald-300 block">
-                            Merchandise Items & Sales Breakdown
+                            Merchandise Items &amp; Sales Breakdown
                           </span>
                           <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400">
-                            Enter item, description, size, cost, and selling price. Revenue and gross profit are calculated automatically.
+                            Enter item name, category, size, quantity, cost, and selling price. Revenue and gross profit are calculated automatically.
                           </span>
                         </div>
-                      </div>
-
-                      {/* Items List */}
-                      <div className="space-y-3">
-                        {(editFormData.items || []).map((it: any, idx: number) => {
-                          const q = parseFloat(String(it.quantity)) || 0;
-                          const cp = parseFloat(String(it.cost_price)) || 0;
-                          const sp = parseFloat(String(it.selling_price)) || 0;
-                          const rev = q * sp;
-                          const gp = rev - (q * cp);
-
-                          return (
-                            <div
-                              key={it.id || idx}
-                              className="p-3 rounded-xl bg-white/90 dark:bg-neutral-900/80 border border-emerald-200/90 dark:border-emerald-800/50 space-y-2.5 shadow-2xs"
+                        {editingItem.status !== 'filed' && (
+                          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleEditAddMultipleItems(5)}
+                              className="px-2.5 py-1 rounded-lg border border-emerald-400/80 bg-emerald-50 dark:bg-emerald-950/40 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                              title="Add 5 empty rows"
                             >
-                              <div className="flex items-center justify-between border-b border-emerald-100 dark:border-emerald-900/50 pb-1.5">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                                  Item #{idx + 1}
-                                </span>
-                                {(editFormData.items || []).length > 1 && editingItem.status !== 'filed' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEditRemoveItem(idx)}
-                                    className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 flex items-center gap-1 cursor-pointer transition-colors"
-                                    title="Remove this item"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                    Remove
-                                  </button>
-                                )}
-                              </div>
-
-                              {/* Row 1: Item, Description, Size */}
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Item
-                                  </label>
-                                  <input
-                                    type="text"
-                                    disabled={editingItem.status === 'filed'}
-                                    value={it.item}
-                                    onChange={e => handleEditItemFieldChange(idx, 'item', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                                    placeholder="e.g. Uniform Polo"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Description
-                                  </label>
-                                  <input
-                                    type="text"
-                                    disabled={editingItem.status === 'filed'}
-                                    value={it.description}
-                                    onChange={e => handleEditItemFieldChange(idx, 'description', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                                    placeholder="e.g. BSMT Gala Set"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Size
-                                  </label>
-                                  <input
-                                    type="text"
-                                    disabled={editingItem.status === 'filed'}
-                                    value={it.size}
-                                    onChange={e => handleEditItemFieldChange(idx, 'size', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                                    placeholder="e.g. XS, S, M, L, XL"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Row 2: Quantity, Cost Price, Selling Price */}
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Quantity
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    disabled={editingItem.status === 'filed'}
-                                    value={it.quantity}
-                                    onChange={e => handleEditItemFieldChange(idx, 'quantity', e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                                    placeholder="1"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Cost Price (₱)
-                                  </label>
-                                  <div className="relative">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      disabled={editingItem.status === 'filed'}
-                                      value={it.cost_price}
-                                      onChange={e => handleEditItemFieldChange(idx, 'cost_price', e.target.value)}
-                                      className="w-full pl-6 pr-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                                      placeholder="0.00"
-                                    />
-                                  </div>
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold uppercase text-neutral-600 dark:text-neutral-400 mb-1">
-                                    Selling Price (₱)
-                                  </label>
-                                  <div className="relative">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      disabled={editingItem.status === 'filed'}
-                                      value={it.selling_price}
-                                      onChange={e => handleEditItemFieldChange(idx, 'selling_price', e.target.value)}
-                                      className="w-full pl-6 pr-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                                      placeholder="0.00"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Row 3: Auto-calculated Revenue & Gross Profit */}
-                              <div className="grid grid-cols-2 gap-2.5 pt-1.5 border-t border-dashed border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-2 rounded-lg">
-                                <div>
-                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block">
-                                    Revenue (Qty × Selling)
-                                  </span>
-                                  <span className="text-xs font-mono font-bold text-emerald-900 dark:text-emerald-200">
-                                    ₱{rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                                <div className="text-right">
-                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block">
-                                    Gross Profit (Revenue - Cost)
-                                  </span>
-                                  <span className={`text-xs font-mono font-bold ${gp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                                    ₱{gp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                              + 5 Rows
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEditAddMultipleItems(10)}
+                              className="px-2.5 py-1 rounded-lg border border-emerald-400/80 bg-emerald-50 dark:bg-emerald-950/40 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                              title="Add 10 empty rows"
+                            >
+                              + 10 Rows
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleEditAddItem}
+                              className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-[10.5px] font-bold text-white transition-all shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Item</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
 
-                      {/* "+ Add Another Item" button & Summary */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-                        {editingItem.status !== 'filed' ? (
-                          <button
-                            type="button"
-                            onClick={handleEditAddItem}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-emerald-500/70 dark:border-emerald-500/50 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 dark:hover:bg-emerald-900/30 transition-all cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            Add Another Item
-                          </button>
-                        ) : <div />}
-
-                        <div className="flex items-center gap-3 self-end sm:self-auto text-right">
-                          <div>
-                            <span className="text-[10px] text-neutral-500 uppercase font-semibold block">Total Revenue</span>
-                            <span className="text-xs font-mono font-bold text-neutral-900 dark:text-white">
-                              ₱{(editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] text-neutral-500 uppercase font-semibold block">Total Profit</span>
-                            <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                              ₱{(editFormData.items || []).reduce((acc: number, it: any) => {
+                      {/* Items Table (Spacious Horizontal Layout for 50+ items) */}
+                      <div className="border border-emerald-300 dark:border-emerald-800/80 rounded-2xl overflow-hidden shadow-2xs">
+                        <div className="overflow-x-auto max-h-[440px] overflow-y-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
+                              <tr>
+                                <th className="p-2 w-9 text-center border-r border-emerald-700/60">#</th>
+                                <th className="p-2 min-w-[170px] border-r border-emerald-700/60">Item Name</th>
+                                <th className="p-2 min-w-[140px] border-r border-emerald-700/60">Description / Category</th>
+                                <th className="p-2 w-24 border-r border-emerald-700/60 text-center">Size</th>
+                                <th className="p-2 w-16 text-center border-r border-emerald-700/60">Qty</th>
+                                <th className="p-2 w-24 text-right border-r border-emerald-700/60">Cost (₱)</th>
+                                <th className="p-2 w-24 text-right border-r border-emerald-700/60">Selling (₱)</th>
+                                <th className="p-2 w-28 text-right border-r border-emerald-700/60">Revenue (₱)</th>
+                                <th className="p-2 w-28 text-right border-r border-emerald-700/60">Profit (₱)</th>
+                                <th className="p-2 w-10 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-neutral-900 text-xs">
+                              {(editFormData.items || []).map((it: any, idx: number) => {
                                 const q = parseFloat(String(it.quantity)) || 0;
                                 const cp = parseFloat(String(it.cost_price)) || 0;
                                 const sp = parseFloat(String(it.selling_price)) || 0;
-                                return acc + ((q * sp) - (q * cp));
-                              }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                const rev = q * sp;
+                                const gp = rev - (q * cp);
+
+                                return (
+                                  <tr key={it.id || idx} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors">
+                                    <td className="p-1.5 text-center font-mono font-bold text-neutral-500 border-r border-neutral-200 dark:border-neutral-800">
+                                      {idx + 1}
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="text"
+                                        disabled={editingItem.status === 'filed'}
+                                        value={it.item}
+                                        onChange={e => handleEditItemFieldChange(idx, 'item', e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        placeholder="e.g. Uniform Polo"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="text"
+                                        disabled={editingItem.status === 'filed'}
+                                        value={it.description}
+                                        onChange={e => handleEditItemFieldChange(idx, 'description', e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        placeholder="e.g. BSMT Gala Set"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="text"
+                                        disabled={editingItem.status === 'filed'}
+                                        value={it.size}
+                                        onChange={e => handleEditItemFieldChange(idx, 'size', e.target.value)}
+                                        className="w-full px-1.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-center font-mono font-medium text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        placeholder="M, L, XL"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        disabled={editingItem.status === 'filed'}
+                                        value={it.quantity}
+                                        onChange={e => handleEditItemFieldChange(idx, 'quantity', e.target.value)}
+                                        className="w-full px-1 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-center font-mono font-bold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        placeholder="1"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        disabled={editingItem.status === 'filed'}
+                                        value={it.cost_price}
+                                        onChange={e => handleEditItemFieldChange(idx, 'cost_price', e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-right font-mono font-medium text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        placeholder="0.00"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        disabled={editingItem.status === 'filed'}
+                                        value={it.selling_price}
+                                        onChange={e => handleEditItemFieldChange(idx, 'selling_price', e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-right font-mono font-bold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        placeholder="0.00"
+                                      />
+                                    </td>
+                                    <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                                      ₱{rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className={`p-2 text-right font-mono font-bold border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap ${gp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                      ₱{gp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-1.5 text-center">
+                                      {(editFormData.items || []).length > 1 && editingItem.status !== 'filed' ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleEditRemoveItem(idx)}
+                                          className="p-1 text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                          title="Remove row"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                                        </button>
+                                      ) : (
+                                        <span className="text-neutral-300 dark:text-neutral-700 text-xs">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Summary Bar Footer */}
+                        <div className="bg-[#ecfdf5] dark:bg-emerald-950/50 p-2.5 px-4 border-t border-emerald-300 dark:border-emerald-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider text-[10.5px]">
+                              Total Items: {(editFormData.items || []).length}
                             </span>
+                            <span className="text-neutral-400">•</span>
+                            <span className="font-medium text-emerald-800 dark:text-emerald-300 text-[10.5px]">
+                              Total Qty: {(editFormData.items || []).reduce((acc: number, it: any) => acc + (parseFloat(String(it.quantity)) || 0), 0)} pcs
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 text-right">
+                            <div>
+                              <span className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-bold block">Total Revenue</span>
+                              <span className="text-sm font-mono font-extrabold text-neutral-900 dark:text-white">
+                                ₱{(editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase font-bold block">Total Profit</span>
+                              <span className="text-sm font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                                ₱{(editFormData.items || []).reduce((acc: number, it: any) => {
+                                  const q = parseFloat(String(it.quantity)) || 0;
+                                  const cp = parseFloat(String(it.cost_price)) || 0;
+                                  const sp = parseFloat(String(it.selling_price)) || 0;
+                                  return acc + ((q * sp) - (q * cp));
+                                }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
