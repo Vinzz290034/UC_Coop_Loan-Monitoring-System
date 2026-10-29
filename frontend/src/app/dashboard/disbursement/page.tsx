@@ -2459,25 +2459,10 @@ function DisbursementPageContent() {
       is_credit: isCredit
     };
 
-    const pairedCreditRow: CvRowItem | null = (!isCredit && replenishType === 'rf')
-      ? {
-          id: `credit-${newId}`,
-          date: defaultDate,
-          voucher_no: defaultVoucherNo,
-          description: `Revolving Fund - ${getCategoryForAccount(defaultDesc, accountCategoryMap)}`,
-          remarks: '',
-          debit: '',
-          credit: '',
-          isAutoCredit: true,
-          is_credit: true,
-          pairedWithId: newId
-        }
-      : null;
-
     const setRows = isEdit ? setEditCvRows : setNewCvRows;
     setRows(prev => {
       const copy = [...prev];
-      const rowsToInsert = pairedCreditRow ? [newRow, pairedCreditRow] : [newRow];
+      const rowsToInsert = [newRow];
       // Keep CIB balancing row at the bottom by inserting before it
       const cibIdx = copy.findIndex(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
       if (cibIdx !== -1) {
@@ -3066,33 +3051,6 @@ function DisbursementPageContent() {
 
       // For Revolving Fund replenishment: CIB amount is always the full disbursed/debit total
       if (replenishType !== 'stl') {
-        // If existing voucher only had debit rows + CIB row (no paired Revolving Fund credit rows),
-        // automatically pair each debit row with its matching Revolving Fund - <Category> credit row
-        const hasNonCibCreditRow = initialRowsList.some(r => checkIsCreditRow(r));
-        if (!hasNonCibCreditRow && initialRowsList.length > 0) {
-          const pairedList: CvRowItem[] = [];
-          for (const r of initialRowsList) {
-            pairedList.push(r);
-            const dVal = parseFloat(r.debit || '0') || 0;
-            if (dVal > 0) {
-              const cat = getCategoryForAccount(r.description, accountCategoryMap);
-              pairedList.push({
-                id: `credit-${r.id}`,
-                date: r.date,
-                voucher_no: r.voucher_no,
-                description: `Revolving Fund - ${cat}`,
-                remarks: '',
-                debit: '',
-                credit: r.debit,
-                isAutoCredit: true,
-                is_credit: true,
-                pairedWithId: r.id
-              });
-            }
-          }
-          initialRowsList = pairedList;
-        }
-
         let dSum = 0;
         for (const r of initialRowsList) {
           const isCred = checkIsCreditRow(r);
