@@ -1625,12 +1625,13 @@ function DisbursementPageContent() {
     return `CIB-${b.replace(/\s*BANK\b/i, '').trim()}`;
   };
 
-  const resolveItemCategory = (it: any, cvDetails?: any[], lfItems?: any[]): string => {
+  const resolveItemCategory = (it: any, cvDetails?: any[], lfItems?: any[], isHonorariumAndWages: boolean = false): string => {
     if (!it) return 'Operation';
 
     // 1. Explicit category directly on the item
     if (it.category) {
       const cleaned = cleanCategoryName(it.category);
+      if (cleaned === 'Wages' && !isHonorariumAndWages) return 'Operation';
       if (cleaned) return cleaned;
     }
 
@@ -1647,7 +1648,7 @@ function DisbursementPageContent() {
       return 'Honorarium';
     }
     if (lowerDirect.includes('wage')) {
-      return 'Wages';
+      return isHonorariumAndWages ? 'Wages' : 'Operation';
     }
 
     const vKey = it.voucher_no ? String(it.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
@@ -1666,7 +1667,8 @@ function DisbursementPageContent() {
             if (!vKey || !cVKey || cVKey.toLowerCase() === vKey.toLowerCase()) {
               const creditAcct = (c.book_of_account || c.description || '').trim();
               const cleaned = cleanCategoryName(creditAcct);
-              if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) {
+              if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF', 'Wages'].includes(cleaned)) {
+                if (cleaned === 'Wages' && !isHonorariumAndWages) return 'Operation';
                 return cleaned;
               }
             }
@@ -1687,7 +1689,8 @@ function DisbursementPageContent() {
         if (pairedCredit) {
           const creditAcct = (pairedCredit.book_of_account || pairedCredit.description || '').trim();
           const cleaned = cleanCategoryName(creditAcct);
-          if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) {
+          if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF', 'Wages'].includes(cleaned)) {
+            if (cleaned === 'Wages' && !isHonorariumAndWages) return 'Operation';
             return cleaned;
           }
         }
@@ -1701,7 +1704,8 @@ function DisbursementPageContent() {
           if (isCredit && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(cand.book_of_account || cand.description || '')) {
             const creditAcct = (cand.book_of_account || cand.description || '').trim();
             const cleaned = cleanCategoryName(creditAcct);
-            if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF'].includes(cleaned)) {
+            if (['Operation', 'Service', 'Merchandise', 'CETF', 'CDF', 'Wages'].includes(cleaned)) {
+              if (cleaned === 'Wages' && !isHonorariumAndWages) return 'Operation';
               return cleaned;
             }
           }
@@ -1718,7 +1722,9 @@ function DisbursementPageContent() {
          (it.remarks && l.remarks && String(it.remarks).trim() === String(l.remarks).trim()))
       );
       if (matchLf?.category) {
-        return cleanCategoryName(matchLf.category);
+        const cleaned = cleanCategoryName(matchLf.category);
+        if (cleaned === 'Wages' && !isHonorariumAndWages) return 'Operation';
+        return cleaned;
       }
     }
 
@@ -1726,10 +1732,13 @@ function DisbursementPageContent() {
     const textToCheck = `${it.remarks || ''} ${it.book_of_account || ''} ${it.description || ''}`.toLowerCase();
     if (/\bcdf\b/.test(textToCheck)) return 'CDF';
     if (/\bcetf\b/.test(textToCheck)) return 'CETF';
+    if (/\bwages?\b/.test(textToCheck)) return isHonorariumAndWages ? 'Wages' : 'Operation';
 
     // 5. Account heuristic fallback
     const desc = (it.book_of_account || it.description || '').trim();
-    return cleanCategoryName(getCategoryForAccount(desc, accountCategoryMap));
+    const cat = cleanCategoryName(getCategoryForAccount(desc, accountCategoryMap));
+    if (cat === 'Wages' && !isHonorariumAndWages) return 'Operation';
+    return cat;
   };
 
   const getSummaryCvRows = (cv: any) => {
@@ -1863,6 +1872,10 @@ function DisbursementPageContent() {
       return { rows, debitTotal, creditTotal };
     }
 
+    const isHonWages = (cv?.rf_classification || cv?.folder_name || cv?.particulars || '').toLowerCase().includes('honorarium') ||
+                       (cv?.rf_classification || cv?.folder_name || cv?.particulars || '').toLowerCase().includes('wages') ||
+                       detectRfClassification(cv) === 'Revolving Fund - Honorarium & Wages';
+
     const catMap: Record<string, number> = {};
     const deductionCreditMap: Record<string, number> = {};
     if (details.length > 0) {
@@ -1878,7 +1891,7 @@ function DisbursementPageContent() {
           isRfAutoCredit ||
           (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
         if (!isCred && rawVal > 0 && !isCib) {
-          const cat = resolveItemCategory(item, details);
+          const cat = resolveItemCategory(item, details, [], isHonWages);
           catMap[cat] = (catMap[cat] || 0) + rawVal;
         } else if (isCred && !isCib && !isRfAutoCredit) {
           const cVal = rawVal < 0 ? Math.abs(rawVal) : (parseFloat(item.credit || item.amount || 0) || 0);
@@ -1892,7 +1905,7 @@ function DisbursementPageContent() {
         if (it.is_cancelled) continue;
         const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
         if (val > 0) {
-          const cat = resolveItemCategory(it, [], cv.revolving_fund.items);
+          const cat = resolveItemCategory(it, [], cv.revolving_fund.items, isHonWages);
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }

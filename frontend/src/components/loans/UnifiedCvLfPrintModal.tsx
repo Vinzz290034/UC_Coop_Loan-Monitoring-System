@@ -342,41 +342,42 @@ function getCategoryForAccount(acct: string): string {
   return 'Operation';
 }
 
-function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): string {
+function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[], isHonorariumAndWages: boolean = false): string {
   if (!it) return 'Operation';
+
+  let rawCat: string = '';
 
   // 1. Explicit category directly on the item
   if (it.category) {
     const cleaned = cleanCategoryName(it.category);
-    if (VALID_CV_CATEGORIES.includes(cleaned)) return cleaned;
+    if (VALID_CV_CATEGORIES.includes(cleaned)) rawCat = cleaned;
   }
 
   // 2. Direct account inspection for Honorarium, Allowances, Wages
-  const desc = (it.book_of_account || it.description || it.particulars || '').trim();
-  const lower = desc.toLowerCase();
-  if (lower === 'honorarium' || (lower.includes('honorarium') && !lower.includes('allowance'))) {
-    return 'Honorarium';
-  }
-  if (lower === 'allowances' || lower === 'allowance' || (lower.includes('allowance') && !lower.includes('honorarium'))) {
-    return 'Allowances';
-  }
-  if (lower === 'honorarium and allowances') {
-    return 'Honorarium';
-  }
-  if (lower.includes('wage')) {
-    return 'Wages';
+  if (!rawCat) {
+    const desc = (it.book_of_account || it.description || it.particulars || '').trim();
+    const lower = desc.toLowerCase();
+    if (lower === 'honorarium' || (lower.includes('honorarium') && !lower.includes('allowance'))) {
+      rawCat = 'Honorarium';
+    } else if (lower === 'allowances' || lower === 'allowance' || (lower.includes('allowance') && !lower.includes('honorarium'))) {
+      rawCat = 'Allowances';
+    } else if (lower === 'honorarium and allowances') {
+      rawCat = 'Honorarium';
+    } else if (lower.includes('wage')) {
+      rawCat = isHonorariumAndWages ? 'Wages' : 'Operation';
+    }
   }
 
   // If the item itself is an explicit credit row (e.g. "Revolving Fund - CDF"), return its category directly
-  if (isRowCredit(it)) {
+  if (!rawCat && isRowCredit(it)) {
     const directCat = getCreditRowCategory(it);
-    if (directCat) return directCat;
+    if (directCat) rawCat = directCat;
   }
 
   const vKey = it.voucher_no ? String(it.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
 
   // 3. Look for paired credit row in cvDetails
-  if (Array.isArray(cvDetails) && cvDetails.length > 0) {
+  if (!rawCat && Array.isArray(cvDetails) && cvDetails.length > 0) {
     const itIdx = cvDetails.indexOf(it);
 
     // 3a. Primary journal check: immediate subsequent row (itIdx + 1)
@@ -384,26 +385,26 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
       const nextRow = cvDetails[itIdx + 1];
       if (isRowCredit(nextRow) && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(nextRow.book_of_account || nextRow.description || '')) {
         const cat = getCreditRowCategory(nextRow);
-        if (cat) return cat;
+        if (cat) rawCat = cat;
       }
     }
 
     // 3b. Look forward from itIdx for credit row matching voucher_no
-    if (itIdx !== -1) {
+    if (!rawCat && itIdx !== -1) {
       for (let j = itIdx + 1; j < cvDetails.length; j++) {
         const c = cvDetails[j];
         if (isRowCredit(c) && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(c.book_of_account || c.description || '')) {
           const cVKey = c.voucher_no ? String(c.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
           if (vKey && cVKey && cVKey.toLowerCase() === vKey.toLowerCase()) {
             const cat = getCreditRowCategory(c);
-            if (cat) return cat;
+            if (cat) { rawCat = cat; break; }
           }
         }
       }
     }
 
     // 3c. Look across all cvDetails for a credit row with matching voucher_no
-    if (vKey) {
+    if (!rawCat && vKey) {
       const pairedCredit = cvDetails.find((c: any) => {
         if (!isRowCredit(c) || /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(c.book_of_account || c.description || '')) return false;
         const cVKey = c.voucher_no ? String(c.voucher_no).replace(/^CV-?0*/i, '').trim() : '';
@@ -412,22 +413,22 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
 
       if (pairedCredit) {
         const cat = getCreditRowCategory(pairedCredit);
-        if (cat) return cat;
+        if (cat) rawCat = cat;
       }
     }
 
     // 3d. Adjacent preceding row (itIdx - 1)
-    if (itIdx > 0) {
+    if (!rawCat && itIdx > 0) {
       const prevRow = cvDetails[itIdx - 1];
       if (isRowCredit(prevRow) && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(prevRow.book_of_account || prevRow.description || '')) {
         const cat = getCreditRowCategory(prevRow);
-        if (cat) return cat;
+        if (cat) rawCat = cat;
       }
     }
   }
 
   // 4. Matched liquidation schedule item
-  if (Array.isArray(lfItems) && lfItems.length > 0) {
+  if (!rawCat && Array.isArray(lfItems) && lfItems.length > 0) {
     const matchLf = lfItems.find((l: any) =>
       !l.is_cancelled &&
       ((vKey && l.voucher_no && String(l.voucher_no).replace(/^CV-?0*/i, '').trim() === vKey) ||
@@ -436,21 +437,32 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[]): strin
     );
     if (matchLf?.category) {
       const cleaned = cleanCategoryName(matchLf.category);
-      if (VALID_CV_CATEGORIES.includes(cleaned)) return cleaned;
+      if (VALID_CV_CATEGORIES.includes(cleaned)) rawCat = cleaned;
     }
   }
 
   // 5. Remarks or description explicit mentions of category
-  const textToCheck = `${it.remarks || ''} ${it.book_of_account || ''} ${it.description || ''}`.toLowerCase();
-  if (/\bcdf\b/i.test(textToCheck)) return 'CDF';
-  if (/\bcetf\b/i.test(textToCheck)) return 'CETF';
-  if (/\bhonorarium\b/i.test(textToCheck) && !/\ballowance\b/i.test(textToCheck)) return 'Honorarium';
-  if (/\ballowance\b/i.test(textToCheck) && !/\bhonorarium\b/i.test(textToCheck)) return 'Allowances';
-  if (/\bwages?\b/i.test(textToCheck)) return 'Wages';
+  if (!rawCat) {
+    const textToCheck = `${it.remarks || ''} ${it.book_of_account || ''} ${it.description || ''}`.toLowerCase();
+    if (/\bcdf\b/i.test(textToCheck)) rawCat = 'CDF';
+    else if (/\bcetf\b/i.test(textToCheck)) rawCat = 'CETF';
+    else if (/\bhonorarium\b/i.test(textToCheck) && !/\ballowance\b/i.test(textToCheck)) rawCat = 'Honorarium';
+    else if (/\ballowance\b/i.test(textToCheck) && !/\bhonorarium\b/i.test(textToCheck)) rawCat = 'Allowances';
+    else if (/\bwages?\b/i.test(textToCheck)) rawCat = isHonorariumAndWages ? 'Wages' : 'Operation';
+  }
 
   // 6. Account heuristic fallback
-  const descToUse = (it.book_of_account || it.description || '').trim();
-  return cleanCategoryName(getCategoryForAccount(descToUse));
+  if (!rawCat) {
+    const descToUse = (it.book_of_account || it.description || '').trim();
+    rawCat = cleanCategoryName(getCategoryForAccount(descToUse));
+  }
+
+  // Final rule: Only put Wages on the Breakdown if it's Revolving Fund Replenishment - Honorarium & Wages
+  if (rawCat === 'Wages' && !isHonorariumAndWages) {
+    return 'Operation';
+  }
+
+  return rawCat || 'Operation';
 }
 
 function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf') {
@@ -458,6 +470,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
   let debitTotal = 0;
   let creditTotal = 0;
 
+  const isHonorarium = checkIsHonorariumAndWages(cv);
   const activeItems = (lfItems || []).filter((it: any) => !it.is_cancelled);
 
   let details: any[] = [];
@@ -513,7 +526,10 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         remarks: it.remarks || '',
         debit: amt,
         credit: null,
-        category: it.category ? cleanCategoryName(it.category) : resolveItemCategory(it, [], activeItems)
+        category: (() => {
+          const c = it.category ? cleanCategoryName(it.category) : resolveItemCategory(it, [], activeItems, isHonorarium);
+          return (c === 'Wages' && !isHonorarium) ? 'Operation' : c;
+        })()
       });
       debitTotal += amt;
     }
@@ -557,6 +573,9 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         if (!creditCat && lastDebitCategory && (vNo === lastDebitVoucherNo || vNo === '—' || !vNo)) {
           creditCat = lastDebitCategory;
         }
+        if (creditCat === 'Wages' && !isHonorarium) {
+          creditCat = 'Operation';
+        }
 
         rows.push({
           date: dateStr,
@@ -569,7 +588,10 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         });
         if (creditVal) creditTotal += creditVal;
       } else if (rawVal > 0) {
-        const resolvedCat = resolveItemCategory(item, details, activeItems);
+        let resolvedCat = resolveItemCategory(item, details, activeItems, isHonorarium);
+        if (resolvedCat === 'Wages' && !isHonorarium) {
+          resolvedCat = 'Operation';
+        }
         lastDebitCategory = resolvedCat;
         lastDebitVoucherNo = vNo;
         rows.push({
@@ -602,7 +624,8 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         for (const r of rows) {
           pairedRows.push(r);
           if (r.debit !== null && r.debit > 0) {
-            const cat = r.category || cleanCategoryName(getCategoryForAccount(r.description));
+            let cat = r.category || cleanCategoryName(getCategoryForAccount(r.description));
+            if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
             pairedRows.push({
               date: r.date,
               voucher_no: r.voucher_no,
@@ -851,14 +874,23 @@ function getSummaryCvRows(
   // Revolving Fund (resolvedType === 'rf'):
   // Always reflect the exact Category Breakdown displayed on the Detailed Transaction
   if (categoryBreakdown.list.length > 0) {
+    const rfMap: Record<string, number> = {};
     for (const cat of categoryBreakdown.list) {
-      const cleanName = cleanCategoryName(cat.name);
-      rows.push({
-        description: cleanName,
-        debit: cat.amount,
-        credit: null
-      });
-      debitTotal += cat.amount;
+      let cleanName = cleanCategoryName(cat.name);
+      if (cleanName === 'Wages' && !isHonorarium) {
+        cleanName = 'Operation';
+      }
+      rfMap[cleanName] = (rfMap[cleanName] || 0) + cat.amount;
+    }
+    for (const [cleanName, amt] of Object.entries(rfMap)) {
+      if (amt > 0) {
+        rows.push({
+          description: cleanName,
+          debit: amt,
+          credit: null
+        });
+        debitTotal += amt;
+      }
     }
   } else {
     // If no category breakdown available, fallback to cv details or amount
@@ -880,7 +912,8 @@ function getSummaryCvRows(
         const val = typeof item.amount === 'number' ? item.amount : parseFloat(item.amount || 0);
         const desc = item.book_of_account || item.description || '';
         if (val > 0 && !/cib\b|cash\s*in\s*bank/i.test(desc)) {
-          const cat = resolveItemCategory(item, details, []);
+          let cat = resolveItemCategory(item, details, [], isHonorarium);
+          if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
@@ -889,7 +922,8 @@ function getSummaryCvRows(
         if (it.is_cancelled) continue;
         const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
         if (val > 0) {
-          const cat = resolveItemCategory(it, [], cv.revolving_fund.items);
+          let cat = resolveItemCategory(it, [], cv.revolving_fund.items, isHonorarium);
+          if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
@@ -1331,6 +1365,7 @@ export default function UnifiedCvLfPrintModal({
 
   // Compute category breakdown matching photo
   const categoryBreakdown = useMemo(() => {
+    const isHonorarium = checkIsHonorariumAndWages(currentCv) || checkIsHonorariumAndWages(currentLf);
     const map: Record<string, number> = {};
     let total = 0;
 
@@ -1356,7 +1391,8 @@ export default function UnifiedCvLfPrintModal({
     if (cvDebitItems.length > 0) {
       for (const it of cvDebitItems) {
         const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
-        const cat = resolveItemCategory(it, cvDetails, lfItems);
+        let cat = resolveItemCategory(it, cvDetails, lfItems, isHonorarium);
+        if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
         map[cat] = (map[cat] || 0) + amt;
         total += amt;
       }
@@ -1366,7 +1402,8 @@ export default function UnifiedCvLfPrintModal({
         for (const it of activeLf) {
           const amt = parseFloat(it.amount) || 0;
           if (amt > 0) {
-            const cat = resolveItemCategory(it, [], activeLf);
+            let cat = resolveItemCategory(it, [], activeLf, isHonorarium);
+            if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
             map[cat] = (map[cat] || 0) + amt;
             total += amt;
           }
@@ -1389,7 +1426,7 @@ export default function UnifiedCvLfPrintModal({
       return b.amount - a.amount;
     });
     return { list, total };
-  }, [lfItems, currentCv]);
+  }, [lfItems, currentCv, currentLf]);
 
   const detailedCvData = useMemo(() => getBalancedCvRows(currentCv, lfItems, resolvedType), [currentCv, lfItems, resolvedType]);
 
@@ -1564,7 +1601,8 @@ export default function UnifiedCvLfPrintModal({
       for (const r of nonCibRows) {
         const amt = Number(r.debit) || 0;
         if (amt > 0) {
-          const cat = (r as any).category || resolveItemCategory(r, detailedCvData.rows, lfItems);
+          let cat = (r as any).category || resolveItemCategory(r, detailedCvData.rows, lfItems, isHonorariumAndWages);
+          if (cat === 'Wages' && !isHonorariumAndWages) cat = 'Operation';
           catMap[cat] = (catMap[cat] || 0) + amt;
         }
       }
@@ -1575,14 +1613,16 @@ export default function UnifiedCvLfPrintModal({
         for (const it of activeLf) {
           const amt = parseFloat(it.amount) || 0;
           if (amt > 0) {
-            const cat = resolveItemCategory(it, [], activeLf);
+            let cat = resolveItemCategory(it, [], activeLf, isHonorariumAndWages);
+            if (cat === 'Wages' && !isHonorariumAndWages) cat = 'Operation';
             catMap[cat] = (catMap[cat] || 0) + amt;
           }
         }
       } else if (categoryBreakdown.list.length > 0) {
         for (const item of categoryBreakdown.list) {
           if (item.amount > 0) {
-            const cat = cleanCategoryName(item.name);
+            let cat = cleanCategoryName(item.name);
+            if (cat === 'Wages' && !isHonorariumAndWages) cat = 'Operation';
             catMap[cat] = (catMap[cat] || 0) + item.amount;
           }
         }
@@ -1615,20 +1655,23 @@ export default function UnifiedCvLfPrintModal({
     }
     const filterCat = selectedCategoryFilter.trim().toLowerCase();
     return detailedCvData.rows.filter(r => {
-      const rowCat = ((r as any).category || '').trim().toLowerCase();
+      let rowCat = ((r as any).category || '').trim().toLowerCase();
+      if (rowCat === 'wages' && !isHonorariumAndWages) rowCat = 'operation';
       if (rowCat === filterCat) return true;
 
       const descCat = cleanCategoryName(r.description || '').toLowerCase();
       if (descCat === filterCat) return true;
+      if (filterCat === 'operation' && descCat === 'wages' && !isHonorariumAndWages) return true;
 
       const desc = (r.description || '').toLowerCase();
       if (filterCat === 'honorarium' && desc.includes('honorarium')) return true;
       if (filterCat === 'allowances' && desc.includes('allowance')) return true;
-      if (filterCat === 'wages' && desc.includes('wage')) return true;
+      if (filterCat === 'wages' && desc.includes('wage') && isHonorariumAndWages) return true;
+      if (filterCat === 'operation' && desc.includes('wage') && !isHonorariumAndWages) return true;
 
       return false;
     });
-  }, [detailedCvData.rows, selectedCategoryFilter]);
+  }, [detailedCvData.rows, selectedCategoryFilter, isHonorariumAndWages]);
 
   const filteredTotals = useMemo(() => {
     if (!selectedCategoryFilter) {
