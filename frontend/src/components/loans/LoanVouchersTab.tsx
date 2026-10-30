@@ -461,6 +461,13 @@ export default function LoanVouchersTab({
     }
   }, [cvSearch, cvLimit, cvBankFilter, cvStatusFilter, cvSortOrder]);
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= cvTotalPages && newPage !== cvPage && !cvLoading) {
+      setCvPage(newPage);
+      loadCheckVouchers(newPage);
+    }
+  };
+
   // Initial load and filter change trigger
   useEffect(() => {
     setCvPage(1);
@@ -1113,15 +1120,38 @@ export default function LoanVouchersTab({
             </div>
             <div className="flex items-center gap-1.5">
               <button
-                disabled={cvPage === 1}
-                onClick={() => setCvPage(prev => Math.max(1, prev - 1))}
+                type="button"
+                disabled={cvPage <= 1 || cvLoading}
+                onClick={() => handlePageChange(cvPage - 1)}
                 className="px-3 py-1.5 rounded-xl border border-outline-variant/60 text-xs font-bold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all"
               >
                 Previous
               </button>
+              {Array.from({ length: cvTotalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === cvTotalPages || Math.abs(p - cvPage) <= 1)
+                .map((p, idx, arr) => (
+                  <React.Fragment key={p}>
+                    {idx > 0 && arr[idx - 1] !== p - 1 && (
+                      <span className="px-1 text-xs text-neutral-400">...</span>
+                    )}
+                    <button
+                      type="button"
+                      disabled={cvLoading}
+                      onClick={() => handlePageChange(p)}
+                      className={`min-w-8 h-8 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        cvPage === p
+                          ? "bg-emerald-600 text-white font-extrabold shadow-xs"
+                          : "border border-outline-variant/60 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  </React.Fragment>
+                ))}
               <button
-                disabled={cvPage >= cvTotalPages}
-                onClick={() => setCvPage(prev => Math.min(cvTotalPages, prev + 1))}
+                type="button"
+                disabled={cvPage >= cvTotalPages || cvLoading}
+                onClick={() => handlePageChange(cvPage + 1)}
                 className="px-3 py-1.5 rounded-xl border border-outline-variant/60 text-xs font-bold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all"
               >
                 Next
