@@ -350,7 +350,13 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[], isHono
   // 1. Explicit category directly on the item
   if (it.category) {
     const cleaned = cleanCategoryName(it.category);
-    if (VALID_CV_CATEGORIES.includes(cleaned)) rawCat = cleaned;
+    if (VALID_CV_CATEGORIES.includes(cleaned)) {
+      if (['Honorarium', 'Allowances', 'Wages'].includes(cleaned) && !isHonorariumAndWages) {
+        rawCat = 'Operation';
+      } else {
+        rawCat = cleaned;
+      }
+    }
   }
 
   // 2. Direct account inspection for Honorarium, Allowances, Wages
@@ -358,11 +364,11 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[], isHono
     const desc = (it.book_of_account || it.description || it.particulars || '').trim();
     const lower = desc.toLowerCase();
     if (lower === 'honorarium' || (lower.includes('honorarium') && !lower.includes('allowance'))) {
-      rawCat = 'Honorarium';
+      rawCat = isHonorariumAndWages ? 'Honorarium' : 'Operation';
     } else if (lower === 'allowances' || lower === 'allowance' || (lower.includes('allowance') && !lower.includes('honorarium'))) {
-      rawCat = 'Allowances';
+      rawCat = isHonorariumAndWages ? 'Allowances' : 'Operation';
     } else if (lower === 'honorarium and allowances') {
-      rawCat = 'Honorarium';
+      rawCat = isHonorariumAndWages ? 'Honorarium' : 'Operation';
     } else if (lower.includes('wage')) {
       rawCat = isHonorariumAndWages ? 'Wages' : 'Operation';
     }
@@ -446,8 +452,8 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[], isHono
     const textToCheck = `${it.remarks || ''} ${it.book_of_account || ''} ${it.description || ''}`.toLowerCase();
     if (/\bcdf\b/i.test(textToCheck)) rawCat = 'CDF';
     else if (/\bcetf\b/i.test(textToCheck)) rawCat = 'CETF';
-    else if (/\bhonorarium\b/i.test(textToCheck) && !/\ballowance\b/i.test(textToCheck)) rawCat = 'Honorarium';
-    else if (/\ballowance\b/i.test(textToCheck) && !/\bhonorarium\b/i.test(textToCheck)) rawCat = 'Allowances';
+    else if (/\bhonorarium\b/i.test(textToCheck) && !/\ballowance\b/i.test(textToCheck)) rawCat = isHonorariumAndWages ? 'Honorarium' : 'Operation';
+    else if (/\ballowance\b/i.test(textToCheck) && !/\bhonorarium\b/i.test(textToCheck)) rawCat = isHonorariumAndWages ? 'Allowances' : 'Operation';
     else if (/\bwages?\b/i.test(textToCheck)) rawCat = isHonorariumAndWages ? 'Wages' : 'Operation';
   }
 
@@ -457,8 +463,8 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[], isHono
     rawCat = cleanCategoryName(getCategoryForAccount(descToUse));
   }
 
-  // Final rule: Only put Wages on the Breakdown if it's Revolving Fund Replenishment - Honorarium & Wages
-  if (rawCat === 'Wages' && !isHonorariumAndWages) {
+  // Final rule: Only put Honorarium, Allowances, or Wages on the Breakdown if it's Revolving Fund Replenishment - Honorarium & Wages
+  if (['Wages', 'Honorarium', 'Allowances'].includes(rawCat) && !isHonorariumAndWages) {
     return 'Operation';
   }
 
@@ -528,7 +534,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         credit: null,
         category: (() => {
           const c = it.category ? cleanCategoryName(it.category) : resolveItemCategory(it, [], activeItems, isHonorarium);
-          return (c === 'Wages' && !isHonorarium) ? 'Operation' : c;
+          return (['Wages', 'Honorarium', 'Allowances'].includes(c) && !isHonorarium) ? 'Operation' : c;
         })()
       });
       debitTotal += amt;
@@ -573,7 +579,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         if (!creditCat && lastDebitCategory && (vNo === lastDebitVoucherNo || vNo === '—' || !vNo)) {
           creditCat = lastDebitCategory;
         }
-        if (creditCat === 'Wages' && !isHonorarium) {
+        if (['Wages', 'Honorarium', 'Allowances'].includes(creditCat) && !isHonorarium) {
           creditCat = 'Operation';
         }
 
@@ -589,7 +595,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         if (creditVal) creditTotal += creditVal;
       } else if (rawVal > 0) {
         let resolvedCat = resolveItemCategory(item, details, activeItems, isHonorarium);
-        if (resolvedCat === 'Wages' && !isHonorarium) {
+        if (['Wages', 'Honorarium', 'Allowances'].includes(resolvedCat) && !isHonorarium) {
           resolvedCat = 'Operation';
         }
         lastDebitCategory = resolvedCat;
@@ -625,7 +631,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           pairedRows.push(r);
           if (r.debit !== null && r.debit > 0) {
             let cat = r.category || cleanCategoryName(getCategoryForAccount(r.description));
-            if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
+            if (['Wages', 'Honorarium', 'Allowances'].includes(cat) && !isHonorarium) cat = 'Operation';
             pairedRows.push({
               date: r.date,
               voucher_no: r.voucher_no,
@@ -877,12 +883,26 @@ function getSummaryCvRows(
     const rfMap: Record<string, number> = {};
     for (const cat of categoryBreakdown.list) {
       let cleanName = cleanCategoryName(cat.name);
-      if (cleanName === 'Wages' && !isHonorarium) {
+      if (['Wages', 'Honorarium', 'Allowances'].includes(cleanName) && !isHonorarium) {
         cleanName = 'Operation';
       }
       rfMap[cleanName] = (rfMap[cleanName] || 0) + cat.amount;
     }
-    for (const [cleanName, amt] of Object.entries(rfMap)) {
+    const preferredOrder = isHonorarium
+      ? ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF']
+      : ['Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
+
+    const sortedCats = Object.keys(rfMap).sort((a, b) => {
+      const idxA = preferredOrder.indexOf(a);
+      const idxB = preferredOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return rfMap[b] - rfMap[a];
+    });
+
+    for (const cleanName of sortedCats) {
+      const amt = rfMap[cleanName];
       if (amt > 0) {
         rows.push({
           description: cleanName,
@@ -913,7 +933,7 @@ function getSummaryCvRows(
         const desc = item.book_of_account || item.description || '';
         if (val > 0 && !/cib\b|cash\s*in\s*bank/i.test(desc)) {
           let cat = resolveItemCategory(item, details, [], isHonorarium);
-          if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
+          if (['Wages', 'Honorarium', 'Allowances'].includes(cat) && !isHonorarium) cat = 'Operation';
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
@@ -923,7 +943,7 @@ function getSummaryCvRows(
         const val = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || 0);
         if (val > 0) {
           let cat = resolveItemCategory(it, [], cv.revolving_fund.items, isHonorarium);
-          if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
+          if (['Wages', 'Honorarium', 'Allowances'].includes(cat) && !isHonorarium) cat = 'Operation';
           catMap[cat] = (catMap[cat] || 0) + val;
         }
       }
@@ -1392,7 +1412,7 @@ export default function UnifiedCvLfPrintModal({
       for (const it of cvDebitItems) {
         const amt = typeof it.amount === 'number' ? it.amount : parseFloat(it.amount || it.debit || 0);
         let cat = resolveItemCategory(it, cvDetails, lfItems, isHonorarium);
-        if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
+        if (['Wages', 'Honorarium', 'Allowances'].includes(cat) && !isHonorarium) cat = 'Operation';
         map[cat] = (map[cat] || 0) + amt;
         total += amt;
       }
@@ -1403,7 +1423,7 @@ export default function UnifiedCvLfPrintModal({
           const amt = parseFloat(it.amount) || 0;
           if (amt > 0) {
             let cat = resolveItemCategory(it, [], activeLf, isHonorarium);
-            if (cat === 'Wages' && !isHonorarium) cat = 'Operation';
+            if (['Wages', 'Honorarium', 'Allowances'].includes(cat) && !isHonorarium) cat = 'Operation';
             map[cat] = (map[cat] || 0) + amt;
             total += amt;
           }
@@ -1411,7 +1431,9 @@ export default function UnifiedCvLfPrintModal({
       }
     }
 
-    const preferredOrder = ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
+    const preferredOrder = isHonorarium
+      ? ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF']
+      : ['Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
     const list = Object.entries(map).map(([name, amount]) => ({
       name,
       amount,
@@ -1590,7 +1612,9 @@ export default function UnifiedCvLfPrintModal({
   const rfDetailedCategoryBreakdown = useMemo(() => {
     if (!isRevolvingFund) return [];
 
-    const preferredOrder = ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
+    const preferredOrder = isHonorariumAndWages
+      ? ['Honorarium', 'Allowances', 'Wages', 'Service', 'Merchandise', 'Operation', 'CETF', 'CDF']
+      : ['Service', 'Merchandise', 'Operation', 'CETF', 'CDF'];
     const catMap: Record<string, number> = {};
 
     const nonCibRows = (detailedCvData.rows || []).filter(r => !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
@@ -1602,7 +1626,7 @@ export default function UnifiedCvLfPrintModal({
         const amt = Number(r.debit) || 0;
         if (amt > 0) {
           let cat = (r as any).category || resolveItemCategory(r, detailedCvData.rows, lfItems, isHonorariumAndWages);
-          if (cat === 'Wages' && !isHonorariumAndWages) cat = 'Operation';
+          if (['Wages', 'Honorarium', 'Allowances'].includes(cat) && !isHonorariumAndWages) cat = 'Operation';
           catMap[cat] = (catMap[cat] || 0) + amt;
         }
       }
@@ -1614,7 +1638,7 @@ export default function UnifiedCvLfPrintModal({
           const amt = parseFloat(it.amount) || 0;
           if (amt > 0) {
             let cat = resolveItemCategory(it, [], activeLf, isHonorariumAndWages);
-            if (cat === 'Wages' && !isHonorariumAndWages) cat = 'Operation';
+            if (['Wages', 'Honorarium', 'Allowances'].includes(cat) && !isHonorariumAndWages) cat = 'Operation';
             catMap[cat] = (catMap[cat] || 0) + amt;
           }
         }
@@ -1622,7 +1646,7 @@ export default function UnifiedCvLfPrintModal({
         for (const item of categoryBreakdown.list) {
           if (item.amount > 0) {
             let cat = cleanCategoryName(item.name);
-            if (cat === 'Wages' && !isHonorariumAndWages) cat = 'Operation';
+            if (['Wages', 'Honorarium', 'Allowances'].includes(cat) && !isHonorariumAndWages) cat = 'Operation';
             catMap[cat] = (catMap[cat] || 0) + item.amount;
           }
         }
@@ -1656,18 +1680,18 @@ export default function UnifiedCvLfPrintModal({
     const filterCat = selectedCategoryFilter.trim().toLowerCase();
     return detailedCvData.rows.filter(r => {
       let rowCat = ((r as any).category || '').trim().toLowerCase();
-      if (rowCat === 'wages' && !isHonorariumAndWages) rowCat = 'operation';
+      if (['wages', 'honorarium', 'allowances'].includes(rowCat) && !isHonorariumAndWages) rowCat = 'operation';
       if (rowCat === filterCat) return true;
 
       const descCat = cleanCategoryName(r.description || '').toLowerCase();
       if (descCat === filterCat) return true;
-      if (filterCat === 'operation' && descCat === 'wages' && !isHonorariumAndWages) return true;
+      if (filterCat === 'operation' && ['wages', 'honorarium', 'allowances'].includes(descCat) && !isHonorariumAndWages) return true;
 
       const desc = (r.description || '').toLowerCase();
-      if (filterCat === 'honorarium' && desc.includes('honorarium')) return true;
-      if (filterCat === 'allowances' && desc.includes('allowance')) return true;
+      if (filterCat === 'honorarium' && desc.includes('honorarium') && isHonorariumAndWages) return true;
+      if (filterCat === 'allowances' && desc.includes('allowance') && isHonorariumAndWages) return true;
       if (filterCat === 'wages' && desc.includes('wage') && isHonorariumAndWages) return true;
-      if (filterCat === 'operation' && desc.includes('wage') && !isHonorariumAndWages) return true;
+      if (filterCat === 'operation' && (desc.includes('wage') || desc.includes('honorarium') || desc.includes('allowance')) && !isHonorariumAndWages) return true;
 
       return false;
     });
