@@ -9,11 +9,25 @@ import {
   deleteCollection,
   bulkDeleteCollections
 } from '../controllers/collectionController.js';
+import {
+  getMerchandiseCatalog,
+  createMerchandiseCatalogItem,
+  updateMerchandiseCatalogItem,
+  deleteMerchandiseCatalogItem,
+  bulkImportMerchandiseCatalog
+} from '../controllers/merchandiseCatalogController.js';
 
 const router = express.Router();
 
 router.use(protect);
 router.use(restrictTo('admin', 'staff'));
+
+// Merchandise Catalog Routes
+router.get('/catalog', getMerchandiseCatalog);
+router.post('/catalog', restrictTo('admin'), createMerchandiseCatalogItem);
+router.post('/catalog/bulk-import', restrictTo('admin'), bulkImportMerchandiseCatalog);
+router.put('/catalog/:id', restrictTo('admin'), updateMerchandiseCatalogItem);
+router.delete('/catalog/:id', restrictTo('admin'), deleteMerchandiseCatalogItem);
 
 router.get('/next-receipt-no', getNextReceiptNumber);
 

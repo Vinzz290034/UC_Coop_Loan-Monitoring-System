@@ -9,6 +9,8 @@ import BackButton from '@/components/BackButton';
 import InvoiceArExcelImportModal from '@/components/collection/InvoiceArExcelImportModal';
 import CollectionReceiptPrint from '@/components/collection/CollectionReceiptPrint';
 import PayrollCollectionTab from '@/components/billing/PayrollCollectionTab';
+import SalesRegistryTab from '@/components/collection/SalesRegistryTab';
+import { SalesRegistryItemCombobox } from '@/components/collection/SalesRegistryItemCombobox';
 import { Skeleton } from '@/components/ui/Skeleton';
 import {
   HandCoins,
@@ -43,10 +45,12 @@ import {
   Lock,
   Unlock,
   ShieldAlert,
-  Loader2
+  Loader2,
+  Package,
+  Tag
 } from 'lucide-react';
 
-export type CollectionTab = 'all' | 'credit' | 'sales_services' | 'billing';
+export type CollectionTab = 'all' | 'credit' | 'sales_services' | 'sales_registry' | 'billing';
 
 export interface TabConfig {
   id: CollectionTab;
@@ -58,6 +62,7 @@ export const COLLECTION_TABS: TabConfig[] = [
   { id: 'all', label: 'All Collections', description: 'Consolidated master collection registry across all revenue categories' },
   { id: 'credit', label: 'Credit', description: 'Daily member loan amortizations, credit repayments, share capital & deposits' },
   { id: 'sales_services', label: 'Sales & Services', description: 'Itemized merchandise sales, uniforms, store inventory, photocopying, and printing services' },
+  { id: 'sales_registry', label: 'Sales Registry', description: 'Master catalog of store merchandise, uniform sizes, services, official cost and selling prices' },
   { id: 'billing', label: 'Billing', description: 'Official METC Coop Salary Deduction List for Accounting (Payroll Collection)' },
 ];
 
@@ -465,8 +470,25 @@ export default function CollectionPage() {
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const memberComboboxRef = useRef<HTMLDivElement>(null);
 
+  // Sales Registry catalog state for top KPI header cards when on Sales Registry tab and auto-fill in collections
+  const [salesCatalogItems, setSalesCatalogItems] = useState<any[]>([]);
+
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Fetch sales catalog on mount so it's instantly available for recording collections across all tabs
+  useEffect(() => {
+    const fetchCatalog = async () => {
+      try {
+        const res = await api.get('/collections/catalog');
+        const data = res.data?.data || [];
+        setSalesCatalogItems(data);
+      } catch (err) {
+        console.error('Failed to prefetch sales registry catalog:', err);
+      }
+    };
+    fetchCatalog();
   }, []);
 
   // Fetch members list on mount & when collections change
@@ -684,6 +706,79 @@ export default function CollectionPage() {
       return {
         ...prev,
         items: updated
+      };
+    });
+  };
+
+  // Handler when selecting an item from the Sales Registry catalog in Record New Collection
+  const handleSelectCatalogItem = (index: number, catItem: any) => {
+    setFormData(prev => {
+      const currentItems = [...prev.items];
+      const it = currentItems[index] || {};
+      const q = parseFloat(String(it.quantity)) > 0 ? parseFloat(String(it.quantity)) : 1;
+      const cp = parseFloat(String(catItem.cost_price || 0)) || 0;
+      const sp = parseFloat(String(catItem.selling_price || 0)) || 0;
+      const revenue = q * sp;
+      const gross_profit = revenue - (q * cp);
+
+      currentItems[index] = {
+        ...it,
+        item: catItem.item_name || '',
+        description: catItem.description || catItem.category || '',
+        size: catItem.size || '',
+        quantity: String(q),
+        cost_price: String(catItem.cost_price ?? 0),
+        selling_price: String(catItem.selling_price ?? 0),
+        revenue,
+        gross_profit
+      };
+
+      return {
+        ...prev,
+        items: currentItems
+      };
+    });
+  };
+
+  // Handler when size is changed or selected, auto-updating variant pricing if found in catalog
+  const handleItemSizeChange = (index: number, newSize: string) => {
+    setFormData(prev => {
+      const currentItems = [...prev.items];
+      const it = currentItems[index] || {};
+      const itName = (it.item || '').trim().toLowerCase();
+      const nSize = newSize.trim().toLowerCase();
+
+      // Check if catalog has variant with this item name and size
+      const variant = salesCatalogItems.find(c =>
+        (c.item_name || '').trim().toLowerCase() === itName &&
+        (c.size || '').trim().toLowerCase() === nSize &&
+        (!it.description || !c.description || (c.description || '').trim().toLowerCase() === (it.description || '').trim().toLowerCase())
+      ) || salesCatalogItems.find(c =>
+        (c.item_name || '').trim().toLowerCase() === itName &&
+        (c.size || '').trim().toLowerCase() === nSize
+      );
+
+      const q = parseFloat(String(it.quantity)) || 1;
+      const cp = variant ? (parseFloat(String(variant.cost_price || 0)) || 0) : (parseFloat(String(it.cost_price || 0)) || 0);
+      const sp = variant ? (parseFloat(String(variant.selling_price || 0)) || 0) : (parseFloat(String(it.selling_price || 0)) || 0);
+      const revenue = q * sp;
+      const gross_profit = revenue - (q * cp);
+
+      currentItems[index] = {
+        ...it,
+        size: newSize,
+        ...(variant ? {
+          cost_price: String(variant.cost_price ?? 0),
+          selling_price: String(variant.selling_price ?? 0),
+          ...(variant.description ? { description: variant.description } : {})
+        } : {}),
+        revenue,
+        gross_profit
+      };
+
+      return {
+        ...prev,
+        items: currentItems
       };
     });
   };
@@ -1029,6 +1124,79 @@ export default function CollectionPage() {
       return {
         ...prev,
         items: updated
+      };
+    });
+  };
+
+  // Handler when selecting an item from the Sales Registry catalog in Edit Collection
+  const handleEditSelectCatalogItem = (index: number, catItem: any) => {
+    setEditFormData((prev: any) => {
+      const currentItems = [...(prev.items || [])];
+      const it = currentItems[index] || {};
+      const q = parseFloat(String(it.quantity)) > 0 ? parseFloat(String(it.quantity)) : 1;
+      const cp = parseFloat(String(catItem.cost_price || 0)) || 0;
+      const sp = parseFloat(String(catItem.selling_price || 0)) || 0;
+      const revenue = q * sp;
+      const gross_profit = revenue - (q * cp);
+
+      currentItems[index] = {
+        ...it,
+        item: catItem.item_name || '',
+        description: catItem.description || catItem.category || '',
+        size: catItem.size || '',
+        quantity: String(q),
+        cost_price: String(catItem.cost_price ?? 0),
+        selling_price: String(catItem.selling_price ?? 0),
+        revenue,
+        gross_profit
+      };
+
+      return {
+        ...prev,
+        items: currentItems
+      };
+    });
+  };
+
+  // Handler when size is changed or selected in Edit Collection, auto-updating variant pricing if found in catalog
+  const handleEditItemSizeChange = (index: number, newSize: string) => {
+    setEditFormData((prev: any) => {
+      const currentItems = [...(prev.items || [])];
+      const it = currentItems[index] || {};
+      const itName = (it.item || '').trim().toLowerCase();
+      const nSize = newSize.trim().toLowerCase();
+
+      // Check if catalog has variant with this item name and size
+      const variant = salesCatalogItems.find(c =>
+        (c.item_name || '').trim().toLowerCase() === itName &&
+        (c.size || '').trim().toLowerCase() === nSize &&
+        (!it.description || !c.description || (c.description || '').trim().toLowerCase() === (it.description || '').trim().toLowerCase())
+      ) || salesCatalogItems.find(c =>
+        (c.item_name || '').trim().toLowerCase() === itName &&
+        (c.size || '').trim().toLowerCase() === nSize
+      );
+
+      const q = parseFloat(String(it.quantity)) || 1;
+      const cp = variant ? (parseFloat(String(variant.cost_price || 0)) || 0) : (parseFloat(String(it.cost_price || 0)) || 0);
+      const sp = variant ? (parseFloat(String(variant.selling_price || 0)) || 0) : (parseFloat(String(it.selling_price || 0)) || 0);
+      const revenue = q * sp;
+      const gross_profit = revenue - (q * cp);
+
+      currentItems[index] = {
+        ...it,
+        size: newSize,
+        ...(variant ? {
+          cost_price: String(variant.cost_price ?? 0),
+          selling_price: String(variant.selling_price ?? 0),
+          ...(variant.description ? { description: variant.description } : {})
+        } : {}),
+        revenue,
+        gross_profit
+      };
+
+      return {
+        ...prev,
+        items: currentItems
       };
     });
   };
@@ -1379,6 +1547,21 @@ export default function CollectionPage() {
       maxAmount
     };
   }, [collections, activeTab]);
+
+  // Sales Registry Catalog Stats for top 4 KPI cards when on Sales Registry tab
+  const salesRegistryStats = useMemo(() => {
+    const totalItems = salesCatalogItems.length;
+    const avgMargin = totalItems > 0
+      ? salesCatalogItems.reduce((acc, it) => {
+          const sp = Number(it.selling_price) || 0;
+          const cp = Number(it.cost_price) || 0;
+          return acc + (sp - cp);
+        }, 0) / totalItems
+      : 0;
+    const servicesCount = salesCatalogItems.filter(c => c.category === 'Coop Services').length;
+    const merchCount = salesCatalogItems.filter(c => c.category !== 'Coop Services').length;
+    return { totalItems, avgMargin, servicesCount, merchCount };
+  }, [salesCatalogItems]);
 
   // Reset pagination on filter or search changes
   useEffect(() => {
@@ -1961,78 +2144,124 @@ export default function CollectionPage() {
         </div>
       )}
 
-      {/* 4 KPI Overview Cards (Identical Layout to Disbursement) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
-        {/* Card 1: Total Collections */}
-        <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              {activeTab === 'all' || activeTab === 'billing' ? 'Total Collections' : `Total ${currentTabConfig.label} Collected`}
-            </span>
-            <p className="text-xl sm:text-2xl font-headline font-black text-primary dark:text-secondary">
-              ₱{tabStats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-            <p className="text-[10px] text-neutral-500">
-              {activeTab === 'all'
-                ? `Across ${tabStats.count} total collections in system`
-                : `Across ${tabStats.count} recorded collection receipts`}
-            </p>
+      {/* 3 KPI Overview Cards (Rendered above tabs for sales registry) */}
+      {activeTab === 'sales_registry' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-stretch">
+          {/* Card 1: Total Catalog Items */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Total Catalog Items</span>
+              <div className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
+                {salesRegistryStats.totalItems}
+              </div>
+              <p className="text-[10px] text-neutral-500">Active items in master registry</p>
+            </div>
+            <div className="p-3 bg-primary/10 text-primary dark:text-secondary rounded-2xl">
+              <Package className="w-5 h-5" />
+            </div>
           </div>
-          <div className="p-3 bg-primary/10 dark:bg-secondary/10 rounded-2xl text-primary dark:text-secondary">
-            <DollarSign className="w-5 h-5" />
-          </div>
-        </div>
 
-        {/* Card 2: Total Receipts */}
-        <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Total Receipts
-            </span>
-            <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
-              {tabStats.count}
-            </p>
-            <p className="text-[10px] text-neutral-500">
-              {activeTab === 'all' || activeTab === 'billing' ? 'All collections in master registry' : 'In current category registry'}
-            </p>
+          {/* Card 2: Merchandise Products */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Merchandise Products</span>
+              <div className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
+                {salesRegistryStats.merchCount}
+              </div>
+              <p className="text-[10px] text-neutral-500">Uniforms, caps, badges &amp; supplies</p>
+            </div>
+            <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+              <ShoppingBag className="w-5 h-5" />
+            </div>
           </div>
-          <div className="p-3 bg-emerald-700/10 dark:bg-emerald-400/10 rounded-2xl text-emerald-700 dark:text-emerald-400">
-            <Receipt className="w-5 h-5" />
-          </div>
-        </div>
 
-        {/* Card 3: Average Release / Collection */}
-        <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Average Collection
-            </span>
-            <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
-              ₱{tabStats.avgAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-            <p className="text-[10px] text-neutral-500">Mean collection receipt value</p>
-          </div>
-          <div className="p-3 bg-blue-700/10 dark:bg-blue-400/10 rounded-2xl text-blue-700 dark:text-blue-400">
-            <Clock className="w-5 h-5" />
+          {/* Card 3: Average Profit / Unit */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Average Profit / Unit</span>
+              <div className="text-xl sm:text-2xl font-headline font-black text-emerald-600 dark:text-emerald-400">
+                ₱{salesRegistryStats.avgMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <p className="text-[10px] text-neutral-500">Across all priced catalogue entries</p>
+            </div>
+            <div className="p-3 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl">
+              <DollarSign className="w-5 h-5" />
+            </div>
           </div>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
+          {/* Card 1: Total Collections */}
+          <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                {activeTab === 'all' || activeTab === 'billing' ? 'Total Collections' : `Total ${currentTabConfig.label} Collected`}
+              </span>
+              <p className="text-xl sm:text-2xl font-headline font-black text-primary dark:text-secondary">
+                ₱{tabStats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-[10px] text-neutral-500">
+                {activeTab === 'all'
+                  ? `Across ${tabStats.count} total collections in system`
+                  : `Across ${tabStats.count} recorded collection receipts`}
+              </p>
+            </div>
+            <div className="p-3 bg-primary/10 dark:bg-secondary/10 rounded-2xl text-primary dark:text-secondary">
+              <DollarSign className="w-5 h-5" />
+            </div>
+          </div>
 
-        {/* Card 4: Largest Collection */}
-        <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Largest Collection
-            </span>
-            <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
-              ₱{tabStats.maxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-            <p className="text-[10px] text-neutral-500">Peak single collection receipt</p>
+          {/* Card 2: Total Receipts */}
+          <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Total Receipts
+              </span>
+              <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
+                {tabStats.count}
+              </p>
+              <p className="text-[10px] text-neutral-500">
+                {activeTab === 'all' || activeTab === 'billing' ? 'All collections in master registry' : 'In current category registry'}
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-700/10 dark:bg-emerald-400/10 rounded-2xl text-emerald-700 dark:text-emerald-400">
+              <Receipt className="w-5 h-5" />
+            </div>
           </div>
-          <div className="p-3 bg-amber-700/10 dark:bg-amber-400/10 rounded-2xl text-amber-700 dark:text-amber-400">
-            <Sparkles className="w-5 h-5" />
+
+          {/* Card 3: Average Release / Collection */}
+          <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Average Collection
+              </span>
+              <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
+                ₱{tabStats.avgAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-[10px] text-neutral-500">Mean collection receipt value</p>
+            </div>
+            <div className="p-3 bg-blue-700/10 dark:bg-blue-400/10 rounded-2xl text-blue-700 dark:text-blue-400">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 4: Largest Collection */}
+          <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Largest Collection
+              </span>
+              <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
+                ₱{tabStats.maxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-[10px] text-neutral-500">Peak single collection receipt</p>
+            </div>
+            <div className="p-3 bg-amber-700/10 dark:bg-amber-400/10 rounded-2xl text-amber-700 dark:text-amber-400">
+              <Sparkles className="w-5 h-5" />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Tabs Header - Same format as Disbursement & Loans pages */}
       <div className="flex border-b border-outline-variant/50 overflow-x-auto">
@@ -2076,6 +2305,12 @@ export default function CollectionPage() {
             setBillingStartDate(start);
             setBillingEndDate(end);
           }}
+        />
+      ) : activeTab === 'sales_registry' ? (
+        <SalesRegistryTab
+          isAdmin={isAdmin}
+          hideHeaderStats={true}
+          onCatalogLoaded={items => setSalesCatalogItems(items)}
         />
       ) : (
       <div className="space-y-4">
@@ -3112,7 +3347,7 @@ export default function CollectionPage() {
                             <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
                               <tr>
                                 <th className="p-2 w-9 text-center border-r border-emerald-700/60">#</th>
-                                <th className="p-2 min-w-[170px] border-r border-emerald-700/60">Item Name</th>
+                                <th className="p-2 min-w-[210px] border-r border-emerald-700/60">Item Name</th>
                                 <th className="p-2 min-w-[140px] border-r border-emerald-700/60">Description / Category</th>
                                 <th className="p-2 w-24 border-r border-emerald-700/60 text-center">Size</th>
                                 <th className="p-2 w-16 text-center border-r border-emerald-700/60">Qty</th>
@@ -3131,18 +3366,27 @@ export default function CollectionPage() {
                                 const rev = q * sp;
                                 const gp = rev - (q * cp);
 
+                                // Available size variants from Sales Registry catalog for datalist suggestions
+                                const availableSizes = Array.from(
+                                  new Set(
+                                    salesCatalogItems
+                                      .filter(c => (c.item_name || '').trim().toLowerCase() === (it.item || '').trim().toLowerCase() && c.size)
+                                      .map(c => c.size.trim())
+                                  )
+                                );
+
                                 return (
                                   <tr key={it.id || idx} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors">
                                     <td className="p-1.5 text-center font-mono font-bold text-neutral-500 border-r border-neutral-200 dark:border-neutral-800">
                                       {idx + 1}
                                     </td>
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
-                                      <input
-                                        type="text"
+                                      <SalesRegistryItemCombobox
                                         value={it.item}
-                                        onChange={e => handleItemFieldChange(idx, 'item', e.target.value)}
-                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                                        placeholder="e.g. Uniform Polo"
+                                        catalog={salesCatalogItems}
+                                        onChange={val => handleItemFieldChange(idx, 'item', val)}
+                                        onSelectItem={item => handleSelectCatalogItem(idx, item)}
+                                        placeholder="Select item from Sales Registry..."
                                       />
                                     </td>
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
@@ -3157,11 +3401,19 @@ export default function CollectionPage() {
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
                                       <input
                                         type="text"
+                                        list={`sizes-record-${idx}`}
                                         value={it.size}
-                                        onChange={e => handleItemFieldChange(idx, 'size', e.target.value)}
+                                        onChange={e => handleItemSizeChange(idx, e.target.value)}
                                         className="w-full px-1.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-center font-mono font-medium text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                                         placeholder="M, L, XL"
                                       />
+                                      {availableSizes.length > 0 && (
+                                        <datalist id={`sizes-record-${idx}`}>
+                                          {availableSizes.map(sz => (
+                                            <option key={sz} value={sz} />
+                                          ))}
+                                        </datalist>
+                                      )}
                                     </td>
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
                                       <input
@@ -4042,7 +4294,7 @@ export default function CollectionPage() {
                             <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
                               <tr>
                                 <th className="p-2 w-9 text-center border-r border-emerald-700/60">#</th>
-                                <th className="p-2 min-w-[170px] border-r border-emerald-700/60">Item Name</th>
+                                <th className="p-2 min-w-[210px] border-r border-emerald-700/60">Item Name</th>
                                 <th className="p-2 min-w-[140px] border-r border-emerald-700/60">Description / Category</th>
                                 <th className="p-2 w-24 border-r border-emerald-700/60 text-center">Size</th>
                                 <th className="p-2 w-16 text-center border-r border-emerald-700/60">Qty</th>
@@ -4061,19 +4313,28 @@ export default function CollectionPage() {
                                 const rev = q * sp;
                                 const gp = rev - (q * cp);
 
+                                // Available size variants from Sales Registry catalog for datalist suggestions
+                                const availableSizes = Array.from(
+                                  new Set(
+                                    salesCatalogItems
+                                      .filter(c => (c.item_name || '').trim().toLowerCase() === (it.item || '').trim().toLowerCase() && c.size)
+                                      .map(c => c.size.trim())
+                                  )
+                                );
+
                                 return (
                                   <tr key={it.id || idx} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors">
                                     <td className="p-1.5 text-center font-mono font-bold text-neutral-500 border-r border-neutral-200 dark:border-neutral-800">
                                       {idx + 1}
                                     </td>
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
-                                      <input
-                                        type="text"
-                                        disabled={isEditLocked}
+                                      <SalesRegistryItemCombobox
                                         value={it.item}
-                                        onChange={e => handleEditItemFieldChange(idx, 'item', e.target.value)}
-                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-semibold text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-                                        placeholder="e.g. Uniform Polo"
+                                        catalog={salesCatalogItems}
+                                        disabled={isEditLocked}
+                                        onChange={val => handleEditItemFieldChange(idx, 'item', val)}
+                                        onSelectItem={item => handleEditSelectCatalogItem(idx, item)}
+                                        placeholder="Select item from Sales Registry..."
                                       />
                                     </td>
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
@@ -4089,12 +4350,20 @@ export default function CollectionPage() {
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
                                       <input
                                         type="text"
+                                        list={`sizes-edit-${idx}`}
                                         disabled={isEditLocked}
                                         value={it.size}
-                                        onChange={e => handleEditItemFieldChange(idx, 'size', e.target.value)}
+                                        onChange={e => handleEditItemSizeChange(idx, e.target.value)}
                                         className="w-full px-1.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-center font-mono font-medium text-neutral-900 dark:text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                                         placeholder="M, L, XL"
                                       />
+                                      {availableSizes.length > 0 && (
+                                        <datalist id={`sizes-edit-${idx}`}>
+                                          {availableSizes.map(sz => (
+                                            <option key={sz} value={sz} />
+                                          ))}
+                                        </datalist>
+                                      )}
                                     </td>
                                     <td className="p-1.5 border-r border-neutral-200 dark:border-neutral-800">
                                       <input
