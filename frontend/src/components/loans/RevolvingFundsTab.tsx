@@ -2731,6 +2731,9 @@ export default function RevolvingFundsTab({
         onClose={() => setUnifiedPrintModal(prev => ({ ...prev, isOpen: false }))}
         initialLf={unifiedPrintModal.lf}
         initialType="rf"
+        onSignatoriesSaved={() => {
+          loadLiquidations();
+        }}
         onLinkSuccess={() => {
           loadLiquidations();
         }}

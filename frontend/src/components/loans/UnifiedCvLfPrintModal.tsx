@@ -28,9 +28,18 @@ export interface UnifiedCvLfPrintModalProps {
   initialMode?: 'summary' | 'detailed';
   onEdit?: (cv: any, mode?: 'summary' | 'detailed', rows?: any[]) => void;
   onLinkSuccess?: (updatedCv?: any, updatedLf?: any) => void;
+  onSignatoriesSaved?: (updatedCv?: any, updatedLf?: any) => void;
 }
 
 // Helpers
+function parseSignatories(sig: any): any {
+  if (!sig) return {};
+  if (typeof sig === 'string') {
+    try { return JSON.parse(sig); } catch { return {}; }
+  }
+  return typeof sig === 'object' ? sig : {};
+}
+
 function formatCurrency(amt: number | string | null | undefined): string {
   const val = Number(amt) || 0;
   return `₱${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1071,7 +1080,8 @@ export default function UnifiedCvLfPrintModal({
   initialType,
   initialMode,
   onEdit,
-  onLinkSuccess
+  onLinkSuccess,
+  onSignatoriesSaved
 }: UnifiedCvLfPrintModalProps) {
   const [loading, setLoading] = useState(false);
   const [linkingAction, setLinkingAction] = useState(false);
@@ -1116,15 +1126,16 @@ export default function UnifiedCvLfPrintModal({
   // Sync signatories when currentCv or currentLf updates
   useEffect(() => {
     if (currentCv || currentLf) {
-      const liq = currentCv?.signatories?.liquidated_by || currentLf?.custodian_name || 'MICHELLE M. PABLE';
-      const liqTitle = currentCv?.signatories?.liquidated_by_title !== undefined
-        ? currentCv.signatories.liquidated_by_title
+      const sigs = parseSignatories(currentCv?.signatories);
+      const liq = sigs?.liquidated_by || currentLf?.custodian_name || currentLf?.prepared_by || 'MICHELLE M. PABLE';
+      const liqTitle = sigs?.liquidated_by_title !== undefined
+        ? sigs.liquidated_by_title
         : (getSignatoryTitle(liq) || 'Manager');
-      const app = currentCv?.signatories?.detailed_approved_by || currentCv?.signatories?.approved_by || currentLf?.approved_by || 'CANDILARIO N. TATOY';
-      const appTitle = currentCv?.signatories?.detailed_approved_by_title !== undefined
-        ? currentCv.signatories.detailed_approved_by_title
-        : (currentCv?.signatories?.approved_by_title !== undefined
-            ? currentCv.signatories.approved_by_title
+      const app = sigs?.detailed_approved_by || sigs?.approved_by || currentLf?.approved_by || 'CANDILARIO N. TATOY';
+      const appTitle = sigs?.detailed_approved_by_title !== undefined
+        ? sigs.detailed_approved_by_title
+        : (sigs?.approved_by_title !== undefined
+            ? sigs.approved_by_title
             : (getSignatoryTitle(app) || 'Chairman'));
       setDetailedLiquidatedBy(liq);
       setDetailedLiquidatedByTitle(liqTitle);
@@ -1148,6 +1159,18 @@ export default function UnifiedCvLfPrintModal({
       let cvObj = initialCv ? { ...initialCv } : null;
       let lfObj = initialLf ? { ...initialLf } : null;
       let detectedType: 'stl' | 'rf' = initialType || 'stl';
+
+      // Always fetch the freshest check voucher from database if it has an ID
+      if (cvObj?.id) {
+        try {
+          const freshCvRes = await api.get('/accounts/check-vouchers', { params: { id: cvObj.id } });
+          if (freshCvRes.data?.data?.[0]) {
+            cvObj = freshCvRes.data.data[0];
+          }
+        } catch (e) {
+          console.warn('Failed to refresh CV data:', e);
+        }
+      }
 
       // Detect type if not provided
       if (!initialType) {
@@ -1334,31 +1357,62 @@ export default function UnifiedCvLfPrintModal({
   const handleSaveDetailedSignatories = async () => {
     try {
       setIsSavingSignatories(true);
+      const currentSigs = parseSignatories(currentCv?.signatories);
       const updatedSignatories = {
-        ...(currentCv?.signatories || {}),
+        ...currentSigs,
         liquidated_by: detailedLiquidatedBy.trim(),
         liquidated_by_title: detailedLiquidatedByTitle.trim(),
         detailed_approved_by: detailedApprovedBy.trim(),
-        approved_by: detailedApprovedBy.trim(),
         detailed_approved_by_title: detailedApprovedByTitle.trim(),
-        approved_by_title: detailedApprovedByTitle.trim()
+        approved_by: currentSigs?.approved_by || detailedApprovedBy.trim()
       };
 
+      let savedCv = currentCv;
       if (currentCv?.id) {
-        await api.put(`/accounts/check-vouchers/${currentCv.id}`, {
+        const putRes = await api.put(`/accounts/check-vouchers/${currentCv.id}`, {
           signatories: updatedSignatories
         });
+        if (putRes.data?.data) {
+          savedCv = putRes.data.data;
+        }
       }
 
-      setCurrentCv((prev: any) => prev ? {
-        ...prev,
-        signatories: updatedSignatories
-      } : prev);
+      if (currentLf?.id) {
+        try {
+          if (resolvedType === 'rf') {
+            await api.put(`/revolving-funds/${currentLf.id}`, {
+              custodian_name: detailedLiquidatedBy.trim(),
+              approved_by: detailedApprovedBy.trim()
+            });
+          } else if (resolvedType === 'stl') {
+            await api.put(`/stl-liquidations/${currentLf.id}`, {
+              prepared_by: detailedLiquidatedBy.trim(),
+              approved_by: detailedApprovedBy.trim()
+            });
+          }
+          setCurrentLf((prev: any) => prev ? {
+            ...prev,
+            custodian_name: detailedLiquidatedBy.trim(),
+            prepared_by: detailedLiquidatedBy.trim(),
+            approved_by: detailedApprovedBy.trim()
+          } : prev);
+        } catch (e) {
+          console.warn('Failed to update liquidation form signatories:', e);
+        }
+      }
 
-      // Do NOT call onLinkSuccess here — that would trigger a full parent reload
-      // (loadCheckVouchers) which changes the initialCv prop, re-runs loadFullData,
-      // and resets cvViewMode back to 'summary'. The local setCurrentCv update above
-      // is sufficient; the DB is already persisted.
+      const mergedCv = {
+        ...(savedCv || currentCv || {}),
+        signatories: updatedSignatories
+      };
+
+      setCurrentCv(mergedCv);
+
+      // Notify parent to sync state immediately so closing/reopening keeps the edit
+      if (onSignatoriesSaved) {
+        onSignatoriesSaved(mergedCv, currentLf);
+      }
+
       setIsEditingDetailedSignatories(false);
     } catch (err: any) {
       console.error('Failed to save signatories:', err);

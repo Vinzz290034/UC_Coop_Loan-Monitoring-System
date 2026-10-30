@@ -1919,6 +1919,9 @@ export default function StlLiquidationsTab({
         onClose={() => setUnifiedPrintModal(prev => ({ ...prev, isOpen: false }))}
         initialLf={unifiedPrintModal.lf}
         initialType="stl"
+        onSignatoriesSaved={() => {
+          fetchLiquidations();
+        }}
         onLinkSuccess={() => {
           fetchLiquidations();
         }}

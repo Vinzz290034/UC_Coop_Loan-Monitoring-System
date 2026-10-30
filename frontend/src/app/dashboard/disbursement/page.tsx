@@ -6984,6 +6984,12 @@ function DisbursementPageContent() {
         initialLf={unifiedPrintModal.lf}
         initialType={unifiedPrintModal.type}
         initialMode={unifiedPrintModal.mode || 'detailed'}
+        onSignatoriesSaved={(updatedCv) => {
+          if (updatedCv?.id) {
+            setUnifiedPrintModal(prev => ({ ...prev, cv: updatedCv }));
+            setCheckVouchers(prev => prev.map(v => v.id === updatedCv.id ? { ...v, signatories: updatedCv.signatories } : v));
+          }
+        }}
         onEdit={(cv, mode, rows) => {
           setUnifiedPrintModal(prev => ({ ...prev, isOpen: false }));
           setSelectedCvForModal(null);
