@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatPayeeName } from './UnifiedCvLfPrintModal';
+import { useAuth } from '@/context/AuthContext';
 import { createPortal } from 'react-dom';
 import api from '@/lib/api';
 import {
@@ -16,6 +17,8 @@ import {
   ChevronRight,
   Send,
   Lock,
+  Unlock,
+  AlertCircle,
   Clock,
   RotateCcw,
   Plus,
@@ -177,6 +180,20 @@ export default function LoanVouchersTab({
   const [cvStatusFilter, setCvStatusFilter] = useState('all');
   const [cvSortOrder, setCvSortOrder] = useState<'desc' | 'asc'>('desc');
   const [bankOptions, setBankOptions] = useState<string[]>(['BDO', 'MBTC']);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  const [modalDialog, setModalDialog] = useState<{
+    isOpen: boolean;
+    type?: 'alert' | 'confirm';
+    variant?: 'primary' | 'rose' | 'amber' | 'emerald';
+    title: string;
+    message?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    onConfirm: () => void;
+    onCancel?: () => void;
+  } | null>(null);
 
   // Modals & Details State
   const [selectedCvForModal, setSelectedCvForModal] = useState<any | null>(null);
@@ -551,7 +568,7 @@ export default function LoanVouchersTab({
   };
 
   // Editing Voucher Modal
-  const startEditingCv = (cv: any) => {
+  const openEditCvModalActual = (cv: any) => {
     const rawRows = cv.details && Array.isArray(cv.details) ? cv.details : [];
     const formattedRows = rawRows.map((r: any) => ({
       description: r.book_of_account || r.description || '',
@@ -576,6 +593,80 @@ export default function LoanVouchersTab({
     setEditCvRows(initialRowsList);
     setInitialCvEditSnapshot(JSON.stringify({ formData: initialForm, rows: initialRowsList }));
     setIsEditingCvModal(true);
+  };
+
+  const startEditingCv = (cv: any) => {
+    if (!cv) return;
+    const status = (cv.status || 'edit').toLowerCase();
+
+    // If filed, prompt user with Override confirmation (Admin Only)
+    if (status === 'filed') {
+      if (!isAdmin) {
+        setModalDialog({
+          isOpen: true,
+          type: 'alert',
+          variant: 'amber',
+          title: 'Permission Denied',
+          message: 'Only administrators can override and edit a filed (sealed) check voucher.',
+          confirmLabel: 'OK',
+          onConfirm: () => setModalDialog(null)
+        });
+        return;
+      }
+      setModalDialog({
+        isOpen: true,
+        type: 'confirm',
+        variant: 'amber',
+        title: 'Override Filed Voucher Lock?',
+        message: `Check Voucher #${cleanCvNumber(cv.voucher_no)} is currently sealed and filed. As an administrator, do you want to override the lock to edit its details, date disbursed, or line items?`,
+        confirmLabel: 'Override & Edit',
+        cancelLabel: 'Cancel',
+        onConfirm: () => {
+          setModalDialog(null);
+          openEditCvModalActual(cv);
+        },
+        onCancel: () => setModalDialog(null)
+      });
+      return;
+    }
+
+    openEditCvModalActual(cv);
+  };
+
+  // Safe delete handler with admin override for filed vouchers
+  const handleDeleteRequest = (cv: any) => {
+    if (!cv) return;
+    const status = (cv.status || '').toLowerCase();
+    if (status === 'filed') {
+      if (!isAdmin) {
+        setModalDialog({
+          isOpen: true,
+          type: 'alert',
+          variant: 'rose',
+          title: 'Permission Denied',
+          message: 'Check voucher is sealed and filed. Only administrators can delete filed vouchers.',
+          confirmLabel: 'OK',
+          onConfirm: () => setModalDialog(null)
+        });
+        return;
+      }
+      setModalDialog({
+        isOpen: true,
+        type: 'confirm',
+        variant: 'rose',
+        title: 'Override Filed Voucher Lock to Delete?',
+        message: `Check Voucher #${cleanCvNumber(cv.voucher_no)} is currently sealed and filed. As an administrator, are you sure you want to override the lock and permanently delete this filed voucher? This action cannot be undone.`,
+        confirmLabel: 'Override & Delete',
+        cancelLabel: 'Cancel',
+        onConfirm: () => {
+          setModalDialog(null);
+          setCvToDelete(cv);
+        },
+        onCancel: () => setModalDialog(null)
+      });
+      return;
+    }
+    setCvToDelete(cv);
   };
 
   // Track if check voucher edit has dirty/unsaved changes
@@ -715,7 +806,8 @@ export default function LoanVouchersTab({
   // Multi-select helpers
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedCvIds(checkVouchers.map(c => c.id));
+      const selectable = checkVouchers.filter(c => isAdmin || c.status !== 'filed');
+      setSelectedCvIds(selectable.map(c => c.id));
     } else {
       setSelectedCvIds([]);
     }
@@ -757,6 +849,23 @@ export default function LoanVouchersTab({
           </span>
         );
       case 'filed':
+        if (isAdmin) {
+          return (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                startEditingCv(cv);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 hover:bg-emerald-500/20 hover:border-emerald-500/50 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-xs group"
+              title="Click to override lock and edit filed check voucher"
+            >
+              <Lock className="w-3 h-3 group-hover:hidden" />
+              <Edit3 className="w-3 h-3 hidden group-hover:inline-block text-emerald-800 dark:text-emerald-200" />
+              <span>Filed</span>
+            </button>
+          );
+        }
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
             <Lock className="w-3 h-3" />
@@ -1040,8 +1149,10 @@ export default function LoanVouchersTab({
                           <input
                             type="checkbox"
                             checked={isSelected}
+                            disabled={cv.status === 'filed' && !isAdmin}
                             onChange={() => handleToggleSelectOne(cv.id)}
-                            className="rounded border-outline-variant accent-primary cursor-pointer w-3.5 h-3.5"
+                            className="rounded border-outline-variant accent-primary cursor-pointer w-3.5 h-3.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={cv.status === 'filed' && !isAdmin ? 'Filed vouchers cannot be deleted' : undefined}
                           />
                         </td>
                       )}
@@ -1083,22 +1194,44 @@ export default function LoanVouchersTab({
                           </button>
                           {isAdminOrManager && (
                             <>
-                              <button
-                                type="button"
-                                onClick={() => startEditingCv(cv)}
-                                className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
-                                title="Edit Check Voucher"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setCvToDelete(cv)}
-                                className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
-                                title="Delete Voucher"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {cv.status === 'filed' && !isAdmin ? (
+                                <span
+                                  className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 cursor-not-allowed inline-flex items-center justify-center"
+                                  title="Check voucher is Sealed & Filed (Editing locked)"
+                                >
+                                  <Lock className="w-3.5 h-3.5" />
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingCv(cv)}
+                                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                    cv.status === 'filed'
+                                      ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                                      : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                  }`}
+                                  title={cv.status === 'filed' ? 'Override lock and edit check voucher (Admin)' : 'Edit Check Voucher'}
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {cv.status === 'filed' && !isAdmin ? (
+                                <span
+                                  className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 cursor-not-allowed inline-flex items-center justify-center"
+                                  title="Check voucher is Sealed & Filed (Locked - cannot be deleted)"
+                                >
+                                  <Lock className="w-3.5 h-3.5" />
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRequest(cv)}
+                                  className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                                  title={cv.status === 'filed' ? 'Override lock and delete check voucher (Admin)' : 'Delete Voucher'}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -1319,7 +1452,8 @@ export default function LoanVouchersTab({
               </div>
 
               <div className="flex items-center gap-2">
-                {isAdminOrManager && (
+                {/* Admin ONLY: Override & Edit for Filed Vouchers */}
+                {selectedCvForModal.status === 'filed' && isAdmin && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1327,7 +1461,25 @@ export default function LoanVouchersTab({
                       setSelectedCvForModal(null);
                       startEditingCv(target);
                     }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-bold cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-200 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                    title="Override lock and edit this filed check voucher"
+                  >
+                    <Unlock className="w-3.5 h-3.5" />
+                    <span>Override &amp; Edit</span>
+                  </button>
+                )}
+
+                {/* Edit Voucher for non-filed vouchers */}
+                {isAdminOrManager && selectedCvForModal.status !== 'filed' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = selectedCvForModal;
+                      setSelectedCvForModal(null);
+                      startEditingCv(target);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-bold cursor-pointer transition-all active:scale-95"
+                    title="Edit check voucher line items and details"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>Edit</span>
@@ -1845,6 +1997,89 @@ export default function LoanVouchersTab({
                 <div style={{ marginTop: '2px' }}>KADT Solutions</div>
               </div>
               <div>Printed on: {new Date().toLocaleString()}</div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      {/* UNIFIED CUSTOM ALERT & CONFIRM MODAL (OVERRIDE LOCK & PERMISSION ALERTS) */}
+      {modalDialog && mounted && createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-neutral-950/60 backdrop-blur-sm animate-modal-backdrop"
+          onClick={() => {
+            if (modalDialog.onCancel) modalDialog.onCancel();
+            setModalDialog(null);
+          }}
+        >
+          <div
+            className={`bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl p-6 ${modalDialog.message ? 'max-w-md' : 'max-w-sm'} w-full shadow-2xl space-y-4 animate-modal-pop`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-2.5 rounded-2xl ${
+                  modalDialog.variant === 'rose'
+                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                    : modalDialog.variant === 'amber'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : modalDialog.variant === 'emerald'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-primary/10 text-primary dark:text-secondary'
+                }`}
+              >
+                {modalDialog.variant === 'rose' ? (
+                  <AlertTriangle className="w-6 h-6" />
+                ) : modalDialog.variant === 'amber' ? (
+                  <RotateCcw className="w-6 h-6" />
+                ) : modalDialog.variant === 'emerald' ? (
+                  <CheckCircle2 className="w-6 h-6" />
+                ) : (
+                  <AlertCircle className="w-6 h-6" />
+                )}
+              </div>
+              <div>
+                <h3 className="font-headline font-bold text-base text-neutral-900 dark:text-white">
+                  {modalDialog.title}
+                </h3>
+              </div>
+            </div>
+
+            {modalDialog.message ? (
+              <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                {modalDialog.message}
+              </p>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              {modalDialog.type === 'confirm' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (modalDialog.onCancel) modalDialog.onCancel();
+                    setModalDialog(null);
+                  }}
+                  className="px-4 py-2 text-xs font-bold rounded-full border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
+                >
+                  {modalDialog.cancelLabel || 'Cancel'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  modalDialog.onConfirm();
+                }}
+                className={`px-5 py-2 text-xs font-bold rounded-full text-white active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                  modalDialog.variant === 'rose'
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : modalDialog.variant === 'amber'
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                    : modalDialog.variant === 'emerald'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-primary dark:bg-secondary dark:text-neutral-950 hover:opacity-90'
+                }`}
+              >
+                <span>{modalDialog.confirmLabel || (modalDialog.type === 'confirm' ? 'Confirm' : 'OK')}</span>
+              </button>
             </div>
           </div>
         </div>,
