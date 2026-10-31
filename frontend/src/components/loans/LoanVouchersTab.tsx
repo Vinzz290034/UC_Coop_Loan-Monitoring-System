@@ -849,23 +849,6 @@ export default function LoanVouchersTab({
           </span>
         );
       case 'filed':
-        if (isAdmin) {
-          return (
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation();
-                startEditingCv(cv);
-              }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25 hover:bg-emerald-500/20 hover:border-emerald-500/50 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-xs group"
-              title="Click to override lock and edit filed check voucher"
-            >
-              <Lock className="w-3 h-3 group-hover:hidden" />
-              <Edit3 className="w-3 h-3 hidden group-hover:inline-block text-emerald-800 dark:text-emerald-200" />
-              <span>Filed</span>
-            </button>
-          );
-        }
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
             <Lock className="w-3 h-3" />
@@ -1149,10 +1132,10 @@ export default function LoanVouchersTab({
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            disabled={cv.status === 'filed' && !isAdmin}
+                            disabled={cv.status === 'filed'}
                             onChange={() => handleToggleSelectOne(cv.id)}
                             className="rounded border-outline-variant accent-primary cursor-pointer w-3.5 h-3.5 disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={cv.status === 'filed' && !isAdmin ? 'Filed vouchers cannot be deleted' : undefined}
+                            title={cv.status === 'filed' ? 'Filed vouchers cannot be deleted' : undefined}
                           />
                         </td>
                       )}
@@ -1194,43 +1177,32 @@ export default function LoanVouchersTab({
                           </button>
                           {isAdminOrManager && (
                             <>
-                              {cv.status === 'filed' && !isAdmin ? (
+                              {cv.status === 'filed' ? (
                                 <span
                                   className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 cursor-not-allowed inline-flex items-center justify-center"
-                                  title="Check voucher is Sealed & Filed (Editing locked)"
+                                  title="Check voucher is Sealed & Filed (Locked - click row to view details & admin override)"
                                 >
                                   <Lock className="w-3.5 h-3.5" />
                                 </span>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => startEditingCv(cv)}
-                                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                                    cv.status === 'filed'
-                                      ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-                                      : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                                  }`}
-                                  title={cv.status === 'filed' ? 'Override lock and edit check voucher (Admin)' : 'Edit Check Voucher'}
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                              {cv.status === 'filed' && !isAdmin ? (
-                                <span
-                                  className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 cursor-not-allowed inline-flex items-center justify-center"
-                                  title="Check voucher is Sealed & Filed (Locked - cannot be deleted)"
-                                >
-                                  <Lock className="w-3.5 h-3.5" />
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteRequest(cv)}
-                                  className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
-                                  title={cv.status === 'filed' ? 'Override lock and delete check voucher (Admin)' : 'Delete Voucher'}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditingCv(cv)}
+                                    className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-800 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+                                    title="Edit Check Voucher"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteRequest(cv)}
+                                    className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
+                                    title="Delete Voucher"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
                               )}
                             </>
                           )}
