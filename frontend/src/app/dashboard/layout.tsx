@@ -506,18 +506,7 @@ function DashboardLayoutContent({
         </header>
 
         {/* Page contents */}
-        <main
-          className={`flex-1 p-4 sm:p-6 md:p-8 w-full mx-auto ${
-            pathname.startsWith('/dashboard/collection') ||
-            pathname.startsWith('/dashboard/disbursement') ||
-            pathname.startsWith('/dashboard/loans') ||
-            pathname.startsWith('/dashboard/members') ||
-            pathname.startsWith('/dashboard/billing') ||
-            pathname.startsWith('/dashboard/accounting')
-              ? 'max-w-[1720px] 2xl:max-w-[1920px]'
-              : 'max-w-7xl'
-          }`}
-        >
+        <main className="flex-1 p-4 sm:p-6 md:p-8 w-full">
           {children}
         </main>
       </div>

@@ -301,7 +301,7 @@ export default function MerchandiseCatalogImportModal({ isOpen, onClose, onImpor
               {file ? file.name : 'Click to select or drag & drop your Price List Excel file'}
             </p>
             <p className="text-neutral-500 dark:text-neutral-400 text-xs mt-1">
-              Supports standard "COST &amp; SELLING PRICE" sheets (Columns: Item, Description, Size, Cost, Selling Price)
+              Supports standard &quot;COST &amp; SELLING PRICE&quot; sheets (Columns: Item, Description, Size, Cost, Selling Price)
             </p>
           </div>
 

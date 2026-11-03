@@ -11,7 +11,8 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": "warn",
       "react-hooks/exhaustive-deps": "warn",
       "@next/next/no-img-element": "warn",
-      "react-hooks/set-state-in-effect": "off"
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/preserve-manual-memoization": "warn"
     }
   },
   // Override default ignores of eslint-config-next.
@@ -23,6 +24,5 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
   ]),
 ]);
-
 
 export default eslintConfig;

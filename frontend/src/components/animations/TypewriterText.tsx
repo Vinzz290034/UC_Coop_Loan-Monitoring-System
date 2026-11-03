@@ -112,14 +112,18 @@ export function TypewriterText({
   }
 
   // Pre-calculate character offset mappings for layout-shift-free progressive rendering
-  let charCounter = 0;
+  const segmentsWithOffsets = normalizedSegments.map((seg, idx) => {
+    const start = normalizedSegments
+      .slice(0, idx)
+      .reduce((acc, s) => acc + s.text.length, 0);
+    return { ...seg, start };
+  });
 
   return (
     <Component ref={ref} className={`relative inline-block ${className}`}>
-      {normalizedSegments.map((seg, sIndex) => {
+      {segmentsWithOffsets.map((seg, sIndex) => {
         const segChars = seg.text.split('');
-        const segStart = charCounter;
-        charCounter += segChars.length;
+        const segStart = seg.start;
 
         return (
           <React.Fragment key={sIndex}>

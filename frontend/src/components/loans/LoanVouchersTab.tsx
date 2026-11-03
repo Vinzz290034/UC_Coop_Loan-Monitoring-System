@@ -163,15 +163,23 @@ export const DRAW_BANK_OPTIONS: { value: string; label: string }[] = [
 interface LoanVouchersTabProps {
   isAdminOrManager: boolean;
   onOpenLoanDetails?: (loanId: string | number) => void;
+  initialSearch?: string;
 }
 
 export default function LoanVouchersTab({
   isAdminOrManager,
-  onOpenLoanDetails
+  onOpenLoanDetails,
+  initialSearch = ''
 }: LoanVouchersTabProps) {
   const [checkVouchers, setCheckVouchers] = useState<any[]>([]);
   const [cvLoading, setCvLoading] = useState(false);
-  const [cvSearch, setCvSearch] = useState('');
+  const [cvSearch, setCvSearch] = useState(initialSearch);
+
+  useEffect(() => {
+    if (initialSearch !== undefined) {
+      setCvSearch(initialSearch);
+    }
+  }, [initialSearch]);
   const [cvPage, setCvPage] = useState(1);
   const [cvLimit] = useState(25);
   const [cvTotalCount, setCvTotalCount] = useState(0);

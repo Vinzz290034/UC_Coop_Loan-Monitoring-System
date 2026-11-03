@@ -2570,12 +2570,16 @@ function DisbursementPageContent() {
   };
 
   // Open Check Voucher Modal by ID or No
-  const openCheckVoucherModalByIdOrNo = async (voucherIdOrNo: string, fallbackVoucherNo?: string) => {
+  const openCheckVoucherModalByIdOrNo = async (
+    voucherIdOrNo: string,
+    fallbackVoucherNo?: string,
+    viewMode: 'summary' | 'detailed' = 'detailed'
+  ) => {
     if (!voucherIdOrNo) return;
     const directMatch = checkVouchers.find(v => v.id === voucherIdOrNo || v.voucher_no === voucherIdOrNo);
     if (directMatch) {
       setSelectedCvForModal(directMatch);
-      setModalCvViewMode('summary');
+      setModalCvViewMode(viewMode);
       setModalCategoryFilter(null);
       setIsEditingCvModal(false);
       return;
@@ -2587,7 +2591,7 @@ function DisbursementPageContent() {
         const res = await api.get(`/accounts/check-vouchers`, { params: { id: voucherIdOrNo } });
         if (res.data?.data?.[0]) {
           setSelectedCvForModal(res.data.data[0]);
-          setModalCvViewMode('summary');
+          setModalCvViewMode(viewMode);
           setModalCategoryFilter(null);
           setIsEditingCvModal(false);
           return;
@@ -2598,7 +2602,7 @@ function DisbursementPageContent() {
       if (res.data?.data?.length > 0) {
         const matched = res.data.data.find((v: any) => v.voucher_no === searchTarget || v.id === searchTarget) || res.data.data[0];
         setSelectedCvForModal(matched);
-        setModalCvViewMode('summary');
+        setModalCvViewMode(viewMode);
         setModalCategoryFilter(null);
         setIsEditingCvModal(false);
       } else {
@@ -2610,6 +2614,18 @@ function DisbursementPageContent() {
       setCvLoading(false);
     }
   };
+
+  // Auto-open check voucher from URL parameter (e.g. redirected from reports)
+  useEffect(() => {
+    const voucherParam = searchParams.get('voucher') || searchParams.get('voucher_no') || searchParams.get('cv');
+    const idParam = searchParams.get('id');
+    const targetParam = voucherParam || idParam;
+    if (targetParam && mounted) {
+      setActiveTab('summary');
+      if (voucherParam) setCvSearch(voucherParam);
+      openCheckVoucherModalByIdOrNo(targetParam, voucherParam || undefined, 'detailed');
+    }
+  }, [searchParams, mounted]);
 
   // Revert status from 'on process' back to 'edit'
   const handleRevertToEdit = (cv: any, e?: React.MouseEvent) => {

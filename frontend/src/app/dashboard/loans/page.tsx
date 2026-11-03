@@ -202,15 +202,6 @@ function LoansPageContent() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab === 'payments' || tab === 'products' || tab === 'loans' || tab === 'vouchers') {
-      setActiveTab(tab as any);
-    } else if (tab === 'revolving_funds' || tab === 'revolving') {
-      router.replace('/dashboard/disbursement?tab=revolving_fund_replenishment');
-    }
-  }, [searchParams, router]);
-
   // Loan Payments State
   const [loanPayments, setLoanPayments] = useState<any[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
@@ -1138,6 +1129,19 @@ function LoansPageContent() {
   const [loansSearch, setLoansSearch] = useState('');
   const [loansSortBy, setLoansSortBy] = useState('date_desc');
   const [isLoansExpandedAll, setIsLoansExpandedAll] = useState(false);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'payments' || tab === 'products' || tab === 'loans' || tab === 'vouchers') {
+      setActiveTab(tab as any);
+    } else if (tab === 'revolving_funds' || tab === 'revolving') {
+      router.replace('/dashboard/disbursement?tab=revolving_fund_replenishment');
+    }
+    const searchQ = searchParams.get('search');
+    if (searchQ) {
+      setLoansSearch(searchQ);
+    }
+  }, [searchParams, router]);
 
   // Truncated pagination helper matching Members Directory
   const getPaginationNumbers = (current: number, total: number): (number | string)[] => {
@@ -3140,6 +3144,7 @@ function LoansPageContent() {
             <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
               <div className="w-full lg:w-auto flex-1 max-w-md">
                 <SearchInput
+                  key={loansSearch}
                   placeholder={isAdminOrManager ? "Search by LAF No., borrower, product, contract ID..." : "Search by LAF No., product, or contract ID..."}
                   defaultValue={loansSearch}
                   onSearch={(val) => {
@@ -3215,15 +3220,48 @@ function LoansPageContent() {
                   .filter((loan) => {
                     // Exclude rejected loans from table list
                     if (loan.status === 'rejected') return false;
-                    const q = loansSearch.toLowerCase().trim();
-                    if (q) {
-                      const bName = `${loan.last_name || ''} ${loan.first_name || ''}`.toLowerCase();
+                    const rawQ = loansSearch.toLowerCase().trim();
+                    if (rawQ) {
+                      const cleanQ = rawQ.replace(/^(?:cv|laf)\s*(?:no\.?|#)?\s*/i, '').trim();
+
+                      const fName = (loan.first_name || '').toLowerCase();
+                      const mName = (loan.middle_name || '').toLowerCase();
+                      const lName = (loan.last_name || '').toLowerCase();
+                      const borrowerName = ((loan as any).borrower_name || '').toLowerCase();
+
+                      const names = [
+                        `${fName} ${lName}`.trim(),
+                        `${fName} ${mName} ${lName}`.trim(),
+                        `${lName} ${fName}`.trim(),
+                        `${lName}, ${fName}`.trim(),
+                        `${lName} ${mName} ${fName}`.trim(),
+                        borrowerName
+                      ].filter(Boolean);
+
                       const pName = (loan.product_name || '').toLowerCase();
                       const idStr = String(loan.id || '').toLowerCase();
                       const lafStr = (loan.laf_no || '').toLowerCase();
                       const statusStr = (loan.status || '').toLowerCase();
-                      const matches = bName.includes(q) || pName.includes(q) || idStr.includes(q) || lafStr.includes(q) || statusStr.includes(q);
-                      if (!matches) return false;
+                      const memberNoStr = (loan.member_no || '').toLowerCase();
+
+                      // Direct inclusion check on name variations & fields
+                      const directMatch =
+                        names.some(n => n.includes(rawQ) || rawQ.includes(n)) ||
+                        pName.includes(rawQ) ||
+                        idStr.includes(rawQ) ||
+                        lafStr.includes(rawQ) ||
+                        statusStr.includes(rawQ) ||
+                        memberNoStr.includes(rawQ) ||
+                        (cleanQ ? (lafStr.includes(cleanQ) || idStr.includes(cleanQ)) : false);
+
+                      if (directMatch) return true;
+
+                      // Token-based matching: all words in query appear in the loan searchable text
+                      const tokens = rawQ.replace(/[.,#]/g, ' ').split(/\s+/).filter(Boolean);
+                      const searchableText = `${fName} ${mName} ${lName} ${borrowerName} ${pName} ${idStr} ${lafStr} ${statusStr} ${memberNoStr}`.replace(/[.,#]/g, ' ').toLowerCase();
+
+                      const tokenMatch = tokens.length > 0 && tokens.every(t => searchableText.includes(t));
+                      if (!tokenMatch) return false;
                     }
                     return true;
                   })
@@ -3921,7 +3959,10 @@ function LoansPageContent() {
             )}
           </div>
         ) : activeTab === 'vouchers' ? (
-          <LoanVouchersTab isAdminOrManager={isAdminOrManager} />
+          <LoanVouchersTab 
+            isAdminOrManager={isAdminOrManager} 
+            initialSearch={searchParams.get('search') || ''}
+          />
         ) : activeTab === 'payments' ? (
           <div className="space-y-6">
             {/* Header & Quick Action Buttons */}

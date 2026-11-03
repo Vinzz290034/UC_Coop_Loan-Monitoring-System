@@ -5,7 +5,13 @@ import {
   getLoanMonitoringReport,
   getTransactionReport,
   getRevenueCollectionReport,
-  importExcelLedger
+  importExcelLedger,
+  getMerchandiseSalesReport,
+  getExpensesBreakdownReport,
+  getLoanProductsReport,
+  getMembershipUpdateReport,
+  getBooksOfAccountsReport,
+  getFinancialStatementReport
 } from '../controllers/reportController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -36,10 +42,19 @@ const router = express.Router();
 router.use(protect);
 router.use(restrictTo('admin', 'staff'));
 
+// Legacy reports
 router.get('/cash-disbursement', getCashDisbursementReport);
 router.get('/loan-monitoring', getLoanMonitoringReport);
 router.get('/transactions', getTransactionReport);
 router.get('/revenue', getRevenueCollectionReport);
 router.post('/import-excel', upload.single('file'), importExcelLedger);
+
+// Cooperative General Manager 5 Content Reports + Financial Statement
+router.get('/merchandise-sales', getMerchandiseSalesReport);
+router.get('/expenses-breakdown', getExpensesBreakdownReport);
+router.get('/loan-products', getLoanProductsReport);
+router.get('/membership-update', getMembershipUpdateReport);
+router.get('/books-of-accounts', getBooksOfAccountsReport);
+router.get('/financial-statement', getFinancialStatementReport);
 
 export default router;

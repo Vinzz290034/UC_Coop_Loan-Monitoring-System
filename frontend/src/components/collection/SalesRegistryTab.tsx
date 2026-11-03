@@ -316,7 +316,7 @@ export default function SalesRegistryTab({ isAdmin = false, onCatalogLoaded, hid
 
   // Filtered & Sorted catalog items
   const filteredCatalog = useMemo(() => {
-    let result = catalog.filter(it => {
+    const result = catalog.filter(it => {
       if (selectedCategory !== 'all' && it.category !== selectedCategory) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
