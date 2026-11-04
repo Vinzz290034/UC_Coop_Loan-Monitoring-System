@@ -3077,7 +3077,7 @@ function LoansPageContent() {
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
               }`}
           >
-            {isAdminOrManager ? 'Loan Monitoring' : 'My Loans'}
+            {isAdminOrManager ? 'Loan Tracker' : 'My Loans'}
           </button>
           {isAdminOrManager && (
             <button
@@ -3340,7 +3340,7 @@ function LoansPageContent() {
                     <div className="flex items-center justify-between px-1 flex-wrap gap-2.5">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-on-surface dark:text-white">
-                          {isAdminOrManager ? 'Loan Monitoring Table' : 'Loan Application Table'}
+                          {isAdminOrManager ? 'Loan Tracker Table' : 'Loan Application Table'}
                         </span>
                         <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold border border-outline-variant/30">
                           {isLoansExpandedAll ? `Showing all ${totalLoansCount} contracts (Full Table)` : `Showing ${visibleLoans.length} of ${totalLoansCount} contracts`}

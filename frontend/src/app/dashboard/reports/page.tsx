@@ -2632,7 +2632,7 @@ export default function ReportsPage() {
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-300 transition-colors cursor-pointer"
                   >
-                    <span>Open in Loan Monitoring</span>
+                    <span>Open in Loan Tracker</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -2692,9 +2692,9 @@ export default function ReportsPage() {
                     router.push(`/dashboard/loans?tab=loans&search=${searchParam}`);
                   }}
                   className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-                  title="Redirect to Loan Monitoring with this product filtered"
+                  title="Redirect to Loan Tracker with this product filtered"
                 >
-                  <span>Open in Loan Monitoring</span>
+                  <span>Open in Loan Tracker</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </button>
                 <button
@@ -2769,7 +2769,7 @@ export default function ReportsPage() {
                   Borrowers & Loan Accounts ({loanProductModalBorrowers.length})
                 </span>
                 <span className="text-[10px] text-neutral-400">
-                  Click any borrower row to open in Loan Monitoring
+                  Click any borrower row to open in Loan Tracker
                 </span>
               </div>
               <div className="flex-1 overflow-y-auto overflow-x-auto">
@@ -2805,7 +2805,7 @@ export default function ReportsPage() {
                             router.push(`/dashboard/loans?tab=${targetTab}&search=${encodeURIComponent(searchVal)}`);
                           }}
                           className="hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer group"
-                          title={b.source === 'Check Voucher' || b.voucher_no ? `Click to open Voucher #${b.voucher_no || b.laf_no} in Loan Vouchers` : `Click to open Contract #${b.laf_no || b.member_name} in Loan Monitoring`}
+                          title={b.source === 'Check Voucher' || b.voucher_no ? `Click to open Voucher #${b.voucher_no || b.laf_no} in Loan Vouchers` : `Click to open Contract #${b.laf_no || b.member_name} in Loan Tracker`}
                         >
                           <td className="p-2 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
                             {idx + 1}

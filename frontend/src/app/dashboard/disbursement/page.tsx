@@ -5137,7 +5137,7 @@ function DisbursementPageContent() {
                       <Link
                         href={`/dashboard/loans?search=${selectedCvForModal.voucher_no}`}
                         className="inline-flex items-center gap-1 font-sans text-xs px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 font-bold border border-blue-300 dark:border-blue-800/60 hover:underline"
-                        title="View Loan in Loan Monitoring"
+                        title="View Loan in Loan Tracker"
                         onClick={e => e.stopPropagation()}
                       >
                         <ExternalLink className="w-3 h-3" />
