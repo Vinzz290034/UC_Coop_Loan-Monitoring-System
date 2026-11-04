@@ -404,16 +404,7 @@ export default function ReportsPage() {
         XLSX.utils.book_append_sheet(wb, ws, 'Book of Accounts');
       } else if (activeTab === 'financial_statement' || activeTab === 'summary') {
         const fs = reportData.statement_of_operations;
-        const merchList = fs?.merchandise_sales_breakdown || [
-          { account: 'College & Senior High Uniforms (Type C, BSNAME, Basic Ed)', amount: 986450.00, category: 'School Uniforms' },
-          { account: 'Physical Education (P.E.) Attire & Department Shirts', amount: 186420.00, category: 'School Uniforms' },
-          { account: 'Cooperative Bags & Student Backpacks', amount: 248320.00, category: 'School Paraphernalia' },
-          { account: 'Instructional Modules, Manuals & Course Materials', amount: 94500.00, category: 'School Paraphernalia' },
-          { account: 'Maritime Buckles, Belts, Ties & Cap Insignia', amount: 142680.00, category: 'Maritime Accessories' },
-          { account: 'Epaulets, Nameplates, Badges & Service Pins', amount: 48000.00, category: 'Maritime Accessories' },
-          { account: 'Daily Over-the-Counter Store Sales (Registry Batches)', amount: 300700.00, category: 'Store Sales Registry' },
-          { account: 'Retail Store Sundries & Miscellaneous Merchandise', amount: 25000.00, category: 'General Merchandise' }
-        ];
+        const merchList = fs?.merchandise_sales_breakdown || [];
 
         const rows: any[] = [
           { 'REVENUES': 'I. SALES OF MERCHANDISE', 'Amount (PHP)': '' },
@@ -421,7 +412,7 @@ export default function ReportsPage() {
             'REVENUES': `  ${m.account} [${m.category}]`,
             'Amount (PHP)': m.amount
           })),
-          { 'REVENUES': 'TOTAL SALES OF MERCHANDISE', 'Amount (PHP)': fs?.merchandise_sales || 2032070.00 },
+          { 'REVENUES': 'TOTAL SALES OF MERCHANDISE', 'Amount (PHP)': fs?.merchandise_sales ?? 0 },
           { 'REVENUES': '', 'Amount (PHP)': '' },
           { 'REVENUES': 'II. OPERATING REVENUES', 'Amount (PHP)': '' },
           ...(fs?.revenues_breakdown || []).map((r: any) => ({
@@ -2184,28 +2175,19 @@ export default function ReportsPage() {
                           </thead>
                           <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                             {(() => {
-                              const items = (reportData.statement_of_operations?.merchandise_sales_breakdown || [
-                                { account: 'College & Senior High Uniforms (Type C, BSNAME, Basic Ed)', amount: 986450.00, category: 'School Uniforms' },
-                                { account: 'Physical Education (P.E.) Attire & Department Shirts', amount: 186420.00, category: 'School Uniforms' },
-                                { account: 'Cooperative Bags & Student Backpacks', amount: 248320.00, category: 'School Paraphernalia' },
-                                { account: 'Instructional Modules, Manuals & Course Materials', amount: 94500.00, category: 'School Paraphernalia' },
-                                { account: 'Maritime Buckles, Belts, Ties & Cap Insignia', amount: 142680.00, category: 'Maritime Accessories' },
-                                { account: 'Epaulets, Nameplates, Badges & Service Pins', amount: 48000.00, category: 'Maritime Accessories' },
-                                { account: 'Daily Over-the-Counter Store Sales (Registry Batches)', amount: 300700.00, category: 'Store Sales Registry' },
-                                { account: 'Retail Store Sundries & Miscellaneous Merchandise', amount: 25000.00, category: 'General Merchandise' }
-                              ]).filter((m: any) =>
+                              const items = (reportData.statement_of_operations?.merchandise_sales_breakdown || []).filter((m: any) =>
                                 !fsSearch.trim() ||
                                 m.account.toLowerCase().includes(fsSearch.toLowerCase()) ||
                                 m.category.toLowerCase().includes(fsSearch.toLowerCase())
                               );
 
-                              const total = Number(reportData.statement_of_operations?.merchandise_sales) || 2032070.00;
+                              const total = Number(reportData.statement_of_operations?.merchandise_sales ?? 0);
 
                               if (items.length === 0) {
                                 return (
                                   <tr>
                                     <td colSpan={5} className="p-6 text-center text-neutral-400 text-xs">
-                                      No merchandise items match &quot;{fsSearch}&quot;
+                                      {fsSearch.trim() ? `No merchandise items match "${fsSearch}"` : 'No merchandise sales recorded in this period (₱0.00)'}
                                     </td>
                                   </tr>
                                 );

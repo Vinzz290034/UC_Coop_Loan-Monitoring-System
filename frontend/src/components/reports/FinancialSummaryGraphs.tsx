@@ -87,18 +87,18 @@ export default function FinancialSummaryGraphs({
   const bs = reportData?.balance_sheet;
 
   // Key Totals
-  const totalAssets = Number(bs?.total_assets || 10492541.24);
-  const totalLiabilities = Number(bs?.total_liabilities || -211966.51);
-  const totalEquity = Number(bs?.total_equity || 10704507.75);
+  const totalAssets = Number(bs?.total_assets ?? 0);
+  const totalLiabilities = Number(bs?.total_liabilities ?? 0);
+  const totalEquity = Number(bs?.total_equity ?? 0);
 
-  const merchandiseSales = Number(fs?.merchandise_sales || 2032070.00);
-  const operatingRevenue = Number(fs?.operating_revenue || fs?.total_revenue || 481665.94);
+  const merchandiseSales = Number(fs?.merchandise_sales ?? 0);
+  const operatingRevenue = Number(fs?.operating_revenue ?? fs?.total_revenue ?? 0);
   const grossReceipts = merchandiseSales + operatingRevenue;
-  const costOfSales = Number(fs?.cost_of_sales || 1474720.88);
-  const grossProfit = Number(fs?.gross_profit || grossReceipts - costOfSales);
-  const operatingExpenses = Number(fs?.operating_expenses || 364233.00);
-  const incomeSubsidy = Number(fs?.income_subsidy || -6050.00);
-  const netSurplus = Number(fs?.net_surplus || grossProfit - operatingExpenses + incomeSubsidy);
+  const costOfSales = Number(fs?.cost_of_sales ?? 0);
+  const grossProfit = Number(fs?.gross_profit ?? (grossReceipts - costOfSales));
+  const operatingExpenses = Number(fs?.operating_expenses ?? 0);
+  const incomeSubsidy = Number(fs?.income_subsidy ?? 0);
+  const netSurplus = Number(fs?.net_surplus ?? (grossProfit - operatingExpenses + incomeSubsidy));
 
   // Financial Health Ratios
   const grossMarginPct = grossReceipts > 0 ? (grossProfit / grossReceipts) * 100 : 0;
@@ -121,21 +121,14 @@ export default function FinancialSummaryGraphs({
 
   // 2. Merchandise Sales Breakdown (By Category)
   const merchandiseCategoryData = useMemo(() => {
-    const rawList = fs?.merchandise_sales_breakdown || [
-      { account: 'College & Senior High Uniforms (Type C, BSNAME, Basic Ed)', amount: 986450.00, category: 'School Uniforms' },
-      { account: 'Physical Education (P.E.) Attire & Department Shirts', amount: 186420.00, category: 'School Uniforms' },
-      { account: 'Cooperative Bags & Student Backpacks', amount: 248320.00, category: 'School Paraphernalia' },
-      { account: 'Instructional Modules, Manuals & Course Materials', amount: 94500.00, category: 'School Paraphernalia' },
-      { account: 'Maritime Buckles, Belts, Ties & Cap Insignia', amount: 142680.00, category: 'Maritime Accessories' },
-      { account: 'Epaulets, Nameplates, Badges & Service Pins', amount: 48000.00, category: 'Maritime Accessories' },
-      { account: 'Daily Over-the-Counter Store Sales (Registry Batches)', amount: 300700.00, category: 'Store Sales Registry' },
-      { account: 'Retail Store Sundries & Miscellaneous Merchandise', amount: 25000.00, category: 'General Merchandise' },
-    ];
-
+    const rawList: any[] = fs?.merchandise_sales_breakdown || [];
     const catMap: Record<string, number> = {};
     rawList.forEach((item: any) => {
-      const cat = item.category || 'General Merchandise';
-      catMap[cat] = (catMap[cat] || 0) + Number(item.amount || 0);
+      const cat = item.category || 'Store Merchandise';
+      const amt = Number(item.amount || 0);
+      if (amt > 0) {
+        catMap[cat] = (catMap[cat] || 0) + amt;
+      }
     });
 
     return Object.entries(catMap)
@@ -151,18 +144,6 @@ export default function FinancialSummaryGraphs({
   // 3. Operating Revenue Stream Breakdown
   const operatingRevenueData = useMemo(() => {
     const list: any[] = fs?.revenues_breakdown || [];
-    if (!list.length) {
-      return [
-        { name: 'Interest on Loans', amount: 340989.10, fill: '#059669' },
-        { name: 'Service Fees', amount: 68806.90, fill: '#0284c7' },
-        { name: 'Printing & Photocopy', amount: 33371.00, fill: '#d97706' },
-        { name: 'Fines & Penalties', amount: 17929.74, fill: '#ea580c' },
-        { name: 'Locker Rental Revenue', amount: 9450.00, fill: '#7c3aed' },
-        { name: 'Commission & Membership', amount: 11119.20, fill: '#64748b' },
-      ];
-    }
-
-    // Group loan interest together for a clean high-level view
     let loanInterest = 0;
     let finesPenalties = 0;
     const others: any[] = [];
@@ -170,9 +151,10 @@ export default function FinancialSummaryGraphs({
     list.forEach((item: any) => {
       const name = item.account || '';
       const amt = Number(item.amount || 0);
+      if (amt <= 0) return;
       if (name.includes('Interest Received') || name.includes('Interest Income')) {
         loanInterest += amt;
-      } else if (name.includes('Fines -')) {
+      } else if (name.includes('Fines -') || name.includes('Fines and Penalties')) {
         finesPenalties += amt;
       } else {
         others.push({ name: name.replace('Commission income - ', 'Commission: '), amount: amt });
@@ -180,11 +162,10 @@ export default function FinancialSummaryGraphs({
     });
 
     const combined = [
-      { name: 'Interest on Loans', amount: loanInterest },
-      { name: 'Fines & Late Charges', amount: finesPenalties },
+      ...(loanInterest > 0 ? [{ name: 'Interest on Loans', amount: loanInterest }] : []),
+      ...(finesPenalties > 0 ? [{ name: 'Fines & Late Charges', amount: finesPenalties }] : []),
       ...others
-    ].filter(item => item.amount > 0)
-     .sort((a, b) => b.amount - a.amount);
+    ].sort((a, b) => b.amount - a.amount);
 
     return combined.map((item, idx) => ({
       ...item,
@@ -200,18 +181,11 @@ export default function FinancialSummaryGraphs({
 
     list.forEach((item: any) => {
       const cat = item.category || 'General Administration';
-      catMap[cat] = (catMap[cat] || 0) + Number(item.amount || 0);
+      const amt = Number(item.amount || 0);
+      if (amt > 0) {
+        catMap[cat] = (catMap[cat] || 0) + amt;
+      }
     });
-
-    if (Object.keys(catMap).length === 0) {
-      return [
-        { name: 'Personnel & Benefits', amount: 154545.00, fill: '#059669' },
-        { name: 'Administrative & General', amount: 114688.00, fill: '#0284c7' },
-        { name: 'Governance & Meetings', amount: 38700.00, fill: '#7c3aed' },
-        { name: 'Facilities & Utilities', amount: 35100.00, fill: '#d97706' },
-        { name: 'Travel & Transportation', amount: 21200.00, fill: '#ea580c' },
-      ];
-    }
 
     return Object.entries(catMap)
       .map(([name, amount], idx) => ({
@@ -235,6 +209,7 @@ export default function FinancialSummaryGraphs({
     list.forEach((item: any) => {
       const acc = item.account || '';
       const amt = Number(item.amount || 0);
+      if (amt <= 0) return;
       if (acc.includes('Cash')) cash += amt;
       else if (acc.includes('Loans Receivable')) loans += amt;
       else if (acc.includes('Inventory')) inventory += amt;
@@ -243,12 +218,12 @@ export default function FinancialSummaryGraphs({
     });
 
     const segments = [
-      { name: 'Cash & Equivalents', amount: cash || 4908208.07, fill: '#059669' },
-      { name: 'Loans Receivable', amount: loans || 3828467.06, fill: '#0284c7' },
-      { name: 'Merchandise Inventory', amount: inventory || 1977268.42, fill: '#d97706' },
-      { name: 'Fixed Assets (at cost)', amount: fixedAssets || 99682.00, fill: '#7c3aed' },
-      { name: 'Receivables & Prepaids', amount: receivablesOther > 0 ? receivablesOther : 22.67, fill: '#64748b' },
-    ];
+      { name: 'Cash & Equivalents', amount: cash, fill: '#059669' },
+      { name: 'Loans Receivable', amount: loans, fill: '#0284c7' },
+      { name: 'Merchandise Inventory', amount: inventory, fill: '#d97706' },
+      { name: 'Fixed Assets (at cost)', amount: fixedAssets, fill: '#7c3aed' },
+      { name: 'Receivables & Other', amount: receivablesOther, fill: '#64748b' },
+    ].filter(s => s.amount > 0);
 
     return segments.map(seg => ({
       ...seg,
@@ -267,6 +242,7 @@ export default function FinancialSummaryGraphs({
     list.forEach((item: any) => {
       const acc = item.account || '';
       const amt = Number(item.amount || 0);
+      if (amt <= 0) return;
       if (acc.includes('Capital Accounts')) shareCapital += amt;
       else if (acc.includes('Retained earnings')) retainedEarnings += amt;
       else if (acc.includes('Donations / Grants')) donationsGrants += amt;
@@ -274,11 +250,11 @@ export default function FinancialSummaryGraphs({
     });
 
     return [
-      { name: 'Share Capital (Member Shares)', amount: shareCapital || 7336593.11, fill: '#059669' },
-      { name: 'Retained Earnings (Undivided Surplus)', amount: retainedEarnings || 3185914.64, fill: '#0284c7' },
-      { name: 'Donated Capital & Grants', amount: donationsGrants || 184500.00, fill: '#7c3aed' },
-      { name: 'Statutory & Community Funds', amount: Math.abs(statutoryFunds) || 2500.00, fill: '#ea580c' },
-    ].map(item => ({
+      { name: 'Share Capital (Member Shares)', amount: shareCapital, fill: '#059669' },
+      { name: 'Retained Earnings (Undivided Surplus)', amount: retainedEarnings, fill: '#0284c7' },
+      { name: 'Donated Capital & Grants', amount: donationsGrants, fill: '#7c3aed' },
+      { name: 'Statutory & Community Funds', amount: Math.abs(statutoryFunds), fill: '#ea580c' },
+    ].filter(s => s.amount > 0).map(item => ({
       ...item,
       percentage: totalEquity > 0 ? ((item.amount / totalEquity) * 100).toFixed(1) : '0'
     }));
