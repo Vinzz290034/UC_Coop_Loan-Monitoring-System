@@ -12,6 +12,9 @@ export async function migrateLoansImportFields() {
       ALTER TABLE loans ADD COLUMN IF NOT EXISTS laf_no VARCHAR(100) DEFAULT NULL;
       ALTER TABLE loans ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50) DEFAULT NULL;
       ALTER TABLE loans ADD COLUMN IF NOT EXISTS total_fines NUMERIC(15, 2) DEFAULT 0.00;
+      ALTER TABLE loans ADD COLUMN IF NOT EXISTS account_classification VARCHAR(50) DEFAULT 'Non DOSRI';
+      ALTER TABLE loans ADD COLUMN IF NOT EXISTS purpose VARCHAR(255) DEFAULT NULL;
+      ALTER TABLE loans ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT NULL;
       ALTER TABLE share_capital_transactions ADD COLUMN IF NOT EXISTS invoice_no VARCHAR(100) DEFAULT NULL;
       ALTER TABLE repayment_schedules ADD COLUMN IF NOT EXISTS fines_due NUMERIC(15, 2) DEFAULT 0.00;
     `);

@@ -79,8 +79,8 @@ router.route('/')
 
 router.route('/:id')
   .get(getLoanById)
-  .put(restrictTo('admin', 'staff'), updateLoanDetails)
-  .delete(restrictTo('admin', 'staff'), deleteLoan);
+  .put(restrictTo('admin'), updateLoanDetails)
+  .delete(restrictTo('admin'), deleteLoan);
 
 // ==========================================
 // 7. LOAN ACTIONS (DISBURSE & REJECT)
@@ -92,6 +92,6 @@ router.route('/:id/reject')
   .patch(restrictTo('admin', 'staff'), rejectLoanApplication);
 
 router.route('/:id/laf-no')
-  .patch(restrictTo('admin', 'staff'), updateLoanLafNo);
+  .patch(restrictTo('admin'), updateLoanLafNo);
 
 export default router;

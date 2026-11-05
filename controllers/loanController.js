@@ -324,7 +324,7 @@ export const getNextLafNumber = async (req, res, next) => {
 // @access  Protected (Admin, Manager)
 export const applyForLoan = async (req, res, next) => {
   try {
-    let { member_id, loan_product_id, principal_amount, term_months, laf_no, payment_mode } = req.body;
+    let { member_id, loan_product_id, principal_amount, term_months, laf_no, payment_mode, account_classification, purpose, remarks, age } = req.body;
 
     // Enforce own profile ID if caller is a member
     if (req.user.role === 'member') {
@@ -348,6 +348,9 @@ export const applyForLoan = async (req, res, next) => {
 
     // Verify member exists, completed profile, and has admin approval (only enforced for member self-application)
     const member = await query('SELECT status, profile_completed FROM members WHERE id = $1', [member_id]);
+    if (member.rowCount > 0 && age && !isNaN(parseInt(age, 10)) && parseInt(age, 10) > 0) {
+      await query('UPDATE members SET age = $1 WHERE id = $2 AND (age IS NULL OR age = 0 OR age != $1)', [parseInt(age, 10), member_id]);
+    }
     if (member.rowCount === 0) {
       return res.status(404).json({
         success: false,
@@ -580,9 +583,8 @@ export const applyForLoan = async (req, res, next) => {
         member_id, loan_product_id, principal_amount, interest_rate, 
         term_months, amortization_type, status, co_maker_name, co_maker_phone,
         laf_no, payment_mode, total_deductions, net_proceeds, deductions_breakdown,
-        custom_schedule, created_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        custom_schedule, created_at, account_classification, purpose, remarks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *
     `;
     let result;
@@ -603,7 +605,10 @@ export const applyForLoan = async (req, res, next) => {
         netProceeds,
         JSON.stringify(deductionsList),
         custom_schedule ? JSON.stringify(custom_schedule) : null,
-        applicationDate.toISOString()
+        applicationDate.toISOString(),
+        account_classification || 'Non DOSRI',
+        purpose || null,
+        remarks ? String(remarks).trim() : null
       ]);
     } catch (insertErr) {
       if (insertErr.code === '42703' && String(insertErr.message).includes('custom_schedule')) {
@@ -625,8 +630,11 @@ export const applyForLoan = async (req, res, next) => {
           netProceeds,
           JSON.stringify(deductionsList),
           custom_schedule ? JSON.stringify(custom_schedule) : null,
-          applicationDate.toISOString()
-        ]);
+          applicationDate.toISOString(),
+        account_classification || 'Non DOSRI',
+        purpose || null,
+        remarks ? String(remarks).trim() : null
+      ]);
       } else {
         throw insertErr;
       }
@@ -921,12 +929,21 @@ export const getLoans = async (req, res, next) => {
           m.last_name,
           m.member_no,
           m.phone,
+          m.age,
+          m.date_of_birth,
+          m.membership_type,
           COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
           COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
           COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
           COALESCE((SELECT SUM(GREATEST(0, rs.principal_due - rs.principal_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_principal,
           COALESCE((SELECT SUM(GREATEST(0, rs.interest_due - rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_interest,
-          COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines
+          COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines,
+          (SELECT rs.due_date FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as next_due_date,
+          (SELECT rs.due_date FROM repayment_schedules rs WHERE rs.loan_id = l.id ORDER BY rs.installment_number ASC LIMIT 1) as first_due_date,
+          (SELECT (rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as current_month_amortization,
+          (SELECT rs.installment_number FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as current_installment_number,
+          (SELECT COUNT(*) FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid'))::int as unpaid_installments_count,
+          (SELECT COUNT(*) FROM repayment_schedules rs WHERE rs.loan_id = l.id)::int as total_installments_count
         FROM loans l 
         JOIN loan_products lp ON l.loan_product_id = lp.id 
         LEFT JOIN members m ON l.member_id = m.id
@@ -974,12 +991,21 @@ export const getLoans = async (req, res, next) => {
         m.last_name,
         m.member_no,
         m.phone,
+        m.age,
+        m.date_of_birth,
+        m.membership_type,
         COALESCE((SELECT SUM(rs.principal_paid + rs.interest_paid) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as total_paid,
         COALESCE((SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_balance,
         COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
         COALESCE((SELECT SUM(GREATEST(0, rs.principal_due - rs.principal_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_principal,
         COALESCE((SELECT SUM(GREATEST(0, rs.interest_due - rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_interest,
-        COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines
+        COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines,
+          (SELECT rs.due_date FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as next_due_date,
+          (SELECT rs.due_date FROM repayment_schedules rs WHERE rs.loan_id = l.id ORDER BY rs.installment_number ASC LIMIT 1) as first_due_date,
+          (SELECT (rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as current_month_amortization,
+          (SELECT rs.installment_number FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as current_installment_number,
+          (SELECT COUNT(*) FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid'))::int as unpaid_installments_count,
+          (SELECT COUNT(*) FROM repayment_schedules rs WHERE rs.loan_id = l.id)::int as total_installments_count
       FROM loans l
       LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
       LEFT JOIN members m ON l.member_id = m.id
@@ -1060,7 +1086,13 @@ export const getLoanById = async (req, res, next) => {
          COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
          COALESCE((SELECT SUM(GREATEST(0, rs.principal_due - rs.principal_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_principal,
          COALESCE((SELECT SUM(GREATEST(0, rs.interest_due - rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_interest,
-         COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines
+         COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines,
+          (SELECT rs.due_date FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as next_due_date,
+          (SELECT rs.due_date FROM repayment_schedules rs WHERE rs.loan_id = l.id ORDER BY rs.installment_number ASC LIMIT 1) as first_due_date,
+          (SELECT (rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as current_month_amortization,
+          (SELECT rs.installment_number FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as current_installment_number,
+          (SELECT COUNT(*) FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid'))::int as unpaid_installments_count,
+          (SELECT COUNT(*) FROM repayment_schedules rs WHERE rs.loan_id = l.id)::int as total_installments_count
        FROM loans l
        LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
        LEFT JOIN members m ON l.member_id = m.id
@@ -1828,7 +1860,9 @@ export const updateLoanDetails = async (req, res, next) => {
       total_deductions,
       custom_schedule,
       application_date,
-      remarks
+      remarks,
+      account_classification,
+      purpose
     } = req.body;
 
     await client.query('BEGIN');
@@ -2001,6 +2035,18 @@ export const updateLoanDetails = async (req, res, next) => {
       }
     }
 
+    const finalAccountClassification = account_classification !== undefined
+      ? (account_classification ? String(account_classification).trim() : 'Non DOSRI')
+      : currentLoan.account_classification;
+
+    const finalPurpose = purpose !== undefined
+      ? (purpose ? String(purpose).trim() : null)
+      : currentLoan.purpose;
+
+    const finalRemarks = remarks !== undefined
+      ? (remarks ? String(remarks).trim() : null)
+      : currentLoan.remarks;
+
     // 11. Update loan in database
     const updateQuery = `
       UPDATE loans
@@ -2021,8 +2067,11 @@ export const updateLoanDetails = async (req, res, next) => {
         deductions_breakdown = $14::jsonb,
         custom_schedule = $15::jsonb,
         created_at = $16,
+        account_classification = $17,
+        purpose = $18,
+        remarks = $19,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $17
+      WHERE id = $20
       RETURNING *
     `;
 
@@ -2043,6 +2092,9 @@ export const updateLoanDetails = async (req, res, next) => {
       finalDeductionsBreakdown,
       finalCustomSchedule,
       finalCreatedAt,
+      finalAccountClassification,
+      finalPurpose,
+      finalRemarks,
       id
     ]);
 
@@ -2100,7 +2152,13 @@ export const updateLoanDetails = async (req, res, next) => {
         COALESCE((SELECT SUM(rs.total_due) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as total_due,
         COALESCE((SELECT SUM(GREATEST(0, rs.principal_due - rs.principal_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), l.principal_amount) as remaining_principal,
         COALESCE((SELECT SUM(GREATEST(0, rs.interest_due - rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) as remaining_interest,
-        COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines
+        COALESCE((SELECT SUM(COALESCE(rs.fines_due, 0) + CASE WHEN rs.due_date < CURRENT_DATE AND rs.status IN ('unpaid', 'partially_paid') THEN ROUND(((rs.total_due - (rs.principal_paid + rs.interest_paid)) * 0.02)::numeric, 2) ELSE 0 END) FROM repayment_schedules rs WHERE rs.loan_id = l.id), 0) + COALESCE(l.total_fines, 0) as total_fines,
+          (SELECT rs.due_date FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as next_due_date,
+          (SELECT rs.due_date FROM repayment_schedules rs WHERE rs.loan_id = l.id ORDER BY rs.installment_number ASC LIMIT 1) as first_due_date,
+          (SELECT (rs.total_due - (rs.principal_paid + rs.interest_paid)) FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as current_month_amortization,
+          (SELECT rs.installment_number FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid') ORDER BY rs.installment_number ASC LIMIT 1) as current_installment_number,
+          (SELECT COUNT(*) FROM repayment_schedules rs WHERE rs.loan_id = l.id AND rs.status IN ('unpaid', 'partially_paid'))::int as unpaid_installments_count,
+          (SELECT COUNT(*) FROM repayment_schedules rs WHERE rs.loan_id = l.id)::int as total_installments_count
       FROM loans l
       LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
       LEFT JOIN members m ON l.member_id = m.id

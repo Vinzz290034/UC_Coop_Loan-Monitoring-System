@@ -37,6 +37,7 @@ import {
   Download,
   Loader2,
   Lock,
+  Unlock,
   Maximize2,
   Minimize2,
   ArrowUp,
@@ -49,6 +50,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  Check,
   ChevronLeft,
   Receipt,
   ReceiptText,
@@ -98,7 +100,280 @@ interface Loan {
   payment_mode?: string;
   member_no?: string;
   co_maker_name?: string | null;
+  account_classification?: string | null;
+  purpose?: string | null;
+  remarks?: string | null;
+  age?: number | string | null;
+  date_of_birth?: string | null;
+  membership_type?: string | null;
+  next_due_date?: string | null;
+  first_due_date?: string | null;
+  current_month_amortization?: number | string | null;
+  current_installment_number?: number | null;
+  unpaid_installments_count?: number | null;
+  total_installments_count?: number | null;
+  remaining_balance?: string | null;
+  total_paid?: string | null;
 }
+
+// Standard cooperative loan purpose choices and account classifications
+export const LOAN_PURPOSES = [
+  'Education',
+  'Medical/Emergency',
+  'House Renovation',
+  'Utilities',
+  'Appliance',
+  'Consumption',
+  'Business',
+  'Special Events',
+  'Loan Restructure',
+  'Others'
+] as const;
+
+export const ACCOUNT_CLASSIFICATIONS = ['Non DOSRI', 'DOSRI'] as const;
+export const PAYMENT_MODES = ['SD 2', 'Hand -in', 'SD 30', 'SD 15'] as const;
+
+// --- Google Drive Spreadsheet Formatters & Helpers ---
+const formatSheetDate = (dateVal: string | Date | null | undefined, shortYear = false) => {
+  if (!dateVal) return '—';
+  try {
+    let y: number, m: number, day: number;
+    if (dateVal instanceof Date) {
+      y = dateVal.getFullYear();
+      m = dateVal.getMonth();
+      day = dateVal.getDate();
+    } else if (typeof dateVal === 'string' && dateVal.includes('-')) {
+      const parts = dateVal.split(/[-T :]/);
+      if (parts.length >= 3) {
+        y = parseInt(parts[0], 10);
+        m = parseInt(parts[1], 10) - 1;
+        day = parseInt(parts[2], 10);
+      } else {
+        const dt = new Date(dateVal);
+        y = dt.getFullYear();
+        m = dt.getMonth();
+        day = dt.getDate();
+      }
+    } else {
+      const dt = new Date(dateVal);
+      y = dt.getFullYear();
+      m = dt.getMonth();
+      day = dt.getDate();
+    }
+    if (isNaN(y) || isNaN(m) || isNaN(day)) return '—';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const yearStr = shortYear ? String(y).slice(-2) : String(y);
+    return `${day}-${months[m]}-${yearStr}`;
+  } catch {
+    return '—';
+  }
+};
+
+const computeDueDate = (loan: Loan, shortYear = true) => {
+  // If loan is not yet disbursed, due date has not started
+  if (!loan.disbursed_at && loan.status !== 'disbursed') return '—';
+
+  // If loan is fully paid off, display —
+  const isFullyPaid = loan.status === 'fully_paid' || 
+    (loan.unpaid_installments_count === 0 && (loan.total_installments_count || 0) > 0) ||
+    (loan.disbursed_at && parseFloat(loan.remaining_balance || '0') <= 0 && parseFloat(loan.total_paid || '0') > 0);
+  if (isFullyPaid) return '—';
+
+  // 1. Next pending / active installment due date from repayment schedule
+  if (loan.next_due_date) return formatSheetDate(loan.next_due_date, shortYear);
+
+  // 2. First due date from repayment schedule
+  if (loan.first_due_date) return formatSheetDate(loan.first_due_date, shortYear);
+
+  // 3. Fallback: calculate first due date (1 month after disbursement)
+  if (loan.disbursed_at) {
+    try {
+      const parts = String(loan.disbursed_at).split(/[-T :]/);
+      if (parts.length >= 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        const dt = new Date(y, m + 1, d);
+        return formatSheetDate(dt, shortYear);
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  if (loan.maturity_date) return formatSheetDate(loan.maturity_date, shortYear);
+  return '—';
+};
+
+const computeMonthlyAmort = (loan: Loan) => {
+  const isFullyPaid = loan.status === 'fully_paid' || 
+    (loan.unpaid_installments_count === 0 && (loan.total_installments_count || 0) > 0) ||
+    (loan.disbursed_at && parseFloat(loan.remaining_balance || '0') <= 0 && parseFloat(loan.total_paid || '0') > 0);
+  if (isFullyPaid) return '0.00';
+
+  // Current month amortization from repayment schedule
+  if (loan.current_month_amortization !== undefined && loan.current_month_amortization !== null) {
+    const curAmt = parseFloat(String(loan.current_month_amortization));
+    if (!isNaN(curAmt) && curAmt > 0) {
+      return curAmt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+  }
+
+  const principal = parseFloat(loan.principal_amount || '0');
+  const term = loan.term_months || 1;
+  const rate = (parseFloat(loan.interest_rate || '0')) / 100;
+  if (principal <= 0 || term <= 0) return '0.00';
+  const totalInterest = principal * rate * term;
+  const totalDue = principal + totalInterest;
+  const monthly = totalDue / term;
+  return monthly.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const formatBorrowerName = (loan: Loan) => {
+  const fName = (loan.first_name || '').trim();
+  const lName = (loan.last_name || '').trim();
+  const mName = (loan.middle_name || '').trim();
+
+  // Check if first_name already ends with a middle initial like "RAYMOND P." or "MAYETT B"
+  const hasInitialInFirst = /\b[A-Za-z]\.?$/.test(fName);
+
+  const parts: string[] = [];
+  if (fName) parts.push(fName);
+
+  if (mName && !hasInitialInFirst) {
+    const mi = mName.trim();
+    parts.push(mi.length === 1 ? `${mi}.` : mi.endsWith('.') ? mi : `${mi.slice(0, 1)}.`);
+  }
+
+  if (lName) parts.push(lName);
+  if (parts.length > 0) return parts.join(' ').toUpperCase();
+  return '—';
+};
+
+const formatProductType = (name: string | null | undefined) => {
+  if (!name) return 'Regular-Salary';
+  const n = name.toLowerCase();
+  if (n.includes('cash express')) return 'STL- Cash Express';
+  if (n.includes('emergency')) return 'STL- Emergency';
+  if (n.includes('special occasion') || n.includes('special events')) return 'STL- Special Occasion';
+  if (n.includes('utility')) return 'STL- Utility';
+  if (n.includes('calamity')) return 'STL- Calamity';
+  if (n.includes('mortuary') || n.includes('columbary')) return 'Special- Mortuary';
+  if (n.includes('salary') || n.includes('regular')) return 'Regular-Salary';
+  return name;
+};
+
+const formatPaymentMode = (mode: string | null | undefined) => {
+  if (!mode) return 'SD 2';
+  const m = mode.trim();
+  const lower = m.toLowerCase().replace(/[-_\s]/g, '');
+  if (lower.includes('hand') || lower.includes('hin')) return 'Hand -in';
+  if (lower === 'sd2' || lower.includes('sd2')) return 'SD 2';
+  if (lower === 'sd30' || lower.includes('sd30')) return 'SD 30';
+  if (lower === 'sd15' || lower.includes('sd15')) return 'SD 15';
+  if (lower === 'sd') return 'SD 2';
+  return m;
+};
+
+const resolveAccountClassification = (loan: Loan) => {
+  if (loan.account_classification && loan.account_classification.trim()) {
+    return loan.account_classification;
+  }
+  const memType = (loan.membership_type || '').toLowerCase();
+  if (memType.includes('dosri') || memType.includes('board') || memType.includes('officer')) {
+    return 'DOSRI';
+  }
+  return 'Non DOSRI';
+};
+
+const resolvePurpose = (loan: Loan) => {
+  if (loan.purpose && loan.purpose.trim()) return loan.purpose;
+  const p = (loan.product_name || '').toLowerCase();
+  if (p.includes('emergency')) return 'Medical/Emergency';
+  if (p.includes('special occasion')) return 'Special Events';
+  if (p.includes('education')) return 'Education';
+  if (p.includes('business')) return 'Business';
+  return 'Medical/Emergency';
+};
+
+const resolveMemberAge = (m: any): string | number => {
+  if (!m) return '';
+  if (m.age !== null && m.age !== undefined && String(m.age).trim() !== '') {
+    const parsed = parseInt(String(m.age), 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  if (m.date_of_birth) {
+    try {
+      const dob = new Date(m.date_of_birth);
+      const diff = Date.now() - dob.getTime();
+      const ageDate = new Date(diff);
+      const computed = Math.abs(ageDate.getUTCFullYear() - 1970);
+      if (!isNaN(computed) && computed > 0 && computed < 120) return computed;
+    } catch {
+      // fallback
+    }
+  }
+  return '';
+};
+
+const formatAge = (loan: Loan) => {
+  if (loan.age !== null && loan.age !== undefined && loan.age !== '') {
+    const parsed = parseInt(String(loan.age), 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  if (loan.date_of_birth) {
+    try {
+      const dob = new Date(loan.date_of_birth);
+      const diff = Date.now() - dob.getTime();
+      const ageDate = new Date(diff);
+      const computed = Math.abs(ageDate.getUTCFullYear() - 1970);
+      if (!isNaN(computed) && computed > 0 && computed < 120) return computed;
+    } catch {
+      // fallback
+    }
+  }
+  return '—';
+};
+
+const resolveLoanStatus = (loan: Loan) => {
+  const isFullyPaid = loan.status === 'fully_paid' || 
+    (loan.unpaid_installments_count === 0 && (loan.total_installments_count || 0) > 0) ||
+    (loan.disbursed_at && parseFloat(loan.remaining_balance || '0') <= 0 && parseFloat(loan.total_paid || '0') > 0);
+
+  if (isFullyPaid) {
+    return { text: 'FULLY PAID', isPaid: true };
+  }
+
+  // If remarks indicates payment details like "PAID THRU 26-108" or "C/O DIVIDENDS"
+  if (loan.remarks && (
+    loan.remarks.toLowerCase().includes('paid thru') || 
+    loan.remarks.toLowerCase().includes('c/o dividends') ||
+    loan.remarks.toLowerCase().startsWith('paid')
+  )) {
+    return { text: loan.remarks, isPaid: true };
+  }
+
+  // Disbursed loans are ACTIVE
+  if (loan.status === 'disbursed' || loan.disbursed_at) {
+    return { text: 'ACTIVE', isPaid: false };
+  }
+
+  // Not yet disbursed
+  if (loan.status === 'approved') {
+    return { text: 'APPROVED', isPaid: false };
+  }
+  if (loan.status === 'pending_approval') {
+    return { text: 'PENDING', isPaid: false };
+  }
+  if (loan.status === 'defaulted') {
+    return { text: 'DEFAULTED', isPaid: false };
+  }
+  if (loan.status === 'rejected') {
+    return { text: 'REJECTED', isPaid: false };
+  }
+
+  return { text: loan.status ? loan.status.toUpperCase() : 'PENDING', isPaid: false };
+};
 
 const LOAN_CATEGORIES = {
   REGULAR: 'Regular Loan',
@@ -192,6 +467,7 @@ function LoansPageContent() {
   const router = useRouter();
   const statusParam = searchParams.get('status');
 
+  const isAdmin = user?.role === 'admin';
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff' || (user?.role as string) === 'manager';
   const isVerified = isAdminOrManager || user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
 
@@ -1211,6 +1487,207 @@ function LoansPageContent() {
   const [applyBorrowerName, setApplyBorrowerName] = useState<string>('');
   const [applyAge, setApplyAge] = useState<number | string>('');
   const [applyInvestmentAmount, setApplyInvestmentAmount] = useState<number | string>('');
+  const [applyAccountClassification, setApplyAccountClassification] = useState<'Non DOSRI' | 'DOSRI'>('Non DOSRI');
+  const [applyPurpose, setApplyPurpose] = useState<string>('Education');
+  const [applyCustomPurpose, setApplyCustomPurpose] = useState<string>('');
+  const [applyPaymentMode, setApplyPaymentMode] = useState<string>('SD 2');
+  const [applyRemarks, setApplyRemarks] = useState<string>('');
+
+  // Dropdown open states for Apply Loan Modal
+  const [isApplyAccountDropdownOpen, setIsApplyAccountDropdownOpen] = useState(false);
+  const applyAccountDropdownRef = useRef<HTMLDivElement>(null);
+  const [isApplyPurposeDropdownOpen, setIsApplyPurposeDropdownOpen] = useState(false);
+  const applyPurposeDropdownRef = useRef<HTMLDivElement>(null);
+  const [isApplyModeDropdownOpen, setIsApplyModeDropdownOpen] = useState(false);
+  const applyModeDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Section 2 Borrower Searchable Dropdown State
+  const [isSection2MemberDropdownOpen, setIsSection2MemberDropdownOpen] = useState(false);
+  const section2MemberDropdownRef = useRef<HTMLDivElement>(null);
+  const [section2MemberSearch, setSection2MemberSearch] = useState('');
+
+  const section2SearchInputRef = useRef<HTMLInputElement>(null);
+
+  const filteredSection2Members = useMemo(() => {
+    if (!section2MemberSearch.trim()) return members;
+    const term = section2MemberSearch.toLowerCase();
+    return members.filter((m: any) => {
+      const fullName = `${m.first_name || ''} ${m.middle_name || ''} ${m.last_name || ''}`.toLowerCase();
+      const reversedName = `${m.last_name || ''}, ${m.first_name || ''}`.toLowerCase();
+      const memberNo = String(m.member_no || '').toLowerCase();
+      return fullName.includes(term) || reversedName.includes(term) || memberNo.includes(term);
+    });
+  }, [members, section2MemberSearch]);
+
+  // Focus search input when Section 2 borrower dropdown opens
+  useEffect(() => {
+    if (isSection2MemberDropdownOpen) {
+      const timer = setTimeout(() => {
+        section2SearchInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isSection2MemberDropdownOpen]);
+  const [updatingLoanFieldId, setUpdatingLoanFieldId] = useState<string | null>(null);
+
+  // Table In-line Edit Lock & Confirmation State
+  const [isTableEditLocked, setIsTableEditLocked] = useState(true);
+  const [pendingLoanFieldUpdate, setPendingLoanFieldUpdate] = useState<{
+    loanId: string | number;
+    loanLaf?: string | null;
+    borrowerName?: string;
+    fieldKey: 'account_classification' | 'purpose' | 'payment_mode';
+    fieldName: string;
+    oldValue: string;
+    newValue: string;
+  } | null>(null);
+
+  const handleConfirmLoanFieldUpdate = async () => {
+    if (!pendingLoanFieldUpdate) return;
+    const { loanId, fieldKey, newValue } = pendingLoanFieldUpdate;
+    setPendingLoanFieldUpdate(null);
+    await handleQuickUpdateLoan(loanId, { [fieldKey]: newValue });
+  };
+
+  // Table Floating Dropdown State (Account, Purpose, Mode)
+  const [tableDropdownState, setTableDropdownState] = useState<{
+    loanId: string | number;
+    type: 'account' | 'purpose' | 'mode';
+    rect: { top: number; left: number; bottom: number; width: number };
+  } | null>(null);
+
+  const [customPurposeModalLoan, setCustomPurposeModalLoan] = useState<Loan | null>(null);
+  const [customPurposeInput, setCustomPurposeInput] = useState('');
+  const customPurposeInputRef = useRef<HTMLInputElement>(null);
+
+  // Close Apply Loan custom dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (applyAccountDropdownRef.current && !applyAccountDropdownRef.current.contains(target)) {
+        setIsApplyAccountDropdownOpen(false);
+      }
+      if (applyPurposeDropdownRef.current && !applyPurposeDropdownRef.current.contains(target)) {
+        setIsApplyPurposeDropdownOpen(false);
+      }
+      if (applyModeDropdownRef.current && !applyModeDropdownRef.current.contains(target)) {
+        setIsApplyModeDropdownOpen(false);
+      }
+      if (section2MemberDropdownRef.current && !section2MemberDropdownRef.current.contains(target)) {
+        setIsSection2MemberDropdownOpen(false);
+      }
+    };
+    if (isApplyAccountDropdownOpen || isApplyPurposeDropdownOpen || isApplyModeDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isApplyAccountDropdownOpen, isApplyPurposeDropdownOpen, isApplyModeDropdownOpen, isSection2MemberDropdownOpen]);
+
+  // Close custom purpose modal on Escape key
+  useEffect(() => {
+    if (!customPurposeModalLoan) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setCustomPurposeModalLoan(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    const timer = setTimeout(() => {
+      customPurposeInputRef.current?.focus();
+      customPurposeInputRef.current?.select();
+    }, 50);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      clearTimeout(timer);
+    };
+  }, [customPurposeModalLoan]);
+
+  // Close table floating dropdown on outside click or external scroll
+  useEffect(() => {
+    if (!tableDropdownState) return;
+
+    const handleScroll = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      // If the scroll event originated INSIDE the dropdown list itself, do NOT close!
+      if (target && typeof target.closest === 'function' && target.closest('[data-table-dropdown-popover="true"]')) {
+        return;
+      }
+      setTableDropdownState(null);
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && typeof target.closest === 'function' && target.closest('[data-table-dropdown-popover="true"]')) {
+        return;
+      }
+      setTableDropdownState(null);
+    };
+
+    const handleResize = () => setTableDropdownState(null);
+
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', handleResize);
+    }, 10);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [tableDropdownState]);
+
+  const handleQuickUpdateLoan = async (loanId: number | string, fields: { account_classification?: string; purpose?: string; payment_mode?: string; remarks?: string }) => {
+    if (!isAdmin) {
+      console.warn('Unauthorized: In-table editing is restricted to administrators.');
+      return;
+    }
+    try {
+      const fieldKey = Object.keys(fields)[0];
+      setUpdatingLoanFieldId(`${loanId}-${fieldKey}`);
+      setLoans((prev) =>
+        prev.map((l) => (String(l.id) === String(loanId) ? { ...l, ...fields } : l))
+      );
+      if (expandedLoanId && String(expandedLoanId) === String(loanId)) {
+        setLoanDetails((prev: any) => prev ? { ...prev, ...fields } : prev);
+      }
+      await api.put(`/loans/${loanId}`, fields);
+    } catch (err: any) {
+      console.error('Failed to update loan field:', err);
+      fetchLoans();
+    } finally {
+      setUpdatingLoanFieldId(null);
+    }
+  };
+  // Remarks Modal State
+  const [remarksModalLoan, setRemarksModalLoan] = useState<Loan | null>(null);
+  const [remarksInputVal, setRemarksInputVal] = useState<string>('');
+  const [remarksSubmitting, setRemarksSubmitting] = useState<boolean>(false);
+
+  const handleOpenRemarksModal = (loan: Loan, e?: React.MouseEvent) => {
+    if (!isAdmin) return;
+    if (e) e.stopPropagation();
+    setRemarksModalLoan(loan);
+    setRemarksInputVal(loan.remarks || '');
+  };
+
+  const handleSaveRemarks = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!remarksModalLoan) return;
+    try {
+      setRemarksSubmitting(true);
+      await handleQuickUpdateLoan(remarksModalLoan.id, { remarks: remarksInputVal.trim() });
+      setRemarksModalLoan(null);
+    } catch (err) {
+      console.error('Failed to save remarks:', err);
+    } finally {
+      setRemarksSubmitting(false);
+    }
+  };
   const [applyServiceFee, setApplyServiceFee] = useState<string>('100');
   const [applyInsurance, setApplyInsurance] = useState<string>('11');
   const [applyFixedDeposit, setApplyFixedDeposit] = useState<string>('0');
@@ -1306,21 +1783,31 @@ function LoansPageContent() {
     setIsMemberDropdownOpen(false);
     setMemberDropdownSearch('');
     if (newMemId) {
-      const catProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
-      if (catProducts.length > 0) {
-        setSelectedProduct(catProducts[0]);
-        const defAmt = isAdminOrManager ? (parseFloat(catProducts[0].min_amount) || 5000) : parseFloat(catProducts[0].min_amount);
-        setApplyAmount(defAmt);
-        const defTerm = catProducts[0].term_months >= 2 && selectedLoanCategory === LOAN_CATEGORIES.STL ? 2 : catProducts[0].term_months;
-        setApplyTermMonths(defTerm);
+      if (!selectedProduct) {
+        const catProducts = products.filter(p => getProductCategory(p.name) === selectedLoanCategory);
+        if (catProducts.length > 0) {
+          setSelectedProduct(catProducts[0]);
+          const defAmt = isAdminOrManager ? (parseFloat(catProducts[0].min_amount) || 5000) : parseFloat(catProducts[0].min_amount);
+          setApplyAmount(defAmt);
+          const defTerm = catProducts[0].term_months >= 2 && selectedLoanCategory === LOAN_CATEGORIES.STL ? 2 : catProducts[0].term_months;
+          setApplyTermMonths(defTerm);
+        }
       }
       const mem = members.find((m: any) => String(m.id) === String(newMemId));
       if (mem) {
-        setApplyBorrowerName([mem.first_name, mem.middle_name, mem.last_name].filter(Boolean).join(' '));
+        const computedName = [mem.first_name, mem.middle_name, mem.last_name].filter(Boolean).join(' ');
+        setApplyBorrowerName(computedName);
+        const autoAge = resolveMemberAge(mem);
+        if (autoAge) setApplyAge(autoAge);
+        if (mem.share_capital_balance !== undefined) {
+          setApplyInvestmentAmount(mem.share_capital_balance);
+        }
       }
     } else {
       setSelectedProduct(null);
       setApplyBorrowerName('');
+      setApplyAge('');
+      setApplyInvestmentAmount('');
     }
   };
 
@@ -1697,13 +2184,33 @@ function LoansPageContent() {
     }
   };
 
-  const openPrintAmortizationModal = (loanObj: any) => {
-    setPrintLoan(loanObj);
-    setPrintMode('schedule');
-    setIsPrintModalOpen(true);
-    const hasCoMaker = Boolean(loanObj.co_maker_name && loanObj.co_maker_name.trim());
-    setCoMakerName(loanObj.co_maker_name || '');
-    setIncludeGuarantor(hasCoMaker);
+  const openPrintAmortizationModal = async (loanObj: any) => {
+    if (!loanObj) return;
+    if (loanObj.schedule && loanObj.schedule.length > 0) {
+      setPrintLoan(loanObj);
+      setPrintMode('schedule');
+      setIsPrintModalOpen(true);
+      const hasCoMaker = Boolean(loanObj.co_maker_name && loanObj.co_maker_name.trim());
+      setCoMakerName(loanObj.co_maker_name || '');
+      setIncludeGuarantor(hasCoMaker);
+      return;
+    }
+
+    try {
+      const res = await api.get(`/loans/${loanObj.id}`);
+      const full = res.data.data;
+      setPrintLoan(full);
+      setPrintMode('schedule');
+      setIsPrintModalOpen(true);
+      const hasCoMaker = Boolean(full.co_maker_name && full.co_maker_name.trim());
+      setCoMakerName(full.co_maker_name || '');
+      setIncludeGuarantor(hasCoMaker);
+    } catch (err) {
+      console.error('Failed to load schedule for print modal:', err);
+      setPrintLoan(loanObj);
+      setPrintMode('schedule');
+      setIsPrintModalOpen(true);
+    }
   };
 
   const openReceiptModal = (loanObj: any, paymentObj: any) => {
@@ -1725,21 +2232,27 @@ function LoansPageContent() {
     if (!isAdminOrManager || !loans || loans.length === 0) return;
 
     const excelData = loans.map((l) => ({
-      'Loan ID': `#${l.id}`,
-      'Borrower Name': `${l.last_name || ''}, ${l.first_name || ''}`.trim() || 'N/A',
-      'Loan Product': l.product_name || 'N/A',
-      'Principal Amount (PHP)': parseFloat(l.principal_amount),
-      'Interest Rate (%)': `${parseFloat(l.interest_rate)}%`,
-      'Term (Months)': l.term_months,
-      'Amortization Type': l.amortization_type?.replace('_', ' ').toUpperCase(),
-      'Status': l.status.toUpperCase(),
-      'Application Date': new Date(l.created_at).toLocaleDateString()
+      'LAF NO.': l.laf_no || '—',
+      'BORROWER': formatBorrowerName(l),
+      'Account': resolveAccountClassification(l),
+      'Age': formatAge(l),
+      'Purpose': resolvePurpose(l),
+      'DATE APPLIED': formatSheetDate(l.created_at),
+      'Applied Amount': parseFloat(l.principal_amount || '0'),
+      'TYPE': formatProductType(l.product_name),
+      'Mode': formatPaymentMode(l.payment_mode),
+      'RELEASE DATE': formatSheetDate(l.disbursed_at),
+      'TERM': l.term_months || '—',
+      'DUE DATE': computeDueDate(l, true),
+      'Monthly Amortization': parseFloat(computeMonthlyAmort(l).replace(/,/g, '')),
+      'STATUS': resolveLoanStatus(l).text,
+      'REMARKS': l.remarks || ''
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Credit Portfolio');
-    XLSX.writeFile(workbook, `Loan_Records_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Loan Tracker');
+    XLSX.writeFile(workbook, `UC_COOP_Loan_Tracker_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const exportPaymentsToExcel = () => {
@@ -2172,12 +2685,10 @@ function LoansPageContent() {
       if (mem) {
         const computedName = [mem.first_name, mem.middle_name, mem.last_name].filter(Boolean).join(' ');
         if (computedName) setApplyBorrowerName(computedName);
-        if (mem?.age) {
-          setApplyAge(mem.age);
-        } else if (mem?.date_of_birth) {
-          const birth = new Date(mem.date_of_birth);
-          const diffYears = Math.floor((Date.now() - birth.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-          if (diffYears > 0) setApplyAge(diffYears);
+        const autoAge = resolveMemberAge(mem);
+        if (autoAge) setApplyAge(autoAge);
+        if (mem.share_capital_balance !== undefined) {
+          setApplyInvestmentAmount(mem.share_capital_balance);
         }
       }
 
@@ -2192,6 +2703,10 @@ function LoansPageContent() {
         }
         if (res.data?.data?.balances?.share_capital !== undefined) {
           setApplyInvestmentAmount(res.data.data.balances.share_capital);
+        }
+        const summaryAge = resolveMemberAge(res.data?.data);
+        if (summaryAge) {
+          setApplyAge(summaryAge);
         }
       } catch (err) {
         console.error('Error fetching selected member summary:', err);
@@ -2657,6 +3172,7 @@ function LoansPageContent() {
   };
 
   const handleOpenLafModal = async (loan: any, e?: React.MouseEvent) => {
+    if (!isAdmin) return;
     if (e) e.stopPropagation();
     setLafModalLoan(loan);
     setLafModalError(null);
@@ -2779,6 +3295,10 @@ function LoansPageContent() {
         };
       });
 
+      const finalPurposeToSubmit = applyPurpose === 'Others'
+        ? (applyCustomPurpose.trim() || 'Others')
+        : applyPurpose;
+
       const response = await api.post('/loans', {
         member_id: applyMemberId,
         loan_product_id: selectedProduct.id,
@@ -2790,7 +3310,12 @@ function LoansPageContent() {
         laf_no: isAdminOrManager ? (applyLafNo.trim() || undefined) : undefined,
         application_date: applyDate || undefined,
         deductions: deductionsPayload,
-        custom_schedule: customSchedulePayload
+        custom_schedule: customSchedulePayload,
+        account_classification: applyAccountClassification,
+        purpose: finalPurposeToSubmit,
+        payment_mode: applyPaymentMode || 'SD 2',
+        remarks: applyRemarks.trim() || null,
+        age: applyAge && !isNaN(parseInt(String(applyAge), 10)) ? parseInt(String(applyAge), 10) : undefined
       });
 
       setSuccessData(response.data.data);
@@ -2802,6 +3327,11 @@ function LoansPageContent() {
       setCoMakerPhone('');
       setApplyLafNo('');
       setApplyScheduleAmounts({});
+      setApplyPaymentMode('SD 2');
+      setApplyRemarks('');
+      setApplyPurpose('Education');
+      setApplyCustomPurpose('');
+      setApplyAccountClassification('Non DOSRI');
       fetchLoans();
       fetchMetrics();
     } catch (err: any) {
@@ -3258,7 +3788,11 @@ function LoansPageContent() {
 
                       // Token-based matching: all words in query appear in the loan searchable text
                       const tokens = rawQ.replace(/[.,#]/g, ' ').split(/\s+/).filter(Boolean);
-                      const searchableText = `${fName} ${mName} ${lName} ${borrowerName} ${pName} ${idStr} ${lafStr} ${statusStr} ${memberNoStr}`.replace(/[.,#]/g, ' ').toLowerCase();
+                      const purposeStr = (loan.purpose || '').toLowerCase();
+                      const remarksStr = (loan.remarks || '').toLowerCase();
+                      const modeStr = (loan.payment_mode || '').toLowerCase();
+                      const acctStr = (loan.account_classification || '').toLowerCase();
+                      const searchableText = `${fName} ${mName} ${lName} ${borrowerName} ${pName} ${idStr} ${lafStr} ${statusStr} ${memberNoStr} ${purposeStr} ${remarksStr} ${modeStr} ${acctStr}`.replace(/[.,#]/g, ' ').toLowerCase();
 
                       const tokenMatch = tokens.length > 0 && tokens.every(t => searchableText.includes(t));
                       if (!tokenMatch) return false;
@@ -3327,7 +3861,7 @@ function LoansPageContent() {
                   });
 
                 const totalLoansCount = filteredLoans.length;
-                const LOANS_PER_PAGE = 8;
+                const LOANS_PER_PAGE = 15;
                 const totalLoansPages = Math.ceil(totalLoansCount / LOANS_PER_PAGE) || 1;
                 const loansStartIdx = (loansPage - 1) * LOANS_PER_PAGE;
                 const visibleLoans = isLoansExpandedAll
@@ -3347,9 +3881,35 @@ function LoansPageContent() {
                         </span>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setIsLoansExpandedAll((prev) => !prev)}
+                      <div className="flex items-center gap-2">
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => setIsTableEditLocked(prev => !prev)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                              isTableEditLocked
+                                ? 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 border-outline-variant/60'
+                                : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 dark:text-amber-200 border-amber-500/40 ring-1 ring-amber-500/30'
+                            }`}
+                            title={isTableEditLocked ? 'Click to unlock in-table quick editing for Account, Purpose, Mode, LAF No, and Remarks' : 'Click to lock table and prevent accidental edits'}
+                          >
+                            {isTableEditLocked ? (
+                              <>
+                                <Lock className="w-3.5 h-3.5 text-neutral-500" />
+                                <span>Editing Locked</span>
+                              </>
+                            ) : (
+                              <>
+                                <Unlock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                <span>Editing Enabled</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setIsLoansExpandedAll((prev) => !prev)}
                         className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer shadow-2xs active:scale-95 ${
                           isLoansExpandedAll
                             ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary border-primary/30 hover:bg-primary/20'
@@ -3368,234 +3928,396 @@ function LoansPageContent() {
                             <span>Expand All List</span>
                           </>
                         )}
-                      </button>
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
+                    <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-2xl md:rounded-3xl shadow-sm overflow-hidden">
                       <div className="overflow-x-auto custom-scrollbar">
                         <table className="w-full text-left border-collapse">
                           <thead>
-                            <tr className="bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/50 text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                            <tr className="bg-[#14532d] dark:bg-[#0f3d21] text-white border-b border-[#0f3d21] text-[10px] font-headline font-bold uppercase tracking-tight select-none shadow-xs">
                               <th 
-                                className="px-6 py-4 cursor-pointer select-none group hover:text-primary dark:hover:text-secondary transition-colors"
+                                className="px-2 py-2.5 cursor-pointer group hover:bg-[#166534] transition-colors whitespace-nowrap first:rounded-tl-2xl"
                                 onClick={() => {
                                   setLoansSortBy(prev => prev === 'laf_asc' ? 'laf_desc' : 'laf_asc');
                                   setLoansPage(1);
                                 }}
-                                title="Click to sort by LAF No."
+                                title="Sort by LAF No."
                               >
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1">
                                   <span>LAF NO.</span>
                                   {loansSortBy === 'laf_asc' ? (
-                                    <ArrowUp className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                    <ArrowUp className="w-3 h-3 text-emerald-300" />
                                   ) : loansSortBy === 'laf_desc' ? (
-                                    <ArrowDown className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                    <ArrowDown className="w-3 h-3 text-emerald-300" />
                                   ) : (
-                                    <ArrowUpDown className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
+                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100" />
                                   )}
                                 </div>
                               </th>
-                              {isAdminOrManager && (
-                                <th 
-                                  className="px-6 py-4 cursor-pointer select-none group hover:text-primary dark:hover:text-secondary transition-colors"
-                                  onClick={() => {
-                                    setLoansSortBy(prev => prev === 'name_asc' ? 'name_desc' : 'name_asc');
-                                    setLoansPage(1);
-                                  }}
-                                  title="Click to sort by Borrower name"
-                                >
-                                  <div className="flex items-center gap-1.5">
-                                    <span>Borrower Member</span>
-                                    {loansSortBy === 'name_asc' ? (
-                                      <ArrowUp className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                                    ) : loansSortBy === 'name_desc' ? (
-                                      <ArrowDown className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                                    ) : (
-                                      <ArrowUpDown className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
-                                    )}
-                                  </div>
-                                </th>
-                              )}
-                              <th className="px-6 py-4">Loan Product</th>
                               <th 
-                                className="px-6 py-4 cursor-pointer select-none group hover:text-primary dark:hover:text-secondary transition-colors"
+                                className="px-2 py-2.5 cursor-pointer group hover:bg-[#166534] transition-colors whitespace-nowrap"
+                                onClick={() => {
+                                  setLoansSortBy(prev => prev === 'name_asc' ? 'name_desc' : 'name_asc');
+                                  setLoansPage(1);
+                                }}
+                                title="Sort by Borrower name"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>BORROWER</span>
+                                  {loansSortBy === 'name_asc' ? (
+                                    <ArrowUp className="w-3 h-3 text-emerald-300" />
+                                  ) : loansSortBy === 'name_desc' ? (
+                                    <ArrowDown className="w-3 h-3 text-emerald-300" />
+                                  ) : (
+                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100" />
+                                  )}
+                                </div>
+                              </th>
+                              <th className="px-1.5 py-2.5 text-center whitespace-nowrap">Account</th>
+                              <th className="px-1 py-2.5 text-center whitespace-nowrap">Age</th>
+                              <th className="px-1.5 py-2.5 text-center whitespace-nowrap">Purpose</th>
+                              <th 
+                                className="px-1.5 py-2.5 text-center cursor-pointer group hover:bg-[#166534] transition-colors whitespace-nowrap"
                                 onClick={() => {
                                   setLoansSortBy(prev => prev === 'date_desc' ? 'date_asc' : 'date_desc');
                                   setLoansPage(1);
                                 }}
-                                title="Click to sort by Date Granted"
+                                title="Sort by Date Applied"
                               >
-                                <div className="flex items-center gap-1.5">
-                                  <span>Date Granted</span>
+                                <div className="flex items-center justify-center gap-1">
+                                  <span>DATE APPLIED</span>
                                   {loansSortBy === 'date_desc' ? (
-                                    <ArrowDown className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                    <ArrowDown className="w-3 h-3 text-emerald-300" />
                                   ) : loansSortBy === 'date_asc' ? (
-                                    <ArrowUp className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                    <ArrowUp className="w-3 h-3 text-emerald-300" />
                                   ) : (
-                                    <ArrowUpDown className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
+                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100" />
                                   )}
                                 </div>
                               </th>
                               <th 
-                                className="px-6 py-4 cursor-pointer select-none group hover:text-primary dark:hover:text-secondary transition-colors"
+                                className="px-1.5 py-2.5 text-center cursor-pointer group hover:bg-[#166534] transition-colors whitespace-nowrap"
                                 onClick={() => {
                                   setLoansSortBy(prev => prev === 'amount_desc' ? 'amount_asc' : 'amount_desc');
                                   setLoansPage(1);
                                 }}
-                                title="Click to sort by Principal Amount"
+                                title="Sort by Applied Amount"
                               >
-                                <div className="flex items-center gap-1.5">
-                                  <span>Principal Amount</span>
+                                <div className="flex items-center justify-center gap-1">
+                                  <span>Applied Amount</span>
                                   {loansSortBy === 'amount_desc' ? (
-                                    <ArrowDown className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                    <ArrowDown className="w-3 h-3 text-emerald-300" />
                                   ) : loansSortBy === 'amount_asc' ? (
-                                    <ArrowUp className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                                    <ArrowUp className="w-3 h-3 text-emerald-300" />
                                   ) : (
-                                    <ArrowUpDown className="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" />
+                                    <ArrowUpDown className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100" />
                                   )}
                                 </div>
                               </th>
-                              <th className="px-6 py-4">Interest (Term)</th>
-                              <th className="px-6 py-4">Status</th>
-                              <th className="px-6 py-4 text-right">Details</th>
+                              <th className="px-1.5 py-2.5 text-center whitespace-nowrap">TYPE</th>
+                              <th className="px-1 py-2.5 text-center whitespace-nowrap">Mode</th>
+                              <th className="px-1.5 py-2.5 text-center whitespace-nowrap">RELEASE DATE</th>
+                              <th className="px-1 py-2.5 text-center whitespace-nowrap">TERM</th>
+                              <th className="px-1.5 py-2.5 text-center whitespace-nowrap bg-[#166534] border-x border-[#14532d]">DUE DATE</th>
+                              <th className="px-1.5 py-2.5 text-center whitespace-nowrap">Monthly Amort.</th>
+                              <th className="px-1.5 py-2.5 text-center whitespace-nowrap">STATUS</th>
+                              <th className="px-1.5 py-2.5 whitespace-nowrap">REMARKS</th>
+                              <th className="px-1 py-2.5 text-center whitespace-nowrap last:rounded-tr-2xl">Act</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                          <tbody className="divide-y divide-outline-variant/30 font-body text-[11px] text-on-surface dark:text-white/90">
                             {visibleLoans.length === 0 ? (
                               <tr>
-                                <td colSpan={isAdminOrManager ? 8 : 7} className="px-6 py-8 text-center text-neutral-500 italic">
+                                <td colSpan={16} className="px-6 py-10 text-center text-neutral-500 italic">
                                   No contracts found matching search criteria.
                                 </td>
                               </tr>
                             ) : (
                               visibleLoans.map((loan) => {
                                 const isExpanded = expandedLoanId === loan.id;
+                                const statusObj = resolveLoanStatus(loan);
+                                const borrowerFormatted = formatBorrowerName(loan);
+                                const acctClassification = resolveAccountClassification(loan);
+                                const purposeFormatted = resolvePurpose(loan);
+                                const modeFormatted = formatPaymentMode(loan.payment_mode);
+                                const productTypeFormatted = formatProductType(loan.product_name);
+                                const appliedAmtFormatted = Number(parseFloat(loan.principal_amount || '0')).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                const monthlyAmortFormatted = computeMonthlyAmort(loan);
+                                const appliedDateFormatted = formatSheetDate(loan.created_at);
+                                const releaseDateFormatted = formatSheetDate(loan.disbursed_at);
+                                const dueDateFormatted = computeDueDate(loan, true);
+                                const cleanRemarks = loan.remarks && loan.remarks.trim() ? loan.remarks : '—';
+
                                 return (
                                   <React.Fragment key={loan.id}>
-                                    <tr className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
-                                       <td className="px-6 py-4 font-mono">
-                                         {loan.status === 'pending_approval' ? (
-                                           <span className="text-neutral-400 dark:text-neutral-500 font-sans">—</span>
-                                         ) : loan.laf_no ? (
-                                           <div className="flex flex-col items-start gap-0.5">
-                                             <div className="flex items-center gap-1.5">
-                                               <span className="inline-flex items-center px-2.5 py-1 rounded-lg font-mono font-bold text-xs bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary border border-primary/25 shadow-2xs">
-                                                 LAF #{loan.laf_no}
-                                               </span>
-                                               {isAdminOrManager && (
-                                                 <button
-                                                   type="button"
-                                                   onClick={(e) => handleOpenLafModal(loan, e)}
-                                                   className="p-1 text-neutral-400 hover:text-primary dark:hover:text-secondary rounded transition-colors cursor-pointer"
-                                                   title="Edit LAF No."
-                                                 >
-                                                   <Pencil className="w-3 h-3" />
-                                                 </button>
-                                               )}
-                                             </div>
-                                             <span className="text-[10px] text-neutral-400 font-mono">#{String(loan.id).slice(0, 8)}</span>
-                                           </div>
-                                         ) : isAdminOrManager ? (
-                                           <div className="flex flex-col items-start gap-1">
-                                             <button
-                                               type="button"
-                                               onClick={(e) => handleOpenLafModal(loan, e)}
-                                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg font-mono font-bold text-[11px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-all cursor-pointer"
-                                               title="Assign LAF No."
-                                             >
-                                               <Plus className="w-3 h-3" /> Assign LAF #
-                                             </button>
-                                             <span className="text-[10px] text-neutral-400 font-mono">#{String(loan.id).slice(0, 8)}</span>
-                                           </div>
-                                         ) : (
-                                           <span className="text-neutral-400 dark:text-neutral-500 font-sans">—</span>
-                                         )}
-                                       </td>
-                                       {isAdminOrManager && (
-                                         <td className="px-6 py-4 font-semibold">
-                                           {loan.last_name}, {loan.first_name}
-                                         </td>
-                                       )}
-                                       <td className="px-6 py-4 font-semibold text-primary dark:text-secondary">{loan.product_name || 'Legacy Product'}</td>
-                                       <td className="px-6 py-4 font-mono text-xs text-neutral-600 dark:text-neutral-300 whitespace-nowrap">
-                                         {loan.status !== 'pending_approval' && loan.disbursed_at ? (
-                                           new Date(loan.disbursed_at).toLocaleDateString('en-US', {
-                                             month: 'short',
-                                             day: 'numeric',
-                                             year: 'numeric',
-                                           })
-                                         ) : (
-                                           <span className="text-neutral-400 dark:text-neutral-500">—</span>
-                                         )}
-                                       </td>
-                                       <td className="px-6 py-4 font-bold">{formatCurrency(parseFloat(loan.principal_amount))}</td>
-                                       <td className="px-6 py-4 font-mono">
-                                         <div className="flex items-center gap-1.5">
-                                           <span>{parseFloat(loan.interest_rate)}% ({loan.term_months}mo)</span>
-                                           {isAdminOrManager && (loan.status === 'pending_approval' || (loan.status === 'approved' && !loan.disbursed_at)) && (
-                                             <button
-                                               type="button"
-                                               onClick={(e) => {
-                                                 e.stopPropagation();
-                                                 openApprovalModal(loan, loanDetails);
-                                               }}
-                                               className="p-1 text-neutral-400 hover:text-primary dark:hover:text-secondary rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer"
-                                               title="Edit term months / loan settings"
-                                             >
-                                               <Pencil className="w-3 h-3" />
-                                             </button>
-                                           )}
-                                         </div>
-                                       </td>
-                                       <td className="px-6 py-4">{getStatusBadge(loan.status)}</td>
-                                       <td className="px-6 py-4 text-right">
-                                         <div className="flex items-center justify-end gap-1.5">
-                                           {loan.status === 'pending_approval' || loan.status === 'approved' ? (
-                                             isAdminOrManager ? (
-                                               <button
-                                                 onClick={() => toggleLoanExpand(loan.id)}
-                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary dark:border-secondary/30 dark:bg-secondary/10 dark:text-secondary hover:bg-primary/20 dark:hover:bg-secondary/20 transition-all text-[11px] font-bold cursor-pointer"
-                                               >
-                                                 {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                                 {loan.status === 'approved' ? 'Review & Disburse' : 'Review Application'}
-                                               </button>
-                                             ) : (
-                                               <button
-                                                 onClick={() => toggleLoanExpand(loan.id)}
-                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all text-[11px] font-bold cursor-pointer"
-                                               >
-                                                 {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                                 View Details
-                                               </button>
-                                             )
-                                           ) : (
-                                             <button
-                                               onClick={() => toggleLoanExpand(loan.id)}
-                                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-outline-variant hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-all text-[11px] font-bold cursor-pointer"
-                                             >
-                                               {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                               Amortization
-                                             </button>
-                                           )}
+                                    <tr
+                                      onClick={() => toggleLoanExpand(loan.id)}
+                                      className={`hover:bg-emerald-500/5 dark:hover:bg-emerald-500/10 transition-colors divide-x divide-outline-variant/10 cursor-pointer text-[10.5px] ${
+                                        isExpanded ? 'bg-emerald-500/[0.07] dark:bg-emerald-500/[0.12]' : ''
+                                      }`}
+                                      title="Click row to view loan details & disbursement schedule"
+                                    >
+                                      {/* 1. LAF NO. */}
+                                      <td className="px-2 py-2 whitespace-nowrap">
+                                        <div className="flex items-center gap-1">
+                                          {loan.laf_no ? (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md font-mono font-bold text-[10px] bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25">
+                                              {loan.laf_no}
+                                            </span>
+                                          ) : (
+                                            <span className="text-neutral-400 dark:text-neutral-500 font-sans text-[10px]">—</span>
+                                          )}
+                                          {isAdmin && !isTableEditLocked && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => handleOpenLafModal(loan, e)}
+                                              className="p-0.5 text-neutral-400 hover:text-primary dark:hover:text-secondary rounded transition-colors cursor-pointer"
+                                              title={loan.laf_no ? 'Edit LAF No.' : 'Assign LAF No.'}
+                                            >
+                                              <Pencil className="w-2.5 h-2.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
 
-                                           {isAdminOrManager && (
-                                             <button
-                                               type="button"
-                                               onClick={(e) => handleDeleteLoan(loan, e)}
-                                               className="p-1.5 rounded-full text-neutral-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/40 transition-all cursor-pointer active:scale-95"
-                                               title={`Delete ${loan.laf_no ? `LAF #${loan.laf_no}` : `Contract #${String(loan.id).slice(0, 8)}`}`}
-                                             >
-                                               <Trash2 className="w-3.5 h-3.5" />
-                                             </button>
-                                           )}
-                                         </div>
-                                       </td>
+                                      {/* 2. BORROWER */}
+                                      <td className="px-2 py-2 font-bold uppercase text-on-surface dark:text-white tracking-tight truncate max-w-[125px]" title={borrowerFormatted}>
+                                        {borrowerFormatted}
+                                      </td>
+
+                                      {/* 3. Account */}
+                                      <td className="px-1 py-2 text-center whitespace-nowrap">
+                                        {isAdmin && !isTableEditLocked ? (
+                                          <div className="relative inline-flex items-center justify-center">
+                                            <button
+                                              type="button"
+                                              disabled={updatingLoanFieldId === `${loan.id}-account_classification`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                if (tableDropdownState?.loanId === loan.id && tableDropdownState?.type === 'account') {
+                                                  setTableDropdownState(null);
+                                                } else {
+                                                  setTableDropdownState({
+                                                    loanId: loan.id,
+                                                    type: 'account',
+                                                    rect: { top: rect.top, left: rect.left, bottom: rect.bottom, width: rect.width }
+                                                  });
+                                                }
+                                              }}
+                                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9.5px] font-semibold border transition-all cursor-pointer ${
+                                                acctClassification === 'DOSRI'
+                                                  ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                                                  : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 border-neutral-300 dark:border-neutral-700'
+                                              } ${tableDropdownState?.loanId === loan.id && tableDropdownState?.type === 'account' ? 'ring-1 ring-primary/40' : ''}`}
+                                              title="Account: DOSRI or Non DOSRI"
+                                            >
+                                              <span>{acctClassification}</span>
+                                              <ChevronDown
+                                                className={`w-2.5 h-2.5 text-neutral-500 transition-transform duration-200 ${
+                                                  tableDropdownState?.loanId === loan.id && tableDropdownState?.type === 'account' ? 'rotate-180' : ''
+                                                }`}
+                                              />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9.5px] font-semibold border bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 border-neutral-300 dark:border-neutral-700">
+                                            {acctClassification}
+                                          </span>
+                                        )}
+                                      </td>
+
+                                      {/* 4. Age */}
+                                      <td className="px-1 py-2 text-center font-medium text-neutral-700 dark:text-neutral-300 whitespace-nowrap">
+                                        {formatAge(loan)}
+                                      </td>
+
+                                      {/* 5. Purpose */}
+                                      <td className="px-1 py-2 text-center whitespace-nowrap">
+                                        {isAdmin && !isTableEditLocked ? (
+                                          <div className="relative inline-flex items-center justify-center max-w-[110px]">
+                                            <button
+                                              type="button"
+                                              disabled={updatingLoanFieldId === `${loan.id}-purpose`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                if (tableDropdownState?.loanId === loan.id && tableDropdownState?.type === 'purpose') {
+                                                  setTableDropdownState(null);
+                                                } else {
+                                                  setTableDropdownState({
+                                                    loanId: loan.id,
+                                                    type: 'purpose',
+                                                    rect: { top: rect.top, left: rect.left, bottom: rect.bottom, width: rect.width }
+                                                  });
+                                                }
+                                              }}
+                                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9.5px] font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-700 transition-all cursor-pointer max-w-[110px] ${
+                                                tableDropdownState?.loanId === loan.id && tableDropdownState?.type === 'purpose' ? 'ring-1 ring-primary/40' : ''
+                                              }`}
+                                              title={purposeFormatted}
+                                            >
+                                              <span className="truncate max-w-[80px]">{purposeFormatted}</span>
+                                              <ChevronDown
+                                                className={`w-2.5 h-2.5 text-neutral-500 shrink-0 transition-transform duration-200 ${
+                                                  tableDropdownState?.loanId === loan.id && tableDropdownState?.type === 'purpose' ? 'rotate-180' : ''
+                                                }`}
+                                              />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9.5px] font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-700 max-w-[95px]" title={purposeFormatted}>
+                                            <span className="truncate">{purposeFormatted}</span>
+                                          </span>
+                                        )}
+                                      </td>
+
+                                      {/* 6. DATE APPLIED */}
+                                      <td className="px-1.5 py-2 text-center text-neutral-600 dark:text-neutral-300 whitespace-nowrap font-medium text-[10px]">
+                                        {appliedDateFormatted}
+                                      </td>
+
+                                      {/* 7. Applied Amount (Centered) */}
+                                      <td className="px-1.5 py-2 text-center tabular-nums font-semibold text-neutral-900 dark:text-neutral-100 whitespace-nowrap">
+                                        {appliedAmtFormatted}
+                                      </td>
+
+                                      {/* 8. TYPE */}
+                                      <td className="px-1 py-2 text-center whitespace-nowrap">
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9.5px] font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-700" title={loan.product_name || productTypeFormatted}>
+                                          <span className="truncate max-w-[85px]">{productTypeFormatted}</span>
+                                        </span>
+                                      </td>
+
+                                      {/* 9. Mode */}
+                                      <td className="px-1 py-2 text-center whitespace-nowrap">
+                                        {isAdmin && !isTableEditLocked ? (
+                                          <div className="relative inline-flex items-center justify-center">
+                                            <button
+                                              type="button"
+                                              disabled={updatingLoanFieldId === `${loan.id}-payment_mode`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                if (tableDropdownState?.loanId === loan.id && tableDropdownState?.type === 'mode') {
+                                                  setTableDropdownState(null);
+                                                } else {
+                                                  setTableDropdownState({
+                                                    loanId: loan.id,
+                                                    type: 'mode',
+                                                    rect: { top: rect.top, left: rect.left, bottom: rect.bottom, width: rect.width }
+                                                  });
+                                                }
+                                              }}
+                                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9.5px] font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-700 transition-all cursor-pointer ${
+                                                tableDropdownState?.loanId === loan.id && tableDropdownState?.type === 'mode' ? 'ring-1 ring-primary/40' : ''
+                                              }`}
+                                              title={`Mode: ${modeFormatted}`}
+                                            >
+                                              <span>{modeFormatted}</span>
+                                              <ChevronDown
+                                                className={`w-2.5 h-2.5 text-neutral-500 shrink-0 transition-transform duration-200 ${
+                                                  tableDropdownState?.loanId === loan.id && tableDropdownState?.type === 'mode' ? 'rotate-180' : ''
+                                                }`}
+                                              />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9.5px] font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-700">
+                                            {modeFormatted}
+                                          </span>
+                                        )}
+                                      </td>
+
+                                      {/* 10. RELEASE DATE */}
+                                      <td className="px-1.5 py-2 text-center text-neutral-600 dark:text-neutral-300 whitespace-nowrap font-medium text-[10px]">
+                                        {releaseDateFormatted}
+                                      </td>
+
+                                      {/* 11. TERM */}
+                                      <td className="px-1 py-2 text-center font-medium text-neutral-800 dark:text-neutral-200 whitespace-nowrap">
+                                        {loan.term_months || '—'}
+                                      </td>
+
+                                      {/* 12. DUE DATE */}
+                                      <td className="px-1.5 py-2 text-center font-bold bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-300 whitespace-nowrap border-x border-emerald-100 dark:border-emerald-900/40 text-[10px]">
+                                        {dueDateFormatted}
+                                      </td>
+
+                                      {/* 13. Monthly Amortization (Centered) */}
+                                      <td className="px-1.5 py-2 text-center tabular-nums font-bold text-neutral-900 dark:text-neutral-100 whitespace-nowrap">
+                                        {monthlyAmortFormatted}
+                                      </td>
+
+                                      {/* 14. STATUS */}
+                                      <td className="px-1 py-2 text-center whitespace-nowrap">
+                                        {statusObj.isPaid ? (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 border border-neutral-700/20">
+                                            <Check className="w-2.5 h-2.5 text-emerald-400 dark:text-emerald-600" />
+                                            <span>{statusObj.text}</span>
+                                          </span>
+                                        ) : statusObj.text === 'ACTIVE' ? (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                            <span>ACTIVE</span>
+                                          </span>
+                                        ) : statusObj.text === 'APPROVED' ? (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-700">
+                                            APPROVED
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                            {statusObj.text}
+                                          </span>
+                                        )}
+                                      </td>
+
+                                      {/* 15. REMARKS */}
+                                      <td className="px-1.5 py-2 text-[10px] whitespace-nowrap">
+                                        <div className="flex items-center justify-between gap-1 group/rem max-w-[80px]">
+                                          <span className="text-neutral-700 dark:text-neutral-300 font-medium truncate" title={loan.remarks || 'No remarks'}>
+                                            {loan.remarks && loan.remarks.trim() ? (
+                                              loan.remarks
+                                            ) : (
+                                              <span className="text-neutral-400 dark:text-neutral-500 italic">—</span>
+                                            )}
+                                          </span>
+                                          {isAdmin && !isTableEditLocked && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => handleOpenRemarksModal(loan, e)}
+                                              className="p-0.5 text-neutral-400 hover:text-primary dark:hover:text-secondary rounded transition-colors cursor-pointer shrink-0"
+                                              title={loan.remarks ? 'Edit Remark' : 'Add Remark'}
+                                            >
+                                              <Pencil className="w-2.5 h-2.5" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
+
+                                      {/* 16. Actions */}
+                                      <td className="px-1 py-2 text-center whitespace-nowrap">
+                                        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                                          {isAdminOrManager && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => handleDeleteLoan(loan, e)}
+                                              className="p-1 rounded-full text-neutral-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-900/40 transition-all cursor-pointer active:scale-95"
+                                              title={`Delete ${loan.laf_no ? `LAF #${loan.laf_no}` : `Contract #${String(loan.id).slice(0, 8)}`}`}
+                                            >
+                                              <Trash2 className="w-3 h-3" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
                                     </tr>
 
                                     {/* Expanded Details Row */}
                                     {isExpanded && (
                                       <tr>
-                                        <td colSpan={isAdminOrManager ? 8 : 7} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
+                                        <td colSpan={16} className="px-6 py-6 bg-surface dark:bg-surface-container-high/30 border-y border-outline-variant/40">
                                           {loadingDetails ? (
                                             <div className="flex items-center gap-2 py-4 justify-center">
                                               <div className="w-5 h-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
@@ -3660,16 +4382,6 @@ function LoansPageContent() {
 
                                                       <button
                                                         type="button"
-                                                        onClick={() => openPrintAmortizationModal(loanDetails)}
-                                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
-                                                        title="Print official loan amortization schedule"
-                                                      >
-                                                        <Printer className="w-3.5 h-3.5 text-primary dark:text-secondary" />
-                                                        Print Amortization
-                                                      </button>
-
-                                                      <button
-                                                        type="button"
                                                         onClick={() => exportSingleLoanScheduleToExcel(loanDetails)}
                                                         className="inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-outline-variant bg-white dark:bg-surface-container-low hover:bg-neutral-50 dark:hover:bg-neutral-800 text-on-surface dark:text-white font-bold rounded-full text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
                                                         title="Export amortization ledger to Excel"
@@ -3716,93 +4428,30 @@ function LoansPageContent() {
                                               )}
 
 
-                                              {/* Repayment Schedules Sub-Table */}
+                                              {/* Repayment Schedules Info Card */}
                                               {loanDetails.schedule && loanDetails.schedule.length > 0 && (
-                                                <div className="space-y-3">
-                                                  <h5 className="font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amortization Repayment Ledger Schedule</h5>
-                                                  <div className="overflow-x-auto border border-outline-variant/40 rounded-2xl">
-                                                    <table className="w-full text-left text-xs border-collapse">
-                                                      <thead className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/40">
-                                                        <tr>
-                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400 font-mono">#</th>
-                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Principal Due</th>
-                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Interest Due</th>
-                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Total Due</th>
-                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Loan Balance</th>
-                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Principal</th>
-                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Paid Interest</th>
-                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Due Date</th>
-                                                          <th className="px-4 py-2.5 font-bold text-neutral-600 dark:text-neutral-400">Status</th>
-                                                        </tr>
-                                                      </thead>
-                                                      <tbody className="divide-y divide-outline-variant/35 font-mono">
-                                                        {(() => {
-                                                          let runningBalance = parseFloat(loanDetails.principal_amount);
-                                                          let totalPrincipalDue = 0;
-                                                          let totalInterestDue = 0;
-                                                          let totalDueSum = 0;
-                                                          let totalPrincipalPaid = 0;
-                                                          let totalInterestPaid = 0;
-                                                          const rows = loanDetails.schedule?.map((sch: any) => {
-                                                            const pDue = parseFloat(sch.principal_due) || 0;
-                                                            const iDue = parseFloat(sch.interest_due) || 0;
-                                                            const schTotalDue = pDue + iDue;
-                                                            totalPrincipalDue += pDue;
-                                                            totalInterestDue += iDue;
-                                                            totalDueSum += schTotalDue;
-                                                            totalPrincipalPaid += parseFloat(sch.principal_paid) || 0;
-                                                            totalInterestPaid += parseFloat(sch.interest_paid) || 0;
-
-                                                            if (loanDetails.amortization_type === 'diminishing_balance') {
-                                                              runningBalance = Math.round((runningBalance - pDue) * 100) / 100;
-                                                            } else {
-                                                              runningBalance = Math.round((runningBalance - pDue) * 100) / 100;
-                                                            }
-                                                            const displayBalance = Math.max(0, runningBalance);
-
-                                                            return (
-                                                              <tr key={sch.id} className="hover:bg-neutral/5">
-                                                                <td className="px-4 py-2 font-bold">{sch.installment_number}</td>
-                                                                <td className="px-4 py-2">{formatCurrency(pDue)}</td>
-                                                                <td className="px-4 py-2">{formatCurrency(iDue)}</td>
-                                                                <td className="px-4 py-2 font-bold">{formatCurrency(schTotalDue)}</td>
-                                                                <td className="px-4 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
-                                                                <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
-                                                                <td className="px-4 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
-                                                                <td className="px-4 py-2 font-sans">{new Date(sch.due_date).toLocaleDateString()}</td>
-                                                                <td className="px-4 py-2 font-sans">
-                                                                  {sch.status === 'paid' ? (
-                                                                    <span className="text-primary font-bold">Paid</span>
-                                                                  ) : sch.status === 'partially_paid' ? (
-                                                                    <span className="text-amber-500 font-bold">Partial</span>
-                                                                  ) : (
-                                                                    <span className="text-tertiary font-bold">Unpaid</span>
-                                                                  )}
-                                                                </td>
-                                                              </tr>
-                                                            );
-                                                          });
-
-                                                          return (
-                                                            <>
-                                                              {rows}
-                                                              <tr className="bg-primary/5 font-bold border-t-2 border-primary/20">
-                                                                <td className="px-4 py-2 font-sans">TOTAL</td>
-                                                                <td className="px-4 py-2">{formatCurrency(totalPrincipalDue)}</td>
-                                                                <td className="px-4 py-2">{formatCurrency(totalInterestDue)}</td>
-                                                                <td className="px-4 py-2 text-primary">{formatCurrency(totalDueSum)}</td>
-                                                                <td className="px-4 py-2 text-neutral-400 font-sans">—</td>
-                                                                <td className="px-4 py-2 text-primary">{formatCurrency(totalPrincipalPaid)}</td>
-                                                                <td className="px-4 py-2 text-primary">{formatCurrency(totalInterestPaid)}</td>
-                                                                <td className="px-4 py-2 text-neutral-400 font-sans">—</td>
-                                                                <td className="px-4 py-2 text-neutral-400 font-sans">—</td>
-                                                              </tr>
-                                                            </>
-                                                          );
-                                                        })()}
-                                                      </tbody>
-                                                    </table>
+                                                <div className="p-4 bg-neutral-50 dark:bg-surface-container-low rounded-2xl border border-outline-variant/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                  <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary flex items-center justify-center shrink-0">
+                                                      <Calendar className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                      <h5 className="font-headline font-bold text-xs text-on-surface dark:text-white uppercase">
+                                                        Amortization Repayment Ledger Schedule
+                                                      </h5>
+                                                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                                                        {loanDetails.schedule.length} Repayment Installments • Click Print Amortization to view and print full schedule ledger
+                                                      </p>
+                                                    </div>
                                                   </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => openPrintAmortizationModal(loanDetails)}
+                                                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-bold rounded-xl text-xs shadow-xs hover:opacity-90 transition-all cursor-pointer shrink-0"
+                                                  >
+                                                    <Printer className="w-3.5 h-3.5" />
+                                                    <span>View & Print Amortization</span>
+                                                  </button>
                                                 </div>
                                               )}
 
@@ -3873,6 +4522,397 @@ function LoansPageContent() {
                         </table>
                       </div>
                     </div>
+
+                    {/* Quick Edit Confirmation Dialog */}
+                    {pendingLoanFieldUpdate && isAdmin && typeof document !== 'undefined' && createPortal(
+                      <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-neutral-950/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+                        <div className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl shadow-2xl p-6 max-w-sm w-full space-y-4 animate-modal-pop">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                              <AlertTriangle className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-sm text-on-surface dark:text-white">Confirm Field Change</h4>
+                              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                                {pendingLoanFieldUpdate.loanLaf ? `LAF #${pendingLoanFieldUpdate.loanLaf}` : `Contract ID #${pendingLoanFieldUpdate.loanId}`}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="p-3.5 bg-neutral-50 dark:bg-surface-container rounded-2xl border border-outline-variant/50 text-xs space-y-2">
+                            <p className="text-[11px] text-neutral-600 dark:text-neutral-400">
+                              Are you sure you want to change <strong>{pendingLoanFieldUpdate.fieldName}</strong> for <strong>{pendingLoanFieldUpdate.borrowerName}</strong>?
+                            </p>
+                            <div className="flex items-center justify-between gap-2 pt-1 font-mono text-xs bg-white dark:bg-surface-container-high p-2 rounded-xl border border-outline-variant/30">
+                              <span className="px-2 py-0.5 rounded-lg bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 line-through truncate max-w-[100px]">
+                                {pendingLoanFieldUpdate.oldValue}
+                              </span>
+                              <span className="text-neutral-400 font-sans">&rarr;</span>
+                              <span className="px-2 py-0.5 rounded-lg bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold truncate max-w-[120px]">
+                                {pendingLoanFieldUpdate.newValue}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setPendingLoanFieldUpdate(null)}
+                              className="px-4 py-2 rounded-xl border border-outline-variant text-xs font-bold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleConfirmLoanFieldUpdate}
+                              className="px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl text-xs font-bold hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5 shadow-xs"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Confirm Update</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>,
+                      document.body
+                    )}
+
+                    {/* Animated Floating Dropdown Popover for Table Rows */}
+                    {tableDropdownState && isAdmin && typeof document !== 'undefined' && (() => {
+                      const targetLoan = loans.find(l => String(l.id) === String(tableDropdownState.loanId));
+                      if (!targetLoan) return null;
+
+                      const shouldOpenUpwards = typeof window !== 'undefined' && (tableDropdownState.rect.bottom + 300 > window.innerHeight) && (tableDropdownState.rect.top > 300);
+
+                      return createPortal(
+                        <div
+                          data-table-dropdown-popover="true"
+                          className="fixed z-[9999] bg-white/95 dark:bg-surface-container-high/95 backdrop-blur-md border border-outline-variant/80 rounded-2xl shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-150 custom-scrollbar"
+                          style={{
+                            ...(shouldOpenUpwards
+                              ? { bottom: `${window.innerHeight - tableDropdownState.rect.top + 6}px` }
+                              : { top: `${tableDropdownState.rect.bottom + 6}px` }),
+                            left: `${tableDropdownState.rect.left + tableDropdownState.rect.width / 2}px`,
+                            transform: 'translateX(-50%)',
+                            minWidth: tableDropdownState.type === 'account' ? '150px' : (tableDropdownState.type === 'mode' ? '140px' : '220px'),
+                            maxHeight: '360px',
+                            overflowY: 'auto'
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {tableDropdownState.type === 'account' && (
+                            <div className="space-y-1">
+                              <div className="px-2.5 py-1 text-[10px] font-bold text-neutral-400 dark:text-neutral-400 uppercase tracking-wider">
+                                Select Account
+                              </div>
+                              {ACCOUNT_CLASSIFICATIONS.map((acct) => {
+                                const isSelected = resolveAccountClassification(targetLoan) === acct;
+                                return (
+                                  <button
+                                    key={acct}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentAcct = resolveAccountClassification(targetLoan);
+                                      setTableDropdownState(null);
+                                      if (currentAcct === acct) return;
+                                      setPendingLoanFieldUpdate({
+                                        loanId: targetLoan.id,
+                                        loanLaf: targetLoan.laf_no,
+                                        borrowerName: formatBorrowerName(targetLoan),
+                                        fieldKey: 'account_classification',
+                                        fieldName: 'Account Classification',
+                                        oldValue: currentAcct,
+                                        newValue: acct
+                                      });
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                        : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-surface-container-highest'
+                                    }`}
+                                  >
+                                    <span>{acct}</span>
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {tableDropdownState.type === 'purpose' && (
+                            <div className="space-y-0.5">
+                              <div className="px-2.5 py-1 text-[10px] font-bold text-neutral-400 dark:text-neutral-400 uppercase tracking-wider">
+                                Select Purpose
+                              </div>
+                              {LOAN_PURPOSES.map((purp) => {
+                                const currentPurp = resolvePurpose(targetLoan);
+                                const isSelected = currentPurp === purp || (purp === 'Others' && currentPurp && !(LOAN_PURPOSES as readonly string[]).includes(currentPurp));
+                                return (
+                                  <button
+                                    key={purp}
+                                    type="button"
+                                    onClick={() => {
+                                      if (purp === 'Others') {
+                                        setTableDropdownState(null);
+                                        setCustomPurposeModalLoan(targetLoan);
+                                        setCustomPurposeInput(currentPurp && !(LOAN_PURPOSES as readonly string[]).includes(currentPurp) ? currentPurp : '');
+                                      } else {
+                                        setTableDropdownState(null);
+                                        if (currentPurp === purp) return;
+                                        setPendingLoanFieldUpdate({
+                                          loanId: targetLoan.id,
+                                          loanLaf: targetLoan.laf_no,
+                                          borrowerName: formatBorrowerName(targetLoan),
+                                          fieldKey: 'purpose',
+                                          fieldName: 'Loan Purpose',
+                                          oldValue: currentPurp || '—',
+                                          newValue: purp
+                                        });
+                                      }
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                        : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-surface-container-highest'
+                                    }`}
+                                  >
+                                    <span>{purp}</span>
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {tableDropdownState.type === 'mode' && (
+                            <div className="space-y-1">
+                              <div className="px-2.5 py-1 text-[10px] font-bold text-neutral-400 dark:text-neutral-400 uppercase tracking-wider">
+                                Payment Mode
+                              </div>
+                              {['SD 2', 'Hand -in', 'SD 30', 'SD 15'].map((mode) => {
+                                const currentMode = formatPaymentMode(targetLoan.payment_mode);
+                                const isSelected = currentMode === mode;
+                                return (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentMode = formatPaymentMode(targetLoan.payment_mode);
+                                      setTableDropdownState(null);
+                                      if (currentMode === mode) return;
+                                      setPendingLoanFieldUpdate({
+                                        loanId: targetLoan.id,
+                                        loanLaf: targetLoan.laf_no,
+                                        borrowerName: formatBorrowerName(targetLoan),
+                                        fieldKey: 'payment_mode',
+                                        fieldName: 'Payment Mode',
+                                        oldValue: currentMode,
+                                        newValue: mode
+                                      });
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                        : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-surface-container-highest'
+                                    }`}
+                                  >
+                                    <span>{mode}</span>
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>,
+                        document.body
+                      );
+                    })()}
+
+                    {/* Custom Purpose Modal (Portaled to document.body for true viewport centering matching other modals) */}
+                    {customPurposeModalLoan && isAdmin && typeof document !== 'undefined' && createPortal(
+                      <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop"
+                        onClick={() => setCustomPurposeModalLoan(null)}
+                      >
+                        <div
+                          className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop space-y-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Header */}
+                          <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30">
+                            <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white flex items-center gap-2">
+                              <FileEdit className="w-5 h-5 text-primary dark:text-secondary" />
+                              <span>Specify Loan Purpose</span>
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={() => setCustomPurposeModalLoan(null)}
+                              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all cursor-pointer"
+                              title="Close (Esc)"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Borrower & Contract Details Info Card */}
+                          <div className="p-3 bg-neutral-50 dark:bg-neutral-800/40 rounded-2xl border border-outline-variant/40 space-y-1 text-xs">
+                            <div className="text-neutral-500 font-semibold">Borrower:</div>
+                            <div className="font-bold text-on-surface dark:text-white text-sm">
+                              {formatBorrowerName(customPurposeModalLoan)}
+                            </div>
+                            <div className="text-[11px] text-neutral-400 font-mono">
+                              {customPurposeModalLoan.product_name || 'Loan'} • {customPurposeModalLoan.laf_no ? `LAF #${customPurposeModalLoan.laf_no}` : `Contract #${String(customPurposeModalLoan.id).slice(0, 8)}`}
+                            </div>
+                          </div>
+
+                          {/* Purpose Form */}
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const finalPurpose = customPurposeInput.trim() || 'Others';
+                              handleQuickUpdateLoan(customPurposeModalLoan.id, { purpose: finalPurpose });
+                              setCustomPurposeModalLoan(null);
+                            }}
+                            className="space-y-4"
+                          >
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-on-surface dark:text-white">
+                                Purpose Description *
+                              </label>
+                              <div className="relative">
+                                <input
+                                  ref={customPurposeInputRef}
+                                  type="text"
+                                  value={customPurposeInput}
+                                  onChange={(e) => setCustomPurposeInput(e.target.value)}
+                                  placeholder="e.g. Travel, Tuition / School Fees, Farm Inputs, House Repair..."
+                                  className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                                {customPurposeInput && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setCustomPurposeInput('')}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 p-1 rounded-full cursor-pointer"
+                                    title="Clear"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action Buttons matching other modals */}
+                            <div className="flex gap-3 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => setCustomPurposeModalLoan(null)}
+                                className="flex-1 py-2.5 bg-neutral/10 hover:bg-neutral/15 dark:bg-neutral/20 dark:hover:bg-neutral/25 text-neutral-700 dark:text-neutral-300 rounded-xl font-bold transition-colors cursor-pointer text-xs"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="flex-1 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl font-bold hover:opacity-90 transition-opacity cursor-pointer text-xs shadow-md flex items-center justify-center gap-1.5"
+                              >
+                                <Save className="w-3.5 h-3.5" />
+                                <span>Save Purpose</span>
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>,
+                      document.body
+                    )}
+                    {/* Manual Remarks Modal (Portaled to document.body for true viewport centering) */}
+                    {remarksModalLoan && typeof document !== 'undefined' && createPortal(
+                      <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop"
+                        onClick={() => setRemarksModalLoan(null)}
+                      >
+                        <div
+                          className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-md shadow-2xl p-6 relative animate-modal-pop space-y-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Header */}
+                          <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30">
+                            <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white flex items-center gap-2">
+                              <FileEdit className="w-5 h-5 text-primary dark:text-secondary" />
+                              <span>Manual Loan Remarks</span>
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={() => setRemarksModalLoan(null)}
+                              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all cursor-pointer"
+                              title="Close (Esc)"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Borrower & Contract Details Info Card */}
+                          <div className="p-3 bg-neutral-50 dark:bg-neutral-800/40 rounded-2xl border border-outline-variant/40 space-y-1 text-xs">
+                            <div className="text-neutral-500 font-semibold">Borrower:</div>
+                            <div className="font-bold text-on-surface dark:text-white text-sm">
+                              {formatBorrowerName(remarksModalLoan)}
+                            </div>
+                            <div className="text-[11px] text-neutral-400 font-mono">
+                              {remarksModalLoan.product_name || 'Loan'} • {remarksModalLoan.laf_no ? `LAF #${remarksModalLoan.laf_no}` : `Contract #${String(remarksModalLoan.id).slice(0, 8)}`}
+                            </div>
+                          </div>
+
+                          {/* Remarks Form */}
+                          <form
+                            onSubmit={handleSaveRemarks}
+                            className="space-y-4"
+                          >
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-on-surface dark:text-white">
+                                Remarks / Notes
+                              </label>
+                              <div className="relative">
+                                <textarea
+                                  rows={3}
+                                  value={remarksInputVal}
+                                  onChange={(e) => setRemarksInputVal(e.target.value)}
+                                  placeholder="e.g. 06/29/2026, PAID THRU 26-108, C/O DIVIDENDS, Special collateral..."
+                                  className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                                  autoFocus
+                                />
+                                {remarksInputVal && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setRemarksInputVal('')}
+                                    className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 p-1 rounded-full cursor-pointer"
+                                    title="Clear"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-3 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => setRemarksModalLoan(null)}
+                                className="flex-1 py-2.5 bg-neutral/10 hover:bg-neutral/15 dark:bg-neutral/20 dark:hover:bg-neutral/25 text-neutral-700 dark:text-neutral-300 rounded-xl font-bold transition-colors cursor-pointer text-xs"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={remarksSubmitting}
+                                className="flex-1 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-xl font-bold hover:opacity-90 transition-opacity cursor-pointer text-xs shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                              >
+                                <Save className="w-3.5 h-3.5" />
+                                <span>{remarksSubmitting ? 'Saving...' : 'Save Remarks'}</span>
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      </div>,
+                      document.body
+                    )}
 
                     {/* Table Footer: Pagination or Expanded Banner */}
                     {isLoansExpandedAll ? (
@@ -5233,32 +6273,131 @@ function LoansPageContent() {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                          <div className="space-y-1">
-                            <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400">Borrower Name</label>
-                            <input
-                              type="text"
-                              value={
-                                applyBorrowerName ||
-                                (() => {
-                                  const mem = members.find((m: any) => String(m.id) === String(applyMemberId));
-                                  if (mem) {
-                                    return [mem.first_name, mem.middle_name, mem.last_name].filter(Boolean).join(' ');
-                                  }
-                                  if (selectedMemberSummary?.full_name) return selectedMemberSummary.full_name;
-                                  if (selectedMemberSummary?.first_name || selectedMemberSummary?.last_name) {
-                                    return `${selectedMemberSummary.first_name || ''} ${selectedMemberSummary.last_name || ''}`.trim();
-                                  }
-                                  return '';
-                                })()
-                              }
-                              onChange={(e) => setApplyBorrowerName(e.target.value)}
-                              placeholder="Borrower Full Name"
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-bold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
-                            />
+                          {/* 1. Borrower Name Searchable Dropdown */}
+                          <div className="space-y-1 relative" ref={section2MemberDropdownRef}>
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400">Borrower Name *</label>
+                              {selectedMemberObj?.member_no && (
+                                <span className="text-[9px] font-mono font-bold text-primary dark:text-secondary">
+                                  ID: {selectedMemberObj.member_no}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsSection2MemberDropdownOpen(prev => !prev);
+                                setIsApplyAccountDropdownOpen(false);
+                                setIsApplyPurposeDropdownOpen(false);
+                                setIsApplyModeDropdownOpen(false);
+                              }}
+                              className={`w-full px-3.5 py-2.5 rounded-xl border bg-white dark:bg-surface-container-high/40 text-xs font-bold text-on-surface dark:text-white flex items-center justify-between transition-all duration-200 cursor-pointer shadow-xs hover:border-primary/50 text-left ${
+                                isSection2MemberDropdownOpen
+                                  ? 'border-primary ring-2 ring-primary/20 shadow-md'
+                                  : 'border-outline-variant'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate min-w-0">
+                                <User className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                                <span className="truncate">
+                                  {selectedMemberObj
+                                    ? `${selectedMemberObj.last_name}, ${selectedMemberObj.first_name} ${selectedMemberObj.middle_name ? selectedMemberObj.middle_name[0] + '.' : ''}`.trim()
+                                    : (applyBorrowerName || '-- Choose Borrower Profile --')}
+                                </span>
+                              </div>
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-300 shrink-0 ml-1.5 ${
+                                  isSection2MemberDropdownOpen ? 'rotate-180 text-primary dark:text-secondary' : ''
+                                }`}
+                              />
+                            </button>
+
+                            {/* Searchable Dropdown Menu Popover */}
+                            <div
+                              className={`absolute left-0 right-0 sm:min-w-[300px] top-[calc(100%+4px)] z-50 bg-white dark:bg-surface-container-high border border-outline-variant/70 rounded-2xl shadow-2xl overflow-hidden transition-all duration-200 ease-out origin-top ${
+                                isSection2MemberDropdownOpen
+                                  ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                                  : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                              }`}
+                            >
+                              {/* Search Box */}
+                              <div className="p-2 border-b border-outline-variant/30 bg-neutral-50/80 dark:bg-surface-container/50">
+                                <div className="relative flex items-center">
+                                  <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 pointer-events-none" />
+                                  <input
+                                    ref={section2SearchInputRef}
+                                    type="text"
+                                    placeholder="Search borrower name or ID..."
+                                    value={section2MemberSearch}
+                                    onChange={(e) => setSection2MemberSearch(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-full pl-8 pr-7 py-1.5 text-xs bg-white dark:bg-surface-container-lowest border border-outline-variant/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-on-surface dark:text-white placeholder:text-neutral-400 font-medium transition-all"
+                                    autoFocus
+                                  />
+                                  {section2MemberSearch && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSection2MemberSearch('');
+                                      }}
+                                      className="absolute right-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-white p-0.5 rounded-full cursor-pointer"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Options List */}
+                              <div className="max-h-56 overflow-y-auto divide-y divide-outline-variant/15 p-1 custom-scrollbar">
+                                {filteredSection2Members.length === 0 ? (
+                                  <div className="px-3 py-6 text-center text-xs text-neutral-400">
+                                    No borrower found matching &quot;{section2MemberSearch}&quot;
+                                  </div>
+                                ) : (
+                                  filteredSection2Members.map((mem: any) => {
+                                    const isSelected = String(mem.id) === String(applyMemberId);
+                                    const fullName = `${mem.last_name}, ${mem.first_name} ${mem.middle_name || ''}`.trim();
+                                    const memAge = resolveMemberAge(mem);
+                                    return (
+                                      <button
+                                        key={mem.id}
+                                        type="button"
+                                        onClick={() => {
+                                          handleSelectMember(String(mem.id));
+                                          setIsSection2MemberDropdownOpen(false);
+                                          setSection2MemberSearch('');
+                                        }}
+                                        className={`w-full px-3 py-2 text-left rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+                                          isSelected
+                                            ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                            : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-surface-container-highest'
+                                        }`}
+                                      >
+                                        <div className="min-w-0 pr-2">
+                                          <div className="text-xs truncate font-semibold">{fullName}</div>
+                                          <div className="text-[10px] text-neutral-400 font-mono">
+                                            ID: {mem.member_no || 'N/A'} {memAge ? `• Age: ${memAge}` : ''}
+                                          </div>
+                                        </div>
+                                        {isSelected && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary shrink-0" />}
+                                      </button>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
                           </div>
 
+                          {/* 2. Age Input (Auto-calculated from Borrower) */}
                           <div className="space-y-1">
-                            <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400">Age</label>
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400">Age</label>
+                              {applyAge ? (
+                                <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">Auto-filled</span>
+                              ) : null}
+                            </div>
                             <input
                               type="number"
                               value={applyAge}
@@ -5284,6 +6423,218 @@ function LoansPageContent() {
                               className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-bold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
                             />
                           </div>
+
+                        </div>
+
+                        {/* Row 2: Account Classification, Loan Purpose, and Payment Mode (With Smooth Animations) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2 border-t border-outline-variant/30">
+                          {/* 1. Account Classification Animated Dropdown */}
+                          <div className="space-y-1 relative" ref={applyAccountDropdownRef}>
+                            <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400 flex items-center justify-between">
+                              <span>Account Classification *</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsApplyAccountDropdownOpen(prev => !prev);
+                                setIsApplyPurposeDropdownOpen(false);
+                                setIsApplyModeDropdownOpen(false);
+                              }}
+                              className={`w-full px-3.5 py-2.5 rounded-xl border bg-white dark:bg-surface-container-high/40 text-xs font-bold text-on-surface dark:text-white flex items-center justify-between transition-all duration-200 cursor-pointer shadow-xs hover:border-primary/50 text-left ${
+                                isApplyAccountDropdownOpen
+                                  ? 'border-primary ring-2 ring-primary/20 shadow-md'
+                                  : 'border-outline-variant'
+                              }`}
+                            >
+                              <span>{applyAccountClassification}</span>
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-300 shrink-0 ml-1.5 ${
+                                  isApplyAccountDropdownOpen ? 'rotate-180 text-primary dark:text-secondary' : ''
+                                }`}
+                              />
+                            </button>
+
+                            {/* Dropdown Menu Popover */}
+                            <div
+                              className={`absolute left-0 right-0 top-[calc(100%+4px)] z-40 bg-white dark:bg-surface-container-high border border-outline-variant/70 rounded-xl shadow-2xl p-1 transition-all duration-200 ease-out origin-top ${
+                                isApplyAccountDropdownOpen
+                                  ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                                  : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                              }`}
+                            >
+                              {ACCOUNT_CLASSIFICATIONS.map((acct) => {
+                                const isSel = applyAccountClassification === acct;
+                                return (
+                                  <button
+                                    key={acct}
+                                    type="button"
+                                    onClick={() => {
+                                      setApplyAccountClassification(acct);
+                                      setIsApplyAccountDropdownOpen(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                      isSel
+                                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                        : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-surface-container-highest'
+                                    }`}
+                                  >
+                                    <span>{acct}</span>
+                                    {isSel && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* 2. Loan Purpose Animated Dropdown + Aligned Others Input */}
+                          <div className="space-y-1 relative" ref={applyPurposeDropdownRef}>
+                            <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400 flex items-center justify-between">
+                              <span>Loan Purpose *</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsApplyPurposeDropdownOpen(prev => !prev);
+                                setIsApplyAccountDropdownOpen(false);
+                                setIsApplyModeDropdownOpen(false);
+                              }}
+                              className={`w-full px-3.5 py-2.5 rounded-xl border bg-white dark:bg-surface-container-high/40 text-xs font-bold text-on-surface dark:text-white flex items-center justify-between transition-all duration-200 cursor-pointer shadow-xs hover:border-primary/50 text-left ${
+                                isApplyPurposeDropdownOpen
+                                  ? 'border-primary ring-2 ring-primary/20 shadow-md'
+                                  : 'border-outline-variant'
+                              }`}
+                            >
+                              <span className="truncate">{applyPurpose}</span>
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-300 shrink-0 ml-1.5 ${
+                                  isApplyPurposeDropdownOpen ? 'rotate-180 text-primary dark:text-secondary' : ''
+                                }`}
+                              />
+                            </button>
+
+                            {/* Dropdown Menu Popover */}
+                            <div
+                              className={`absolute left-0 right-0 top-[calc(100%+4px)] z-40 bg-white dark:bg-surface-container-high border border-outline-variant/70 rounded-xl shadow-2xl p-1 max-h-56 overflow-y-auto custom-scrollbar transition-all duration-200 ease-out origin-top ${
+                                isApplyPurposeDropdownOpen
+                                  ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                                  : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                              }`}
+                            >
+                              {LOAN_PURPOSES.map((purp) => {
+                                const isSel = applyPurpose === purp;
+                                return (
+                                  <button
+                                    key={purp}
+                                    type="button"
+                                    onClick={() => {
+                                      setApplyPurpose(purp);
+                                      setIsApplyPurposeDropdownOpen(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                      isSel
+                                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                        : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-surface-container-highest'
+                                    }`}
+                                  >
+                                    <span>{purp}</span>
+                                    {isSel && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Aligned 'Please specify other purpose' directly underneath Loan Purpose dropdown */}
+                            {applyPurpose === 'Others' && (
+                              <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200 space-y-1">
+                                <label className="text-[10px] font-bold text-primary dark:text-secondary uppercase tracking-wider flex items-center justify-between">
+                                  <span>Please specify other purpose *</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={applyCustomPurpose}
+                                  onChange={(e) => setApplyCustomPurpose(e.target.value)}
+                                  placeholder="e.g. Travel, Equipment, Tuition..."
+                                  className="w-full px-3.5 py-2.5 rounded-xl border border-primary/40 focus:border-primary bg-white dark:bg-surface-container-high/40 text-xs font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
+                                  autoFocus
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 3. Payment Mode Animated Dropdown */}
+                          <div className="space-y-1 relative" ref={applyModeDropdownRef}>
+                            <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400 flex items-center justify-between">
+                              <span>Payment Mode *</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsApplyModeDropdownOpen(prev => !prev);
+                                setIsApplyAccountDropdownOpen(false);
+                                setIsApplyPurposeDropdownOpen(false);
+                              }}
+                              className={`w-full px-3.5 py-2.5 rounded-xl border bg-white dark:bg-surface-container-high/40 text-xs font-bold text-on-surface dark:text-white flex items-center justify-between transition-all duration-200 cursor-pointer shadow-xs hover:border-primary/50 text-left ${
+                                isApplyModeDropdownOpen
+                                  ? 'border-primary ring-2 ring-primary/20 shadow-md'
+                                  : 'border-outline-variant'
+                              }`}
+                            >
+                              <span>{applyPaymentMode}</span>
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-300 shrink-0 ml-1.5 ${
+                                  isApplyModeDropdownOpen ? 'rotate-180 text-primary dark:text-secondary' : ''
+                                }`}
+                              />
+                            </button>
+
+                            {/* Dropdown Menu Popover */}
+                            <div
+                              className={`absolute left-0 right-0 top-[calc(100%+4px)] z-40 bg-white dark:bg-surface-container-high border border-outline-variant/70 rounded-xl shadow-2xl p-1 transition-all duration-200 ease-out origin-top ${
+                                isApplyModeDropdownOpen
+                                  ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                                  : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                              }`}
+                            >
+                              {['SD 2', 'Hand -in', 'SD 30', 'SD 15'].map((mode) => {
+                                const isSel = applyPaymentMode === mode;
+                                return (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => {
+                                      setApplyPaymentMode(mode);
+                                      setIsApplyModeDropdownOpen(false);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                      isSel
+                                        ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                                        : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-surface-container-highest'
+                                    }`}
+                                  >
+                                    <span>{mode}</span>
+                                    {isSel && <Check className="w-3.5 h-3.5 text-primary dark:text-secondary" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Row 3: Remarks Field */}
+                        <div className="pt-2 border-t border-outline-variant/30 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400">
+                              Remarks (Optional)
+                            </label>
+                            <span className="text-[9px] text-neutral-400 font-normal">Physical slip notes, promissory details, or collateral</span>
+                          </div>
+                          <input
+                            type="text"
+                            value={applyRemarks}
+                            onChange={(e) => setApplyRemarks(e.target.value)}
+                            placeholder="e.g. 06/29/2026, special promissory note, collateral on file..."
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-high/40 text-xs font-medium text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
                         </div>
                       </div>
 
@@ -6994,14 +8345,15 @@ function LoansPageContent() {
         </div>
       )}
 
-      {/* MODAL 5: PRINT AMORTIZATION SCHEDULE PREVIEW */}
+      {/* MODAL 5: PRINT AMORTIZATION SCHEDULE PREVIEW WITH FULL SCHEDULE LEDGER */}
       {isPrintModalOpen && printMode === 'schedule' && printLoan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-4xl shadow-2xl p-6 relative animate-modal-pop max-h-[92vh] overflow-y-auto space-y-4">
             {/* Header */}
-            <div className="flex justify-between items-center pb-4 border-b border-outline-variant/30 mb-4">
+            <div className="flex justify-between items-center pb-3 border-b border-outline-variant/30">
               <h3 className="font-headline font-bold text-lg text-on-surface dark:text-white flex items-center gap-2">
-                <Printer className="w-5 h-5 text-primary" /> Print Amortization Schedule
+                <Printer className="w-5 h-5 text-primary dark:text-secondary" />
+                <span>Amortization Repayment Ledger Schedule</span>
               </h3>
               <button
                 onClick={closePrintModal}
@@ -7012,78 +8364,202 @@ function LoansPageContent() {
               </button>
             </div>
 
-            {/* Content Form */}
-            <div className="space-y-4 text-xs">
-              <div className="p-3.5 bg-neutral-50 dark:bg-surface-container rounded-2xl border border-outline-variant/60 space-y-3">
+            {/* Schedule Statement Summary */}
+            <div className="bg-neutral-50 dark:bg-surface-container rounded-2xl border border-outline-variant/60 p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-neutral-500 uppercase block">Borrower</span>
+                  <p className="font-bold text-on-surface dark:text-white text-sm">{formatBorrowerFullName(printLoan)}</p>
+                  <p className="text-[11px] text-neutral-400 font-mono mt-0.5">{printLoan.laf_no ? `LAF #${printLoan.laf_no}` : `Contract #${String(printLoan.id).slice(0, 8)}`}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-neutral-500 uppercase block">Loan Product</span>
+                  <p className="font-semibold text-on-surface dark:text-white">{(printLoan.product_name || 'Regular - Salary Loan').replace(/^Regular Loan\s*-\s*/i, 'Regular - ')}</p>
+                  <p className="text-[11px] text-neutral-500 capitalize mt-0.5">{printLoan.amortization_type?.replace('_', ' ')}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-neutral-500 uppercase block">Principal & Terms</span>
+                  <p className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{formatCurrency(parseFloat(printLoan.principal_amount))}</p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">{printLoan.term_months} Months Term</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-neutral-500 uppercase block">Disbursement Date</span>
+                  <p className="font-semibold text-on-surface dark:text-white">{printLoan.disbursed_at ? formatSheetDate(printLoan.disbursed_at) : 'Un-disbursed'}</p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">Net: {formatCurrency(parseFloat(printLoan.net_proceeds || printLoan.principal_amount || 0))}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Full Amortization Repayment Ledger Schedule Table */}
+            {printLoan.schedule && printLoan.schedule.length > 0 ? (
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <label className="font-bold text-neutral-800 dark:text-neutral-200 block text-xs">
-                      Guarantor / Co-Maker Signature Block
-                    </label>
-                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
-                      Toggle whether the co-maker signature line appears on the printed amortization schedule.
-                    </p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
-                    <input
-                      type="checkbox"
-                      checked={includeGuarantor}
-                      onChange={(e) => setIncludeGuarantor(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-10 h-5 bg-neutral-300 peer-focus:outline-none rounded-full peer dark:bg-neutral-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-neutral-600 peer-checked:bg-primary"></div>
-                    <span className="ml-2 text-[11px] font-bold text-neutral-700 dark:text-neutral-300 w-14">
-                      {includeGuarantor ? 'Visible' : 'Hidden'}
-                    </span>
+                  <h5 className="font-headline text-xs font-bold text-neutral-700 dark:text-neutral-300 uppercase tracking-wide">
+                    Amortization Repayment Ledger Schedule ({printLoan.schedule.length} Installments)
+                  </h5>
+                  <button
+                    type="button"
+                    onClick={() => exportSingleLoanScheduleToExcel(printLoan)}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 transition-colors cursor-pointer"
+                    title="Download schedule to Excel"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Excel</span>
+                  </button>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto border border-outline-variant/60 rounded-2xl shadow-inner bg-white dark:bg-surface-container">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 z-10 bg-surface-container-low dark:bg-surface-container-high border-b border-outline-variant/60 shadow-xs">
+                      <tr>
+                        <th className="px-3.5 py-2.5 font-bold text-neutral-600 dark:text-neutral-300 font-mono">#</th>
+                        <th className="px-3.5 py-2.5 font-bold text-neutral-600 dark:text-neutral-300">Principal Due</th>
+                        <th className="px-3.5 py-2.5 font-bold text-neutral-600 dark:text-neutral-300">Interest Due</th>
+                        <th className="px-3.5 py-2.5 font-bold text-neutral-600 dark:text-neutral-300">Total Due</th>
+                        <th className="px-3.5 py-2.5 font-bold text-neutral-600 dark:text-neutral-300">Loan Balance</th>
+                        <th className="px-3.5 py-2.5 font-bold text-neutral-600 dark:text-neutral-300">Paid Principal</th>
+                        <th className="px-3.5 py-2.5 font-bold text-neutral-600 dark:text-neutral-300">Paid Interest</th>
+                        <th className="px-3.5 py-2.5 font-bold text-neutral-600 dark:text-neutral-300">Due Date</th>
+                        <th className="px-3.5 py-2.5 font-bold text-neutral-600 dark:text-neutral-300 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/35 font-mono">
+                      {(() => {
+                        let runningBalance = parseFloat(printLoan.principal_amount);
+                        let totalPrincipalDue = 0;
+                        let totalInterestDue = 0;
+                        let totalDueSum = 0;
+                        let totalPrincipalPaid = 0;
+                        let totalInterestPaid = 0;
+                        const rows = printLoan.schedule.map((sch: any) => {
+                          const pDue = parseFloat(sch.principal_due) || 0;
+                          const iDue = parseFloat(sch.interest_due) || 0;
+                          const schTotalDue = pDue + iDue;
+                          totalPrincipalDue += pDue;
+                          totalInterestDue += iDue;
+                          totalDueSum += schTotalDue;
+                          totalPrincipalPaid += parseFloat(sch.principal_paid) || 0;
+                          totalInterestPaid += parseFloat(sch.interest_paid) || 0;
+
+                          runningBalance = Math.round((runningBalance - pDue) * 100) / 100;
+                          const displayBalance = Math.max(0, runningBalance);
+
+                          return (
+                            <tr key={sch.id || sch.installment_number} className="hover:bg-neutral/5">
+                              <td className="px-3.5 py-2 font-bold">{sch.installment_number}</td>
+                              <td className="px-3.5 py-2">{formatCurrency(pDue)}</td>
+                              <td className="px-3.5 py-2">{formatCurrency(iDue)}</td>
+                              <td className="px-3.5 py-2 font-bold">{formatCurrency(schTotalDue)}</td>
+                              <td className="px-3.5 py-2 text-tertiary font-bold">{formatCurrency(displayBalance)}</td>
+                              <td className="px-3.5 py-2 text-primary">{formatCurrency(parseFloat(sch.principal_paid))}</td>
+                              <td className="px-3.5 py-2 text-primary">{formatCurrency(parseFloat(sch.interest_paid))}</td>
+                              <td className="px-3.5 py-2 font-sans">{sch.due_date ? formatSheetDate(sch.due_date) : '—'}</td>
+                              <td className="px-3.5 py-2 font-sans text-center">
+                                {sch.status === 'paid' ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Paid</span>
+                                ) : sch.status === 'partially_paid' ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">Partial</span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">Unpaid</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        });
+
+                        return (
+                          <>
+                            {rows}
+                            <tr className="sticky bottom-0 z-10 font-bold border-t-2 border-primary/30 dark:border-secondary/30 bg-neutral-100 dark:bg-neutral-800 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                              <td className="px-3.5 py-2.5 font-sans bg-neutral-100 dark:bg-neutral-800">TOTAL</td>
+                              <td className="px-3.5 py-2.5 bg-neutral-100 dark:bg-neutral-800">{formatCurrency(totalPrincipalDue)}</td>
+                              <td className="px-3.5 py-2.5 bg-neutral-100 dark:bg-neutral-800">{formatCurrency(totalInterestDue)}</td>
+                              <td className="px-3.5 py-2.5 text-primary dark:text-secondary bg-neutral-100 dark:bg-neutral-800">{formatCurrency(totalDueSum)}</td>
+                              <td className="px-3.5 py-2.5 text-neutral-400 font-sans bg-neutral-100 dark:bg-neutral-800">—</td>
+                              <td className="px-3.5 py-2.5 text-primary dark:text-secondary bg-neutral-100 dark:bg-neutral-800">{formatCurrency(totalPrincipalPaid)}</td>
+                              <td className="px-3.5 py-2.5 text-primary dark:text-secondary bg-neutral-100 dark:bg-neutral-800">{formatCurrency(totalInterestPaid)}</td>
+                              <td className="px-3.5 py-2.5 text-neutral-400 font-sans bg-neutral-100 dark:bg-neutral-800">—</td>
+                              <td className="px-3.5 py-2.5 text-neutral-400 font-sans bg-neutral-100 dark:bg-neutral-800">—</td>
+                            </tr>
+                          </>
+                        );
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-200 dark:border-amber-900/40 text-center text-xs text-amber-800 dark:text-amber-300">
+                Installment schedules will be generated upon loan disbursement.
+              </div>
+            )}
+
+            {/* Co-Maker / Guarantor Option Box */}
+            <div className="p-3 bg-neutral-50 dark:bg-surface-container rounded-2xl border border-outline-variant/60 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="font-bold text-neutral-800 dark:text-neutral-200 block text-xs">
+                    Guarantor / Co-Maker Signature Block
                   </label>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    Toggle whether the co-maker signature line appears on the printed amortization schedule.
+                  </p>
                 </div>
-
-                {includeGuarantor ? (
-                  <div className="space-y-1 pt-1 border-t border-outline-variant/30">
-                    <label className="font-semibold text-neutral-600 dark:text-neutral-400 text-[11px]">
-                      Guarantor / Co-Maker Name
-                    </label>
-                    <input
-                      type="text"
-                      value={coMakerName}
-                      onChange={(e) => setCoMakerName(e.target.value)}
-                      placeholder="e.g. Michelle Pable (or leave as Guarantor)"
-                      className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
-                    />
-                  </div>
-                ) : (
-                  <div className="p-2.5 bg-neutral-100/70 dark:bg-neutral-800/40 rounded-xl text-[11px] text-neutral-500 italic">
-                    Guarantor signature box will be omitted from the printed schedule.
-                  </div>
-                )}
+                <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                  <input
+                    type="checkbox"
+                    checked={includeGuarantor}
+                    onChange={(e) => setIncludeGuarantor(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-10 h-5 bg-neutral-300 peer-focus:outline-none rounded-full peer dark:bg-neutral-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-neutral-600 peer-checked:bg-primary"></div>
+                  <span className="ml-2 text-[11px] font-bold text-neutral-700 dark:text-neutral-300 w-14">
+                    {includeGuarantor ? 'Visible' : 'Hidden'}
+                  </span>
+                </label>
               </div>
 
-              <div className="bg-neutral-50 dark:bg-neutral-900/40 p-4 rounded-2xl border border-outline-variant/60 space-y-3">
-                <h5 className="font-bold text-on-surface dark:text-white text-xs">Schedule Statement Summary</h5>
-                <div className="grid grid-cols-2 gap-2 text-[10px]">
-                  <p><strong>Member Name:</strong> {formatBorrowerFullName(printLoan)}</p>
-                  <p><strong>Loan Product:</strong> {(printLoan.product_name || 'Regular - Salary Loan').replace(/^Regular Loan\s*-\s*/i, 'Regular - ')}</p>
-                  <p><strong>Principal Amount:</strong> {formatCurrency(parseFloat(printLoan.principal_amount))}</p>
-                  <p><strong>Total Repayment Periods:</strong> {printLoan.term_months} Months</p>
+              {includeGuarantor && (
+                <div className="space-y-1 pt-1 border-t border-outline-variant/30">
+                  <label className="font-semibold text-neutral-600 dark:text-neutral-400 text-[11px]">
+                    Guarantor / Co-Maker Name
+                  </label>
+                  <input
+                    type="text"
+                    value={coMakerName}
+                    onChange={(e) => setCoMakerName(e.target.value)}
+                    placeholder="e.g. Michelle Pable (or leave as Guarantor)"
+                    className="w-full px-3.5 py-2 bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary outline-none font-semibold text-on-surface dark:text-white"
+                  />
                 </div>
-              </div>
+              )}
+            </div>
 
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-outline-variant/30">
-                <button
-                  type="button"
-                  onClick={closePrintModal}
-                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
-                >
-                  <Printer className="w-4 h-4" /> Print Document
-                </button>
-              </div>
+            {/* Modal Actions */}
+            <div className="pt-2 flex items-center justify-end gap-3 border-t border-outline-variant/30">
+              <button
+                type="button"
+                onClick={closePrintModal}
+                className="px-5 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => exportSingleLoanScheduleToExcel(printLoan)}
+                className="px-5 py-2.5 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 rounded-full text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Export Excel</span>
+              </button>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Document</span>
+              </button>
             </div>
           </div>
         </div>

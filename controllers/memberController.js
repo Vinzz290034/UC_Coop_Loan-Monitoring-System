@@ -640,7 +640,7 @@ export const getMemberDashboardSummary = async (req, res, next) => {
     }
 
     // Verify member exists first
-    const memberCheck = await query('SELECT member_no, first_name, last_name, status, investment_goal FROM members WHERE id = $1', [id]);
+    const memberCheck = await query('SELECT member_no, first_name, last_name, status, investment_goal, age, date_of_birth FROM members WHERE id = $1', [id]);
     if (memberCheck.rowCount === 0) {
       return res.status(404).json({
         success: false,
@@ -758,6 +758,8 @@ export const getMemberDashboardSummary = async (req, res, next) => {
         first_name: memberCheck.rows[0].first_name,
         last_name: memberCheck.rows[0].last_name,
         full_name: `${memberCheck.rows[0].first_name} ${memberCheck.rows[0].last_name}`,
+        age: memberCheck.rows[0].age,
+        date_of_birth: memberCheck.rows[0].date_of_birth,
         profile_status: memberCheck.rows[0].status,
         investment_goal: parseFloat(memberCheck.rows[0].investment_goal ?? 0.00),
         login_count: loginCount,
