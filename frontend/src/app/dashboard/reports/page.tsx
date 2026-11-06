@@ -3358,15 +3358,22 @@ function ReportsPageContent() {
                     </tr>
                   ) : (
                     accountModalTransactions.map((t: any, idx: number) => {
-                      const hasVoucher = Boolean(t.voucher_no && t.voucher_no !== '—' && !t.voucher_no.includes('Liquidation'));
+                      const isCheckVoucher = Boolean(
+                        (t.voucher_no && t.voucher_no !== '—' && !t.voucher_no.startsWith('LF') && !t.voucher_no.includes('Liquidation')) ||
+                        t.voucher_id
+                      );
+                      const isLfOnly = Boolean(!isCheckVoucher && (t.lf_no || (t.voucher_no && (t.voucher_no.startsWith('LF') || t.voucher_no.includes('Liquidation')))));
+                      const isClickable = isCheckVoucher || isLfOnly;
                       return (
                         <tr
                           key={idx}
                           onClick={() => {
-                            if (hasVoucher) {
+                            if (isCheckVoucher) {
                               const params = new URLSearchParams();
                               params.set('tab', 'summary');
-                              params.set('voucher', t.voucher_no);
+                              if (t.voucher_no && !t.voucher_no.startsWith('LF') && !t.voucher_no.includes('Liquidation')) {
+                                params.set('voucher', t.voucher_no);
+                              }
                               if (t.voucher_id) params.set('id', t.voucher_id);
                               params.set('fromReport', 'expenses');
                               params.set('returnAccount', selectedAccountModal.account_name);
@@ -3376,14 +3383,25 @@ function ReportsPageContent() {
                               if (period === 'monthly') params.set('month', String(month));
                               if (period === 'daily') params.set('date', date);
                               router.push(`/dashboard/disbursement?${params.toString()}`);
+                            } else if (isLfOnly) {
+                              const params = new URLSearchParams();
+                              params.set('tab', 'revolving_fund_replenishment');
+                              if (t.lf_no) params.set('search', t.lf_no);
+                              router.push(`/dashboard/disbursement?${params.toString()}`);
                             }
                           }}
                           className={`transition-colors group ${
-                            hasVoucher
+                            isClickable
                               ? 'hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 cursor-pointer'
                               : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
                           }`}
-                          title={hasVoucher ? `Click to open Check Voucher #${t.voucher_no} in Disbursement` : undefined}
+                          title={
+                            isCheckVoucher
+                              ? `Click to open Check Voucher #${t.voucher_no} in Disbursement`
+                              : isLfOnly
+                              ? `Click to view Revolving Fund Liquidation in Disbursement`
+                              : undefined
+                          }
                         >
                           <td className="p-2 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
                             {idx + 1}
@@ -3394,8 +3412,8 @@ function ReportsPageContent() {
                           <td className="p-2 font-mono font-bold text-neutral-800 dark:text-neutral-200 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-400 group-hover:underline">
                               <span>{t.voucher_no}</span>
-                              {hasVoucher && (
-                                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                              {isClickable && (
+                                <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />
                               )}
                             </div>
                           </td>

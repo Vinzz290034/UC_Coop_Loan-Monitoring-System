@@ -1143,9 +1143,19 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
     const rfResult = await pool.query(`
       SELECT 
         rfi.id, rfi.item_date, rfi.item_date_raw, rfi.particulars, rfi.amount,
-        rfi.account_name, rfi.category, rfi.remarks, cv.voucher_no, cv.voucher_date
+        rfi.account_name, rfi.category, rfi.remarks,
+        COALESCE(cv.voucher_no, rfl.voucher_no) AS voucher_no,
+        COALESCE(cv.id, rfl.check_voucher_id) AS voucher_id,
+        COALESCE(cv.voucher_date, rfl.period_end, rfl.created_at) AS voucher_date,
+        rfl.id AS liquidation_id,
+        rfl.lf_no
       FROM rf_liquidation_items rfi
-      LEFT JOIN check_vouchers cv ON rfi.liquidation_id = cv.id
+      LEFT JOIN revolving_fund_liquidations rfl ON rfi.liquidation_id = rfl.id
+      LEFT JOIN check_vouchers cv ON (
+        rfl.check_voucher_id = cv.id 
+        OR (rfl.voucher_no IS NOT NULL AND LOWER(TRIM(rfl.voucher_no)) = LOWER(TRIM(cv.voucher_no)))
+        OR (rfl.lf_no IS NOT NULL AND (cv.particulars ILIKE '%' || rfl.lf_no || '%' OR cv.particulars ILIKE '%#' || rfl.lf_no || '%'))
+      )
       WHERE (rfi.is_cancelled IS FALSE OR rfi.is_cancelled IS NULL)
       ORDER BY rfi.item_date DESC, rfi.created_at DESC
     `);
@@ -1275,10 +1285,13 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
       }
       accountBreakdown[accName].total_amount += amt;
       accountBreakdown[accName].count += 1;
+      const displayVoucherNo = row.voucher_no || (row.lf_no ? `LF #${row.lf_no}` : 'RF Liquidation');
       accountBreakdown[accName].transactions.push({
         id: row.id,
-        voucher_id: row.liquidation_id || null,
-        voucher_no: row.voucher_no || 'RF Liquidation',
+        voucher_id: row.voucher_id || null,
+        voucher_no: displayVoucherNo,
+        lf_no: row.lf_no || null,
+        liquidation_id: row.liquidation_id || null,
         date: itemDate ? new Date(itemDate).toISOString().split('T')[0] : 'N/A',
         particulars: row.particulars || 'Replenishment Expense',
         account_name: accName,
@@ -1290,7 +1303,9 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
 
       itemized.push({
         id: row.id,
-        voucher_no: row.voucher_no || 'RF Liquidation',
+        voucher_id: row.voucher_id || null,
+        voucher_no: displayVoucherNo,
+        lf_no: row.lf_no || null,
         date: itemDate ? new Date(itemDate).toISOString().split('T')[0] : 'N/A',
         particulars: row.particulars || 'Replenishment Expense',
         account_name: accName,
@@ -1304,10 +1319,10 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
         amt,
         accName,
         row.category,
-        row.voucher_no || 'RF Liquidation',
+        displayVoucherNo,
         itemDate,
         row.particulars,
-        row.liquidation_id || null
+        row.voucher_id || null
       );
     });
 
@@ -1986,9 +2001,19 @@ export const getBooksOfAccountsReport = async (req, res, next) => {
     `);
 
     const rfResult = await pool.query(`
-      SELECT rfi.id, rfi.item_date, rfi.particulars, rfi.amount, rfi.account_name, rfi.category, rfi.remarks, cv.voucher_no, rfi.liquidation_id
+      SELECT 
+        rfi.id, rfi.item_date, rfi.particulars, rfi.amount, rfi.account_name, rfi.category, rfi.remarks,
+        COALESCE(cv.voucher_no, rfl.voucher_no) AS voucher_no,
+        COALESCE(cv.id, rfl.check_voucher_id) AS voucher_id,
+        rfl.id AS liquidation_id,
+        rfl.lf_no
       FROM rf_liquidation_items rfi
-      LEFT JOIN check_vouchers cv ON rfi.liquidation_id = cv.id
+      LEFT JOIN revolving_fund_liquidations rfl ON rfi.liquidation_id = rfl.id
+      LEFT JOIN check_vouchers cv ON (
+        rfl.check_voucher_id = cv.id 
+        OR (rfl.voucher_no IS NOT NULL AND LOWER(TRIM(rfl.voucher_no)) = LOWER(TRIM(cv.voucher_no)))
+        OR (rfl.lf_no IS NOT NULL AND (cv.particulars ILIKE '%' || rfl.lf_no || '%' OR cv.particulars ILIKE '%#' || rfl.lf_no || '%'))
+      )
       WHERE (rfi.is_cancelled IS FALSE OR rfi.is_cancelled IS NULL)
     `);
 
@@ -2288,9 +2313,19 @@ export const getFinancialStatementReport = async (req, res, next) => {
         ORDER BY voucher_date DESC
       `),
       pool.query(`
-        SELECT rfi.id, rfi.item_date, rfi.particulars, rfi.amount, rfi.account_name, rfi.category, rfi.remarks, cv.voucher_no, rfi.liquidation_id
+        SELECT 
+          rfi.id, rfi.item_date, rfi.particulars, rfi.amount, rfi.account_name, rfi.category, rfi.remarks,
+          COALESCE(cv.voucher_no, rfl.voucher_no) AS voucher_no,
+          COALESCE(cv.id, rfl.check_voucher_id) AS voucher_id,
+          rfl.id AS liquidation_id,
+          rfl.lf_no
         FROM rf_liquidation_items rfi
-        LEFT JOIN check_vouchers cv ON rfi.liquidation_id = cv.id
+        LEFT JOIN revolving_fund_liquidations rfl ON rfi.liquidation_id = rfl.id
+        LEFT JOIN check_vouchers cv ON (
+          rfl.check_voucher_id = cv.id 
+          OR (rfl.voucher_no IS NOT NULL AND LOWER(TRIM(rfl.voucher_no)) = LOWER(TRIM(cv.voucher_no)))
+          OR (rfl.lf_no IS NOT NULL AND (cv.particulars ILIKE '%' || rfl.lf_no || '%' OR cv.particulars ILIKE '%#' || rfl.lf_no || '%'))
+        )
         WHERE (rfi.is_cancelled IS FALSE OR rfi.is_cancelled IS NULL)
         ORDER BY rfi.item_date DESC
       `),
