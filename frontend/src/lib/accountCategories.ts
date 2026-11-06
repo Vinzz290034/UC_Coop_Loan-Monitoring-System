@@ -55,38 +55,38 @@ export const OPERATION_EXPENSE_ACCOUNT_OPTIONS = [
   'Honorarium',
   'Incentive',
   'Insurance Payable',
-  'Insurance Payable- 1CISP',
-  'Insurance payable- Climbs',
+  'Insurance Payable - 1CISP',
+  'Insurance Payable - Climbs',
   'Licenses & Taxes',
   'Meeting & conferences',
   'Miscellaneous',
-  'Office supplies',
+  'Office Supplies',
   'Office Supplies Expenses',
   'Office Use',
-  'Pag-ibig premium ER share',
-  'Pag-ibig premium- EE share',
-  'Philhealth -EE share',
-  'Philhealth-ER share',
+  'Pag-ibig Premium - EE Share',
+  'Pag-ibig Premium - ER Share',
+  'PhilHealth - EE Share',
+  'PhilHealth - ER Share',
   'Professional and Consultancy Fee',
   'Professional Fee',
   'Repair & Maintenance',
   'Representation',
   'Salary',
   'Seminar & Training',
-  'SSS premium-EE Share',
-  'SSS premium-ER share',
+  'SSS Premium - EE Share',
+  'SSS Premium - ER Share',
   'Wages'
 ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
 export const SERVICES_EXPENSE_ACCOUNT_OPTIONS = [
+  'COS - Hardbound',
+  'COS - Insurance',
+  'COS - Printing',
   'COS - Scoresheet',
-  'COS -water',
+  'COS - Water',
   'COS - Water Vendo',
-  'COS- hardbound',
-  'COS- Insurance',
-  'COS- printing',
-  'COS-Wifi',
-  'labor',
+  'COS - WiFi',
+  'Labor',
   'Repair & Maintenance',
   'Repair & Maintenance - Equipment',
   'Service Supplies',
@@ -210,6 +210,63 @@ export const CATEGORY_THEMES: Record<string, { bg: string; text: string; border:
     iconBg: 'bg-indigo-600 text-white'
   }
 };
+
+export function normalizeAccountName(rawName: string): string {
+  if (!rawName) return '';
+  let str = String(rawName).trim();
+  if (!str) return '';
+
+  str = str.replace(/\s+/g, ' ');
+  str = str.replace(/\s*-\s*/g, ' - ');
+
+  const lower = str.toLowerCase();
+
+  if (/^cos\s*-\s*/i.test(str)) {
+    const suffix = str.replace(/^cos\s*-\s*/i, '').trim();
+    const formattedSuffix = suffix
+      .split(' ')
+      .map(w => {
+        if (/^wifi$/i.test(w)) return 'WiFi';
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      })
+      .join(' ');
+    return `COS - ${formattedSuffix}`;
+  }
+
+  if (/^sss\s*premium/i.test(lower)) {
+    if (lower.includes('ee')) return 'SSS Premium - EE Share';
+    if (lower.includes('er')) return 'SSS Premium - ER Share';
+    return 'SSS Premium';
+  }
+
+  if (/^pag\s*-\s*ibig/i.test(lower)) {
+    if (lower.includes('er')) return 'Pag-ibig Premium - ER Share';
+    if (lower.includes('ee')) return 'Pag-ibig Premium - EE Share';
+    if (lower.includes('payable')) return 'Pag-ibig Payable';
+    return 'Pag-ibig';
+  }
+
+  if (/^philhealth/i.test(lower)) {
+    if (lower.includes('er')) return 'PhilHealth - ER Share';
+    if (lower.includes('ee')) return 'PhilHealth - EE Share';
+    if (lower.includes('payable')) return 'PhilHealth Payable';
+    return 'PhilHealth';
+  }
+
+  if (/^cib\s*[-_\s]*bdo/i.test(lower)) return 'CIB-BDO';
+  if (/^cib\s*[-_\s]*mbtc/i.test(lower)) return 'CIB-MBTC';
+
+  return str
+    .split(' ')
+    .map(w => {
+      if (/^(cdf|cetf|bir|sss|bdo|mbtc|rf|stl|cos)$/i.test(w)) return w.toUpperCase();
+      if (w === '-') return '-';
+      if (/^1cisp$/i.test(w)) return '1CISP';
+      if (/^climbs$/i.test(w)) return 'Climbs';
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
 
 export const getCategoryForAccount = (acct: string, categoryMap?: Record<string, string>): string => {
   const trimmed = (acct || '').trim();

@@ -44,6 +44,7 @@ import {
   ACCOUNT_CATEGORIES,
   CATEGORY_THEMES,
   getCategoryForAccount,
+  normalizeAccountName,
   REPLENISHMENT_ACCOUNT_OPTIONS,
   getRfDeletedAccountsSet,
   saveRfDeletedAccount,
@@ -385,22 +386,32 @@ function ReportsPageContent() {
     const accountsByName = new Map<string, any>();
     for (const a of accountsData) {
       if (a.account_name) {
-        accountsByName.set(a.account_name.trim().toLowerCase(), a);
+        const norm = normalizeAccountName(a.account_name);
+        const key = norm.toLowerCase();
+        const existing = accountsByName.get(key);
+        if (!existing) {
+          accountsByName.set(key, { ...a, account_name: norm });
+        } else {
+          existing.total_amount = (Number(existing.total_amount) || 0) + (Number(a.total_amount) || 0);
+          existing.count = (Number(existing.count) || 0) + (Number(a.count) || 0);
+          existing.transactions = [...(existing.transactions || []), ...(a.transactions || [])];
+        }
       }
     }
 
     // Combine all known accounts
     const allKnownNames = new Set<string>();
     for (const opt of REPLENISHMENT_ACCOUNT_OPTIONS) {
-      if (!deleted.has(opt.trim().toLowerCase())) allKnownNames.add(opt.trim());
+      const norm = normalizeAccountName(opt);
+      if (!deleted.has(norm.toLowerCase())) allKnownNames.add(norm);
     }
     for (const a of accountsData) {
-      const clean = (a.account_name || '').trim();
-      if (clean && !deleted.has(clean.toLowerCase())) allKnownNames.add(clean);
+      const norm = normalizeAccountName(a.account_name || '');
+      if (norm && !deleted.has(norm.toLowerCase())) allKnownNames.add(norm);
     }
     for (const c of customAccounts) {
-      const clean = (c || '').trim();
-      if (clean && !deleted.has(clean.toLowerCase())) allKnownNames.add(clean);
+      const norm = normalizeAccountName(c || '');
+      if (norm && !deleted.has(norm.toLowerCase())) allKnownNames.add(norm);
     }
 
     if (typeof window !== 'undefined') {
@@ -410,8 +421,8 @@ function ReportsPageContent() {
           const arr = JSON.parse(customSaved);
           if (Array.isArray(arr)) {
             for (const c of arr) {
-              const clean = String(c || '').trim();
-              if (clean && !deleted.has(clean.toLowerCase())) allKnownNames.add(clean);
+              const norm = normalizeAccountName(String(c || ''));
+              if (norm && !deleted.has(norm.toLowerCase())) allKnownNames.add(norm);
             }
           }
         }

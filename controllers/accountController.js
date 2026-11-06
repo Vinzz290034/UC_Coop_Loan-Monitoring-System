@@ -851,7 +851,7 @@ export const getCheckVouchers = async (req, res, next) => {
 
     if (search) {
       params.push(`%${search}%`);
-      conditions.push(`(voucher_no ILIKE $${params.length} OR payee ILIKE $${params.length} OR particulars ILIKE $${params.length} OR check_no ILIKE $${params.length} OR folder_name ILIKE $${params.length} OR bank ILIKE $${params.length})`);
+      conditions.push(`(voucher_no ILIKE $${params.length} OR payee ILIKE $${params.length} OR particulars ILIKE $${params.length} OR check_no ILIKE $${params.length} OR folder_name ILIKE $${params.length} OR bank ILIKE $${params.length} OR details::text ILIKE $${params.length})`);
     }
 
     if (folder) {

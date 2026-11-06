@@ -1116,6 +1116,63 @@ export function categorizeExpenseAccount(accName, categoryRaw) {
 // @desc    Monthly, Annual report on Operation Expense, Service Expense, Merchandise Expense
 // @route   GET /api/reports/expenses-breakdown
 // @access  Protected (Admin, Staff)
+export function normalizeAccountName(rawName) {
+  if (!rawName) return '';
+  let str = String(rawName).trim();
+  if (!str) return '';
+
+  str = str.replace(/\s+/g, ' ');
+  str = str.replace(/\s*-\s*/g, ' - ');
+
+  const lower = str.toLowerCase();
+
+  if (/^cos\s*-\s*/i.test(str)) {
+    const suffix = str.replace(/^cos\s*-\s*/i, '').trim();
+    const formattedSuffix = suffix
+      .split(' ')
+      .map(w => {
+        if (/^wifi$/i.test(w)) return 'WiFi';
+        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      })
+      .join(' ');
+    return `COS - ${formattedSuffix}`;
+  }
+
+  if (/^sss\s*premium/i.test(lower)) {
+    if (lower.includes('ee')) return 'SSS Premium - EE Share';
+    if (lower.includes('er')) return 'SSS Premium - ER Share';
+    return 'SSS Premium';
+  }
+
+  if (/^pag\s*-\s*ibig/i.test(lower)) {
+    if (lower.includes('er')) return 'Pag-ibig Premium - ER Share';
+    if (lower.includes('ee')) return 'Pag-ibig Premium - EE Share';
+    if (lower.includes('payable')) return 'Pag-ibig Payable';
+    return 'Pag-ibig';
+  }
+
+  if (/^philhealth/i.test(lower)) {
+    if (lower.includes('er')) return 'PhilHealth - ER Share';
+    if (lower.includes('ee')) return 'PhilHealth - EE Share';
+    if (lower.includes('payable')) return 'PhilHealth Payable';
+    return 'PhilHealth';
+  }
+
+  if (/^cib\s*[-_\s]*bdo/i.test(lower)) return 'CIB-BDO';
+  if (/^cib\s*[-_\s]*mbtc/i.test(lower)) return 'CIB-MBTC';
+
+  return str
+    .split(' ')
+    .map(w => {
+      if (/^(cdf|cetf|bir|sss|bdo|mbtc|rf|stl|cos)$/i.test(w)) return w.toUpperCase();
+      if (w === '-') return '-';
+      if (/^1cisp$/i.test(w)) return '1CISP';
+      if (/^climbs$/i.test(w)) return 'Climbs';
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
 export function normalizeRecipientName(rawName) {
   if (!rawName) return '';
   let clean = String(rawName).trim().replace(/\s+/g, ' ');
@@ -1274,19 +1331,20 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
         operationTotal += amt;
       }
 
-      if (!accountBreakdown[accName]) {
-        accountBreakdown[accName] = {
-          account_name: accName,
+      const cleanAccName = normalizeAccountName(accName);
+      if (!accountBreakdown[cleanAccName]) {
+        accountBreakdown[cleanAccName] = {
+          account_name: cleanAccName,
           category: normalizedCat,
           total_amount: 0,
           count: 0,
           transactions: []
         };
       }
-      accountBreakdown[accName].total_amount += amt;
-      accountBreakdown[accName].count += 1;
+      accountBreakdown[cleanAccName].total_amount += amt;
+      accountBreakdown[cleanAccName].count += 1;
       const displayVoucherNo = row.voucher_no || (row.lf_no ? `LF #${row.lf_no}` : 'RF Liquidation');
-      accountBreakdown[accName].transactions.push({
+      accountBreakdown[cleanAccName].transactions.push({
         id: row.id,
         voucher_id: row.voucher_id || null,
         voucher_no: displayVoucherNo,
@@ -1294,7 +1352,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
         liquidation_id: row.liquidation_id || null,
         date: itemDate ? new Date(itemDate).toISOString().split('T')[0] : 'N/A',
         particulars: row.particulars || 'Replenishment Expense',
-        account_name: accName,
+        account_name: cleanAccName,
         category: normalizedCat,
         amount: amt,
         payee: row.remarks || 'Revolving Fund',
@@ -1350,7 +1408,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
             operationTotal += amt;
           }
 
-          const cleanAccName = accName || 'Operation Expense';
+          const cleanAccName = normalizeAccountName(accName) || 'Operation Expense';
           if (!accountBreakdown[cleanAccName]) {
             accountBreakdown[cleanAccName] = {
               account_name: cleanAccName,
@@ -1412,7 +1470,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
               operationTotal += amt;
             }
 
-            const cleanAccName = accName || 'Operation Expense';
+            const cleanAccName = normalizeAccountName(accName) || 'Operation Expense';
             if (!accountBreakdown[cleanAccName]) {
               accountBreakdown[cleanAccName] = {
                 account_name: cleanAccName,
@@ -1464,7 +1522,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
     });
 
     for (const ca of customRes.rows) {
-      const caName = (ca.name || '').trim();
+      const caName = normalizeAccountName(ca.name || '');
       if (!caName || deletedSet.has(caName.toLowerCase())) continue;
       if (!accountBreakdown[caName]) {
         const normalizedCat = categorizeExpenseAccount(caName, ca.category);
