@@ -276,20 +276,45 @@ function ReportsPageContent() {
     );
   }, [selectedLoanProductModal, loanProductModalSearch]);
 
+  // Handlers to close modals and clean URL parameters
+  const closeAccountModal = useCallback(() => {
+    setSelectedAccountModal(null);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('account')) {
+        url.searchParams.delete('account');
+        const qs = url.searchParams.toString();
+        window.history.replaceState({}, '', url.pathname + (qs ? `?${qs}` : ''));
+      }
+    }
+  }, []);
+
+  const closeRecipientModal = useCallback(() => {
+    setSelectedRecipientModal(null);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('recipient')) {
+        url.searchParams.delete('recipient');
+        const qs = url.searchParams.toString();
+        window.history.replaceState({}, '', url.pathname + (qs ? `?${qs}` : ''));
+      }
+    }
+  }, []);
+
   // Close modals on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (selectedLoanProductModal) setSelectedLoanProductModal(null);
         if (selectedMerchandiseModal) setSelectedMerchandiseModal(null);
-          if (selectedAccountModal) setSelectedAccountModal(null);
-        if (selectedRecipientModal) setSelectedRecipientModal(null);
+        if (selectedAccountModal) closeAccountModal();
+        if (selectedRecipientModal) closeRecipientModal();
         if (selectedFsAccountModal) setSelectedFsAccountModal(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLoanProductModal, selectedMerchandiseModal, selectedAccountModal, selectedRecipientModal, selectedFsAccountModal]);
+  }, [selectedLoanProductModal, selectedMerchandiseModal, selectedAccountModal, selectedRecipientModal, selectedFsAccountModal, closeAccountModal, closeRecipientModal]);
 
   // Fetch report data based on active tab and period
   const fetchReport = useCallback(async () => {
@@ -352,13 +377,20 @@ function ReportsPageContent() {
     if (targetAccountName && Array.isArray(reportData.accounts)) {
       const key = `acc-${targetAccountName}`;
       if (autoOpenedRef.current !== key) {
+        autoOpenedRef.current = key;
         const match = reportData.accounts.find(
           (a: any) => (a.account_name || '').trim().toLowerCase() === targetAccountName.trim().toLowerCase()
         );
         if (match) {
           setSelectedAccountModal(match);
           setExpenseSubView('accounts');
-          autoOpenedRef.current = key;
+        }
+        // Immediately remove ?account= from browser URL so subsequent refreshes or visits don't keep reopening it
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('account');
+          const qs = url.searchParams.toString();
+          window.history.replaceState({}, '', url.pathname + (qs ? `?${qs}` : ''));
         }
       }
     }
@@ -367,13 +399,20 @@ function ReportsPageContent() {
     if (targetRecipientName && Array.isArray(reportData.recipients)) {
       const key = `rec-${targetRecipientName}`;
       if (autoOpenedRef.current !== key) {
+        autoOpenedRef.current = key;
         const match = reportData.recipients.find(
           (r: any) => (r.name || '').trim().toLowerCase() === targetRecipientName.trim().toLowerCase()
         );
         if (match) {
           setSelectedRecipientModal(match);
           setExpenseSubView('recipients');
-          autoOpenedRef.current = key;
+        }
+        // Immediately remove ?recipient= from browser URL so subsequent refreshes or visits don't keep reopening it
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('recipient');
+          const qs = url.searchParams.toString();
+          window.history.replaceState({}, '', url.pathname + (qs ? `?${qs}` : ''));
         }
       }
     }
@@ -3196,7 +3235,7 @@ function ReportsPageContent() {
       {selectedAccountModal && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/75 backdrop-blur-md p-3 sm:p-6 overflow-y-auto animate-modal-backdrop"
-          onClick={() => setSelectedAccountModal(null)}
+          onClick={closeAccountModal}
         >
           <div
             className="relative w-full max-w-3xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col animate-modal-pop"
@@ -3230,7 +3269,7 @@ function ReportsPageContent() {
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedAccountModal(null)}
+                onClick={closeAccountModal}
                 className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 text-lg font-bold transition-colors cursor-pointer"
               >
                 ✕
@@ -3401,7 +3440,7 @@ function ReportsPageContent() {
               </span>
               <button
                 type="button"
-                onClick={() => setSelectedAccountModal(null)}
+                onClick={closeAccountModal}
                 className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
               >
                 Close
@@ -3416,7 +3455,7 @@ function ReportsPageContent() {
       {selectedRecipientModal && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/75 backdrop-blur-md p-3 sm:p-6 overflow-y-auto animate-modal-backdrop"
-          onClick={() => setSelectedRecipientModal(null)}
+          onClick={closeRecipientModal}
         >
           <div
             className="relative w-full max-w-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col animate-modal-pop"
@@ -3438,7 +3477,7 @@ function ReportsPageContent() {
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedRecipientModal(null)}
+                onClick={closeRecipientModal}
                 className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 text-lg font-bold transition-colors cursor-pointer"
               >
                 ✕
@@ -3554,7 +3593,7 @@ function ReportsPageContent() {
             <div className="flex justify-end pt-2">
               <button
                 type="button"
-                onClick={() => setSelectedRecipientModal(null)}
+                onClick={closeRecipientModal}
                 className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
               >
                 Close
