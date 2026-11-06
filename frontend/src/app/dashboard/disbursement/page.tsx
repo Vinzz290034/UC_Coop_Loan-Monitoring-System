@@ -5713,26 +5713,13 @@ function DisbursementPageContent() {
 
             {/* Modal Footer */}
             <div className="px-6 py-3.5 border-t border-outline-variant/30 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/40 shrink-0">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedCvForModal(null)}
-                  className="px-5 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer shadow-2xs active:scale-95"
-                >
-                  Close
-                </button>
-                {fromReport && (
-                  <button
-                    type="button"
-                    onClick={handleBackToReport}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full bg-[#064e3b] text-white hover:bg-emerald-800 transition-all cursor-pointer shadow-xs active:scale-95"
-                    title="Return directly to Expense Breakdown modal"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    <span>Back to Expense Breakdown{returnAccount ? ` (${returnAccount})` : returnRecipient ? ` (${returnRecipient})` : ''}</span>
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCvForModal(null)}
+                className="px-5 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer shadow-2xs active:scale-95"
+              >
+                Close
+              </button>
 
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Staff / Admin: Approve for Release when 'on process' */}
