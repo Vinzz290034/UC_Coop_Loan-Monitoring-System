@@ -34,6 +34,8 @@ import {
   Banknote,
   FileText,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   CheckCircle2
 } from 'lucide-react';
 
@@ -186,7 +188,7 @@ export default function LoanVouchersTab({
   const [cvTotalPages, setCvTotalPages] = useState(1);
   const [cvBankFilter, setCvBankFilter] = useState('all');
   const [cvStatusFilter, setCvStatusFilter] = useState('all');
-  const [cvSortOrder, setCvSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [cvSortOrder, setCvSortOrder] = useState<'voucher_desc' | 'voucher_asc'>('voucher_desc');
   const [bankOptions, setBankOptions] = useState<string[]>(['BDO', 'MBTC']);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -1083,12 +1085,16 @@ export default function LoanVouchersTab({
                 )}
                 <th className="py-3.5 px-4">
                   <button
-                    onClick={() => setCvSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-                    className="flex items-center gap-1 font-bold text-[11px] hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                    title={`Sort by voucher number (${cvSortOrder === 'desc' ? 'Descending' : 'Ascending'})`}
+                    onClick={() => setCvSortOrder(prev => prev === 'voucher_desc' ? 'voucher_asc' : 'voucher_desc')}
+                    className="flex items-center gap-1 font-bold text-[11px] hover:text-neutral-900 dark:hover:text-white cursor-pointer select-none"
+                    title={`Sort by voucher number (${cvSortOrder === 'voucher_desc' ? 'Descending' : 'Ascending'})`}
                   >
                     <span>Voucher No.</span>
-                    <ArrowUpDown className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                    {cvSortOrder === 'voucher_asc' ? (
+                      <ArrowUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    ) : (
+                      <ArrowDown className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    )}
                   </button>
                 </th>
                 <th className="py-3.5 px-4">Date</th>

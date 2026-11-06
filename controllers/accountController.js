@@ -900,7 +900,7 @@ export const getCheckVouchers = async (req, res, next) => {
         created_at DESC
     `;
 
-    if (sort_by === 'voucher_asc') {
+    if (sort_by === 'voucher_asc' || sort_by === 'asc') {
       orderClause = `
         ORDER BY 
           CASE 
