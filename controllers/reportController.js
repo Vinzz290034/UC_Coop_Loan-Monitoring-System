@@ -1157,6 +1157,26 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
       ORDER BY voucher_date DESC
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rf_deleted_accounts (
+        name VARCHAR(150) PRIMARY KEY,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `).catch(() => {});
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rf_custom_accounts (
+        name VARCHAR(150) PRIMARY KEY,
+        category VARCHAR(100) DEFAULT 'Operation',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `).catch(() => {});
+
+    const deletedRes = await pool.query('SELECT name FROM rf_deleted_accounts').catch(() => ({ rows: [] }));
+    const deletedSet = new Set((deletedRes.rows || []).map(r => r.name.trim().toLowerCase()));
+
+    const customRes = await pool.query('SELECT name, category FROM rf_custom_accounts').catch(() => ({ rows: [] }));
+
     const itemized = [];
     let operationTotal = 0;
     let serviceTotal = 0;
@@ -1232,6 +1252,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
       if (amt <= 0) return;
 
       const accName = (row.account_name || 'General Operation').trim();
+      if (deletedSet.has(accName.toLowerCase())) return;
       if (!isOperatingExpenseAccount(accName, 'Revolving Fund', row.particulars)) return;
 
       const normalizedCat = categorizeExpenseAccount(accName, row.category);
@@ -1301,6 +1322,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
           if (amt <= 0) return;
 
           const accName = String(d.book_of_account || '').trim();
+          if (deletedSet.has(accName.toLowerCase())) return;
           // Strictly filter out Balance Sheet items (loans, liabilities, bank/cash, equity)
           if (!isOperatingExpenseAccount(accName, cv.folder_name, cv.particulars)) return;
 
@@ -1364,6 +1386,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
         const amt = parseFloat(String(cv.amount || 0));
         if (amt > 0) {
           const accName = String(cv.particulars || 'Disbursement Voucher').trim();
+          if (deletedSet.has(accName.toLowerCase())) return;
           if (isOperatingExpenseAccount(accName, cv.folder_name, cv.particulars)) {
             const cat = categorizeExpenseAccount(accName);
             if (cat === 'Merchandise Expense') {
@@ -1424,6 +1447,21 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
         }
       }
     });
+
+    for (const ca of customRes.rows) {
+      const caName = (ca.name || '').trim();
+      if (!caName || deletedSet.has(caName.toLowerCase())) continue;
+      if (!accountBreakdown[caName]) {
+        const normalizedCat = categorizeExpenseAccount(caName, ca.category);
+        accountBreakdown[caName] = {
+          account_name: caName,
+          category: normalizedCat,
+          total_amount: 0,
+          count: 0,
+          transactions: []
+        };
+      }
+    }
 
     const totalExpenses = operationTotal + serviceTotal + merchandiseTotal + otherTotal;
 

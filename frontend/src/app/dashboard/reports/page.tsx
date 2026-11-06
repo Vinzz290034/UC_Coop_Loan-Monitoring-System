@@ -106,6 +106,7 @@ function ReportsPageContent() {
   const [expenseAccountSortKey, setExpenseAccountSortKey] = useState<'name' | 'count' | 'amount'>('name');
   const [expenseAccountSortOrder, setExpenseAccountSortOrder] = useState<'asc' | 'desc'>('asc');
   const [recipientSearch, setRecipientSearch] = useState('');
+  const [accountsVersion, setAccountsVersion] = useState(0);
   const [selectedRecipientModal, setSelectedRecipientModal] = useState<any | null>(null);
   const [selectedAccountModal, setSelectedAccountModal] = useState<any | null>(null);
   const [accountModalSearch, setAccountModalSearch] = useState('');
@@ -136,6 +137,57 @@ function ReportsPageContent() {
 
   const filteredExpenseAccounts = useMemo(() => {
     let list = reportData?.accounts || [];
+
+    // Filter out deleted accounts (from localStorage and backend deleted list)
+    if (typeof window !== 'undefined') {
+      try {
+        const deletedSaved = localStorage.getItem('rf_deleted_accounts');
+        if (deletedSaved) {
+          const arr = JSON.parse(deletedSaved);
+          if (Array.isArray(arr) && arr.length > 0) {
+            const delSet = new Set(arr.map((s: string) => String(s).trim().toLowerCase()));
+            list = list.filter((acc: any) => !delSet.has((acc.account_name || '').trim().toLowerCase()));
+          }
+        }
+      } catch {}
+    }
+
+    // Merge any newly added custom accounts from localStorage if not yet returned by backend
+    if (typeof window !== 'undefined') {
+      try {
+        const customSaved = localStorage.getItem('rf_custom_accounts');
+        const catSaved = localStorage.getItem('rf_account_categories');
+        const catMap = catSaved ? JSON.parse(catSaved) : {};
+        if (customSaved) {
+          const arr = JSON.parse(customSaved);
+          if (Array.isArray(arr)) {
+            const existingNames = new Set(list.map((a: any) => (a.account_name || '').trim().toLowerCase()));
+            const toAdd: any[] = [];
+            for (const c of arr) {
+              const clean = String(c).trim();
+              if (clean && !existingNames.has(clean.toLowerCase())) {
+                const rawCat = catMap[clean.toLowerCase()] || 'Operation';
+                let normalizedCat = 'Operation Expense';
+                if (/service/i.test(rawCat)) normalizedCat = 'Service Expense';
+                else if (/merchandise/i.test(rawCat)) normalizedCat = 'Merchandise Expense';
+                toAdd.push({
+                  account_name: clean,
+                  category: normalizedCat,
+                  total_amount: 0,
+                  count: 0,
+                  share_pct: '0.0',
+                  transactions: []
+                });
+              }
+            }
+            if (toAdd.length > 0) {
+              list = [...list, ...toAdd];
+            }
+          }
+        }
+      } catch {}
+    }
+
     if (selectedExpenseCategory !== 'all') {
       list = list.filter((acc: any) => acc.category === selectedExpenseCategory);
     }
@@ -161,7 +213,7 @@ function ReportsPageContent() {
       }
       return 0;
     });
-  }, [reportData?.accounts, selectedExpenseCategory, expenseAccountSearch, expenseAccountSortKey, expenseAccountSortOrder]);
+  }, [reportData?.accounts, selectedExpenseCategory, expenseAccountSearch, expenseAccountSortKey, expenseAccountSortOrder, accountsVersion]);
 
   const accountModalTransactions = useMemo(() => {
     if (!selectedAccountModal) return [];
@@ -274,6 +326,20 @@ function ReportsPageContent() {
 
   useEffect(() => {
     fetchReport();
+  }, [fetchReport]);
+
+  // Sync custom/deleted accounts when modified from disbursement dropdown
+  useEffect(() => {
+    const handleAccountsUpdated = () => {
+      setAccountsVersion(v => v + 1);
+      fetchReport();
+    };
+    window.addEventListener('accounts_updated', handleAccountsUpdated);
+    window.addEventListener('storage', handleAccountsUpdated);
+    return () => {
+      window.removeEventListener('accounts_updated', handleAccountsUpdated);
+      window.removeEventListener('storage', handleAccountsUpdated);
+    };
   }, [fetchReport]);
 
   // Auto-open requested Account or Recipient Modal when returning from Check Voucher in Disbursement

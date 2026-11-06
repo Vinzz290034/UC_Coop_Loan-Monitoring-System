@@ -600,8 +600,13 @@ export const getCategorySpecificAccounts = (
   allAccounts: string[],
   categoryMap: Record<string, string> = {}
 ): string[] => {
+  const deleted = getRfDeletedAccountsSet();
   const normKey = normalizeDisbursementCategoryKey(targetCategory);
-  if (normKey === 'All') return allAccounts.slice().sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  if (normKey === 'All') {
+    return allAccounts
+      .filter(a => !deleted.has(a.trim().toLowerCase()))
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }
 
   let baseList: string[] = [];
   if (normKey === 'Petty Cash') {
@@ -616,6 +621,7 @@ export const getCategorySpecificAccounts = (
 
   // Filter custom and existing accounts matching this category
   const matchingFromAll = allAccounts.filter(acct => {
+    if (deleted.has(acct.trim().toLowerCase())) return false;
     const cat = getCategoryForAccount(acct, categoryMap);
     if (normKey === 'Petty Cash') {
       return cat === 'Petty Cash' || PETTY_CASH_ACCOUNT_OPTIONS.some(p => p.toLowerCase() === acct.toLowerCase());
@@ -644,8 +650,9 @@ export const getCategorySpecificAccounts = (
     return false;
   });
 
-  const merged = Array.from(new Set([...baseList, ...matchingFromAll]));
-  return merged.sort((a, b) => a.localeCompare(b));
+  const merged = Array.from(new Set([...baseList, ...matchingFromAll]))
+    .filter(a => !deleted.has(a.trim().toLowerCase()));
+  return merged.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 };
 
 export const getRfDeletedAccountsSet = (): Set<string> => {
@@ -869,13 +876,14 @@ function ReplenishmentAccountDropdown({
     return getCategorySpecificAccounts(targetCategoryKey, options, categoryMap);
   }, [targetCategoryKey, options, categoryMap]);
 
-  // Make sure current value is preserved in options list so it never appears unselected
+  // Make sure current value is preserved in options list so it never appears unselected (unless it was deleted)
   const availableOptions = useMemo(() => {
+    const deleted = getRfDeletedAccountsSet();
     const cleanVal = (value || '').trim();
-    if (cleanVal && !categorySpecificOptions.some(a => a.toLowerCase() === cleanVal.toLowerCase())) {
+    if (cleanVal && !deleted.has(cleanVal.toLowerCase()) && !categorySpecificOptions.some(a => a.toLowerCase() === cleanVal.toLowerCase())) {
       return [cleanVal, ...categorySpecificOptions];
     }
-    return categorySpecificOptions;
+    return categorySpecificOptions.filter(a => !deleted.has(a.trim().toLowerCase()));
   }, [categorySpecificOptions, value]);
 
   const filtered = useMemo(() => {
@@ -1111,9 +1119,12 @@ function ReplenishmentAccountDropdown({
                               onClick={e => {
                                 e.stopPropagation();
                                 onDeleteAccount(acct);
+                                if (value.trim().toLowerCase() === acct.trim().toLowerCase()) {
+                                  onChange('');
+                                }
                               }}
-                              className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 p-0.5 rounded transition-all cursor-pointer"
-                              title="Delete account option"
+                              className="text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 p-0.5 rounded transition-all cursor-pointer"
+                              title={`Delete account "${acct}"`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1520,11 +1531,17 @@ function DisbursementPageContent() {
       return merged;
     });
 
+    restoreRfDeletedAccount(trimmed);
+
     // 3. Persist to backend
     try {
       await api.post('/revolving-funds/accounts', { name: trimmed, category: catToUse });
     } catch (err) {
       console.error('Failed to save custom account to backend:', err);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('accounts_updated'));
     }
   };
 
@@ -1555,6 +1572,10 @@ function DisbursementPageContent() {
       await api.delete(`/revolving-funds/accounts/${encodeURIComponent(trimmed)}`);
     } catch (err) {
       console.error('Failed to remove custom account:', err);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('accounts_updated'));
     }
   };
 
