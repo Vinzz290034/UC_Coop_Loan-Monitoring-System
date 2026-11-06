@@ -32,13 +32,28 @@ import {
   ExternalLink,
   X,
   BarChart3,
-  ArrowLeft
+  ArrowLeft,
+  FolderTree,
+  ChevronRight,
+  Plus,
+  Trash2,
+  Check
 } from 'lucide-react';
 import FinancialSummaryGraphs from '@/components/reports/FinancialSummaryGraphs';
+import {
+  ACCOUNT_CATEGORIES,
+  CATEGORY_THEMES,
+  getCategoryForAccount,
+  REPLENISHMENT_ACCOUNT_OPTIONS,
+  getRfDeletedAccountsSet,
+  saveRfDeletedAccount,
+  restoreRfDeletedAccount
+} from '@/lib/accountCategories';
 
 export type ReportTab =
   | 'merchandise'
   | 'expenses'
+  | 'categories'
   | 'loans'
   | 'membership'
   | 'financial_statement'
@@ -50,6 +65,44 @@ const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+const getCategoryNavigationLink = (category: string) => {
+  const lower = (category || '').toLowerCase();
+  if (lower.includes('merchandise')) {
+    return {
+      label: 'Merchandise Sales & Profit',
+      href: '/dashboard/reports?tab=merchandise'
+    };
+  }
+  if (lower.includes('revolving')) {
+    return {
+      label: 'Revolving Funds',
+      href: '/dashboard/disbursement?tab=revolving_fund_replenishment'
+    };
+  }
+  if (lower.includes('petty')) {
+    return {
+      label: 'Petty Cash',
+      href: '/dashboard/disbursement?tab=petty_cash_replenishment'
+    };
+  }
+  if (lower.includes('service')) {
+    return {
+      label: 'Service Disbursement',
+      href: '/dashboard/disbursement?tab=service'
+    };
+  }
+  if (lower.includes('honorarium') || lower.includes('wages') || lower.includes('allowances')) {
+    return {
+      label: 'Recipient Compensation',
+      href: '/dashboard/reports?tab=expenses&subview=recipients'
+    };
+  }
+  return {
+    label: 'Expense Breakdown',
+    href: '/dashboard/reports?tab=expenses&subview=accounts'
+  };
+};
 
 function ReportsPageContent() {
   const { user } = useAuth();
@@ -66,11 +119,19 @@ function ReportsPageContent() {
   // Active Report Tab - supports deep-linking via ?tab=expenses
   const [activeTab, setActiveTab] = useState<ReportTab>(() => {
     const t = searchParams?.get('tab') as ReportTab | null;
-    if (t && ['summary', 'expenses', 'merchandise', 'loans', 'membership', 'financial_statement'].includes(t)) {
+    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'financial_statement'].includes(t)) {
       return t;
     }
     return 'summary';
   });
+
+  // Keep activeTab synchronized when ?tab= query parameter changes
+  useEffect(() => {
+    const t = searchParams?.get('tab') as ReportTab | null;
+    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'financial_statement'].includes(t)) {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
 
   // Filter States
   const now = new Date();
@@ -115,6 +176,22 @@ function ReportsPageContent() {
   const [merchandiseCatalogFilter, setMerchandiseCatalogFilter] = useState<'all' | 'sold'>('all');
   const [selectedLoanProductModal, setSelectedLoanProductModal] = useState<any | null>(null);
   const [loanProductModalSearch, setLoanProductModalSearch] = useState('');
+
+  // Book of Accounts by Category States
+  const [categorySearch, setCategorySearch] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<'all' | string>('all');
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [customAccounts, setCustomAccounts] = useState<string[]>([]);
+  const [accountCategoryMap, setAccountCategoryMap] = useState<Record<string, string>>({});
+
+  // Create / Delete Book of Account Modal States
+  const [isCreateAccountModalOpen, setIsCreateAccountModalOpen] = useState(false);
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountCategory, setNewAccountCategory] = useState('Operation');
+  const [isCategoryManuallyChosen, setIsCategoryManuallyChosen] = useState(false);
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<{ name: string; count: number } | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Financial Statement Sub-View & Search
   const [fsSubView, setFsSubView] = useState<'combined' | 'balance_sheet' | 'income_statement'>('combined');
@@ -276,9 +353,173 @@ function ReportsPageContent() {
     );
   }, [selectedLoanProductModal, loanProductModalSearch]);
 
+  // Sync custom accounts and categories from backend
+  useEffect(() => {
+    let isMounted = true;
+    api.get('/revolving-funds/accounts')
+      .then(res => {
+        if (!isMounted) return;
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const names: string[] = [];
+          const catMap: Record<string, string> = {};
+          for (const item of res.data.data) {
+            const name = typeof item === 'string' ? item : item.name;
+            const cat = typeof item === 'string' ? '' : item.category;
+            if (name) {
+              names.push(name);
+              if (cat) catMap[name.toLowerCase()] = cat;
+            }
+          }
+          setCustomAccounts(names);
+          setAccountCategoryMap(catMap);
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [accountsVersion]);
+
+  // Group all accounts under the 10 Categories
+  const categoryGroupsData = useMemo(() => {
+    const deleted = getRfDeletedAccountsSet();
+    const accountsData = reportData?.accounts || [];
+    const accountsByName = new Map<string, any>();
+    for (const a of accountsData) {
+      if (a.account_name) {
+        accountsByName.set(a.account_name.trim().toLowerCase(), a);
+      }
+    }
+
+    // Combine all known accounts
+    const allKnownNames = new Set<string>();
+    for (const opt of REPLENISHMENT_ACCOUNT_OPTIONS) {
+      if (!deleted.has(opt.trim().toLowerCase())) allKnownNames.add(opt.trim());
+    }
+    for (const a of accountsData) {
+      const clean = (a.account_name || '').trim();
+      if (clean && !deleted.has(clean.toLowerCase())) allKnownNames.add(clean);
+    }
+    for (const c of customAccounts) {
+      const clean = (c || '').trim();
+      if (clean && !deleted.has(clean.toLowerCase())) allKnownNames.add(clean);
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const customSaved = localStorage.getItem('rf_custom_accounts');
+        if (customSaved) {
+          const arr = JSON.parse(customSaved);
+          if (Array.isArray(arr)) {
+            for (const c of arr) {
+              const clean = String(c || '').trim();
+              if (clean && !deleted.has(clean.toLowerCase())) allKnownNames.add(clean);
+            }
+          }
+        }
+      } catch {}
+    }
+
+    let mergedCatMap = { ...accountCategoryMap };
+    if (typeof window !== 'undefined') {
+      try {
+        const catSaved = localStorage.getItem('rf_account_categories');
+        if (catSaved) {
+          const parsed = JSON.parse(catSaved);
+          mergedCatMap = { ...mergedCatMap, ...parsed };
+        }
+      } catch {}
+    }
+
+    const groups: Record<string, any[]> = {};
+    for (const cat of ACCOUNT_CATEGORIES) {
+      groups[cat.value] = [];
+    }
+
+    for (const name of allKnownNames) {
+      const cat = getCategoryForAccount(name, mergedCatMap);
+      const targetCat = groups[cat] ? cat : 'Operation';
+      const existingReport = accountsByName.get(name.toLowerCase());
+      groups[targetCat].push({
+        account_name: name,
+        category: targetCat,
+        total_amount: existingReport ? Number(existingReport.total_amount) || 0 : 0,
+        count: existingReport ? Number(existingReport.count) || 0 : 0,
+        transactions: existingReport?.transactions || [],
+        share_pct: existingReport?.share_pct || '0.0'
+      });
+    }
+
+    return ACCOUNT_CATEGORIES.map(cat => {
+      const allAccts = (groups[cat.value] || []).sort((a, b) =>
+        a.account_name.localeCompare(b.account_name, undefined, { sensitivity: 'base' })
+      );
+      const totalSpent = allAccts.reduce((sum, a) => sum + (Number(a.total_amount) || 0), 0);
+      const totalEntries = allAccts.reduce((sum, a) => sum + (Number(a.count) || 0), 0);
+
+      const q = categorySearch.trim().toLowerCase();
+      const filteredAccts = q
+        ? allAccts.filter(a =>
+            a.account_name.toLowerCase().includes(q) ||
+            cat.label.toLowerCase().includes(q)
+          )
+        : allAccts;
+
+      return {
+        category: cat.value,
+        label: cat.label,
+        color: cat.color,
+        description: cat.description,
+        theme: CATEGORY_THEMES[cat.value] || CATEGORY_THEMES['Operation'],
+        accounts: filteredAccts,
+        totalAccountsCount: allAccts.length,
+        total_spent: totalSpent,
+        total_entries: totalEntries,
+        isMatch: q ? (cat.label.toLowerCase().includes(q) || filteredAccts.length > 0) : true
+      };
+    });
+  }, [reportData?.accounts, customAccounts, accountCategoryMap, categorySearch, accountsVersion]);
+
+  const visibleCategoryGroups = useMemo(() => {
+    if (selectedCategoryFilter === 'all') {
+      return categoryGroupsData.filter(g => g.isMatch);
+    }
+    return categoryGroupsData.filter(g => g.category === selectedCategoryFilter && g.isMatch);
+  }, [categoryGroupsData, selectedCategoryFilter]);
+
+  const totalCategoryAccountsCount = useMemo(() => {
+    return categoryGroupsData.reduce((sum, g) => sum + g.totalAccountsCount, 0);
+  }, [categoryGroupsData]);
+
+  const totalCategorySpent = useMemo(() => {
+    return categoryGroupsData.reduce((sum, g) => sum + g.total_spent, 0);
+  }, [categoryGroupsData]);
+
+  const totalCategoryEntries = useMemo(() => {
+    return categoryGroupsData.reduce((sum, g) => sum + g.total_entries, 0);
+  }, [categoryGroupsData]);
+
+  const toggleCategoryCollapse = (catValue: string) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [catValue]: !prev[catValue]
+    }));
+  };
+
+  const handleExpandAll = () => {
+    const next: Record<string, boolean> = {};
+    ACCOUNT_CATEGORIES.forEach(c => { next[c.value] = false; });
+    setCollapsedCategories(next);
+  };
+
+  const handleCollapseAll = () => {
+    const next: Record<string, boolean> = {};
+    ACCOUNT_CATEGORIES.forEach(c => { next[c.value] = true; });
+    setCollapsedCategories(next);
+  };
+
   // Handlers to close modals and clean URL parameters
   const closeAccountModal = useCallback(() => {
     setSelectedAccountModal(null);
+    autoOpenedRef.current = null;
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       if (url.searchParams.has('account')) {
@@ -291,6 +532,7 @@ function ReportsPageContent() {
 
   const closeRecipientModal = useCallback(() => {
     setSelectedRecipientModal(null);
+    autoOpenedRef.current = null;
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       if (url.searchParams.has('recipient')) {
@@ -301,10 +543,115 @@ function ReportsPageContent() {
     }
   }, []);
 
+  // Handlers to create and delete Book of Accounts
+  const handleCreateAccount = async () => {
+    const trimmed = newAccountName.trim();
+    if (!trimmed) return;
+    const catToUse = newAccountCategory.trim() || 'Operation';
+
+    setIsSavingAccount(true);
+    restoreRfDeletedAccount(trimmed);
+
+    // 1. Update localStorage
+    try {
+      const customSaved = localStorage.getItem('rf_custom_accounts');
+      const arr = customSaved ? JSON.parse(customSaved) : [];
+      const merged = Array.from(new Set([...(Array.isArray(arr) ? arr : []), trimmed])).sort((a, b) => a.localeCompare(b));
+      localStorage.setItem('rf_custom_accounts', JSON.stringify(merged));
+
+      const catSaved = localStorage.getItem('rf_account_categories');
+      const catMap = catSaved ? JSON.parse(catSaved) : {};
+      catMap[trimmed.toLowerCase()] = catToUse;
+      localStorage.setItem('rf_account_categories', JSON.stringify(catMap));
+    } catch {}
+
+    // 2. Update local state
+    setCustomAccounts(prev => Array.from(new Set([...prev, trimmed])).sort((a, b) => a.localeCompare(b)));
+    setAccountCategoryMap(prev => ({ ...prev, [trimmed.toLowerCase()]: catToUse }));
+
+    // 3. Persist to backend
+    try {
+      await api.post('/revolving-funds/accounts', { name: trimmed, category: catToUse });
+    } catch (err) {
+      console.error('Failed to save account to backend:', err);
+    }
+
+    // 4. Dispatch event & refresh
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('accounts_updated'));
+    }
+    setAccountsVersion(v => v + 1);
+    fetchReport();
+
+    setIsSavingAccount(false);
+    setIsCreateAccountModalOpen(false);
+    setNewAccountName('');
+    setIsCategoryManuallyChosen(false);
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    if (!accountToDelete) return;
+    const trimmed = accountToDelete.name.trim();
+    setIsDeletingAccount(true);
+
+    // 1. Mark as deleted persistently
+    saveRfDeletedAccount(trimmed);
+
+    // 2. Update localStorage
+    try {
+      const customSaved = localStorage.getItem('rf_custom_accounts');
+      if (customSaved) {
+        const arr = JSON.parse(customSaved);
+        if (Array.isArray(arr)) {
+          const filtered = arr.filter((a: any) => String(a || '').trim().toLowerCase() !== trimmed.toLowerCase());
+          localStorage.setItem('rf_custom_accounts', JSON.stringify(filtered));
+        }
+      }
+      const catSaved = localStorage.getItem('rf_account_categories');
+      if (catSaved) {
+        const catMap = JSON.parse(catSaved);
+        delete catMap[trimmed.toLowerCase()];
+        localStorage.setItem('rf_account_categories', JSON.stringify(catMap));
+      }
+    } catch {}
+
+    // 3. Update state
+    setCustomAccounts(prev => prev.filter(a => a.toLowerCase() !== trimmed.toLowerCase()));
+    setAccountCategoryMap(prev => {
+      const next = { ...prev };
+      delete next[trimmed.toLowerCase()];
+      return next;
+    });
+
+    // 4. Persist to backend
+    try {
+      await api.delete(`/revolving-funds/accounts/${encodeURIComponent(trimmed)}`);
+    } catch (err) {
+      console.error('Failed to delete account on backend:', err);
+    }
+
+    // 5. Close account modal if open with this account
+    if (selectedAccountModal && (selectedAccountModal.account_name || '').toLowerCase() === trimmed.toLowerCase()) {
+      closeAccountModal();
+    }
+
+    // 6. Dispatch event & refresh
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('accounts_updated'));
+    }
+    setAccountsVersion(v => v + 1);
+    fetchReport();
+
+    setIsDeletingAccount(false);
+    setAccountToDelete(null);
+  };
+
   // Close modals on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (isCreateAccountModalOpen) setIsCreateAccountModalOpen(false);
+        if (accountToDelete) setAccountToDelete(null);
         if (selectedLoanProductModal) setSelectedLoanProductModal(null);
         if (selectedMerchandiseModal) setSelectedMerchandiseModal(null);
         if (selectedAccountModal) closeAccountModal();
@@ -314,7 +661,17 @@ function ReportsPageContent() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLoanProductModal, selectedMerchandiseModal, selectedAccountModal, selectedRecipientModal, selectedFsAccountModal, closeAccountModal, closeRecipientModal]);
+  }, [
+    isCreateAccountModalOpen,
+    accountToDelete,
+    selectedLoanProductModal,
+    selectedMerchandiseModal,
+    selectedAccountModal,
+    selectedRecipientModal,
+    selectedFsAccountModal,
+    closeAccountModal,
+    closeRecipientModal
+  ]);
 
   // Fetch report data based on active tab and period
   const fetchReport = useCallback(async () => {
@@ -325,6 +682,7 @@ function ReportsPageContent() {
       const endpointMap: Record<ReportTab, string> = {
         merchandise: '/reports/merchandise-sales',
         expenses: '/reports/expenses-breakdown',
+        categories: '/reports/expenses-breakdown',
         loans: '/reports/loan-products',
         membership: '/reports/membership-update',
         financial_statement: '/reports/financial-statement',
@@ -374,16 +732,31 @@ function ReportsPageContent() {
     if (!reportData) return;
 
     const targetAccountName = searchParams?.get('account');
-    if (targetAccountName && Array.isArray(reportData.accounts)) {
+    if (targetAccountName) {
       const key = `acc-${targetAccountName}`;
       if (autoOpenedRef.current !== key) {
         autoOpenedRef.current = key;
-        const match = reportData.accounts.find(
-          (a: any) => (a.account_name || '').trim().toLowerCase() === targetAccountName.trim().toLowerCase()
-        );
+        let match = Array.isArray(reportData.accounts)
+          ? reportData.accounts.find(
+              (a: any) => (a.account_name || '').trim().toLowerCase() === targetAccountName.trim().toLowerCase()
+            )
+          : null;
+        if (!match) {
+          for (const grp of categoryGroupsData) {
+            const found = grp.accounts.find(
+              (a: any) => (a.account_name || '').trim().toLowerCase() === targetAccountName.trim().toLowerCase()
+            );
+            if (found) {
+              match = found;
+              break;
+            }
+          }
+        }
         if (match) {
           setSelectedAccountModal(match);
-          setExpenseSubView('accounts');
+          if (activeTab === 'expenses') {
+            setExpenseSubView('accounts');
+          }
         }
         // Immediately remove ?account= from browser URL so subsequent refreshes or visits don't keep reopening it
         if (typeof window !== 'undefined') {
@@ -392,6 +765,10 @@ function ReportsPageContent() {
           const qs = url.searchParams.toString();
           window.history.replaceState({}, '', url.pathname + (qs ? `?${qs}` : ''));
         }
+      }
+    } else {
+      if (autoOpenedRef.current?.startsWith('acc-')) {
+        autoOpenedRef.current = null;
       }
     }
 
@@ -415,8 +792,12 @@ function ReportsPageContent() {
           window.history.replaceState({}, '', url.pathname + (qs ? `?${qs}` : ''));
         }
       }
+    } else {
+      if (autoOpenedRef.current?.startsWith('rec-')) {
+        autoOpenedRef.current = null;
+      }
     }
-  }, [reportData, searchParams]);
+  }, [reportData, searchParams, categoryGroupsData, activeTab]);
 
   // Daily, Monthly, and Annual periods supported across all report tabs
 
@@ -540,6 +921,19 @@ function ReportsPageContent() {
           const recWs = XLSX.utils.json_to_sheet(recRows);
           XLSX.utils.book_append_sheet(wb, recWs, 'Recipient Payroll & Honorarium');
         }
+      } else if (activeTab === 'categories') {
+        const rows: any[] = [];
+        for (const grp of categoryGroupsData) {
+          for (const a of grp.accounts) {
+            rows.push({
+              'Category': grp.label,
+              'Book of Accounts': a.account_name,
+              'Recorded Entries Count': a.count
+            });
+          }
+        }
+        const ws = XLSX.utils.json_to_sheet(rows);
+        XLSX.utils.book_append_sheet(wb, ws, 'Book of Accounts by Category');
       } else if (activeTab === 'loans') {
         const rows = (reportData.products || []).map((lp: any) => ({
           'Loan Product': lp.product_name,
@@ -749,6 +1143,7 @@ function ReportsPageContent() {
           { id: 'summary', label: 'Summary', icon: BarChart3 },
           { id: 'merchandise', label: 'Merchandise Sales & Profit', icon: ShoppingBag },
           { id: 'expenses', label: 'Expense Breakdown', icon: DollarSign },
+          { id: 'categories', label: 'Book of Accounts', icon: FolderTree },
           { id: 'loans', label: 'Loan Products', icon: CreditCard },
           { id: 'membership', label: 'Membership Updates', icon: Users },
           { id: 'financial_statement', label: 'Financial Statement', icon: PieChart },
@@ -1665,6 +2060,322 @@ function ReportsPageContent() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* 2.5 BOOK OF ACCOUNTS BY CATEGORY TAB */}
+          {/* ============================================================== */}
+          {activeTab === 'categories' && (
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
+                  <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider">Book of Accounts</span>
+                    <BookOpen className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-neutral-900 dark:text-white mt-1.5 font-mono">
+                    {totalCategoryAccountsCount}
+                  </div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">Across all 10 active categories</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
+                  <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider">Configured Categories</span>
+                    <FolderTree className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-neutral-900 dark:text-white mt-1.5 font-mono">
+                    {ACCOUNT_CATEGORIES.length}
+                  </div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">Operation, Merchandise, Service, etc.</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
+                  <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider">Recorded Entries</span>
+                    <FileText className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-neutral-900 dark:text-white mt-1.5 font-mono">
+                    {totalCategoryEntries}
+                  </div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">Transactions logged across accounts</div>
+                </div>
+              </div>
+
+              {/* Controls bar: Search, Filter Pills & Collapse/Expand */}
+              <div className="bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 rounded-2xl p-4 shadow-2xs space-y-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" />
+                    <input
+                      type="text"
+                      value={categorySearch}
+                      onChange={(e) => setCategorySearch(e.target.value)}
+                      placeholder="Search any account or category..."
+                      className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-neutral-900 dark:text-white placeholder:text-neutral-400"
+                    />
+                    {categorySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setCategorySearch('')}
+                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewAccountName('');
+                        setNewAccountCategory(selectedCategoryFilter !== 'all' ? selectedCategoryFilter : 'Operation');
+                        setIsCategoryManuallyChosen(selectedCategoryFilter !== 'all');
+                        setIsCreateAccountModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#064e3b] dark:bg-emerald-600 hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white shadow-xs hover:shadow-md active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Book of Account</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExpandAll}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                    >
+                      Expand All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCollapseAll}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                    >
+                      Collapse All
+                    </button>
+                  </div>
+                </div>
+
+                {/* Category Selector Pills */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-neutral-100 dark:border-neutral-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategoryFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      selectedCategoryFilter === 'all'
+                        ? 'bg-[#064e3b] text-white shadow-xs'
+                        : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                    }`}
+                  >
+                    All Categories ({ACCOUNT_CATEGORIES.length})
+                  </button>
+                  {ACCOUNT_CATEGORIES.map(cat => {
+                    const isSel = selectedCategoryFilter === cat.value;
+                    const grp = categoryGroupsData.find(g => g.category === cat.value);
+                    const count = grp?.totalAccountsCount || 0;
+                    return (
+                      <button
+                        key={cat.value}
+                        type="button"
+                        onClick={() => setSelectedCategoryFilter(cat.value)}
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          isSel
+                            ? 'bg-[#064e3b] text-white shadow-xs'
+                            : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                        }`}
+                      >
+                        <span>{cat.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                          isSel ? 'bg-white/20 text-white' : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 10 Category Accordion Cards */}
+              <div className="space-y-4">
+                {visibleCategoryGroups.length === 0 ? (
+                  <div className="p-12 text-center bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 text-neutral-400">
+                    <p className="text-sm font-semibold">No categories or book of accounts matching &ldquo;{categorySearch}&rdquo;</p>
+                    <button
+                      type="button"
+                      onClick={() => { setCategorySearch(''); setSelectedCategoryFilter('all'); }}
+                      className="mt-3 px-3.5 py-1.5 rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-xs font-bold cursor-pointer"
+                    >
+                      Clear search & filters
+                    </button>
+                  </div>
+                ) : (
+                  visibleCategoryGroups.map(grp => {
+                    const isCollapsed = Boolean(collapsedCategories[grp.category]);
+                    return (
+                      <div
+                        key={grp.category}
+                        className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-2xs overflow-hidden transition-all"
+                      >
+                        {/* Category Card Header */}
+                        <div
+                          onClick={() => toggleCategoryCollapse(grp.category)}
+                          className="p-4 flex items-center justify-between cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/40 select-none transition-colors border-b border-neutral-100 dark:border-neutral-800"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${grp.theme.iconBg}`}>
+                              <Layers className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="text-sm font-extrabold text-neutral-900 dark:text-white">
+                                  {grp.label}
+                                </h3>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${grp.theme.badge}`}>
+                                  {grp.totalAccountsCount} {grp.totalAccountsCount === 1 ? 'account' : 'accounts'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
+                                {grp.description}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0 pl-3">
+                            {/* Quick Add Account Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNewAccountName('');
+                                setNewAccountCategory(grp.category);
+                                setIsCategoryManuallyChosen(true);
+                                setIsCreateAccountModalOpen(true);
+                              }}
+                              className="hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 transition-colors cursor-pointer"
+                              title={`Add new account under ${grp.label}`}
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Add Account</span>
+                            </button>
+
+                            {/* Destination Page Link */}
+                            {(() => {
+                              const nav = getCategoryNavigationLink(grp.category);
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(nav.href);
+                                  }}
+                                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold bg-neutral-100 hover:bg-emerald-100 dark:bg-neutral-800 dark:hover:bg-emerald-950/70 text-neutral-700 hover:text-emerald-800 dark:text-neutral-300 dark:hover:text-emerald-300 border border-neutral-200 dark:border-neutral-700 transition-colors cursor-pointer"
+                                  title={`Open ${nav.label}`}
+                                >
+                                  <span>{nav.label}</span>
+                                  <ExternalLink className="w-3 h-3 opacity-70" />
+                                </button>
+                              );
+                            })()}
+                            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 text-neutral-500">
+                              <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Category Card Content (Table of Accounts) */}
+                        {!isCollapsed && (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead className="bg-neutral-50 dark:bg-neutral-800/60 text-neutral-500 dark:text-neutral-400 font-bold uppercase text-[9.5px] border-b border-neutral-200 dark:border-neutral-800">
+                                <tr>
+                                  <th className="p-2.5 w-12 text-center border-r border-neutral-200 dark:border-neutral-800">#</th>
+                                  <th className="p-2.5 min-w-[260px] border-r border-neutral-200 dark:border-neutral-800">Book of Accounts Name</th>
+                                  <th className="p-2.5 w-36 text-center border-r border-neutral-200 dark:border-neutral-800">Recorded Entries</th>
+                                  <th className="p-2.5 w-40 text-center">Action</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                                {grp.accounts.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={4} className="py-6 text-center text-neutral-400 italic">
+                                      No accounts found under this category matching your search.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  grp.accounts.map((acc, aIdx) => {
+                                    return (
+                                      <tr
+                                        key={acc.account_name}
+                                        onClick={() => setSelectedAccountModal(acc)}
+                                        className="hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-colors cursor-pointer group"
+                                      >
+                                        <td className="p-2.5 text-center font-mono text-[11px] text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
+                                          {aIdx + 1}
+                                        </td>
+                                        <td className="p-2.5 font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                                          <div className="flex items-center gap-2">
+                                            <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                                              {acc.account_name}
+                                            </span>
+                                            {acc.count > 0 && (
+                                              <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                                Active
+                                              </span>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="p-2.5 text-center font-mono text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
+                                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                            acc.count > 0
+                                              ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-semibold'
+                                              : 'text-neutral-400'
+                                          }`}>
+                                            {acc.count} {acc.count === 1 ? 'entry' : 'entries'}
+                                          </span>
+                                        </td>
+                                        <td className="p-2.5 text-center">
+                                          <div className="inline-flex items-center gap-1.5 justify-center">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedAccountModal(acc);
+                                              }}
+                                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-bold bg-neutral-100 hover:bg-emerald-100 dark:bg-neutral-800 dark:hover:bg-emerald-950/70 text-neutral-700 hover:text-emerald-800 dark:text-neutral-300 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+                                              title="View itemized transaction entries"
+                                            >
+                                              <span>View Entries</span>
+                                              <ExternalLink className="w-3 h-3 opacity-70" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setAccountToDelete({ name: acc.account_name, count: acc.count });
+                                              }}
+                                              className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                              title={`Delete ${acc.account_name}`}
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
 
@@ -3375,9 +4086,11 @@ function ReportsPageContent() {
                                 params.set('voucher', t.voucher_no);
                               }
                               if (t.voucher_id) params.set('id', t.voucher_id);
-                              params.set('fromReport', 'expenses');
+                              params.set('fromReport', activeTab);
                               params.set('returnAccount', selectedAccountModal.account_name);
-                              params.set('returnSubView', 'accounts');
+                              if (activeTab === 'expenses') {
+                                params.set('returnSubView', 'accounts');
+                              }
                               params.set('period', period);
                               params.set('year', String(year));
                               if (period === 'monthly') params.set('month', String(month));
@@ -3387,6 +4100,15 @@ function ReportsPageContent() {
                               const params = new URLSearchParams();
                               params.set('tab', 'revolving_fund_replenishment');
                               if (t.lf_no) params.set('search', t.lf_no);
+                              params.set('fromReport', activeTab);
+                              params.set('returnAccount', selectedAccountModal.account_name);
+                              if (activeTab === 'expenses') {
+                                params.set('returnSubView', 'accounts');
+                              }
+                              params.set('period', period);
+                              params.set('year', String(year));
+                              if (period === 'monthly') params.set('month', String(month));
+                              if (period === 'daily') params.set('date', date);
                               router.push(`/dashboard/disbursement?${params.toString()}`);
                             }
                           }}
@@ -3615,6 +4337,222 @@ function ReportsPageContent() {
                 className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Create Book of Account Modal */}
+      {isCreateAccountModalOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/75 backdrop-blur-md p-3 sm:p-6 overflow-y-auto animate-modal-backdrop"
+          onClick={() => setIsCreateAccountModalOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-lg bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800 rounded-3xl p-6 shadow-2xl space-y-4 animate-modal-pop"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#064e3b] text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                  <Sparkles className="w-5 h-5 text-emerald-300" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-neutral-900 dark:text-white">
+                    Create Book of Account
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Add a new account to your chart of accounts and link it to a category
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateAccountModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-300 mb-1.5">
+                  Account Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newAccountName}
+                  onChange={(e) => {
+                    setNewAccountName(e.target.value);
+                    if (!isCategoryManuallyChosen) {
+                      setNewAccountCategory(getCategoryForAccount(e.target.value, accountCategoryMap));
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleCreateAccount();
+                    }
+                  }}
+                  placeholder="e.g. Communication Equipment"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs font-semibold text-neutral-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none placeholder:text-neutral-400"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-300 mb-1.5">
+                  Select Category <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {ACCOUNT_CATEGORIES.map(cat => {
+                    const isSelected = newAccountCategory === cat.value;
+                    return (
+                      <button
+                        key={cat.value}
+                        type="button"
+                        onClick={() => {
+                          setNewAccountCategory(cat.value);
+                          setIsCategoryManuallyChosen(true);
+                        }}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+                          isSelected
+                            ? `${cat.color} ring-2 ring-emerald-500 shadow-xs font-black`
+                            : 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        <span>{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="text-[11px] text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 rounded-xl p-2.5 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>
+                  This account will instantly synchronize across all disbursement dropdowns and financial reports.
+                </span>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-200 dark:border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setIsCreateAccountModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!newAccountName.trim() || isSavingAccount}
+                onClick={handleCreateAccount}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#064e3b] hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-xs hover:shadow-md transition-all cursor-pointer"
+              >
+                {isSavingAccount ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Book of Account</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Delete Book of Account Confirmation Modal */}
+      {accountToDelete && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/75 backdrop-blur-md p-3 sm:p-6 overflow-y-auto animate-modal-backdrop"
+          onClick={() => !isDeletingAccount && setAccountToDelete(null)}
+        >
+          <div
+            className="relative w-full max-w-md bg-white dark:bg-neutral-900 border border-rose-300 dark:border-rose-900/80 rounded-3xl p-6 shadow-2xl space-y-4 animate-modal-pop"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white font-bold flex items-center justify-center shadow-xs shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-neutral-900 dark:text-white">
+                    Delete Book of Account
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Remove account from chart of accounts
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isDeletingAccount && setAccountToDelete(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="space-y-3">
+              <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed">
+                Are you sure you want to delete <strong className="text-neutral-900 dark:text-white font-bold">&ldquo;{accountToDelete.name}&rdquo;</strong>?
+              </p>
+
+              {accountToDelete.count > 0 ? (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                  ⚠️ This account has <strong className="font-bold">{accountToDelete.count} recorded transaction {accountToDelete.count === 1 ? 'entry' : 'entries'}</strong> in this period. Deleting it will remove it from dropdown selectors and account listings.
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs text-neutral-600 dark:text-neutral-400">
+                  This account will be removed from voucher selection dropdowns and financial report categories.
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-200 dark:border-neutral-800">
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={() => setAccountToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={handleConfirmDeleteAccount}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-xs hover:shadow-md transition-all cursor-pointer"
+              >
+                {isDeletingAccount ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

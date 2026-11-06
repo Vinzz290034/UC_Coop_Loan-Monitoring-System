@@ -1191,6 +1191,8 @@ function DisbursementPageContent() {
   const returnMonth = searchParams.get('month');
   const returnDate = searchParams.get('date');
 
+  const reportTabName = fromReport === 'categories' ? 'Book of Accounts' : 'Expense Breakdown';
+
   const handleBackToReport = useCallback(() => {
     const p = new URLSearchParams();
     p.set('tab', fromReport || 'expenses');
@@ -4041,7 +4043,7 @@ function DisbursementPageContent() {
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 font-bold text-xs border border-emerald-300 dark:border-emerald-700 shadow-2xs transition-all cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Expense Breakdown{returnAccount ? ` (${returnAccount})` : returnRecipient ? ` (${returnRecipient})` : ''}</span>
+              <span>Back to {reportTabName}{returnAccount ? ` (${returnAccount})` : returnRecipient ? ` (${returnRecipient})` : ''}</span>
             </button>
           ) : (
             <BackButton href="/dashboard" label="Back to Overview" />
@@ -5447,11 +5449,11 @@ function DisbursementPageContent() {
                     type="button"
                     onClick={handleBackToReport}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 font-bold text-xs border border-emerald-300 dark:border-emerald-700 shadow-2xs transition-all cursor-pointer"
-                    title="Return directly to Expense Breakdown modal"
+                    title={`Return directly to ${reportTabName} modal`}
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Back to</span>
-                    <span className="max-w-[150px] truncate">{returnAccount || returnRecipient || 'Expense Breakdown'}</span>
+                    <span className="max-w-[150px] truncate">{returnAccount || returnRecipient || reportTabName}</span>
                   </button>
                 )}
                 <button
