@@ -41,7 +41,8 @@ import {
   Check,
   GripVertical,
   Unlock,
-  ArrowLeft
+  ArrowLeft,
+  User
 } from 'lucide-react';
 
 // Tab configuration matching the user spreadsheet structure
@@ -813,7 +814,8 @@ function ReplenishmentAccountDropdown({
   disbursementCategory,
   onAddAccount,
   onDeleteAccount,
-  placeholder = 'Select or type account...'
+  placeholder = 'Select or type account...',
+  excludeOptions = []
 }: {
   value: string;
   onChange: (val: string) => void;
@@ -823,6 +825,7 @@ function ReplenishmentAccountDropdown({
   onAddAccount?: (name: string, category: string) => void;
   onDeleteAccount?: (name: string) => void;
   placeholder?: string;
+  excludeOptions?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -879,12 +882,13 @@ function ReplenishmentAccountDropdown({
   // Make sure current value is preserved in options list so it never appears unselected (unless it was deleted)
   const availableOptions = useMemo(() => {
     const deleted = getRfDeletedAccountsSet();
+    const excludeSet = new Set((excludeOptions || []).map(x => x.trim().toLowerCase()));
     const cleanVal = (value || '').trim();
-    if (cleanVal && !deleted.has(cleanVal.toLowerCase()) && !categorySpecificOptions.some(a => a.toLowerCase() === cleanVal.toLowerCase())) {
-      return [cleanVal, ...categorySpecificOptions];
+    if (cleanVal && !deleted.has(cleanVal.toLowerCase()) && !excludeSet.has(cleanVal.toLowerCase()) && !categorySpecificOptions.some(a => a.toLowerCase() === cleanVal.toLowerCase())) {
+      return [cleanVal, ...categorySpecificOptions.filter(a => !excludeSet.has(a.trim().toLowerCase()))];
     }
-    return categorySpecificOptions.filter(a => !deleted.has(a.trim().toLowerCase()));
-  }, [categorySpecificOptions, value]);
+    return categorySpecificOptions.filter(a => !deleted.has(a.trim().toLowerCase()) && !excludeSet.has(a.trim().toLowerCase()));
+  }, [categorySpecificOptions, value, excludeOptions]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -1164,6 +1168,186 @@ function ReplenishmentAccountDropdown({
                 )}
               </div>
             </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReplenishmentRecipientDropdown({
+  value,
+  onChange,
+  options = [],
+  onAddRecipient,
+  placeholder = 'Recipient...'
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options?: string[];
+  onAddRecipient?: (name: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const listRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (open && listRef.current) {
+      listRef.current.scrollTop = 0;
+    }
+  }, [open]);
+
+  // Ensure current value is in the list
+  const availableOptions = useMemo(() => {
+    const cleanVal = (value || '').trim();
+    if (cleanVal && !options.some(o => o.toLowerCase() === cleanVal.toLowerCase())) {
+      return [cleanVal, ...options];
+    }
+    return options;
+  }, [options, value]);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return availableOptions;
+    return availableOptions.filter(opt => opt.toLowerCase().includes(term));
+  }, [availableOptions, search]);
+
+  const exactMatchExists = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return false;
+    return options.some(opt => opt.trim().toLowerCase() === term);
+  }, [options, search]);
+
+  const handleSelect = (recipientName: string) => {
+    onChange(recipientName);
+    setSearch('');
+    setOpen(false);
+  };
+
+  const handleAddNew = () => {
+    const clean = search.trim();
+    if (!clean) return;
+    if (onAddRecipient) {
+      onAddRecipient(clean);
+    }
+    onChange(clean);
+    setSearch('');
+    setOpen(false);
+  };
+
+  return (
+    <div className={`relative w-full ${open ? 'z-50' : 'z-10'}`} ref={wrapperRef}>
+      <div className="relative flex items-center">
+        <input
+          type="text"
+          value={value}
+          onChange={e => {
+            onChange(e.target.value);
+            setSearch(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => {
+            setSearch('');
+            setOpen(true);
+          }}
+          placeholder={placeholder}
+          className="w-full pr-7 px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none transition-colors"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => setOpen(prev => !prev)}
+          className="absolute right-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer p-0.5"
+          title="Toggle recipient list"
+        >
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? 'rotate-180 text-emerald-600 dark:text-emerald-400' : ''}`} />
+        </button>
+      </div>
+
+      {open && (
+        <div
+          ref={listRef}
+          className="absolute left-0 top-full mt-1.5 w-full min-w-[260px] max-w-sm bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl shadow-2xl z-[60] ring-1 ring-black/5 dark:ring-white/5 animate-dropdown-pop origin-top overflow-hidden flex flex-col"
+        >
+          {/* Header indicator */}
+          <div className="px-3 py-1.5 bg-neutral-50/80 dark:bg-neutral-800/60 border-b border-outline-variant/30 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+            <span className="flex items-center gap-1.5">
+              <User className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+              Recipients ({filtered.length})
+            </span>
+            {search.trim() && (
+              <span className="text-emerald-600 dark:text-emerald-400 lowercase font-normal truncate max-w-[120px]">
+                "{search.trim()}"
+              </span>
+            )}
+          </div>
+
+          {/* List of options */}
+          <div className="max-h-52 overflow-y-auto divide-y divide-outline-variant/10">
+            {filtered.length === 0 ? (
+              <div className="p-3 text-center text-xs text-neutral-400 italic">
+                No recipient found matching "{search}"
+              </div>
+            ) : (
+              filtered.map(name => {
+                const isSelected = value?.trim().toLowerCase() === name.trim().toLowerCase();
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => handleSelect(name)}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 font-bold'
+                        : 'hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0 text-[10px] font-bold">
+                        {name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="truncate">{name}</span>
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Add custom recipient button if user typed something new */}
+          {search.trim() && !exactMatchExists && (
+            <div className="p-2 border-t border-outline-variant/30 bg-neutral-50/70 dark:bg-neutral-800/40">
+              <button
+                type="button"
+                onClick={handleAddNew}
+                className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Use "{search.trim()}" as Recipient</span>
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -1453,6 +1637,20 @@ function DisbursementPageContent() {
     return {};
   });
 
+  // Compensation Recipients for Honorarium & Wages revolving fund
+  const [recipientOptions, setRecipientOptions] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('rf_compensation_recipients');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+
   // Fetch accounts from server to sync custom accounts and categories
   const fetchCustomAccounts = useCallback(async () => {
     try {
@@ -1481,10 +1679,11 @@ function DisbursementPageContent() {
         }
 
         const deleted = getRfDeletedAccountsSet();
+        const recLowerSet = new Set((recipientOptions || []).map(r => r.trim().toLowerCase()));
 
         setCustomAccountOptions(prev => {
           const merged = Array.from(new Set([...REPLENISHMENT_ACCOUNT_OPTIONS, ...prev, ...serverNames]))
-            .filter(a => !deleted.has(a.trim().toLowerCase()))
+            .filter(a => !deleted.has(a.trim().toLowerCase()) && !recLowerSet.has(a.trim().toLowerCase()))
             .sort((a, b) => a.localeCompare(b));
           try {
             localStorage.setItem('rf_custom_accounts', JSON.stringify(merged));
@@ -1502,11 +1701,61 @@ function DisbursementPageContent() {
     } catch {
       // Quietly keep local options if server endpoint fails
     }
+  }, [recipientOptions]);
+
+  const fetchRecipients = useCallback(async () => {
+    try {
+      const res = await api.get('/revolving-funds/recipients');
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setRecipientOptions(prev => {
+          const merged = Array.from(new Set([...prev, ...res.data.data]))
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b));
+          try {
+            localStorage.setItem('rf_compensation_recipients', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+        return;
+      }
+    } catch {}
+    try {
+      const expRes = await api.get('/reports/expenses-breakdown?period=all');
+      if (expRes.data?.recipients && Array.isArray(expRes.data.recipients)) {
+        const names = expRes.data.recipients.map((r: any) => r.name).filter(Boolean);
+        setRecipientOptions(prev => {
+          const merged = Array.from(new Set([...prev, ...names])).sort((a, b) => a.localeCompare(b));
+          try {
+            localStorage.setItem('rf_compensation_recipients', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
+    } catch {}
+  }, []);
+
+  const handleAddCustomRecipient = useCallback(async (name: string) => {
+    const clean = name.trim();
+    if (!clean) return;
+    setRecipientOptions(prev => {
+      if (prev.some(r => r.toLowerCase() === clean.toLowerCase())) return prev;
+      const updated = [...prev, clean].sort((a, b) => a.localeCompare(b));
+      try {
+        localStorage.setItem('rf_compensation_recipients', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    try {
+      await api.post('/revolving-funds/recipients', { name: clean });
+    } catch (err) {
+      console.error('Failed to save recipient to backend:', err);
+    }
   }, []);
 
   useEffect(() => {
     fetchCustomAccounts();
-  }, [fetchCustomAccounts]);
+    fetchRecipients();
+  }, [fetchCustomAccounts, fetchRecipients]);
 
   const handleAddCustomAccount = async (name: string, category: string) => {
     const trimmed = name.trim();
@@ -5004,6 +5253,7 @@ function DisbursementPageContent() {
                                           value={row.description}
                                           onChange={val => updateCvRowField(false, row.id!, 'description', val, replenishType)}
                                           options={customAccountOptions}
+                                          excludeOptions={recipientOptions}
                                           categoryMap={accountCategoryMap}
                                           disbursementCategory={newCvCategory}
                                           onAddAccount={handleAddCustomAccount}
@@ -5012,13 +5262,23 @@ function DisbursementPageContent() {
                                       )}
                                     </div>
                                     <div>
-                                      <input
-                                        type="text"
-                                        placeholder={isHonWagesRow ? 'Recipient...' : (replenishType === 'stl' ? 'Borrower...' : 'Remarks...')}
-                                        value={row.remarks || ''}
-                                        onChange={e => updateCvRowField(false, row.id!, 'remarks', e.target.value, replenishType)}
-                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                                      />
+                                      {isHonWagesRow ? (
+                                        <ReplenishmentRecipientDropdown
+                                          value={row.remarks || ''}
+                                          onChange={val => updateCvRowField(false, row.id!, 'remarks', val, replenishType)}
+                                          options={recipientOptions}
+                                          onAddRecipient={handleAddCustomRecipient}
+                                          placeholder="Recipient..."
+                                        />
+                                      ) : (
+                                        <input
+                                          type="text"
+                                          placeholder={replenishType === 'stl' ? 'Borrower...' : 'Remarks...'}
+                                          value={row.remarks || ''}
+                                          onChange={e => updateCvRowField(false, row.id!, 'remarks', e.target.value, replenishType)}
+                                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                        />
+                                      )}
                                     </div>
                                     <div>
                                       {isCreditRow ? (
@@ -6292,6 +6552,7 @@ function DisbursementPageContent() {
                                         options={customAccountOptions}
                                         categoryMap={accountCategoryMap}
                                         disbursementCategory={editCvFormData.folder_name}
+                                        excludeOptions={recipientOptions}
                                         onAddAccount={handleAddCustomAccount}
                                         onDeleteAccount={handleDeleteCustomAccount}
                                       />
@@ -6299,13 +6560,23 @@ function DisbursementPageContent() {
                                     )}
                                   </div>
                                   <div>
-                                    <input
-                                      type="text"
-                                      placeholder={isHonWagesRow ? 'Recipient...' : (replenishType === 'stl' ? 'Borrower...' : 'Remarks...')}
-                                      value={row.remarks || ''}
-                                      onChange={e => updateCvRowField(true, row.id!, 'remarks', e.target.value, replenishType)}
-                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                                    />
+                                    {isHonWagesRow ? (
+                                      <ReplenishmentRecipientDropdown
+                                        value={row.remarks || ''}
+                                        onChange={val => updateCvRowField(true, row.id!, 'remarks', val, replenishType)}
+                                        options={recipientOptions}
+                                        onAddRecipient={handleAddCustomRecipient}
+                                        placeholder="Recipient..."
+                                      />
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        placeholder={replenishType === 'stl' ? 'Borrower...' : 'Remarks...'}
+                                        value={row.remarks || ''}
+                                        onChange={e => updateCvRowField(true, row.id!, 'remarks', e.target.value, replenishType)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                      />
+                                    )}
                                   </div>
                                   <div>
                                     {isCreditRow ? (

@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { normalizeRecipientName } from './reportController.js';
 
 // @desc    Get all Revolving Fund Liquidation Forms with stats & pagination
 // @route   GET /api/revolving-funds
@@ -894,6 +895,26 @@ export const getRevolvingFundAccounts = async (req, res, next) => {
     const deletedRes = await query('SELECT name FROM rf_deleted_accounts').catch(() => ({ rows: [] }));
     const deletedSet = new Set((deletedRes.rows || []).map(r => r.name.trim().toLowerCase()));
 
+    // Gather known recipients to exclude them from book of accounts so people are never returned as accounts
+    const knownRecipients = new Set();
+    const rfRecRes = await query(`
+      SELECT remarks, particulars, account_name, category
+      FROM rf_liquidation_items
+      WHERE (remarks IS NOT NULL AND TRIM(remarks) != '')
+         OR (particulars IS NOT NULL AND TRIM(particulars) != '')
+    `).catch(() => ({ rows: [] }));
+
+    for (const r of rfRecRes.rows) {
+      const isH = /honorarium/i.test(r.account_name) || /honorarium/i.test(r.category) || /honorarium/i.test(r.particulars);
+      const isA = /allowance/i.test(r.account_name) || /allowance/i.test(r.category) || /allowance/i.test(r.particulars);
+      const isS = /salary/i.test(r.account_name) || /salary/i.test(r.category) || /salary/i.test(r.particulars);
+      const isW = /wage/i.test(r.account_name) || /wage/i.test(r.category) || /wage/i.test(r.particulars);
+      if (isH || isA || isS || isW) {
+        const norm = normalizeRecipientName(r.remarks || r.particulars);
+        if (norm) knownRecipients.add(norm.toLowerCase());
+      }
+    }
+
     // Combine unique account names
     const accountMap = new Map();
 
@@ -901,7 +922,7 @@ export const getRevolvingFundAccounts = async (req, res, next) => {
     for (const row of itemsRes.rows) {
       if (row.account_name && row.account_name.trim()) {
         const clean = row.account_name.trim();
-        if (!deletedSet.has(clean.toLowerCase())) {
+        if (!deletedSet.has(clean.toLowerCase()) && !knownRecipients.has(clean.toLowerCase())) {
           accountMap.set(clean.toLowerCase(), { name: clean, category: row.category || 'Operation' });
         }
       }
@@ -911,7 +932,7 @@ export const getRevolvingFundAccounts = async (req, res, next) => {
     for (const row of customRes.rows) {
       if (row.name && row.name.trim()) {
         const clean = row.name.trim();
-        if (!deletedSet.has(clean.toLowerCase())) {
+        if (!deletedSet.has(clean.toLowerCase()) && !knownRecipients.has(clean.toLowerCase())) {
           accountMap.set(clean.toLowerCase(), { name: clean, category: row.category || 'Operation' });
         }
       }
@@ -990,6 +1011,125 @@ export const deleteRevolvingFundAccount = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Account removed successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all compensation recipients for Honorarium, Wages, Allowances, Salary
+// @route   GET /api/revolving-funds/recipients
+// @access  Protected (Admin, Staff)
+export const getRevolvingFundRecipients = async (req, res, next) => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS rf_custom_recipients (
+        name VARCHAR(150) PRIMARY KEY,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `).catch(() => {});
+
+    // 1. Get from rf_liquidation_items
+    const rfRes = await query(`
+      SELECT remarks, particulars, account_name, category
+      FROM rf_liquidation_items
+      WHERE (remarks IS NOT NULL AND TRIM(remarks) != '')
+         OR (particulars IS NOT NULL AND TRIM(particulars) != '')
+    `);
+
+    // 2. Get from check_vouchers
+    const cvRes = await query(`
+      SELECT payee, particulars, folder_name, details
+      FROM check_vouchers
+      WHERE status != 'cancelled'
+    `);
+
+    // 3. Custom recipients
+    const customRes = await query(`
+      SELECT name FROM rf_custom_recipients ORDER BY name ASC
+    `).catch(() => ({ rows: [] }));
+
+    const recipientSet = new Set();
+
+    function checkAndAdd(rawName, desc, cat, particulars) {
+      if (!rawName) return;
+      const isH = /honorarium/i.test(desc) || /honorarium/i.test(cat) || /honorarium/i.test(particulars);
+      const isA = /allowance/i.test(desc) || /allowance/i.test(cat) || /allowance/i.test(particulars);
+      const isS = /salary/i.test(desc) || /salary/i.test(cat) || /salary/i.test(particulars);
+      const isW = /wage/i.test(desc) || /wage/i.test(cat) || /wage/i.test(particulars);
+      if (!isH && !isA && !isS && !isW) return;
+
+      const norm = normalizeRecipientName(rawName);
+      if (norm && !/^(n\/?a|none|unknown|test)$/i.test(norm)) {
+        recipientSet.add(norm);
+      }
+    }
+
+    for (const row of rfRes.rows) {
+      checkAndAdd(row.remarks || row.particulars, row.account_name, row.category, row.particulars);
+    }
+
+    for (const cv of cvRes.rows) {
+      const fundOrPart = `${cv.particulars || ''} ${cv.folder_name || ''}`;
+      if (Array.isArray(cv.details) && cv.details.length > 0) {
+        for (const d of cv.details) {
+          if (d.is_credit) continue;
+          const name = d.remarks || d.recipient || cv.payee;
+          checkAndAdd(name, d.book_of_account, d.category, `${fundOrPart} ${d.book_of_account || ''}`);
+        }
+      } else {
+        checkAndAdd(cv.payee, cv.particulars, '', fundOrPart);
+      }
+    }
+
+    for (const cr of customRes.rows) {
+      const norm = normalizeRecipientName(cr.name);
+      if (norm && !/^(n\/?a|none|unknown|test)$/i.test(norm)) {
+        recipientSet.add(norm);
+      }
+    }
+
+    const recipients = Array.from(recipientSet).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    res.status(200).json({
+      success: true,
+      data: recipients
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Save custom recipient
+// @route   POST /api/revolving-funds/recipients
+// @access  Protected (Admin, Staff)
+export const saveRevolvingFundRecipient = async (req, res, next) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Recipient name is required' });
+    }
+    const cleanName = normalizeRecipientName(name);
+    if (!cleanName) {
+      return res.status(400).json({ success: false, message: 'Invalid recipient name' });
+    }
+
+    await query(`
+      CREATE TABLE IF NOT EXISTS rf_custom_recipients (
+        name VARCHAR(150) PRIMARY KEY,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `).catch(() => {});
+
+    await query(`
+      INSERT INTO rf_custom_recipients (name)
+      VALUES ($1)
+      ON CONFLICT (name) DO NOTHING
+    `, [cleanName]);
+
+    res.status(200).json({
+      success: true,
+      data: cleanName
     });
   } catch (error) {
     next(error);

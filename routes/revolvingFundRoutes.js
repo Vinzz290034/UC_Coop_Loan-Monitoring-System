@@ -13,7 +13,9 @@ import {
   deleteLiquidationItem,
   getRevolvingFundAccounts,
   saveRevolvingFundAccount,
-  deleteRevolvingFundAccount
+  deleteRevolvingFundAccount,
+  getRevolvingFundRecipients,
+  saveRevolvingFundRecipient
 } from '../controllers/revolvingFundController.js';
 
 const router = express.Router();
@@ -31,6 +33,10 @@ router.route('/accounts')
 
 router.route('/accounts/:name')
   .delete(deleteRevolvingFundAccount);
+
+router.route('/recipients')
+  .get(getRevolvingFundRecipients)
+  .post(saveRevolvingFundRecipient);
 
 router.route('/:id')
   .get(getLiquidationById)
