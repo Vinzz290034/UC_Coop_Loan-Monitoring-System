@@ -33,6 +33,7 @@ import { migrateCollectionItems } from './migrate_collection_items.js';
 import { migrateFixMisaLoans } from './migrate_fix_misa_loans.js';
 import { migrateRestoreStlCvRemarks } from './migrate_restore_stl_cv_remarks.js';
 import { migrateSalesRegistryCatalog } from './migrate_sales_registry_catalog.js';
+import { migrateFixCv26076 } from './migrate_fix_cv_26_076.js';
 
 export async function runMigrations() {
   console.log('[System Startup] Running automated database migrations...');
@@ -71,6 +72,7 @@ export async function runMigrations() {
     await migrateFixMisaLoans();
     await migrateRestoreStlCvRemarks();
     await migrateSalesRegistryCatalog();
+    await migrateFixCv26076();
     console.log('[System Startup] All database migrations completed successfully.');
   } catch (error) {
     console.error('[System Startup] Database migration error:', error);
