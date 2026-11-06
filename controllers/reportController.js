@@ -1170,9 +1170,10 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
       if (amt <= 0) return;
       const isH = /honorarium/i.test(desc) || /honorarium/i.test(cat) || /honorarium/i.test(particularText);
       const isA = /allowance/i.test(desc) || /allowance/i.test(cat) || /allowance/i.test(particularText);
-      const isW = /wage|salary/i.test(desc) || /wage|salary/i.test(cat) || /wage|salary/i.test(particularText);
+      const isS = /salary/i.test(desc) || /salary/i.test(cat) || /salary/i.test(particularText);
+      const isW = /wage/i.test(desc) || /wage/i.test(cat) || /wage/i.test(particularText);
 
-      if (!isH && !isA && !isW) return;
+      if (!isH && !isA && !isS && !isW) return;
 
       const normName = normalizeRecipientName(rawRecipient);
       if (!normName || /^(n\/?a|none|unknown|test)$/i.test(normName)) return;
@@ -1183,6 +1184,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
           total_honorarium: 0,
           total_allowances: 0,
           total_wages: 0,
+          total_salary: 0,
           total_compensation: 0,
           payout_count: 0,
           transactions: []
@@ -1197,9 +1199,15 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
       } else if (isA) {
         rec.total_allowances += amt;
         itemType = 'Allowances';
+      } else if (isS && (!isW || /salary/i.test(desc))) {
+        rec.total_salary += amt;
+        itemType = 'Salary';
       } else if (isW) {
         rec.total_wages += amt;
         itemType = 'Wages';
+      } else if (isS) {
+        rec.total_salary += amt;
+        itemType = 'Salary';
       }
 
       rec.total_compensation += amt;
@@ -1422,21 +1430,24 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
     const accounts = Object.values(accountBreakdown).map(a => ({
       ...a,
       share_pct: totalExpenses > 0 ? ((a.total_amount / totalExpenses) * 100).toFixed(1) : '0.0'
-    })).sort((a, b) => b.total_amount - a.total_amount);
+    })).sort((a, b) => (a.account_name || '').localeCompare(b.account_name || '', undefined, { sensitivity: 'base' }));
 
     let totalHonorarium = 0;
     let totalAllowances = 0;
     let totalWages = 0;
+    let totalSalary = 0;
     let totalCompensation = 0;
 
     const recipients = Object.values(recipientMap).map(r => {
       totalHonorarium += r.total_honorarium;
       totalAllowances += r.total_allowances;
       totalWages += r.total_wages;
+      totalSalary += (r.total_salary || 0);
       totalCompensation += r.total_compensation;
       r.transactions.sort((a, b) => (b.date > a.date ? 1 : -1));
       return {
         ...r,
+        total_salary: r.total_salary || 0,
         share_pct: totalCompensation > 0 ? ((r.total_compensation / totalCompensation) * 100).toFixed(1) : '0.0'
       };
     }).sort((a, b) => b.total_compensation - a.total_compensation);
@@ -1445,11 +1456,13 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
       total_honorarium: totalHonorarium,
       total_allowances: totalAllowances,
       total_wages: totalWages,
+      total_salary: totalSalary,
       total_compensation: totalCompensation,
       total_recipients: recipients.length,
       honorarium_pct: totalCompensation > 0 ? ((totalHonorarium / totalCompensation) * 100).toFixed(1) : '0.0',
       allowances_pct: totalCompensation > 0 ? ((totalAllowances / totalCompensation) * 100).toFixed(1) : '0.0',
-      wages_pct: totalCompensation > 0 ? ((totalWages / totalCompensation) * 100).toFixed(1) : '0.0'
+      wages_pct: totalCompensation > 0 ? ((totalWages / totalCompensation) * 100).toFixed(1) : '0.0',
+      salary_pct: totalCompensation > 0 ? ((totalSalary / totalCompensation) * 100).toFixed(1) : '0.0'
     };
 
     return res.status(200).json({

@@ -40,7 +40,8 @@ import {
   Send,
   Check,
   GripVertical,
-  Unlock
+  Unlock,
+  ArrowLeft
 } from 'lucide-react';
 
 // Tab configuration matching the user spreadsheet structure
@@ -455,70 +456,197 @@ export const checkIsCreditRow = (row: { isAutoCredit?: boolean; is_credit?: bool
 };
 
 
-export const REPLENISHMENT_ACCOUNT_OPTIONS = [
+export const PETTY_CASH_ACCOUNT_OPTIONS = [
+  'Communication',
+  'COS -water',
+  'COS - Water Vendo',
+  'Freight in',
+  'Hygiene expense',
+  'key locker duplicate',
+  'Meeting meals',
+  'Miscellaneous',
+  'Office supplies',
+  'Office Use',
+  'Petty Cash Replenishment',
+  'Porterage',
+  'Repair & Maintenance',
+  'Transportation',
+  'Travel & Transportation'
+].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+export const MERCHANDISE_ACCOUNT_OPTIONS = [
+  'black shoes',
+  'CE - Gala',
+  'COGS - FREIGHT IN - Pershing Cap',
+  'COGS-handbag',
+  'COGS-Pershing cap',
+  'Commission- Participation Card',
+  'Commission- ROTC Manual',
+  'Freight in',
+  'Inventory-handbag',
+  'Inventory-hardhat',
+  'Inventory-Pershing cap',
+  'Inventory-safety goggles',
+  'Merchandise Inventory - Gala',
+  'Merchandise Inventory - Lanyard',
+  'Merchandise Inventory - Pershing Cap',
+  'Merchandise Inventory - Type A & B',
+  'Porterage',
+  'Uniform items'
+].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+export const OPERATION_EXPENSE_ACCOUNT_OPTIONS = [
+  'Account Payable',
   'Advances to employee',
-  'Seminar & Training',
-  'Professional Fee',
-  'Professional and Consultancy Fee',
+  'Allowances',
   'Audit Professional Expense',
-  'SSS premium-EE Share',
-  'SSS premium-ER share',
+  'Communication',
+  'Credit Payable to Baterna',
+  'Donation Expense',
+  'Due to CETF - Apex Organization',
+  'Fixture & Furniture',
+  'Honorarium',
+  'Incentive',
+  'Insurance Payable',
+  'Insurance Payable- 1CISP',
+  'Insurance payable- Climbs',
+  'Licenses & Taxes',
+  'Meeting & conferences',
+  'Miscellaneous',
+  'Office supplies',
+  'Office Supplies Expenses',
+  'Office Use',
   'Pag-ibig premium ER share',
   'Pag-ibig premium- EE share',
   'Philhealth -EE share',
   'Philhealth-ER share',
+  'Professional and Consultancy Fee',
+  'Professional Fee',
+  'Repair & Maintenance',
+  'Representation',
+  'Salary',
+  'Seminar & Training',
+  'SSS premium-EE Share',
+  'SSS premium-ER share',
+  'Wages'
+].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+export const SERVICES_EXPENSE_ACCOUNT_OPTIONS = [
+  'COS - Scoresheet',
   'COS -water',
   'COS - Water Vendo',
-  'Transportation',
-  'Travel & Transportation',
-  'Honorarium',
-  'Allowances',
-  'Representation',
-  'COS - Scoresheet',
   'COS- hardbound',
-  'COS- printing',
   'COS- Insurance',
+  'COS- printing',
   'COS-Wifi',
-  'Office supplies',
-  'Office Supplies Expenses',
-  'Office Use',
-  'Hygiene expense',
-  'Insurance payable- Climbs',
-  'Insurance Payable- 1CISP',
-  'Insurance Payable',
-  'Licenses & Taxes',
-  'Inventory-handbag',
-  'Inventory-hardhat',
-  'Inventory-safety goggles',
-  'Inventory-Pershing cap',
-  'Merchandise Inventory - Pershing Cap',
-  'Merchandise Inventory - Lanyard',
-  'COGS-Pershing cap',
-  'COGS - FREIGHT IN - Pershing Cap',
-  'COGS-handbag',
-  'Freight in',
-  'Porterage',
-  'Commission- Participation Card',
-  'Commission- ROTC Manual',
-  'Wages',
-  'Communication',
-  'Repair & Maintenance',
-  'Meeting & conferences',
-  'Meeting meals',
-  'Incentive',
-  'key locker duplicate',
-  'CE - Gala',
-  'Toga Rental Revenue',
-  'Toga Rental Labor Expense',
   'labor',
-  'Fixture & Furniture',
-  'Account Payable',
-  'Credit Payable to Baterna',
-  'Due to CETF - Apex Organization',
-  'Donation Expense',
-  'Miscellaneous',
+  'Repair & Maintenance',
+  'Repair & Maintenance - Equipment',
+  'Service Supplies',
+  'Toga Rental Labor Expense',
+  'Toga Rental Revenue'
+].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+export const REVOLVING_FUND_ACCOUNT_OPTIONS = [
+  'Advances to employee',
+  'Allowances',
+  'Honorarium',
+  'Office supplies',
+  'Petty Cash Replenishment',
+  'Revolving Fund - Honorarium & Wages',
+  'Revolving Fund - Manager',
+  'Revolving Fund - Petty Cash',
+  'Revolving Fund - Rice',
+  'Salary',
+  'Transportation',
+  'Wages'
+].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+export const REPLENISHMENT_ACCOUNT_OPTIONS = Array.from(new Set([
+  ...PETTY_CASH_ACCOUNT_OPTIONS,
+  ...MERCHANDISE_ACCOUNT_OPTIONS,
+  ...OPERATION_EXPENSE_ACCOUNT_OPTIONS,
+  ...SERVICES_EXPENSE_ACCOUNT_OPTIONS,
+  ...REVOLVING_FUND_ACCOUNT_OPTIONS,
   'Short Term Loan'
-];
+])).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+export const normalizeDisbursementCategoryKey = (cat?: string): 'Petty Cash' | 'Merchandise' | 'Operation' | 'Service' | 'All' => {
+  const lower = (cat || '').toLowerCase().trim();
+  if (lower.includes('petty')) return 'Petty Cash';
+  if (lower.includes('merchandise')) return 'Merchandise';
+  if (lower.includes('service')) return 'Service';
+  if (lower.includes('operation')) return 'Operation';
+  // Revolving Fund retains the full, unrestricted list of Book of Accounts
+  return 'All';
+};
+
+export const getTransactionRefHeader = (categoryOrFolder?: string, rfClass?: string): string => {
+  const cat = (categoryOrFolder || '').toLowerCase();
+  const rfc = (rfClass || '').toLowerCase();
+  if (rfc.includes('honorarium') || rfc.includes('wages') || rfc.includes('salary') || cat.includes('honorarium') || cat.includes('wages') || cat.includes('salary')) {
+    return 'Cash Release Form No.';
+  }
+  if (cat.includes('stl')) return 'LAF No.';
+  if (cat.includes('petty')) return 'PCV #';
+  if (cat.includes('merchandise')) return 'Invoice / PO #';
+  if (cat.includes('operation')) return 'Bill / Invoice #';
+  if (cat.includes('service')) return 'Service / OR #';
+  return 'RF Voucher #';
+};
+
+export const getCategorySpecificAccounts = (
+  targetCategory: string,
+  allAccounts: string[],
+  categoryMap: Record<string, string> = {}
+): string[] => {
+  const normKey = normalizeDisbursementCategoryKey(targetCategory);
+  if (normKey === 'All') return allAccounts.slice().sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+  let baseList: string[] = [];
+  if (normKey === 'Petty Cash') {
+    baseList = PETTY_CASH_ACCOUNT_OPTIONS;
+  } else if (normKey === 'Merchandise') {
+    baseList = MERCHANDISE_ACCOUNT_OPTIONS;
+  } else if (normKey === 'Operation') {
+    baseList = OPERATION_EXPENSE_ACCOUNT_OPTIONS;
+  } else if (normKey === 'Service') {
+    baseList = SERVICES_EXPENSE_ACCOUNT_OPTIONS;
+  }
+
+  // Filter custom and existing accounts matching this category
+  const matchingFromAll = allAccounts.filter(acct => {
+    const cat = getCategoryForAccount(acct, categoryMap);
+    if (normKey === 'Petty Cash') {
+      return cat === 'Petty Cash' || PETTY_CASH_ACCOUNT_OPTIONS.some(p => p.toLowerCase() === acct.toLowerCase());
+    }
+    if (normKey === 'Merchandise') {
+      return cat === 'Merchandise' || MERCHANDISE_ACCOUNT_OPTIONS.some(m => m.toLowerCase() === acct.toLowerCase());
+    }
+    if (normKey === 'Service') {
+      return cat === 'Service' || SERVICES_EXPENSE_ACCOUNT_OPTIONS.some(s => s.toLowerCase() === acct.toLowerCase());
+    }
+    if (normKey === 'Operation') {
+      return (
+        cat === 'Operation' ||
+        cat === 'Honorarium' ||
+        cat === 'Allowances' ||
+        cat === 'Wages' ||
+        cat === 'Salary' ||
+        cat === 'CETF' ||
+        cat === 'CDF' ||
+        OPERATION_EXPENSE_ACCOUNT_OPTIONS.some(o => o.toLowerCase() === acct.toLowerCase())
+      );
+    }
+    if (normKey === 'Revolving Fund') {
+      return cat === 'Revolving Fund' || acct.toLowerCase().startsWith('revolving fund') || cat === 'Honorarium' || cat === 'Allowances' || cat === 'Wages' || cat === 'Salary';
+    }
+    return false;
+  });
+
+  const merged = Array.from(new Set([...baseList, ...matchingFromAll]));
+  return merged.sort((a, b) => a.localeCompare(b));
+};
 
 export const getRfDeletedAccountsSet = (): Set<string> => {
   if (typeof window === 'undefined') return new Set();
@@ -557,6 +685,8 @@ export const ACCOUNT_CATEGORIES = [
   { value: 'Operation', label: 'Operation', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border-blue-300 dark:border-blue-700' },
   { value: 'Merchandise', label: 'Merchandise', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700' },
   { value: 'Service', label: 'Service', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 border-purple-300 dark:border-purple-700' },
+  { value: 'Petty Cash', label: 'Petty Cash', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' },
+  { value: 'Revolving Fund', label: 'Revolving Fund', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border-teal-300 dark:border-teal-700' },
   { value: 'CETF', label: 'CETF', color: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-300 dark:border-rose-700' },
   { value: 'CDF', label: 'CDF', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' },
   { value: 'Honorarium', label: 'Honorarium', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border-teal-300 dark:border-teal-700' },
@@ -587,7 +717,18 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
     }
   }
 
-  // 3. Honorarium & Wages accounts
+  // 3. Petty Cash accounts heuristic
+  if (
+    lower === 'petty cash replenishment' ||
+    lower === 'hygiene expense' ||
+    lower === 'key locker duplicate' ||
+    lower === 'meeting meals' ||
+    (lower.includes('petty') && !lower.includes('revolving'))
+  ) {
+    return 'Petty Cash';
+  }
+
+  // 4. Honorarium & Wages accounts
   if (lower === 'honorarium' || (lower.includes('honorarium') && !lower.includes('allowance'))) {
     return 'Honorarium';
   }
@@ -601,34 +742,51 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
     return 'Wages';
   }
 
-  // 4. Keyword-based heuristic auto-classification
+  // 5. Revolving Fund classifications
+  if (lower.startsWith('revolving fund')) {
+    return 'Revolving Fund';
+  }
+
+  // 6. Service accounts
   if (
     lower.includes('wifi') ||
-    lower.includes('water') ||
-    lower.includes('cos') ||
     lower.includes('scoresheet') ||
     lower.includes('score sheet') ||
-    lower.includes('service') ||
-    lower.includes('repair') ||
-    lower.includes('labor') ||
-    lower.includes('duplicate') ||
-    lower.includes('toga rental labor')
+    lower.includes('toga rental') ||
+    lower.includes('printing') ||
+    lower.includes('hardbound') ||
+    lower.includes('photocopy') ||
+    lower.includes('service supplies') ||
+    lower.includes('service')
   ) {
     return 'Service';
   }
+
+  // 7. Merchandise accounts
   if (
     lower.includes('merchandise') ||
     lower.includes('inventory') ||
     lower.includes('cogs') ||
-    lower.includes('freight') ||
-    lower.includes('commission') ||
     lower.includes('pershing') ||
     lower.includes('lanyard') ||
     lower.includes('handbag') ||
     lower.includes('hardhat') ||
     lower.includes('goggles') ||
-    lower.includes('porterage')
+    lower.includes('black shoes') ||
+    lower.includes('shoes') ||
+    lower.includes('uniform') ||
+    lower.includes('gala')
   ) {
+    return 'Merchandise';
+  }
+
+  if (lower.includes('water')) {
+    return 'Petty Cash';
+  }
+  if (lower.includes('transportation') || lower.includes('travel')) {
+    return 'Petty Cash';
+  }
+  if (lower.includes('freight') || lower.includes('porterage')) {
     return 'Merchandise';
   }
   if (lower.includes('cetf') || lower.includes('apex')) {
@@ -645,6 +803,7 @@ function ReplenishmentAccountDropdown({
   onChange,
   options = REPLENISHMENT_ACCOUNT_OPTIONS,
   categoryMap = {},
+  disbursementCategory,
   onAddAccount,
   onDeleteAccount,
   placeholder = 'Select or type account...'
@@ -653,6 +812,7 @@ function ReplenishmentAccountDropdown({
   onChange: (val: string) => void;
   options?: string[];
   categoryMap?: Record<string, string>;
+  disbursementCategory?: string;
   onAddAccount?: (name: string, category: string) => void;
   onDeleteAccount?: (name: string) => void;
   placeholder?: string;
@@ -663,6 +823,12 @@ function ReplenishmentAccountDropdown({
   const [newAcctName, setNewAcctName] = useState('');
   const [newAcctCategory, setNewAcctCategory] = useState('Operation');
   const [categoryManuallySet, setCategoryManuallySet] = useState(false);
+
+  // Normalize disbursement category to standard category key
+  const targetCategoryKey = useMemo(() => {
+    return normalizeDisbursementCategoryKey(disbursementCategory);
+  }, [disbursementCategory]);
+
   const wrapperRef = React.useRef<HTMLDivElement>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
 
@@ -697,13 +863,28 @@ function ReplenishmentAccountDropdown({
     }
   }, [open, isCreating]);
 
+  // Get options for active category
+  const categorySpecificOptions = useMemo(() => {
+    if (targetCategoryKey === 'All') return options;
+    return getCategorySpecificAccounts(targetCategoryKey, options, categoryMap);
+  }, [targetCategoryKey, options, categoryMap]);
+
+  // Make sure current value is preserved in options list so it never appears unselected
+  const availableOptions = useMemo(() => {
+    const cleanVal = (value || '').trim();
+    if (cleanVal && !categorySpecificOptions.some(a => a.toLowerCase() === cleanVal.toLowerCase())) {
+      return [cleanVal, ...categorySpecificOptions];
+    }
+    return categorySpecificOptions;
+  }, [categorySpecificOptions, value]);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return options;
-    return options.filter(acct =>
+    if (!term) return availableOptions;
+    return availableOptions.filter(acct =>
       acct.toLowerCase().includes(term)
     );
-  }, [options, search]);
+  }, [availableOptions, search]);
 
   const exactMatchExists = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -713,8 +894,10 @@ function ReplenishmentAccountDropdown({
 
   const handleStartCreate = (suggestedName = search.trim()) => {
     setNewAcctName(suggestedName);
-    const guessed = getCategoryForAccount(suggestedName, categoryMap);
-    setNewAcctCategory(guessed);
+    const defaultCat = targetCategoryKey !== 'All'
+      ? (targetCategoryKey === 'Petty Cash' ? 'Operation' : targetCategoryKey)
+      : getCategoryForAccount(suggestedName, categoryMap);
+    setNewAcctCategory(defaultCat);
     setCategoryManuallySet(false);
     setIsCreating(true);
   };
@@ -769,7 +952,7 @@ function ReplenishmentAccountDropdown({
       {open && (
         <div
           ref={listRef}
-          className="absolute left-0 top-full mt-1.5 w-full min-w-[360px] max-w-lg bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl shadow-2xl z-[60] ring-1 ring-black/5 dark:ring-white/5 animate-dropdown-pop origin-top overflow-hidden flex flex-col"
+          className="absolute left-0 top-full mt-1.5 w-full min-w-[380px] max-w-lg bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl shadow-2xl z-[60] ring-1 ring-black/5 dark:ring-white/5 animate-dropdown-pop origin-top overflow-hidden flex flex-col"
         >
           {isCreating ? (
             /* Inline New Account Creator View */
@@ -844,7 +1027,7 @@ function ReplenishmentAccountDropdown({
               </div>
 
               <div className="text-[10px] text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 rounded-md px-2 py-1">
-                Auto-fills credit row 2 as: <span className="font-bold font-mono">Revolving Fund - {newAcctCategory}</span>
+                Category links directly to Expense Breakdown & Financial Reports
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-1 border-t border-outline-variant/20">
@@ -906,14 +1089,18 @@ function ReplenishmentAccountDropdown({
                         <span className="truncate flex-1">{acct}</span>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span
-                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                              cat === 'Service'
-                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+                              cat === 'Petty Cash'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                                : cat === 'Service'
+                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 border-purple-300 dark:border-purple-800'
                                 : cat === 'Merchandise'
-                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                                : cat === 'Revolving Fund'
+                                ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border-teal-300 dark:border-teal-800'
                                 : cat === 'CETF' || cat === 'CDF'
-                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
-                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-300 dark:border-rose-800'
+                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border-blue-300 dark:border-blue-800'
                             }`}
                           >
                             {cat}
@@ -982,6 +1169,29 @@ function DisbursementPageContent() {
   const isAdminOrStaff = user?.role === 'admin' || user?.role === 'staff';
   const rowIdCounterRef = useRef(0);
   const nextRowId = (prefix: string = 'row') => `${prefix}-${++rowIdCounterRef.current}`;
+
+  // Return to Reports navigation
+  const fromReport = searchParams.get('fromReport');
+  const returnAccount = searchParams.get('returnAccount');
+  const returnRecipient = searchParams.get('returnRecipient');
+  const returnSubView = searchParams.get('returnSubView');
+  const returnPeriod = searchParams.get('period');
+  const returnYear = searchParams.get('year');
+  const returnMonth = searchParams.get('month');
+  const returnDate = searchParams.get('date');
+
+  const handleBackToReport = useCallback(() => {
+    const p = new URLSearchParams();
+    p.set('tab', fromReport || 'expenses');
+    if (returnSubView) p.set('subview', returnSubView);
+    if (returnAccount) p.set('account', returnAccount);
+    if (returnRecipient) p.set('recipient', returnRecipient);
+    if (returnPeriod) p.set('period', returnPeriod);
+    if (returnYear) p.set('year', returnYear);
+    if (returnMonth) p.set('month', returnMonth);
+    if (returnDate) p.set('date', returnDate);
+    router.push(`/dashboard/reports?${p.toString()}`);
+  }, [fromReport, returnSubView, returnAccount, returnRecipient, returnPeriod, returnYear, returnMonth, returnDate, router]);
 
   // Active Tab state (defaults to master summary tab)
   const [activeTab, setActiveTab] = useState<DisbursementTab>('summary');
@@ -2291,27 +2501,36 @@ function DisbursementPageContent() {
     const cat = (folderOrCat || cv?.folder_name || '').toLowerCase();
     if (cat) {
       if (cat === 'stl' || cat.includes('stl')) return 'stl';
-      if (cat.includes('revolving') || cat.includes('petty')) return 'rf';
-      return null;
-    }
-    if (
-      activeTab === 'operation_expense' ||
-      activeTab === 'merchandise_payment' || 
-      activeTab === 'services_expense'
-    ) {
+      if (
+        cat.includes('revolving') ||
+        cat.includes('petty') ||
+        cat.includes('merchandise') ||
+        cat.includes('operation') ||
+        cat.includes('service')
+      ) return 'rf';
       return null;
     }
     const part = (cv?.particulars || '').toLowerCase();
     if (part.includes('stl') || Boolean(cv?.stl_liquidation?.id)) {
       return 'stl';
     }
-    if (part.includes('revolving') || part.includes('petty cash') || Boolean(cv?.revolving_fund?.id)) {
+    if (
+      part.includes('revolving') ||
+      part.includes('petty cash') ||
+      part.includes('merchandise') ||
+      part.includes('operation') ||
+      part.includes('service') ||
+      Boolean(cv?.revolving_fund?.id)
+    ) {
       return 'rf';
     }
     if (activeTab === 'stl_replenishment') return 'stl';
     if (
       activeTab === 'revolving_fund_replenishment' ||
-      activeTab === 'petty_cash_replenishment'
+      activeTab === 'petty_cash_replenishment' ||
+      activeTab === 'merchandise_payment' ||
+      activeTab === 'operation_expense' ||
+      activeTab === 'services_expense'
     ) {
       return 'rf';
     }
@@ -2343,25 +2562,29 @@ function DisbursementPageContent() {
       const isCurrentCredit = checkIsCreditRow(currentRow);
       const nextRows = prev.map((r, i) => (i === rowIdx ? updatedRow : r));
 
-      // If description was edited on a debit row in RF mode, auto-fill matching category on the credit row directly below it (or paired credit row)
+      // If description was edited on a debit row in RF mode, auto-fill matching category on the credit row directly below it (or paired credit row) ONLY for true RF vouchers
       if (field === 'description' && !isCurrentCredit && replenishType === 'rf') {
-        const cat = getCategoryForAccount(val, accountCategoryMap);
-        const autoCreditDesc = `Revolving Fund - ${cat}`;
-        
-        let targetCreditIdx = -1;
-        if (rowIdx + 1 < nextRows.length && checkIsCreditRow(nextRows[rowIdx + 1])) {
-          targetCreditIdx = rowIdx + 1;
-        } else {
-          targetCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
-        }
+        const activeCat = isEdit ? editCvFormData.folder_name : newCvCategory;
+        const isTrueRf = isTrueRevolvingFundVoucher(null, activeCat);
+        if (isTrueRf) {
+          const cat = getCategoryForAccount(val, accountCategoryMap);
+          const autoCreditDesc = `Revolving Fund - ${cat}`;
+          
+          let targetCreditIdx = -1;
+          if (rowIdx + 1 < nextRows.length && checkIsCreditRow(nextRows[rowIdx + 1])) {
+            targetCreditIdx = rowIdx + 1;
+          } else {
+            targetCreditIdx = nextRows.findIndex(r => r.pairedWithId === rowId);
+          }
 
-        if (targetCreditIdx !== -1) {
-          const currentCreditDesc = nextRows[targetCreditIdx]?.description || '';
-          if (!/cib\b|cash\s*in\s*bank/i.test(currentCreditDesc)) {
-            nextRows[targetCreditIdx] = {
-              ...nextRows[targetCreditIdx],
-              description: autoCreditDesc
-            };
+          if (targetCreditIdx !== -1) {
+            const currentCreditDesc = nextRows[targetCreditIdx]?.description || '';
+            if (!/cib\b|cash\s*in\s*bank/i.test(currentCreditDesc)) {
+              nextRows[targetCreditIdx] = {
+                ...nextRows[targetCreditIdx],
+                description: autoCreditDesc
+              };
+            }
           }
         }
       }
@@ -2486,20 +2709,28 @@ function DisbursementPageContent() {
       : (newCvDate || new Date().toISOString().split('T')[0]);
     const defaultVoucherNo = isEdit ? editCvFormData.voucher_no : newCvVoucherNo;
 
+    const activeCat = isEdit ? editCvFormData.folder_name : newCvCategory;
+    const catKey = normalizeDisbursementCategoryKey(activeCat);
+    const isTrueRf = isTrueRevolvingFundVoucher(null, activeCat);
+
     let defaultDesc = '';
     if (isCredit) {
       if (replenishType === 'stl') {
         defaultDesc = 'Revolving Fund - STL';
       } else if (replenishType === 'rf') {
-        const currentRows = isEdit ? editCvRows : newCvRows;
-        const lastRow = currentRows.length > 0 ? currentRows[currentRows.length - 1] : null;
-        if (lastRow && !checkIsCreditRow(lastRow)) {
-          // If the row above is a debit row, auto-read its category
-          const cat = getCategoryForAccount(lastRow.description, accountCategoryMap);
-          defaultDesc = `Revolving Fund - ${cat}`;
+        if (isTrueRf) {
+          const currentRows = isEdit ? editCvRows : newCvRows;
+          const lastRow = currentRows.length > 0 ? currentRows[currentRows.length - 1] : null;
+          if (lastRow && !checkIsCreditRow(lastRow)) {
+            // If the row above is a debit row, auto-read its category
+            const cat = getCategoryForAccount(lastRow.description, accountCategoryMap);
+            defaultDesc = `Revolving Fund - ${cat}`;
+          } else {
+            defaultDesc = '';
+          }
         } else {
-          // If the row above is also a credit row, don't copy, allow manual input
-          defaultDesc = '';
+          const currentBank = isEdit ? editCvFormData.bank : newCvBankName;
+          defaultDesc = formatCibAccountName(currentBank || 'BDO');
         }
       } else {
         defaultDesc = '';
@@ -2507,7 +2738,17 @@ function DisbursementPageContent() {
     } else if (replenishType === 'stl') {
       defaultDesc = 'Short Term Loan';
     } else if (replenishType === 'rf') {
-      defaultDesc = 'Communication';
+      if (catKey === 'Petty Cash') {
+        defaultDesc = 'Petty Cash Replenishment';
+      } else if (catKey === 'Merchandise') {
+        defaultDesc = 'Merchandise Inventory - Pershing Cap';
+      } else if (catKey === 'Service') {
+        defaultDesc = 'COS- printing';
+      } else if (catKey === 'Operation') {
+        defaultDesc = 'Advances to employee';
+      } else {
+        defaultDesc = 'Communication';
+      }
     } else {
       defaultDesc = '';
     }
@@ -3771,8 +4012,19 @@ function DisbursementPageContent() {
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <BackButton href="/dashboard" label="Back to Overview" />
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {fromReport ? (
+            <button
+              type="button"
+              onClick={handleBackToReport}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 font-bold text-xs border border-emerald-300 dark:border-emerald-700 shadow-2xs transition-all cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Expense Breakdown{returnAccount ? ` (${returnAccount})` : returnRecipient ? ` (${returnRecipient})` : ''}</span>
+            </button>
+          ) : (
+            <BackButton href="/dashboard" label="Back to Overview" />
+          )}
         </div>
 
         {isAdminOrStaff && activeTab === 'summary' && (
@@ -4647,7 +4899,7 @@ function DisbursementPageContent() {
                             <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
                               <div className="text-center">#</div>
                               <div>Date</div>
-                              <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}</div>
+                              <div>{getTransactionRefHeader(newCvCategory, newCvRfClassification)}</div>
                               <div>Book of Accounts</div>
                               <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
                               <div className="text-right">Debit (₱)</div>
@@ -4659,6 +4911,11 @@ function DisbursementPageContent() {
                               {newCvRows.map((row, idx) => {
                                 const isCreditRow = checkIsCreditRow(row);
                                 const isHonWagesRow = (newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages');
+                                const refPlaceholder = isHonWagesRow
+                                  ? 'Cash Release Form No.'
+                                  : replenishType === 'stl'
+                                  ? 'LAF No.'
+                                  : `${getTransactionRefHeader(newCvCategory, newCvRfClassification)}`;
                                 return (
                                   <div
                                     key={row.id || idx}
@@ -4696,7 +4953,7 @@ function DisbursementPageContent() {
                                     <div>
                                       <input
                                         type="text"
-                                        placeholder={isHonWagesRow ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}
+                                        placeholder={refPlaceholder}
                                         value={row.voucher_no || ''}
                                         onChange={e => updateCvRowField(false, row.id!, 'voucher_no', e.target.value, replenishType)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -4725,9 +4982,10 @@ function DisbursementPageContent() {
                                           onChange={val => updateCvRowField(false, row.id!, 'description', val, replenishType)}
                                           options={customAccountOptions}
                                           categoryMap={accountCategoryMap}
+                                          disbursementCategory={newCvCategory}
                                           onAddAccount={handleAddCustomAccount}
                                           onDeleteAccount={handleDeleteCustomAccount}
-                                       />
+                                        />
                                       )}
                                     </div>
                                     <div>
@@ -4851,15 +5109,26 @@ function DisbursementPageContent() {
                                     />
                                   </div>
                                   <div>
-                                    <input
-                                      type="text"
-                                      placeholder={row.is_credit ? "Credit Account / Deduction (e.g. Common Share)" : "Book of Account / Item Description"}
-                                      value={row.description}
-                                      onChange={e => updateCvRowField(false, row.id!, 'description', e.target.value, null)}
-                                      className={`w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs ${
-                                        row.is_credit ? 'font-bold text-emerald-900 dark:text-emerald-200' : ''
-                                      }`}
-                                    />
+                                    {row.is_credit || checkIsCreditRow(row) ? (
+                                      <input
+                                        type="text"
+                                        placeholder="Credit Account / Deduction (e.g. Common Share)"
+                                        value={row.description}
+                                        onChange={e => updateCvRowField(false, row.id!, 'description', e.target.value, null)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-bold text-emerald-900 dark:text-emerald-200"
+                                      />
+                                    ) : (
+                                      <ReplenishmentAccountDropdown
+                                        value={row.description}
+                                        onChange={val => updateCvRowField(false, row.id!, 'description', val, null)}
+                                        options={customAccountOptions}
+                                        categoryMap={accountCategoryMap}
+                                        disbursementCategory={newCvCategory}
+                                        onAddAccount={handleAddCustomAccount}
+                                        onDeleteAccount={handleDeleteCustomAccount}
+                                        placeholder="Book of Account / Item Description"
+                                      />
+                                    )}
                                   </div>
                                   <div>
                                     <input
@@ -5152,6 +5421,18 @@ function DisbursementPageContent() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {fromReport && (
+                  <button
+                    type="button"
+                    onClick={handleBackToReport}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 font-bold text-xs border border-emerald-300 dark:border-emerald-700 shadow-2xs transition-all cursor-pointer"
+                    title="Return directly to Expense Breakdown modal"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Back to</span>
+                    <span className="max-w-[150px] truncate">{returnAccount || returnRecipient || 'Expense Breakdown'}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setSelectedCvForModal(null)}
@@ -5432,13 +5713,26 @@ function DisbursementPageContent() {
 
             {/* Modal Footer */}
             <div className="px-6 py-3.5 border-t border-outline-variant/30 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/40 shrink-0">
-              <button
-                type="button"
-                onClick={() => setSelectedCvForModal(null)}
-                className="px-5 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer shadow-2xs active:scale-95"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCvForModal(null)}
+                  className="px-5 py-2 text-xs font-semibold rounded-full border border-outline-variant text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all cursor-pointer shadow-2xs active:scale-95"
+                >
+                  Close
+                </button>
+                {fromReport && (
+                  <button
+                    type="button"
+                    onClick={handleBackToReport}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-full bg-[#064e3b] text-white hover:bg-emerald-800 transition-all cursor-pointer shadow-xs active:scale-95"
+                    title="Return directly to Expense Breakdown modal"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Back to Expense Breakdown{returnAccount ? ` (${returnAccount})` : returnRecipient ? ` (${returnRecipient})` : ''}</span>
+                  </button>
+                )}
+              </div>
 
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Staff / Admin: Approve for Release when 'on process' */}
@@ -5903,7 +6197,7 @@ function DisbursementPageContent() {
                           <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
                             <div className="text-center">#</div>
                             <div>Date</div>
-                            <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}</div>
+                            <div>{getTransactionRefHeader(editCvFormData.folder_name, editCvFormData.rf_classification)}</div>
                             <div>Book of Accounts</div>
                             <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
                             <div className="text-right">Debit (₱)</div>
@@ -5915,6 +6209,11 @@ function DisbursementPageContent() {
                             {editCvRows.map((row, idx) => {
                               const isCreditRow = checkIsCreditRow(row);
                               const isHonWagesRow = (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages');
+                              const refPlaceholder = isHonWagesRow
+                                ? 'Cash Release Form No.'
+                                : replenishType === 'stl'
+                                ? 'LAF No.'
+                                : `${getTransactionRefHeader(editCvFormData.folder_name, editCvFormData.rf_classification)}`;
                               return (
                                 <div
                                   key={row.id || idx}
@@ -5952,7 +6251,7 @@ function DisbursementPageContent() {
                                   <div>
                                     <input
                                       type="text"
-                                      placeholder={isHonWagesRow ? 'Cash Release Form No.' : (replenishType === 'stl' ? 'LAF No.' : 'RF Voucher #')}
+                                      placeholder={refPlaceholder}
                                       value={row.voucher_no || ''}
                                       onChange={e => updateCvRowField(true, row.id!, 'voucher_no', e.target.value, replenishType)}
                                       className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
@@ -5982,6 +6281,7 @@ function DisbursementPageContent() {
                                         onChange={val => updateCvRowField(true, row.id!, 'description', val, replenishType)}
                                         options={customAccountOptions}
                                         categoryMap={accountCategoryMap}
+                                        disbursementCategory={editCvFormData.folder_name}
                                         onAddAccount={handleAddCustomAccount}
                                         onDeleteAccount={handleDeleteCustomAccount}
                                       />
@@ -6178,13 +6478,26 @@ function DisbursementPageContent() {
                                   />
                                 </div>
                                 <div>
-                                  <input
-                                    type="text"
-                                    value={row.description}
-                                    onChange={e => updateCvRowField(true, row.id!, 'description', e.target.value, null)}
-                                    placeholder="Account description"
-                                    className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs cursor-text"
-                                  />
+                                  {row.is_credit || checkIsCreditRow(row) ? (
+                                    <input
+                                      type="text"
+                                      placeholder="Credit Account / Deduction (e.g. CIB-MBTC)"
+                                      value={row.description}
+                                      onChange={e => updateCvRowField(true, row.id!, 'description', e.target.value, null)}
+                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-bold text-emerald-900 dark:text-emerald-200"
+                                    />
+                                  ) : (
+                                    <ReplenishmentAccountDropdown
+                                      value={row.description}
+                                      onChange={val => updateCvRowField(true, row.id!, 'description', val, null)}
+                                      options={customAccountOptions}
+                                      categoryMap={accountCategoryMap}
+                                      disbursementCategory={editCvFormData.folder_name}
+                                      onAddAccount={handleAddCustomAccount}
+                                      onDeleteAccount={handleDeleteCustomAccount}
+                                      placeholder="Book of Account / Item Description"
+                                    />
+                                  )}
                                 </div>
                                 <div>
                                   <input

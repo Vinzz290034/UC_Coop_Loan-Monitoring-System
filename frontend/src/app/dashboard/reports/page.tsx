@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import BackButton from '@/components/BackButton';
@@ -31,7 +31,8 @@ import {
   Sparkles,
   ExternalLink,
   X,
-  BarChart3
+  BarChart3,
+  ArrowLeft
 } from 'lucide-react';
 import FinancialSummaryGraphs from '@/components/reports/FinancialSummaryGraphs';
 
@@ -40,7 +41,6 @@ export type ReportTab =
   | 'expenses'
   | 'loans'
   | 'membership'
-  | 'books'
   | 'financial_statement'
   | 'summary';
 
@@ -51,9 +51,10 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export default function ReportsPage() {
+function ReportsPageContent() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Redirect non-admin users
   useEffect(() => {
@@ -62,15 +63,32 @@ export default function ReportsPage() {
     }
   }, [user, router]);
 
-  // Active Report Tab
-  const [activeTab, setActiveTab] = useState<ReportTab>('summary');
+  // Active Report Tab - supports deep-linking via ?tab=expenses
+  const [activeTab, setActiveTab] = useState<ReportTab>(() => {
+    const t = searchParams?.get('tab') as ReportTab | null;
+    if (t && ['summary', 'expenses', 'merchandise', 'loans', 'membership', 'financial_statement'].includes(t)) {
+      return t;
+    }
+    return 'summary';
+  });
 
   // Filter States
   const now = new Date();
-  const [period, setPeriod] = useState<ReportPeriod>('annual');
-  const [year, setYear] = useState<number>(2026);
-  const [month, setMonth] = useState<number>(now.getMonth() + 1);
-  const [date, setDate] = useState<string>(now.toISOString().split('T')[0]);
+  const [period, setPeriod] = useState<ReportPeriod>(() => {
+    const p = searchParams?.get('period') as ReportPeriod | null;
+    return p && ['daily', 'monthly', 'annual'].includes(p) ? p : 'annual';
+  });
+  const [year, setYear] = useState<number>(() => {
+    const y = searchParams?.get('year');
+    return y && !isNaN(Number(y)) ? Number(y) : 2026;
+  });
+  const [month, setMonth] = useState<number>(() => {
+    const m = searchParams?.get('month');
+    return m && !isNaN(Number(m)) ? Number(m) : now.getMonth() + 1;
+  });
+  const [date, setDate] = useState<string>(() => {
+    return searchParams?.get('date') || now.toISOString().split('T')[0];
+  });
 
   // Search & Sorting States
   const [search, setSearch] = useState('');
@@ -79,14 +97,18 @@ export default function ReportsPage() {
   const [sortAsc, setSortAsc] = useState(false);
 
   // Expense Breakdown Sub-view States
-  const [expenseSubView, setExpenseSubView] = useState<'accounts' | 'recipients'>('accounts');
+  const [expenseSubView, setExpenseSubView] = useState<'accounts' | 'recipients'>(() => {
+    const sv = searchParams?.get('subview');
+    return sv === 'recipients' ? 'recipients' : 'accounts';
+  });
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<'all' | 'Operation Expense' | 'Service Expense' | 'Merchandise Expense'>('all');
+  const [expenseAccountSearch, setExpenseAccountSearch] = useState('');
+  const [expenseAccountSortKey, setExpenseAccountSortKey] = useState<'name' | 'count' | 'amount'>('name');
+  const [expenseAccountSortOrder, setExpenseAccountSortOrder] = useState<'asc' | 'desc'>('asc');
   const [recipientSearch, setRecipientSearch] = useState('');
   const [selectedRecipientModal, setSelectedRecipientModal] = useState<any | null>(null);
   const [selectedAccountModal, setSelectedAccountModal] = useState<any | null>(null);
   const [accountModalSearch, setAccountModalSearch] = useState('');
-  const [selectedBookAccountModal, setSelectedBookAccountModal] = useState<any | null>(null);
-  const [bookAccountModalSearch, setBookAccountModalSearch] = useState('');
   const [selectedMerchandiseModal, setSelectedMerchandiseModal] = useState<any | null>(null);
   const [merchandiseModalSearch, setMerchandiseModalSearch] = useState('');
   const [merchandiseCatalogFilter, setMerchandiseCatalogFilter] = useState<'all' | 'sold'>('all');
@@ -113,10 +135,33 @@ export default function ReportsPage() {
   }, [reportData?.recipients, recipientSearch]);
 
   const filteredExpenseAccounts = useMemo(() => {
-    const list = reportData?.accounts || [];
-    if (selectedExpenseCategory === 'all') return list;
-    return list.filter((acc: any) => acc.category === selectedExpenseCategory);
-  }, [reportData?.accounts, selectedExpenseCategory]);
+    let list = reportData?.accounts || [];
+    if (selectedExpenseCategory !== 'all') {
+      list = list.filter((acc: any) => acc.category === selectedExpenseCategory);
+    }
+    const q = expenseAccountSearch.trim().toLowerCase();
+    if (q) {
+      list = list.filter((acc: any) =>
+        (acc.account_name || '').toLowerCase().includes(q) ||
+        (acc.category || '').toLowerCase().includes(q)
+      );
+    }
+    return list.slice().sort((a: any, b: any) => {
+      if (expenseAccountSortKey === 'name') {
+        const cmp = (a.account_name || '').localeCompare(b.account_name || '', undefined, { sensitivity: 'base' });
+        return expenseAccountSortOrder === 'asc' ? cmp : -cmp;
+      }
+      if (expenseAccountSortKey === 'count') {
+        const diff = (Number(a.count) || 0) - (Number(b.count) || 0);
+        return expenseAccountSortOrder === 'asc' ? diff : -diff;
+      }
+      if (expenseAccountSortKey === 'amount') {
+        const diff = (Number(a.total_amount) || 0) - (Number(b.total_amount) || 0);
+        return expenseAccountSortOrder === 'asc' ? diff : -diff;
+      }
+      return 0;
+    });
+  }, [reportData?.accounts, selectedExpenseCategory, expenseAccountSearch, expenseAccountSortKey, expenseAccountSortOrder]);
 
   const accountModalTransactions = useMemo(() => {
     if (!selectedAccountModal) return [];
@@ -136,19 +181,7 @@ export default function ReportsPage() {
     );
   }, [selectedAccountModal, accountModalSearch, reportData]);
 
-  const bookAccountModalTransactions = useMemo(() => {
-    if (!selectedBookAccountModal) return [];
-    const list = selectedBookAccountModal.transactions || [];
-    if (!bookAccountModalSearch.trim()) return list;
-    const q = bookAccountModalSearch.toLowerCase();
-    return list.filter((t: any) =>
-      String(t.ref_no || t.voucher_no || '').toLowerCase().includes(q) ||
-      String(t.particulars || '').toLowerCase().includes(q) ||
-      String(t.payee || '').toLowerCase().includes(q) ||
-      String(t.source || '').toLowerCase().includes(q) ||
-      String(t.date || '').toLowerCase().includes(q)
-    );
-  }, [selectedBookAccountModal, bookAccountModalSearch]);
+
 
   const filteredProducts = useMemo(() => {
     if (!reportData?.products || !Array.isArray(reportData.products)) return [];
@@ -197,15 +230,14 @@ export default function ReportsPage() {
       if (e.key === 'Escape') {
         if (selectedLoanProductModal) setSelectedLoanProductModal(null);
         if (selectedMerchandiseModal) setSelectedMerchandiseModal(null);
-        if (selectedBookAccountModal) setSelectedBookAccountModal(null);
-        if (selectedAccountModal) setSelectedAccountModal(null);
+          if (selectedAccountModal) setSelectedAccountModal(null);
         if (selectedRecipientModal) setSelectedRecipientModal(null);
         if (selectedFsAccountModal) setSelectedFsAccountModal(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLoanProductModal, selectedMerchandiseModal, selectedBookAccountModal, selectedAccountModal, selectedRecipientModal, selectedFsAccountModal]);
+  }, [selectedLoanProductModal, selectedMerchandiseModal, selectedAccountModal, selectedRecipientModal, selectedFsAccountModal]);
 
   // Fetch report data based on active tab and period
   const fetchReport = useCallback(async () => {
@@ -218,7 +250,6 @@ export default function ReportsPage() {
         expenses: '/reports/expenses-breakdown',
         loans: '/reports/loan-products',
         membership: '/reports/membership-update',
-        books: '/reports/books-of-accounts',
         financial_statement: '/reports/financial-statement',
         summary: '/reports/financial-statement'
       };
@@ -244,6 +275,43 @@ export default function ReportsPage() {
   useEffect(() => {
     fetchReport();
   }, [fetchReport]);
+
+  // Auto-open requested Account or Recipient Modal when returning from Check Voucher in Disbursement
+  const autoOpenedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!reportData) return;
+
+    const targetAccountName = searchParams?.get('account');
+    if (targetAccountName && Array.isArray(reportData.accounts)) {
+      const key = `acc-${targetAccountName}`;
+      if (autoOpenedRef.current !== key) {
+        const match = reportData.accounts.find(
+          (a: any) => (a.account_name || '').trim().toLowerCase() === targetAccountName.trim().toLowerCase()
+        );
+        if (match) {
+          setSelectedAccountModal(match);
+          setExpenseSubView('accounts');
+          autoOpenedRef.current = key;
+        }
+      }
+    }
+
+    const targetRecipientName = searchParams?.get('recipient');
+    if (targetRecipientName && Array.isArray(reportData.recipients)) {
+      const key = `rec-${targetRecipientName}`;
+      if (autoOpenedRef.current !== key) {
+        const match = reportData.recipients.find(
+          (r: any) => (r.name || '').trim().toLowerCase() === targetRecipientName.trim().toLowerCase()
+        );
+        if (match) {
+          setSelectedRecipientModal(match);
+          setExpenseSubView('recipients');
+          autoOpenedRef.current = key;
+        }
+      }
+    }
+  }, [reportData, searchParams]);
 
   // Daily, Monthly, and Annual periods supported across all report tabs
 
@@ -296,8 +364,8 @@ export default function ReportsPage() {
         subAccounts = [
           { name: `${acc} Primary Schedule Entry`, amount: amt, notes: 'Verified general journal ledger line' }
         ];
-        linkTab = 'books';
-        linkTitle = 'Book of Accounts';
+        linkTab = 'expenses';
+        linkTitle = 'Expense Breakdown';
         desc = `Official cooperative financial statement balance recorded under ${item.category || statementType}.`;
       }
     }
@@ -359,6 +427,7 @@ export default function ReportsPage() {
             'Honorarium (PHP)': r.total_honorarium,
             'Allowances (PHP)': r.total_allowances,
             'Wages (PHP)': r.total_wages,
+            'Salary (PHP)': r.total_salary || 0,
             'Total Compensation (PHP)': r.total_compensation,
             'Payout Count': r.payout_count,
             'Share of Compensation (%)': `${r.share_pct}%`
@@ -391,17 +460,7 @@ export default function ReportsPage() {
         }));
         const ws = XLSX.utils.json_to_sheet(rows);
         XLSX.utils.book_append_sheet(wb, ws, 'Membership Updates');
-      } else if (activeTab === 'books') {
-        const rows = (reportData.accounts || []).map((b: any) => ({
-          'Account Name': b.account_name,
-          'Category': b.category || b.account_type,
-          'Total Debit (PHP)': b.total_debit,
-          'Total Credit (PHP)': b.total_credit,
-          'Net Movement (PHP)': b.net_balance,
-          'Entries Count': b.entries_count
-        }));
-        const ws = XLSX.utils.json_to_sheet(rows);
-        XLSX.utils.book_append_sheet(wb, ws, 'Book of Accounts');
+
       } else if (activeTab === 'financial_statement' || activeTab === 'summary') {
         const fs = reportData.statement_of_operations;
         const merchList = fs?.merchandise_sales_breakdown || [];
@@ -587,7 +646,6 @@ export default function ReportsPage() {
           { id: 'expenses', label: 'Expense Breakdown', icon: DollarSign },
           { id: 'loans', label: 'Loan Products', icon: CreditCard },
           { id: 'membership', label: 'Membership Updates', icon: Users },
-          { id: 'books', label: 'Book of Accounts', icon: BookOpen },
           { id: 'financial_statement', label: 'Financial Statement', icon: PieChart },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -1133,7 +1191,28 @@ export default function ReportsPage() {
                   </button>
                 </div>
 
-                {expenseSubView === 'recipients' && (
+                {expenseSubView === 'accounts' ? (
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-neutral-400" />
+                    <input
+                      type="text"
+                      placeholder="Search expense account..."
+                      value={expenseAccountSearch}
+                      onChange={(e) => setExpenseAccountSearch(e.target.value)}
+                      className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                    />
+                    {expenseAccountSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setExpenseAccountSearch('')}
+                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
                   <div className="relative w-full sm:w-72">
                     <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-neutral-400" />
                     <input
@@ -1141,8 +1220,18 @@ export default function ReportsPage() {
                       placeholder="Search recipient name..."
                       value={recipientSearch}
                       onChange={(e) => setRecipientSearch(e.target.value)}
-                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                      className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
                     />
+                    {recipientSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setRecipientSearch('')}
+                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1168,11 +1257,24 @@ export default function ReportsPage() {
                           <X className="w-3 h-3" />
                         </button>
                       )}
+                      {expenseAccountSearch.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setExpenseAccountSearch('')}
+                          className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200 dark:hover:bg-emerald-800 border border-emerald-300 dark:border-emerald-700 transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Clear search query"
+                        >
+                          <span>Matching &quot;{expenseAccountSearch.trim()}&quot;</span>
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                     <span className="text-[11px] text-neutral-500">
-                      {selectedExpenseCategory === 'all'
-                        ? 'Sorted by highest expenditure • Click any row to view count breakdown and category'
-                        : `Filtered by ${selectedExpenseCategory} • Click row for details or card to reset`}
+                      {expenseAccountSortKey === 'name'
+                        ? `Sorted alphabetically (${expenseAccountSortOrder === 'asc' ? 'A-Z' : 'Z-A'}) • Click any row to view breakdown`
+                        : expenseAccountSortKey === 'amount'
+                        ? `Sorted by expenditure (${expenseAccountSortOrder === 'desc' ? 'Highest first' : 'Lowest first'}) • Click any row to view breakdown`
+                        : `Sorted by count (${expenseAccountSortOrder === 'desc' ? 'Most entries' : 'Fewest entries'}) • Click any row to view breakdown`}
                     </span>
                   </div>
                   <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
@@ -1180,9 +1282,63 @@ export default function ReportsPage() {
                       <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
                         <tr>
                           <th className="p-2.5 w-12 text-center border-r border-emerald-700/60">#</th>
-                          <th className="p-2.5 min-w-[260px] border-r border-emerald-700/60">Account / Expense Particulars</th>
-                          <th className="p-2.5 w-28 text-center border-r border-emerald-700/60">Count</th>
-                          <th className="p-2.5 w-44 text-right border-r border-emerald-700/60">Total Spent</th>
+                          <th
+                            onClick={() => {
+                              if (expenseAccountSortKey === 'name') {
+                                setExpenseAccountSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setExpenseAccountSortKey('name');
+                                setExpenseAccountSortOrder('asc');
+                              }
+                            }}
+                            className="p-2.5 min-w-[260px] border-r border-emerald-700/60 cursor-pointer hover:bg-emerald-800 transition-colors select-none"
+                            title="Click to sort alphabetically (A-Z / Z-A)"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span>Account / Expense Particulars</span>
+                              <span className="text-[10px] text-emerald-200">
+                                {expenseAccountSortKey === 'name' ? (expenseAccountSortOrder === 'asc' ? '▲ A-Z' : '▼ Z-A') : '⇅'}
+                              </span>
+                            </div>
+                          </th>
+                          <th
+                            onClick={() => {
+                              if (expenseAccountSortKey === 'count') {
+                                setExpenseAccountSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setExpenseAccountSortKey('count');
+                                setExpenseAccountSortOrder('desc');
+                              }
+                            }}
+                            className="p-2.5 w-28 text-center border-r border-emerald-700/60 cursor-pointer hover:bg-emerald-800 transition-colors select-none"
+                            title="Click to sort by Count"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              <span>Count</span>
+                              <span className="text-[10px] text-emerald-200">
+                                {expenseAccountSortKey === 'count' ? (expenseAccountSortOrder === 'desc' ? '▼' : '▲') : '⇅'}
+                              </span>
+                            </div>
+                          </th>
+                          <th
+                            onClick={() => {
+                              if (expenseAccountSortKey === 'amount') {
+                                setExpenseAccountSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setExpenseAccountSortKey('amount');
+                                setExpenseAccountSortOrder('desc');
+                              }
+                            }}
+                            className="p-2.5 w-44 text-right border-r border-emerald-700/60 cursor-pointer hover:bg-emerald-800 transition-colors select-none"
+                            title="Click to sort by Total Spent"
+                          >
+                            <div className="flex items-center justify-end gap-1">
+                              <span>Total Spent</span>
+                              <span className="text-[10px] text-emerald-200">
+                                {expenseAccountSortKey === 'amount' ? (expenseAccountSortOrder === 'desc' ? '▼' : '▲') : '⇅'}
+                              </span>
+                            </div>
+                          </th>
                           <th className="p-2.5 w-28 text-center">% of Total</th>
                         </tr>
                       </thead>
@@ -1190,7 +1346,9 @@ export default function ReportsPage() {
                         {filteredExpenseAccounts.length === 0 ? (
                           <tr>
                             <td colSpan={5} className="py-10 text-center text-neutral-400 italic">
-                              No accounts found under {selectedExpenseCategory}.
+                              {expenseAccountSearch.trim()
+                                ? `No accounts matching "${expenseAccountSearch}".`
+                                : `No accounts found under ${selectedExpenseCategory}.`}
                             </td>
                           </tr>
                         ) : (
@@ -1242,7 +1400,7 @@ export default function ReportsPage() {
               {expenseSubView === 'recipients' && (
                 <div className="space-y-4">
                   {/* Recipient Compensation Stat Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
                     <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 shadow-2xs">
                       <div className="flex items-center justify-between">
                         <span className="text-[10.5px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
@@ -1276,7 +1434,7 @@ export default function ReportsPage() {
                     <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/60 shadow-2xs">
                       <div className="flex items-center justify-between">
                         <span className="text-[10.5px] font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300">
-                          Total Wages & Salary
+                          Total Wages
                         </span>
                         <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300">
                           {reportData.summary?.compensation_summary?.wages_pct || '0.0'}%
@@ -1285,7 +1443,22 @@ export default function ReportsPage() {
                       <div className="text-2xl font-black text-indigo-900 dark:text-indigo-200 mt-1 font-mono">
                         {fmt(reportData.summary?.compensation_summary?.total_wages)}
                       </div>
-                      <div className="text-[10px] text-indigo-700/80 dark:text-indigo-300/80 mt-0.5">Employee payroll & staff compensations</div>
+                      <div className="text-[10px] text-indigo-700/80 dark:text-indigo-300/80 mt-0.5">Employee wages & compensations</div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/60 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10.5px] font-bold uppercase tracking-wider text-violet-800 dark:text-violet-300">
+                          Total Salary
+                        </span>
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/60 text-violet-800 dark:text-violet-300">
+                          {reportData.summary?.compensation_summary?.salary_pct || '0.0'}%
+                        </span>
+                      </div>
+                      <div className="text-2xl font-black text-violet-900 dark:text-violet-200 mt-1 font-mono">
+                        {fmt(reportData.summary?.compensation_summary?.total_salary)}
+                      </div>
+                      <div className="text-[10px] text-violet-700/80 dark:text-violet-300/80 mt-0.5">Staff salaries & regular payroll</div>
                     </div>
 
                     <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
@@ -1316,11 +1489,12 @@ export default function ReportsPage() {
                         <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
                           <tr>
                             <th className="p-2.5 w-10 text-center border-r border-emerald-700/60">#</th>
-                            <th className="p-2.5 min-w-[220px] border-r border-emerald-700/60">Recipient Name</th>
-                            <th className="p-2.5 w-32 text-right border-r border-emerald-700/60">Honorarium (₱)</th>
-                            <th className="p-2.5 w-32 text-right border-r border-emerald-700/60">Allowances (₱)</th>
-                            <th className="p-2.5 w-32 text-right border-r border-emerald-700/60">Wages (₱)</th>
-                            <th className="p-2.5 w-36 text-right border-r border-emerald-700/60">Total Earnings (₱)</th>
+                            <th className="p-2.5 min-w-[200px] border-r border-emerald-700/60">Recipient Name</th>
+                            <th className="p-2.5 w-28 text-right border-r border-emerald-700/60">Honorarium (₱)</th>
+                            <th className="p-2.5 w-28 text-right border-r border-emerald-700/60">Allowances (₱)</th>
+                            <th className="p-2.5 w-28 text-right border-r border-emerald-700/60">Wages (₱)</th>
+                            <th className="p-2.5 w-28 text-right border-r border-emerald-700/60">Salary (₱)</th>
+                            <th className="p-2.5 w-32 text-right border-r border-emerald-700/60">Total Earnings (₱)</th>
                             <th className="p-2.5 w-24 text-center border-r border-emerald-700/60">Payouts</th>
                             <th className="p-2.5 w-28 text-center">Action</th>
                           </tr>
@@ -1337,13 +1511,8 @@ export default function ReportsPage() {
                                     <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-bold text-[10px] flex items-center justify-center shrink-0">
                                       {rec.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('')}
                                     </div>
-                                    <div>
-                                      <div className="font-bold text-neutral-900 dark:text-white">
-                                        {rec.name}
-                                      </div>
-                                      <div className="text-[10px] text-neutral-400">
-                                        {rec.share_pct}% of total payroll & honorarium
-                                      </div>
+                                    <div className="font-bold text-neutral-900 dark:text-white">
+                                      {rec.name}
                                     </div>
                                   </div>
                                 </td>
@@ -1355,6 +1524,9 @@ export default function ReportsPage() {
                                 </td>
                                 <td className="p-2 text-right font-mono text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
                                   {rec.total_wages > 0 ? fmt(rec.total_wages) : <span className="text-neutral-300 dark:text-neutral-600">—</span>}
+                                </td>
+                                <td className="p-2 text-right font-mono text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
+                                  {(rec.total_salary || 0) > 0 ? fmt(rec.total_salary) : <span className="text-neutral-300 dark:text-neutral-600">—</span>}
                                 </td>
                                 <td className="p-2 text-right font-mono font-bold text-emerald-800 dark:text-emerald-400 border-r border-neutral-200 dark:border-neutral-800">
                                   {fmt(rec.total_compensation)}
@@ -1377,7 +1549,7 @@ export default function ReportsPage() {
                             ))
                           ) : (
                             <tr>
-                              <td colSpan={8} className="p-8 text-center text-neutral-400">
+                              <td colSpan={9} className="p-8 text-center text-neutral-400">
                                 No recipient compensation records found for this period.
                               </td>
                             </tr>
@@ -1625,153 +1797,7 @@ export default function ReportsPage() {
 
 
 
-          {/* ============================================================== */}
-          {/* 5. BOOK OF ACCOUNTS TAB */}
-          {/* ============================================================== */}
-          {activeTab === 'books' && (
-            <div className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">Active Book of Accounts</div>
-                  <div className="text-2xl font-black text-neutral-900 dark:text-white mt-1">
-                    {reportData.summary?.total_accounts || 0} Accounts
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">With recorded transaction entries</div>
-                </div>
-                <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">Total Debits</div>
-                  <div className="text-2xl font-black text-neutral-900 dark:text-white mt-1 font-mono">
-                    {fmt(reportData.summary?.total_debits)}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">All ledger debit movements</div>
-                </div>
-                <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">Total Credits</div>
-                  <div className="text-2xl font-black text-neutral-900 dark:text-white mt-1 font-mono">
-                    {fmt(reportData.summary?.total_credits)}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">All ledger credit movements</div>
-                </div>
-                <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                    Net Movement
-                  </div>
-                  <div className="text-2xl font-black text-emerald-900 dark:text-emerald-200 mt-1 font-mono">
-                    {fmt((reportData.summary?.total_debits || 0) - (reportData.summary?.total_credits || 0))}
-                  </div>
-                  <div className="text-[10px] text-emerald-700/80 mt-0.5">Debit vs Credit balance</div>
-                </div>
-              </div>
 
-              {/* Search Control */}
-              <div className="flex justify-end">
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search book of accounts..."
-                    className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-outline-variant/60 bg-transparent text-xs text-neutral-900 dark:text-white outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-
-              {/* Master Ledger Schedule Table */}
-              <div className="border border-emerald-300 dark:border-emerald-800/80 rounded-2xl overflow-hidden shadow-2xs">
-                <div className="overflow-x-auto max-h-[550px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
-                      <tr>
-                        <th className="p-2.5 w-10 text-center border-r border-emerald-700/60">#</th>
-                        <th className="p-2.5 min-w-[220px] border-r border-emerald-700/60">Book of Account Name</th>
-                        <th className="p-2.5 w-40 border-r border-emerald-700/60">Category</th>
-                        <th className="p-2.5 w-24 text-center border-r border-emerald-700/60">Entries</th>
-                        <th className="p-2.5 w-36 text-right border-r border-emerald-700/60">Total Debit (₱)</th>
-                        <th className="p-2.5 w-36 text-right border-r border-emerald-700/60">Total Credit (₱)</th>
-                        <th className="p-2.5 w-36 text-right">Net Balance (₱)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-neutral-900 text-xs">
-                      {(reportData.accounts || [])
-                        .filter((b: any) =>
-                          search ? b.account_name?.toLowerCase().includes(search.toLowerCase()) : true
-                        )
-                        .map((b: any, idx: number) => (
-                          <tr
-                            key={idx}
-                            onClick={() => {
-                              setSelectedBookAccountModal(b);
-                              setBookAccountModalSearch('');
-                            }}
-                            className="hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer group"
-                            title={`Click to view breakdown of ${b.entries_count} entries and category details for ${b.account_name}`}
-                          >
-                            <td className="p-2 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
-                              {idx + 1}
-                            </td>
-                            <td className="p-2 font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
-                                  {b.account_name}
-                                </span>
-                                <span className="text-[10px] font-normal text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
-                                  <span>View {b.entries_count} entries</span>
-                                  <ExternalLink className="w-3 h-3" />
-                                </span>
-                              </div>
-                            </td>
-                            <td className="p-2 border-r border-neutral-200 dark:border-neutral-800">
-                              {(() => {
-                                const cat = b.category || b.account_type || 'Operation Expense';
-                                const badgeStyle =
-                                  cat === 'Service Expense'
-                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-200 dark:border-purple-800'
-                                    : cat === 'Merchandise Expense'
-                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                                    : cat === 'Cash & Bank'
-                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                                    : cat === 'Share Capital'
-                                    ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                                    : cat === 'Income'
-                                    ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border-teal-200 dark:border-teal-800'
-                                    : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-800';
-                                return (
-                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${badgeStyle}`}>
-                                    {cat}
-                                  </span>
-                                );
-                              })()}
-                            </td>
-                            <td className="p-2 text-center font-mono font-medium text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
-                              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 group-hover:bg-emerald-100 group-hover:text-emerald-800 dark:group-hover:bg-emerald-950 dark:group-hover:text-emerald-300 transition-colors">
-                                {b.entries_count}
-                              </span>
-                            </td>
-                            <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
-                              {fmt(b.total_debit)}
-                            </td>
-                            <td className="p-2 text-right font-mono font-bold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
-                              {fmt(b.total_credit)}
-                            </td>
-                            <td
-                              className={`p-2 text-right font-mono font-black ${
-                                b.net_balance >= 0
-                                  ? 'text-emerald-600 dark:text-emerald-400'
-                                  : 'text-rose-600 dark:text-rose-400'
-                              }`}
-                            >
-                              {fmt(b.net_balance)}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
 
 
 
@@ -3098,260 +3124,7 @@ export default function ReportsPage() {
         document.body
       )}
 
-      {/* Itemized Single Book of Account Movement Modal */}
-      {selectedBookAccountModal && typeof document !== 'undefined' && createPortal(
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/75 backdrop-blur-md p-3 sm:p-6 overflow-y-auto animate-modal-backdrop"
-          onClick={() => setSelectedBookAccountModal(null)}
-        >
-          <div
-            className="relative w-full max-w-4xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col animate-modal-pop"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#064e3b] text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-bold text-neutral-900 dark:text-white">
-                      {selectedBookAccountModal.account_name}
-                    </h3>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      selectedBookAccountModal.category === 'Merchandise Expense'
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                        : selectedBookAccountModal.category === 'Service Expense'
-                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
-                        : selectedBookAccountModal.category === 'Cash & Bank'
-                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                        : selectedBookAccountModal.category === 'Share Capital'
-                        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
-                        : selectedBookAccountModal.category === 'Income'
-                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
-                        : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                    }`}>
-                      {selectedBookAccountModal.category || selectedBookAccountModal.account_type}
-                    </span>
-                  </div>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    General Ledger Breakdown • Net Balance:{' '}
-                    <span className={`font-bold font-mono ${
-                      selectedBookAccountModal.net_balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                    }`}>
-                      {fmt(selectedBookAccountModal.net_balance)}
-                    </span> across {selectedBookAccountModal.entries_count} recorded entries
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedBookAccountModal(null)}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 text-lg font-bold transition-colors cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
 
-            {/* Quick Info & Category banner cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 text-xs">
-              <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-800">
-                <div className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Where It Belongs</div>
-                <div className="font-bold text-neutral-900 dark:text-white mt-1 flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{selectedBookAccountModal.category || selectedBookAccountModal.account_type}</span>
-                </div>
-                <div className="text-[10px] text-neutral-400 mt-0.5">
-                  {selectedBookAccountModal.category === 'Merchandise Expense'
-                    ? 'Store purchases, uniforms & merchandise'
-                    : selectedBookAccountModal.category === 'Service Expense'
-                    ? 'Photocopier toner, printing & service supplies'
-                    : selectedBookAccountModal.category === 'Cash & Bank'
-                    ? 'Bank accounts, deposits & cash balances'
-                    : selectedBookAccountModal.category === 'Share Capital'
-                    ? 'Member equity & capital contributions'
-                    : selectedBookAccountModal.category === 'Income'
-                    ? 'Interest, fines & service revenue'
-                    : 'Operating expenses, utilities & administration'}
-                </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-800">
-                <div className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Total Debits</div>
-                <div className="font-mono font-black text-lg text-neutral-900 dark:text-white mt-0.5">
-                  {fmt(selectedBookAccountModal.total_debit)}
-                </div>
-                <div className="text-[10px] text-neutral-400 mt-0.5 font-mono">
-                  All debit transactions
-                </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-800">
-                <div className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Total Credits</div>
-                <div className="font-mono font-black text-lg text-neutral-700 dark:text-neutral-300 mt-0.5">
-                  {fmt(selectedBookAccountModal.total_credit)}
-                </div>
-                <div className="text-[10px] text-neutral-400 mt-0.5 font-mono">
-                  All credit movements
-                </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60">
-                <div className="text-[10px] text-emerald-700 dark:text-emerald-300 uppercase font-bold tracking-wider">Net Movement</div>
-                <div className={`font-mono font-black text-lg mt-0.5 ${
-                  selectedBookAccountModal.net_balance >= 0 ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-400'
-                }`}>
-                  {fmt(selectedBookAccountModal.net_balance)}
-                </div>
-                <div className="text-[10px] text-neutral-400 mt-0.5 font-mono">
-                  {selectedBookAccountModal.entries_count} entries recorded
-                </div>
-              </div>
-            </div>
-
-            {/* Filter Search inside Modal */}
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-neutral-400" />
-              <input
-                type="text"
-                placeholder="Search entries by voucher/OR #, payee, particulars, or date..."
-                value={bookAccountModalSearch}
-                onChange={(e) => setBookAccountModalSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-
-            {/* Itemized Transactions Table */}
-            <div className="flex-1 flex flex-col border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden min-h-[180px] max-h-[380px]">
-              <div className="px-3 py-2 bg-emerald-50/70 dark:bg-emerald-950/40 border-b border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-between text-[11px] text-neutral-500 shrink-0">
-                <span className="font-bold text-emerald-900 dark:text-emerald-300">
-                  Itemized Entries ({bookAccountModalTransactions.length})
-                </span>
-                <span className="text-[10px] text-neutral-400 flex items-center gap-1">
-                  <ExternalLink className="w-3 h-3 text-emerald-600" />
-                  Click check voucher to view in Disbursement
-                </span>
-              </div>
-              <div className="flex-1 overflow-y-auto overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] sticky top-0 z-10">
-                  <tr>
-                    <th className="p-2 w-10 text-center border-r border-emerald-700/60">#</th>
-                    <th className="p-2 w-24 border-r border-emerald-700/60">Date</th>
-                    <th className="p-2 w-32 border-r border-emerald-700/60">Ref / Voucher #</th>
-                    <th className="p-2 w-24 border-r border-emerald-700/60">Source</th>
-                    <th className="p-2 min-w-[150px] border-r border-emerald-700/60">Payee / Entity</th>
-                    <th className="p-2 min-w-[180px] border-r border-emerald-700/60">Particulars / Details</th>
-                    <th className="p-2 w-24 text-right border-r border-emerald-700/60">Debit (₱)</th>
-                    <th className="p-2 w-24 text-right">Credit (₱)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                  {bookAccountModalTransactions.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-neutral-400 italic">
-                        No transactions found matching your search.
-                      </td>
-                    </tr>
-                  ) : (
-                    bookAccountModalTransactions.map((t: any, idx: number) => {
-                      const hasVoucher = Boolean(t.voucher_no && t.voucher_no !== '—' && !String(t.voucher_no).includes('Liquidation'));
-                      return (
-                        <tr
-                          key={idx}
-                          onClick={() => {
-                            if (hasVoucher) {
-                              const params = new URLSearchParams();
-                              params.set('tab', 'summary');
-                              params.set('voucher', t.voucher_no);
-                              if (t.voucher_id) params.set('id', t.voucher_id);
-                              router.push(`/dashboard/disbursement?${params.toString()}`);
-                            }
-                          }}
-                          className={`transition-colors group ${
-                            hasVoucher
-                              ? 'hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 cursor-pointer'
-                              : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
-                          }`}
-                          title={hasVoucher ? `Click to open Check Voucher #${t.voucher_no} in Disbursement` : undefined}
-                        >
-                          <td className="p-2 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
-                            {idx + 1}
-                          </td>
-                          <td className="p-2 font-mono text-[11px] text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
-                            {t.date}
-                          </td>
-                          <td className="p-2 font-mono font-bold text-neutral-800 dark:text-neutral-200 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-400 group-hover:underline">
-                              <span>{t.ref_no}</span>
-                              {hasVoucher && (
-                                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-2 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
-                            <span className="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400">
-                              {t.source}
-                            </span>
-                          </td>
-                          <td className="p-2 border-r border-neutral-200 dark:border-neutral-800">
-                            <span className="font-semibold text-neutral-900 dark:text-white">
-                              {t.payee || '—'}
-                            </span>
-                          </td>
-                          <td className="p-2 border-r border-neutral-200 dark:border-neutral-800">
-                            <span className="text-neutral-700 dark:text-neutral-300">
-                              {t.particulars || '—'}
-                            </span>
-                          </td>
-                          <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
-                            {t.debit > 0 ? fmt(t.debit) : '—'}
-                          </td>
-                          <td className="p-2 text-right font-mono font-bold text-neutral-700 dark:text-neutral-300 whitespace-nowrap">
-                            {t.credit > 0 ? fmt(t.credit) : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-                {bookAccountModalTransactions.length > 0 && (
-                  <tfoot className="bg-neutral-100 dark:bg-neutral-800 font-bold border-t border-neutral-300 dark:border-neutral-700 sticky bottom-0 z-10 shadow-xs">
-                    <tr>
-                      <td colSpan={6} className="p-2 text-right uppercase text-[10px] text-neutral-600 dark:text-neutral-400">
-                        Total Sum:
-                      </td>
-                      <td className="p-2 text-right font-mono text-neutral-900 dark:text-white font-black">
-                        {fmt(bookAccountModalTransactions.reduce((acc: number, t: any) => acc + (parseFloat(t.debit) || 0), 0))}
-                      </td>
-                      <td className="p-2 text-right font-mono text-neutral-700 dark:text-neutral-300 font-black">
-                        {fmt(bookAccountModalTransactions.reduce((acc: number, t: any) => acc + (parseFloat(t.credit) || 0), 0))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-              </div>
-            </div>
-
-            {/* Modal Bottom Close */}
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-[11px] text-neutral-400">
-                Showing {bookAccountModalTransactions.length} of {selectedBookAccountModal.entries_count} entries
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedBookAccountModal(null)}
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* Itemized Book of Accounts Breakdown Modal */}
       {selectedAccountModal && typeof document !== 'undefined' && createPortal(
@@ -3490,6 +3263,13 @@ export default function ReportsPage() {
                               params.set('tab', 'summary');
                               params.set('voucher', t.voucher_no);
                               if (t.voucher_id) params.set('id', t.voucher_id);
+                              params.set('fromReport', 'expenses');
+                              params.set('returnAccount', selectedAccountModal.account_name);
+                              params.set('returnSubView', 'accounts');
+                              params.set('period', period);
+                              params.set('year', String(year));
+                              if (period === 'monthly') params.set('month', String(month));
+                              if (period === 'daily') params.set('date', date);
                               router.push(`/dashboard/disbursement?${params.toString()}`);
                             }
                           }}
@@ -3600,7 +3380,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Breakdown summary pills */}
-            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
               <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60">
                 <div className="text-[10px] text-amber-700 dark:text-amber-300 font-bold uppercase">Honorarium</div>
                 <div className="font-mono font-black text-amber-900 dark:text-amber-200 mt-0.5">{fmt(selectedRecipientModal.total_honorarium)}</div>
@@ -3612,6 +3392,10 @@ export default function ReportsPage() {
               <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60">
                 <div className="text-[10px] text-indigo-700 dark:text-indigo-300 font-bold uppercase">Wages</div>
                 <div className="font-mono font-black text-indigo-900 dark:text-indigo-200 mt-0.5">{fmt(selectedRecipientModal.total_wages)}</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900/60">
+                <div className="text-[10px] text-violet-700 dark:text-violet-300 font-bold uppercase">Salary</div>
+                <div className="font-mono font-black text-violet-900 dark:text-violet-200 mt-0.5">{fmt(selectedRecipientModal.total_salary || 0)}</div>
               </div>
             </div>
 
@@ -3649,6 +3433,13 @@ export default function ReportsPage() {
                             params.set('tab', 'summary');
                             params.set('voucher', t.voucher_no);
                             if (t.voucher_id) params.set('id', t.voucher_id);
+                            params.set('fromReport', 'expenses');
+                            params.set('returnRecipient', selectedRecipientModal.name);
+                            params.set('returnSubView', 'recipients');
+                            params.set('period', period);
+                            params.set('year', String(year));
+                            if (period === 'monthly') params.set('month', String(month));
+                            if (period === 'daily') params.set('date', date);
                             router.push(`/dashboard/disbursement?${params.toString()}`);
                           }
                         }}
@@ -3711,5 +3502,21 @@ export default function ReportsPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 space-y-6 animate-pulse">
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+          <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-96 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      }
+    >
+      <ReportsPageContent />
+    </Suspense>
   );
 }
