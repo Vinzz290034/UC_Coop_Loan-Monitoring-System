@@ -582,6 +582,15 @@ export const normalizeDisbursementCategoryKey = (cat?: string): 'Petty Cash' | '
   return 'All';
 };
 
+export const isExpenseOrMerchandise = (folderOrCat?: string): boolean => {
+  const cat = (folderOrCat || '').toLowerCase();
+  return (
+    cat.includes('merchandise') ||
+    cat.includes('operation') ||
+    cat.includes('service')
+  );
+};
+
 export const getTransactionRefHeader = (categoryOrFolder?: string, rfClass?: string): string => {
   const cat = (categoryOrFolder || '').toLowerCase();
   const rfc = (rfClass || '').toLowerCase();
@@ -1984,41 +1993,43 @@ function DisbursementPageContent() {
     }
 
     if (details.length > 0) {
-      // 2. Search for explicit CIB (Cash In Bank) entry representing actual check disbursed
+      let cibVal = 0;
+      let dSum = 0;
+      let nonCibCSum = 0;
+
       for (const item of details) {
         const desc = (item.book_of_account || item.description || '').trim();
-        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc)) {
-          const creditRaw = item.credit !== null && item.credit !== undefined && item.credit !== '' ? item.credit : null;
-          const amtRaw = item.amount !== null && item.amount !== undefined && item.amount !== '' ? item.amount : null;
-          const val = creditRaw !== null
-            ? parseFloat(String(creditRaw).replace(/,/g, ''))
-            : (typeof amtRaw === 'number' ? Math.abs(amtRaw) : Math.abs(parseFloat(String(amtRaw || item.debit || 0).replace(/,/g, ''))));
-          if (!isNaN(val) && val > 0) return val;
+        const isCib = /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc);
+        const creditRaw = item.credit !== null && item.credit !== undefined && item.credit !== '' ? item.credit : null;
+        const amtRaw = item.amount !== null && item.amount !== undefined && item.amount !== '' ? item.amount : null;
+        const rawVal = creditRaw !== null
+          ? parseFloat(String(creditRaw).replace(/,/g, ''))
+          : (typeof amtRaw === 'number' ? Math.abs(amtRaw) : Math.abs(parseFloat(String(amtRaw || item.debit || 0).replace(/,/g, ''))));
+        const isCredit = item.is_credit === true ||
+                         item.isAutoCredit === true ||
+                         isCib ||
+                         (typeof item.amount === 'number' && item.amount < 0) ||
+                         (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
+
+        if (isCib) {
+          if (!isNaN(rawVal) && rawVal > 0) cibVal = rawVal;
+        } else if (isCredit) {
+          if (!isNaN(rawVal) && rawVal > 0 && !/^revolving\s*fund\s*-/i.test(desc)) nonCibCSum += rawVal;
+        } else {
+          const debitVal = typeof item.amount === 'number' && item.amount > 0 ? item.amount : parseFloat(String(item.debit || item.amount || 0).replace(/,/g, ''));
+          if (!isNaN(debitVal) && debitVal > 0) dSum += debitVal;
         }
       }
 
-      // 3. If no explicit CIB row, compute net disbursed: Total Debits minus deductions (other credits)
-      let dSum = 0;
-      let cSum = 0;
-      for (const item of details) {
-        const desc = (item.book_of_account || item.description || '').trim();
-        if (/^(cib\b|cib[-_\s]|cash\s*in\s*bank|revolving\s*fund\s*-)/i.test(desc)) continue;
-        const val = typeof item.amount === 'number' ? item.amount : parseFloat(String(item.amount || item.debit || 0).replace(/,/g, ''));
-        const isCredit = item.is_credit === true ||
-                         item.isAutoCredit === true ||
-                         /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc) ||
-                         val < 0 ||
-                         (item.credit !== null && item.credit !== undefined && item.credit !== '' && !item.debit);
-        if (isCredit) {
-          const creditVal = val < 0 ? Math.abs(val) : (item.credit !== null && item.credit !== undefined && item.credit !== '' ? parseFloat(String(item.credit).replace(/,/g, '')) : Math.abs(val));
-          if (!isNaN(creditVal)) cSum += creditVal;
-        } else if (!isNaN(val) && val > 0) {
-          dSum += val;
+      if (dSum > 0 && nonCibCSum > 0 && dSum > nonCibCSum) {
+        // If CIB equals nonCibCSum (historical bug where CIB was saved as deductions sum) or doesn't balance,
+        // the true net disbursed check amount is dSum - nonCibCSum
+        if (cibVal === nonCibCSum || Math.abs((cibVal + nonCibCSum) - dSum) > 0.01) {
+          return dSum - nonCibCSum;
         }
       }
-      if (dSum > 0 && cSum > 0 && dSum >= cSum) {
-        return dSum - cSum;
-      }
+      if (cibVal > 0) return cibVal;
+      if (dSum > 0 && nonCibCSum > 0 && dSum >= nonCibCSum) return dSum - nonCibCSum;
       if (dSum > 0) return dSum;
     }
 
@@ -2678,25 +2689,40 @@ function DisbursementPageContent() {
       }
     }
 
-    // Auto-balance credit with CIB row if creditTotal is 0 and debitTotal > 0
-    if (debitTotal > 0 && creditTotal === 0) {
-      const rawDate = cv?.voucher_date || cv?.date;
-      const dateStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : '') : '';
-      const vNo = (cv?.voucher_no || '').replace(/^CV-?0*/i, '').trim();
-      const detectedBank = (cv?.bank_name || cv?.bank || 'MBTC').trim();
-      const cibLabel = detectedBank.toUpperCase().startsWith('CIB') ? detectedBank : `CIB - ${detectedBank}`;
-      rows.push({
-        id: 'credit-cib-auto',
-        date: dateStr,
-        voucher_no: vNo,
-        description: cibLabel,
-        remarks: '',
-        debit: null,
-        credit: debitTotal,
-        isAutoCredit: true,
-        is_credit: true
-      });
-      creditTotal = debitTotal;
+    // Auto-balance credit with CIB row if credit doesn't balance debitTotal
+    if (debitTotal > 0) {
+      const cibRowIdx = rows.findIndex(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+      const nonCibCreditTotal = rows.reduce((sum, r, idx) => {
+        if (idx === cibRowIdx) return sum;
+        return sum + (r.is_credit || r.isAutoCredit ? (r.credit || 0) : 0);
+      }, 0);
+      const requiredCibCredit = Math.max(0, debitTotal - nonCibCreditTotal);
+
+      if (cibRowIdx >= 0) {
+        // If voucher is unbalanced (e.g. historical bug where CIB was mistakenly set equal to deductions total), correct it
+        if (requiredCibCredit > 0 && Math.abs(debitTotal - creditTotal) > 0.01) {
+          creditTotal = creditTotal - (rows[cibRowIdx].credit || 0) + requiredCibCredit;
+          rows[cibRowIdx].credit = requiredCibCredit;
+        }
+      } else if (requiredCibCredit > 0) {
+        const rawDate = cv?.voucher_date || cv?.date;
+        const dateStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : '') : '';
+        const vNo = (cv?.voucher_no || '').replace(/^CV-?0*/i, '').trim();
+        const detectedBank = (cv?.bank_name || cv?.bank || 'MBTC').trim();
+        const cibLabel = detectedBank.toUpperCase().startsWith('CIB') ? detectedBank : `CIB - ${detectedBank}`;
+        rows.push({
+          id: 'credit-cib-auto',
+          date: dateStr,
+          voucher_no: vNo,
+          description: cibLabel,
+          remarks: '',
+          debit: null,
+          credit: requiredCibCredit,
+          isAutoCredit: true,
+          is_credit: true
+        });
+        creditTotal += requiredCibCredit;
+      }
     }
 
     return { rows, debitTotal, creditTotal };
@@ -2775,10 +2801,7 @@ function DisbursementPageContent() {
       if (cat === 'stl' || cat.includes('stl')) return 'stl';
       if (
         cat.includes('revolving') ||
-        cat.includes('petty') ||
-        cat.includes('merchandise') ||
-        cat.includes('operation') ||
-        cat.includes('service')
+        cat.includes('petty')
       ) return 'rf';
       return null;
     }
@@ -2789,9 +2812,6 @@ function DisbursementPageContent() {
     if (
       part.includes('revolving') ||
       part.includes('petty cash') ||
-      part.includes('merchandise') ||
-      part.includes('operation') ||
-      part.includes('service') ||
       Boolean(cv?.revolving_fund?.id)
     ) {
       return 'rf';
@@ -2799,10 +2819,7 @@ function DisbursementPageContent() {
     if (activeTab === 'stl_replenishment') return 'stl';
     if (
       activeTab === 'revolving_fund_replenishment' ||
-      activeTab === 'petty_cash_replenishment' ||
-      activeTab === 'merchandise_payment' ||
-      activeTab === 'operation_expense' ||
-      activeTab === 'services_expense'
+      activeTab === 'petty_cash_replenishment'
     ) {
       return 'rf';
     }
@@ -3825,50 +3842,53 @@ function DisbursementPageContent() {
       let creditRowsSum = 0;
       let debitRowsSum = 0;
       for (const r of editCvRows) {
+        const isCib = /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim());
+        if (isCib) continue;
         if (checkIsCreditRow(r)) {
           creditRowsSum += parseFloat(r.credit || (r.debit ? r.debit : '0') || '0') || 0;
         } else {
           debitRowsSum += parseFloat(r.debit || '0') || 0;
         }
       }
-      const cibVal = isReplenish
-        ? (isStl ? (parseFloat(editCvCibAmount || '0') || 0) : (creditRowsSum > 0 ? creditRowsSum : debitRowsSum))
-        : 0;
-      // Persist the manual CIB row for replenishment vouchers (STL / Revolving Fund)
-      if (isReplenish) {
-        const existingCibIdx = detailsArray.findIndex(d => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((d.book_of_account || '').trim()));
-        if (cibVal > 0) {
-          const cibName = formatCibAccountName(editCvFormData.bank);
-          if (existingCibIdx >= 0) {
-            detailsArray[existingCibIdx] = {
-              ...detailsArray[existingCibIdx],
-              book_of_account: cibName,
-              amount: -cibVal,
-              credit: cibVal,
-              debit: null,
-              is_credit: true,
-              isAutoCredit: true
-            };
-          } else {
-            detailsArray.push({
-              date: editCvFormData.voucher_date || null,
-              voucher_no: editCvFormData.voucher_no || null,
-              book_of_account: cibName,
-              remarks: null,
-              amount: -cibVal,
-              debit: null,
-              credit: cibVal,
-              is_credit: true,
-              isAutoCredit: true
-            });
-          }
-        } else if (existingCibIdx >= 0) {
-          detailsArray.splice(existingCibIdx, 1);
+      const balancingCib = Math.max(0, debitRowsSum - creditRowsSum);
+      const manualCib = parseFloat(editCvCibAmount || '0') || 0;
+      const cibVal = isStl
+        ? (manualCib > 0 ? manualCib : balancingCib)
+        : (balancingCib > 0 ? balancingCib : (manualCib > 0 ? manualCib : debitRowsSum));
+
+      // Persist the balancing CIB row
+      const existingCibIdx = detailsArray.findIndex(d => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((d.book_of_account || '').trim()));
+      if (cibVal > 0) {
+        const cibName = formatCibAccountName(editCvFormData.bank);
+        if (existingCibIdx >= 0) {
+          detailsArray[existingCibIdx] = {
+            ...detailsArray[existingCibIdx],
+            book_of_account: cibName,
+            amount: -cibVal,
+            credit: cibVal,
+            debit: null,
+            is_credit: true,
+            isAutoCredit: true
+          };
+        } else {
+          detailsArray.push({
+            date: editCvFormData.voucher_date || null,
+            voucher_no: editCvFormData.voucher_no || null,
+            book_of_account: cibName,
+            remarks: null,
+            amount: -cibVal,
+            debit: null,
+            credit: cibVal,
+            is_credit: true,
+            isAutoCredit: true
+          });
         }
+      } else if (existingCibIdx >= 0 && !isReplenish) {
+        detailsArray.splice(existingCibIdx, 1);
       }
 
       const disbursedAmt = getEditCvDisbursedAmount();
-      const finalAmount = calculatedAmount > 0 ? calculatedAmount : (disbursedAmt > 0 ? disbursedAmt : (activeOriginalCv?.amount || 0));
+      const finalAmount = cibVal > 0 ? cibVal : (disbursedAmt > 0 ? disbursedAmt : (calculatedAmount > 0 ? calculatedAmount : (activeOriginalCv?.amount || 0)));
 
       const payload = {
         voucher_no: editCvFormData.voucher_no.trim(),
@@ -3881,7 +3901,7 @@ function DisbursementPageContent() {
         particulars: editCvFormData.particulars.trim() || null,
         folder_name: editCvFormData.folder_name.trim() || null,
         amount: finalAmount,
-        fund_amount: editCvFormData.fund_amount !== undefined && editCvFormData.fund_amount !== null && editCvFormData.fund_amount !== '' ? parseFloat(editCvFormData.fund_amount) : null,
+        fund_amount: !isExpenseOrMerchandise(editCvFormData.folder_name) && editCvFormData.fund_amount !== undefined && editCvFormData.fund_amount !== null && editCvFormData.fund_amount !== '' ? parseFloat(editCvFormData.fund_amount) : null,
         details: detailsArray,
         signatories: {
           prepared_by: editCvFormData.prepared_by.trim(),
@@ -4095,6 +4115,7 @@ function DisbursementPageContent() {
     try {
       setIsSavingNewCv(true);
       let calculatedAmount = 0;
+      let nonCibCreditSum = 0;
       const detailsArray = newCvRows
         .filter(r => r.description.trim() || r.debit || r.credit)
         .map(r => {
@@ -4102,6 +4123,9 @@ function DisbursementPageContent() {
           const debitVal = !isCredit ? (parseFloat(r.debit || '0') || 0) : 0;
           const creditVal = isCredit ? (parseFloat(r.credit || '0') || (r.debit ? parseFloat(r.debit) : 0) || 0) : 0;
           if (!isCredit && debitVal > 0) calculatedAmount += debitVal;
+          if (isCredit && creditVal > 0 && !/^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim())) {
+            nonCibCreditSum += creditVal;
+          }
           const netAmount = isCredit ? -Math.abs(creditVal) : debitVal;
           return {
             date: r.date || null,
@@ -4116,8 +4140,8 @@ function DisbursementPageContent() {
           };
         });
 
-      const replenishType = getReplenishmentType(newCvCategory);
-      if (replenishType && calculatedAmount > 0) {
+      const netCheckAmount = Math.max(0, calculatedAmount - nonCibCreditSum);
+      if (netCheckAmount > 0) {
         const existingCibIdx = detailsArray.findIndex(d => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((d.book_of_account || '').trim()));
         if (existingCibIdx < 0) {
           const cibName = formatCibAccountName(newCvBankName);
@@ -4126,9 +4150,9 @@ function DisbursementPageContent() {
             voucher_no: newCvVoucherNo.trim() || null,
             book_of_account: cibName,
             remarks: null,
-            amount: -calculatedAmount,
+            amount: -netCheckAmount,
             debit: null,
-            credit: calculatedAmount,
+            credit: netCheckAmount,
             is_credit: true,
             isAutoCredit: true
           });
@@ -4145,8 +4169,8 @@ function DisbursementPageContent() {
         bank: newCvBankName.trim() || null,
         particulars: newCvParticulars.trim() || `${matchedCat?.label || 'Disbursement'}`,
         folder_name: newCvCategory || 'Loan',
-        amount: calculatedAmount,
-        fund_amount: newCvFundAmount !== '' ? parseFloat(newCvFundAmount) : null,
+        amount: netCheckAmount > 0 ? netCheckAmount : calculatedAmount,
+        fund_amount: !isExpenseOrMerchandise(newCvCategory) && newCvFundAmount !== '' ? parseFloat(newCvFundAmount) : null,
         details: detailsArray,
         signatories: {
           prepared_by: newCvPreparedBy.trim(),
@@ -5109,7 +5133,7 @@ function DisbursementPageContent() {
                       </div>
                     </div>
                   </div>
-                ) : (
+                ) : !isExpenseOrMerchandise(newCvCategory) && (newCvCategory === 'STL' || (newCvCategory || '').toLowerCase().includes('stl') || (newCvCategory || '').toLowerCase().includes('petty')) ? (
                   <div>
                     <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                       Fund Amount <span className="text-neutral-400 font-normal normal-case">(Total fund amount)</span>
@@ -5130,7 +5154,7 @@ function DisbursementPageContent() {
                       Used to compute Fund Balance on the detailed check voucher.
                     </p>
                   </div>
-                )}
+                ) : null}
 
                 {/* Line Items Rows (Balanced Double Entry) */}
                 {(() => {
@@ -5528,7 +5552,7 @@ function DisbursementPageContent() {
 
                 {/* Signatories Section */}
                 {(() => {
-                  const isReplenish = Boolean(getReplenishmentType(newCvCategory));
+                  const isReplenish = Boolean(getReplenishmentType(newCvCategory)) && !isExpenseOrMerchandise(newCvCategory);
                   return (
                     <div className="space-y-4 pt-2 border-t border-outline-variant/60">
                       {/* Summary Check Voucher Signatories */}
@@ -5762,7 +5786,7 @@ function DisbursementPageContent() {
                 </div>
 
                 {/* Fund Amount Card */}
-                {(Number(selectedCvForModal.fund_amount) > 0 || isTrueRevolvingFundVoucher(selectedCvForModal) || (selectedCvForModal.folder_name || '').toLowerCase().includes('petty')) && (
+                {!isExpenseOrMerchandise(selectedCvForModal.folder_name) && (Number(selectedCvForModal.fund_amount) > 0 || isTrueRevolvingFundVoucher(selectedCvForModal) || (selectedCvForModal.folder_name || '').toLowerCase().includes('petty')) && (
                   <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 border border-outline-variant/40">
                     <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">Fund Amount</span>
                     <span className="text-sm font-mono font-bold text-emerald-700 dark:text-emerald-400 truncate block mt-0.5">
@@ -6409,7 +6433,7 @@ function DisbursementPageContent() {
                     </div>
                   </div>
                 </div>
-              ) : getReplenishmentType(editCvFormData.folder_name, selectedCvForModal) === 'rf' ? (
+              ) : !isExpenseOrMerchandise(editCvFormData.folder_name) && (getReplenishmentType(editCvFormData.folder_name, selectedCvForModal) === 'rf' || getReplenishmentType(editCvFormData.folder_name, selectedCvForModal) === 'stl') ? (
                 <div>
                   <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1">
                     Fund Amount (₱) <span className="text-neutral-400 font-normal normal-case">(Optional / Total fund amount)</span>
@@ -6863,10 +6887,11 @@ function DisbursementPageContent() {
                     {/* Summary row */}
                     {(() => {
                       const isStl = replenishType === 'stl';
-                      const cibVal = isReplenish ? (parseFloat(editCvCibAmount || '0') || 0) : 0;
-                      const overallCreditTotal = isStl
-                        ? creditTotal + cibVal
-                        : (creditTotal > 0 ? creditTotal : (cibVal > 0 ? cibVal : debitTotal));
+                      const manualCib = parseFloat(editCvCibAmount || '0') || 0;
+                      const hasCibInRows = editCvRows.some(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+                      const balancingCib = hasCibInRows ? 0 : Math.max(0, debitTotal - creditTotal);
+                      const cibVal = isStl ? manualCib : (manualCib > 0 ? manualCib : balancingCib);
+                      const overallCreditTotal = creditTotal + (hasCibInRows ? 0 : cibVal);
                       const isBalanced = Math.abs(debitTotal - overallCreditTotal) < 0.01 && debitTotal > 0;
                       return (
                         <div className="p-3 rounded-xl bg-surface-container-low dark:bg-surface-container flex items-center justify-between text-xs border border-outline-variant/40">
@@ -6939,7 +6964,7 @@ function DisbursementPageContent() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
-                    {Boolean(getReplenishmentType(editCvFormData.folder_name, selectedCvForModal)) ? 'Approved By (Summary)' : 'Approved By'}
+                    {Boolean(getReplenishmentType(editCvFormData.folder_name, selectedCvForModal)) && !isExpenseOrMerchandise(editCvFormData.folder_name) ? 'Approved By (Summary)' : 'Approved By'}
                   </label>
                   <input
                     type="text"
@@ -6951,7 +6976,7 @@ function DisbursementPageContent() {
               </div>
 
               {/* Detailed Check Voucher Signatories (only for replenishments) */}
-              {Boolean(getReplenishmentType(editCvFormData.folder_name, selectedCvForModal)) && (
+              {Boolean(getReplenishmentType(editCvFormData.folder_name, selectedCvForModal)) && !isExpenseOrMerchandise(editCvFormData.folder_name) && (
                 <div className="pt-2 border-t border-outline-variant/40">
                   <span className="block text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-2">
                     Detailed Check Voucher Signatories

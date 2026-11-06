@@ -65,9 +65,16 @@ app.options('*', cors(corsOptions)); // Handle preflight for all routes
 app.use(helmet());
 
 // Rate Limiter to guard against denial of service and brute force
+const isProd = process.env.NODE_ENV === 'production';
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 300 : 2000, // 2000 requests in dev mode to prevent throttling during testing
+  max: isProd ? 5000 : 100000, // Generous limit for high-volume cooperative multi-user dashboards
+  skip: (req) => {
+    // Never throttle local development, loopback requests, or health checks
+    if (!isProd) return true;
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    return ip === '127.0.0.1' || ip === '::1' || ip.includes('127.0.0.1');
+  },
   message: {
     success: false,
     error: { message: 'Too many requests from this IP. Please try again after 15 minutes.' }

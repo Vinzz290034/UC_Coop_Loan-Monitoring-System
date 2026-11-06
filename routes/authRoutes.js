@@ -33,6 +33,7 @@ const router = express.Router();
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.NODE_ENV === 'production' ? 15 : 100,
+  skip: (req) => process.env.NODE_ENV !== 'production' || req.ip === '127.0.0.1' || req.ip === '::1' || (req.ip && req.ip.includes('127.0.0.1')),
   message: {
     success: false,
     error: { message: 'Too many login attempts from this IP. Please try again after 15 minutes.' }
@@ -45,6 +46,7 @@ const authLimiter = rateLimit({
 const recoveryLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.NODE_ENV === 'production' ? 6 : 50,
+  skip: (req) => process.env.NODE_ENV !== 'production' || req.ip === '127.0.0.1' || req.ip === '::1' || (req.ip && req.ip.includes('127.0.0.1')),
   message: {
     success: false,
     error: { message: 'Too many recovery requests from this IP. Please try again after 15 minutes.' }
