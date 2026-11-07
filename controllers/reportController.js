@@ -1869,7 +1869,7 @@ export const getLoanProductsReport = async (req, res, next) => {
         SELECT 
           id, tab, date, or_no, payor_name, loans, items,
           loan_account, principal_amount, interest_account, interest_amount,
-          fines_account, fines_amount, common_share_amount, membership_fee,
+          fines_account, fines_amount, common_share_amount, membership_fee, billing_amount, particulars_amount,
           item_name, item_category, service_type, particulars, other_category,
           amount, payment_method, remarks, status, created_at
         FROM collections
@@ -2332,8 +2332,8 @@ export const getLoanProductsReport = async (req, res, next) => {
       if (memFeeAmt > 0) {
         addOtherTrackerAmount('membership_fee', cDate, memFeeAmt);
       }
-      if (particularsAmt > 0 && col.other_category) {
-        const partCat = String(col.other_category).toLowerCase();
+      if (particularsAmt > 0) {
+        const partCat = String(col.other_category || col.particulars || '').toLowerCase();
         if (/insurance|climbs|cipl/i.test(partCat)) {
           addOtherTrackerAmount('insurance', cDate, particularsAmt);
         } else if (/raffle/i.test(partCat)) {
@@ -2342,11 +2342,13 @@ export const getLoanProductsReport = async (req, res, next) => {
           addOtherTrackerAmount('donation_grants', cDate, particularsAmt);
         } else if (/withdrawal\s*fee/i.test(partCat)) {
           addOtherTrackerAmount('withdrawal_fee', cDate, particularsAmt);
+        } else {
+          addOtherTrackerAmount('insurance', cDate, particularsAmt);
         }
       }
 
       const combinedDesc = `${col.loan_account || ''} ${col.particulars || ''} ${col.service_type || ''} ${col.item_name || ''} ${col.other_category || ''} ${col.remarks || ''}`.toLowerCase();
-      const unallocatedAfterShare = Math.max(0, colAmount - commonShareAmt - memFeeAmt - particularsAmt);
+      const unallocatedAfterShare = Math.max(0, colAmount - commonShareAmt - memFeeAmt - particularsAmt - billingAmt);
       const payor = String(col.payor_name || '').toLowerCase();
 
       // Check if standalone non-loan row (or non-loan portion when particulars_amount is not explicitly split)
@@ -2376,7 +2378,7 @@ export const getLoanProductsReport = async (req, res, next) => {
       }
 
       // Member Donations & Grants
-      if (/donation|grant/i.test(combinedDesc) || /alyson|allyson|antojado|cda|bering/i.test(payor)) {
+      if (particularsAmt === 0 && (/donation|grant/i.test(combinedDesc) || /alyson|allyson|antojado|cda|bering/i.test(payor))) {
         addOtherTrackerAmount('donation_grants', cDate, topPrincipal || colAmount);
         return;
       }
@@ -2455,7 +2457,8 @@ export const getLoanProductsReport = async (req, res, next) => {
         accountedFinesInEntries += fAmt;
 
         // Skip non-loan collection accounts (e.g., Shared Capital, Donation, Membership Fee, General Collection fallback)
-        if (isNonLoanCollectionAccount(fallbackAcctText, !hasLoansArray ? col.other_category : '')) {
+        const hasExplicitLoanAccount = entry.loan_account && /loans payable|loan|salary|project|calamity|express|occasion|emergency|utility|rice|soap|mortuary|petty|product/i.test(entry.loan_account);
+        if (!hasExplicitLoanAccount && isNonLoanCollectionAccount(fallbackAcctText, !hasLoansArray ? col.other_category : '')) {
           if (fAmt > 0) {
             recordLoanInflow(identifyProduct('', col.payor_name), cDate, 0, 0, fAmt, {
               or_no: col.or_no,
