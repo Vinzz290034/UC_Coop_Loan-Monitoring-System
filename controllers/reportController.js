@@ -1602,41 +1602,194 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
 // ==========================================
 // 8. LOAN PRODUCTS REPORT
 // ==========================================
-// @desc    Daily, Monthly, Annual report for all 10 loan products
+// @desc    Daily, Monthly, Annual report for all cooperative loan products
 // @route   GET /api/reports/loan-products
 // @access  Protected (Admin, Staff)
 export const getLoanProductsReport = async (req, res, next) => {
   try {
     const { period, year, month, date } = parsePeriodParams(req.query);
+    const targetYear = Number(year) || new Date().getFullYear();
 
+    // Cooperative Loan Products (Regular Loan is divided into Salary Loan and Project Loan)
     const LOAN_PRODUCT_DEFINITIONS = [
-      { key: 'salary', name: 'Salary Loan', match: ['salary'] },
-      { key: 'project', name: 'Project Loan', match: ['project'] },
-      { key: 'utility', name: 'Utility Loan', match: ['utility'] },
-      { key: 'cash_express', name: 'Cash Express', match: ['cash express', 'express'] },
-      { key: 'special_occasion', name: 'Special Occasion', match: ['special occasion', 'occasion'] },
-      { key: 'emergency', name: 'Emergency Loan', match: ['emergency'] },
-      { key: 'petty_cash', name: 'Petty Cash', match: ['petty cash', 'petty'] },
-      { key: 'calamity', name: 'Calamity Loan', match: ['calamity'] },
-      { key: 'mortuary', name: 'Mortuary Loan', match: ['mortuary', 'columbary'] },
-      { key: 'product', name: 'Product Loan', match: ['product', 'appliance', 'goods'] }
+      { key: 'salary', name: 'Salary Loan', trackerLabel: 'Salary Loan', hasInterestRow: true, match: ['salary'] },
+      { key: 'project', name: 'Project Loan', trackerLabel: 'Project Loan', hasInterestRow: true, match: ['project'] },
+      { key: 'calamity', name: 'Calamity Loan', trackerLabel: 'Calamity loan', hasInterestRow: true, match: ['calamity'] },
+      { key: 'cash_express', name: 'Cash Express', trackerLabel: 'Cash Express', hasInterestRow: true, match: ['cash express', 'express'] },
+      { key: 'special_occasion', name: 'Special Occasion', trackerLabel: 'Special Occasion', hasInterestRow: true, match: ['special occasion', 'occasion'] },
+      { key: 'emergency', name: 'Emergency Loan', trackerLabel: 'Emergency', hasInterestRow: true, match: ['emergency'] },
+      { key: 'utility', name: 'Utility Loan', trackerLabel: 'Utility', hasInterestRow: true, match: ['utility'] },
+      { key: 'rice', name: 'Rice Loan', trackerLabel: 'Rice', hasInterestRow: false, match: ['rice loan', 'rice'] },
+      { key: 'laundry_soap', name: 'Laundry Soap Loan', trackerLabel: 'Laundry Soap', hasInterestRow: false, match: ['laundry soap', 'soap loan', 'soap'] },
+      { key: 'mortuary', name: 'Mortuary Loan', trackerLabel: 'Mortuary Loan', hasInterestRow: true, match: ['mortuary', 'columbary'] },
+      { key: 'petty_cash', name: 'Petty Cash', trackerLabel: 'Petty Cash', hasInterestRow: true, match: ['petty cash', 'petty'] },
+      { key: 'product', name: 'Product Loan', trackerLabel: 'Product Loan', hasInterestRow: true, match: ['product', 'appliance', 'goods'] }
     ];
 
-    function identifyProduct(name) {
-      const lower = (name || '').toLowerCase();
+    function isNonLoanCollectionAccount(text, otherCategory = '') {
+      const lower = `${text || ''} ${otherCategory || ''}`.toLowerCase().trim();
+      if (!lower) return true;
+      if (
+        lower.includes('shared capital') ||
+        lower.includes('share capital') ||
+        lower.includes('fixed deposit') ||
+        lower.includes('common share') ||
+        lower.includes('donation') ||
+        lower.includes('grant') ||
+        lower.includes('membership fee') ||
+        lower.includes('application fee') ||
+        lower.includes('pmes') ||
+        lower.includes('onboarding') ||
+        lower.includes('insurance') ||
+        lower.includes('climbs') ||
+        lower.includes('cipl') ||
+        lower.includes('rice sales') ||
+        lower.includes('rice (store') ||
+        lower.includes('soap sales') ||
+        lower.includes('laundry soap (store') ||
+        lower.includes('store sales') ||
+        lower.includes('merchandise') ||
+        lower.includes('uniform') ||
+        lower.includes('raffle') ||
+        lower.includes('withdrawal fee')
+      ) {
+        return true;
+      }
+      // Generic fallback collection receipts that do not name any loan product
+      if (
+        String(otherCategory || '').toLowerCase() === 'general collection' ||
+        /^(collection receipt|general collection|imported receipt)$/i.test(String(text || '').trim())
+      ) {
+        const hasLoanKeyword = LOAN_PRODUCT_DEFINITIONS.some(p => p.match.some(m => lower.includes(m))) ||
+          /\b(regular|loan|stl|short\s*term)\b/i.test(lower);
+        if (!hasLoanKeyword) return true;
+      }
+      return false;
+    }
+
+    const RICE_COMMODITY_AMOUNTS = new Set([316, 360, 606, 632, 720, 900, 990, 1080, 1101, 1350, 1440, 1451, 1850, 2160, 2880, 3020]);
+    const SOAP_COMMODITY_AMOUNTS = new Set([78, 120, 130, 240, 250, 260, 272, 390, 450, 458, 520, 544]);
+
+    function getPersonNameKeys(rawName, firstName = '', lastName = '') {
+      const keys = new Set();
+      const addCleaned = (s) => {
+        if (!s) return;
+        const lower = String(s)
+          .toLowerCase()
+          .replace(/[^a-z\s]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!lower) return;
+        keys.add(lower);
+        const tokens = lower.split(' ').filter(t => t.length > 1 && !['jr', 'sr', 'ii', 'iii', 'iv', 'mr', 'ms', 'mrs', 'dr', 'ma'].includes(t));
+        if (tokens.length >= 2) {
+          keys.add([...tokens].sort().join(' '));
+          keys.add(`${tokens[0]} ${tokens[tokens.length - 1]}`);
+          keys.add(`${tokens[tokens.length - 1]} ${tokens[0]}`);
+        }
+      };
+      addCleaned(rawName);
+      if (firstName || lastName) {
+        addCleaned(`${firstName || ''} ${lastName || ''}`);
+        addCleaned(`${lastName || ''} ${firstName || ''}`);
+      }
+      return Array.from(keys);
+    }
+
+    // Authoritative lookup maps across the system
+    const loanProductById = new Map();
+    const loanProductByLafNo = new Map();
+    const projectLoanMemberKeys = new Set();
+    const activeProjectLoanMemberKeys = new Set();
+    const salaryLoanMemberKeys = new Set();
+
+    function classifyLoanRecord(loan) {
+      const combinedText = `${loan.product_name || ''} ${loan.purpose || ''} ${loan.remarks || ''} ${loan.laf_no || ''}`.toLowerCase();
+      for (const p of LOAN_PRODUCT_DEFINITIONS) {
+        if (p.name === 'Salary Loan') continue;
+        if (p.match.some(m => combinedText.includes(m))) return p.name;
+      }
+
+      const principal = parseFloat(loan.principal_amount) || 0;
+      const roundedPrincipal = Math.round(principal);
+      const termMonths = parseInt(loan.term_months || 12, 10);
+
+      // In UC Coop loan_products:
+      // Regular Loan - Salary Deduction is 10,000 - 75,000
+      // Regular Loan - Project Loan is 76,000 - 300,000
+      if (principal >= 76000) {
+        return 'Project Loan';
+      }
+
+      // 1-2 month commodity loans imported from Excel member sheets under default Regular product
+      if (termMonths <= 2 && SOAP_COMMODITY_AMOUNTS.has(roundedPrincipal)) {
+        return 'Laundry Soap Loan';
+      }
+      if (termMonths <= 2 && RICE_COMMODITY_AMOUNTS.has(roundedPrincipal)) {
+        return 'Rice Loan';
+      }
+
+      return 'Salary Loan';
+    }
+
+    function identifyProduct(name, memberOrPayorName = '', extraContext = {}) {
+      if (extraContext.loanId && loanProductById.has(extraContext.loanId)) {
+        return loanProductById.get(extraContext.loanId);
+      }
+      if (extraContext.lafNo) {
+        const cleanLaf = String(extraContext.lafNo).trim().toLowerCase();
+        if (cleanLaf && loanProductByLafNo.has(cleanLaf)) {
+          return loanProductByLafNo.get(cleanLaf);
+        }
+      }
+
+      const lower = String(name || '').toLowerCase();
       for (const p of LOAN_PRODUCT_DEFINITIONS) {
         if (p.match.some(m => lower.includes(m))) return p.name;
       }
-      return 'Regular Loan';
+
+      const principalHint = parseFloat(extraContext.principalAmount || 0);
+      if (principalHint >= 76000) {
+        return 'Project Loan';
+      }
+
+      // Generic 'Regular Loan' / 'STL' / fallback -> check if member holds an active Project Loan or only a Project Loan
+      const nameKeys = getPersonNameKeys(memberOrPayorName, extraContext.firstName, extraContext.lastName);
+      const hasActiveProject = nameKeys.some(k => activeProjectLoanMemberKeys.has(k));
+      const hasAnyProject = nameKeys.some(k => projectLoanMemberKeys.has(k));
+      const hasSalary = nameKeys.some(k => salaryLoanMemberKeys.has(k));
+
+      if (hasActiveProject || (hasAnyProject && !hasSalary)) {
+        return 'Project Loan';
+      }
+      return 'Salary Loan';
+    }
+
+    function extractInvoiceToken(refStr) {
+      const raw = String(refStr || '').trim();
+      if (!raw) return '';
+      const cleaned = raw
+        .replace(/^(?:inv(?:oice)?|or|ar|cr|receipt)\s*(?:no\.?|#|:)?\s*/i, '')
+        .split(/\s*-\s*/)[0]
+        .trim()
+        .toLowerCase();
+      if (!cleaned || /^(sd|cd|cash|check|gcash|bank|payroll|deduction|n\/a|na|none|-+)$/i.test(cleaned)) {
+        return '';
+      }
+      return cleaned;
     }
 
     function isCheckVoucherLoanDisbursement(cv) {
       const fn = String(cv.folder_name || '').toLowerCase().trim();
       const part = String(cv.particulars || '').toLowerCase().trim();
       const payee = String(cv.payee || '').toLowerCase().trim();
+      const detailsStr = typeof cv.details === 'string' ? cv.details.toLowerCase() : JSON.stringify(cv.details || {}).toLowerCase();
 
-      // Exclude fund replenishments (including typos like 'replenisment')
-      if (part.includes('replenish') || part.includes('replenis') || part.includes('revolving fund')) return false;
+      // Exclude staff salary/payroll & operational expenses
+      if (fn === 'operation' || part === 'salary' || part.includes('honorarium') || part.includes('allowance') || part.includes('wages')) return false;
+
+      // Exclude fund replenishments and STL liquidation summary vouchers (handled via individual loans/stl_liquidation_items)
+      if (part.includes('replenish') || part.includes('replenis') || part.includes('revolving fund') || part.includes('liquidation #') || part.includes('stl liquidation')) return false;
 
       // Exclude payments to banks/federations/creditors
       if (fn === 'loan payment' || fn === 'liability' || part.includes('payment to victo') || part.includes('loan repayment') || payee.includes('victo')) return false;
@@ -1645,75 +1798,120 @@ export const getLoanProductsReport = async (req, res, next) => {
       if (payee.includes('insurance') || payee.includes('climbs') || part.includes('insurance') || part.includes('premium')) return false;
       if (part.includes('kadt') || part.includes('system') || part.includes('capital') || payee.includes('good apps') || payee.includes('kadt')) return false;
 
-      // Must be in Regular Loans folder OR particulars indicate loan release / regular loan / laf
-      const isLoanFolder = fn === 'regular loans';
-      const isLoanParticulars = part.includes('regular loan') || part.includes('release of') || Boolean(part.match(/laf\s*(?:no\.?|#)?/i));
+      // Must be in Regular Loans folder OR particulars/details indicate loan release / loans receivable / laf
+      const isLoanFolder = fn.includes('loan');
+      const isLoanParticulars = part.includes('regular loan') || part.includes('project loan') || part.includes('salary loan') || part.includes('calamity loan') || part.includes('release of') || Boolean(part.match(/laf\s*(?:no\.?|#)?/i));
+      const isLoanReceivableDetails = detailsStr.includes('loans receivable');
 
-      return isLoanFolder || isLoanParticulars;
+      return isLoanFolder || isLoanParticulars || isLoanReceivableDetails;
     }
 
-    const loansResult = await pool.query(`
-      SELECT 
-        l.id, l.laf_no, l.principal_amount, l.interest_rate, l.term_months, l.status,
-        l.disbursed_at, l.created_at, lp.name as product_name,
-        m.first_name || ' ' || m.last_name as member_name
-      FROM loans l
-      LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
-      LEFT JOIN members m ON l.member_id = m.id
-      WHERE l.status IN ('disbursed', 'active', 'approved', 'fully_paid')
-    `);
+    function isSyntheticLoanPayment(lp) {
+      const ref = String(lp.reference_no || '').trim();
+      if (/^paid-/i.test(ref) || /^paid$/i.test(ref) || /^historical_settlement$/i.test(ref)) return true;
+      if (/^\d+\.\d+$/.test(ref)) return true;
+      if (ref === '13400' && Math.abs((parseFloat(lp.amount) || 0) - 133.33) < 0.05) return true;
+      return false;
+    }
 
-    const cvLoansResult = await pool.query(`
-      SELECT id, voucher_no, voucher_date, payee, particulars, amount, folder_name
-      FROM check_vouchers
-      WHERE status != 'cancelled' AND (
-        folder_name ILIKE '%loan%' OR 
-        particulars ILIKE '%loan%' OR 
-        particulars ILIKE '%laf%'
-      )
-    `);
+    function isPre2025HistoricalDate(rawDate) {
+      if (!rawDate) return false;
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return false;
+      return d.getFullYear() < 2025;
+    }
 
-    const collectionsResult = await pool.query(`
-      SELECT 
-        id, date, or_no, payor_name, loans, loan_account, principal_amount,
-        interest_account, interest_amount, fines_account, fines_amount, amount, created_at
-      FROM collections
-      WHERE tab = 'credit' OR loans IS NOT NULL OR principal_amount > 0 OR interest_amount > 0
-    `);
+    const [
+      loansResult,
+      cvLoansResult,
+      stlItemsResult,
+      collectionsResult,
+      loanPaymentsResult
+    ] = await Promise.all([
+      pool.query(`
+        SELECT 
+          l.id, l.laf_no, l.principal_amount, l.interest_rate, l.term_months, l.status,
+          l.payment_mode AS purpose, l.disbursement_remarks AS remarks, l.disbursed_at, l.created_at,
+          lp.name as product_name,
+          m.first_name, m.middle_name, m.last_name,
+          COALESCE(m.first_name || ' ' || m.last_name, 'Coop Member') as member_name
+        FROM loans l
+        LEFT JOIN loan_products lp ON l.loan_product_id = lp.id
+        LEFT JOIN members m ON l.member_id = m.id
+        WHERE l.status IN ('disbursed', 'active', 'approved', 'fully_paid')
+      `),
+      pool.query(`
+        SELECT id, voucher_no, voucher_date, payee, particulars, amount, folder_name, loan_id, details
+        FROM check_vouchers
+        WHERE COALESCE(status, 'released') != 'cancelled' AND (
+          folder_name ILIKE '%loan%' OR 
+          particulars ILIKE '%loan%' OR 
+          particulars ILIKE '%laf%' OR
+          CAST(details AS TEXT) ILIKE '%loans receivable%'
+        )
+      `),
+      pool.query(`
+        SELECT
+          sli.id,
+          COALESCE(sli.release_date, stl.date_submitted) AS item_date,
+          sli.particulars AS member_name,
+          stl.lf_no AS laf_no,
+          sli.remarks AS loan_type,
+          sli.amount,
+          sli.loan_id,
+          stl.lf_no AS liquidation_no,
+          stl.status
+        FROM stl_liquidation_items sli
+        INNER JOIN stl_liquidations stl ON sli.liquidation_id = stl.id
+        WHERE COALESCE(stl.status, 'open') != 'cancelled'
+      `).catch(() => ({ rows: [] })),
+      pool.query(`
+        SELECT 
+          id, tab, date, or_no, payor_name, loans, items,
+          loan_account, principal_amount, interest_account, interest_amount,
+          fines_account, fines_amount, common_share_amount, membership_fee,
+          item_name, item_category, service_type, particulars, other_category,
+          amount, payment_method, remarks, status, created_at
+        FROM collections
+        WHERE COALESCE(status, 'completed') != 'cancelled'
+      `),
+      pool.query(`
+        SELECT
+          lp.id,
+          lp.loan_id,
+          lp.payment_date,
+          lp.reference_no,
+          lp.amount,
+          lp.payment_method,
+          COALESCE(alloc.principal_allocated, 0) AS principal_allocated,
+          COALESCE(alloc.interest_allocated, 0) AS interest_allocated,
+          l.laf_no,
+          l.principal_amount AS loan_principal,
+          l.term_months AS loan_term_months,
+          l.payment_mode AS loan_purpose,
+          l.disbursement_remarks AS loan_remarks,
+          prd.name AS product_name,
+          m.first_name,
+          m.last_name,
+          COALESCE(m.first_name || ' ' || m.last_name, 'Coop Member') AS member_name
+        FROM loan_payments lp
+        INNER JOIN loans l ON lp.loan_id = l.id
+        LEFT JOIN loan_products prd ON l.loan_product_id = prd.id
+        LEFT JOIN members m ON l.member_id = m.id
+        LEFT JOIN (
+          SELECT
+            loan_payment_id,
+            SUM(principal_allocated) AS principal_allocated,
+            SUM(interest_allocated) AS interest_allocated
+          FROM loan_payment_allocations
+          GROUP BY loan_payment_id
+        ) alloc ON alloc.loan_payment_id = lp.id
+        WHERE l.status IN ('disbursed', 'active', 'approved', 'fully_paid')
+      `)
+    ]);
 
     const productStats = {};
-    LOAN_PRODUCT_DEFINITIONS.forEach(p => {
-      productStats[p.name] = {
-        product_name: p.name,
-        disbursed_count: 0,
-        total_disbursed: 0,
-        amortizations_count: 0,
-        principal_collected: 0,
-        interest_collected: 0,
-        fines_collected: 0,
-        total_collected: 0,
-        borrowers: []
-      };
-    });
-    productStats['Regular Loan'] = {
-      product_name: 'Regular Loan',
-      disbursed_count: 0,
-      total_disbursed: 0,
-      amortizations_count: 0,
-      principal_collected: 0,
-      interest_collected: 0,
-      fines_collected: 0,
-      total_collected: 0,
-      borrowers: []
-    };
-
-    loansResult.rows.forEach(loan => {
-      const dDate = loan.disbursed_at || loan.created_at;
-      if (!matchesPeriod(dDate, period, year, month, date)) return;
-
-      const pName = identifyProduct(loan.product_name);
-      const principal = parseFloat(loan.principal_amount) || 0;
-
+    const ensureProductStat = (pName) => {
       if (!productStats[pName]) {
         productStats[pName] = {
           product_name: pName,
@@ -1724,14 +1922,58 @@ export const getLoanProductsReport = async (req, res, next) => {
           interest_collected: 0,
           fines_collected: 0,
           total_collected: 0,
-          borrowers: []
+          borrowers: [],
+          repayments: []
         };
       }
+      return productStats[pName];
+    };
 
-      productStats[pName].disbursed_count += 1;
-      productStats[pName].total_disbursed += principal;
+    LOAN_PRODUCT_DEFINITIONS.forEach(p => ensureProductStat(p.name));
 
-      productStats[pName].borrowers.push({
+    // Map loan_id -> borrower object so we can also attach principal_paid / interest_paid per borrower
+    const borrowerByLoanId = new Map();
+
+    // 1. Classify all loans in the system and populate authoritative lookup maps
+    loansResult.rows.forEach(loan => {
+      const pName = classifyLoanRecord(loan);
+      loan._resolvedProduct = pName;
+      loanProductById.set(loan.id, pName);
+
+      if (loan.laf_no) {
+        loanProductByLafNo.set(String(loan.laf_no).trim().toLowerCase(), pName);
+      }
+
+      const nameKeys = getPersonNameKeys(loan.member_name, loan.first_name, loan.last_name);
+      const isLoanActive = ['active', 'disbursed', 'approved'].includes(String(loan.status || '').toLowerCase());
+
+      if (pName === 'Project Loan') {
+        nameKeys.forEach(k => {
+          projectLoanMemberKeys.add(k);
+          if (isLoanActive) activeProjectLoanMemberKeys.add(k);
+        });
+      } else if (pName === 'Salary Loan') {
+        nameKeys.forEach(k => salaryLoanMemberKeys.add(k));
+      }
+    });
+
+    // 2. Process Loan Monitoring disbursements (`loans` table)
+    loansResult.rows.forEach(loan => {
+      // Only count loans that have an actual disbursement date (exclude undated pending/approved applications)
+      const dDate = loan.disbursed_at;
+      if (!dDate) return;
+      if (isPre2025HistoricalDate(dDate)) return;
+
+      const pName = loan._resolvedProduct || classifyLoanRecord(loan);
+      const principal = parseFloat(loan.principal_amount) || 0;
+
+      if (!matchesPeriod(dDate, period, year, month, date)) return;
+
+      const stat = ensureProductStat(pName);
+      stat.disbursed_count += 1;
+      stat.total_disbursed += principal;
+
+      const borrowerEntry = {
         loan_id: loan.id,
         voucher_id: null,
         voucher_no: null,
@@ -1739,61 +1981,144 @@ export const getLoanProductsReport = async (req, res, next) => {
         member_name: (loan.member_name || '').trim() || 'Coop Member',
         date: dDate ? new Date(dDate).toISOString().split('T')[0] : 'N/A',
         principal: principal,
+        principal_paid: 0,
+        interest_paid: 0,
         term_months: loan.term_months || 12,
         status: loan.status || 'active',
         product_name: pName,
         source: 'Loan Monitoring'
-      });
+      };
+      stat.borrowers.push(borrowerEntry);
+      borrowerByLoanId.set(loan.id, borrowerEntry);
     });
 
+    // 3. Process Check Voucher loan disbursements (`check_vouchers` table)
     cvLoansResult.rows.forEach(cv => {
       const dDate = cv.voucher_date;
-      if (!matchesPeriod(dDate, period, year, month, date)) return;
       if (!isCheckVoucherLoanDisbursement(cv)) return;
 
-      const pName = identifyProduct(`${cv.folder_name} ${cv.particulars}`);
-      const amt = parseFloat(cv.amount) || 0;
-      if (amt <= 0) return;
-
       const lafMatch = String(cv.particulars || '').match(/laf(?:\s*(?:no\.?|#)?:?\s*)([0-9a-z-]+)/i);
-      const lafNo = lafMatch ? lafMatch[1] : (cv.voucher_no ? `CV #${cv.voucher_no}` : '—');
+      const extractedLaf = lafMatch ? lafMatch[1] : '';
 
-      if (!productStats[pName]) {
-        productStats[pName] = {
-          product_name: pName,
-          disbursed_count: 0,
-          total_disbursed: 0,
-          amortizations_count: 0,
-          principal_collected: 0,
-          interest_collected: 0,
-          fines_collected: 0,
-          total_collected: 0,
-          borrowers: []
-        };
+      // Extract gross loan receivable amount from details JSON if present
+      let grossLoanAmt = 0;
+      if (Array.isArray(cv.details)) {
+        const lrLine = cv.details.find(d => String(d.book_of_account || '').toLowerCase().includes('loans receivable'));
+        if (lrLine && parseFloat(lrLine.amount) > 0) {
+          grossLoanAmt = parseFloat(lrLine.amount);
+        }
       }
 
+      const netAmt = parseFloat(cv.amount) || 0;
+      const effectivePrincipal = grossLoanAmt > 0 ? grossLoanAmt : netAmt;
+      if (effectivePrincipal <= 0) return;
+
+      // Classify Check Voucher into Project Loan vs Salary Loan vs Calamity Loan, etc.
+      // Note: Net check voucher for a ₱76,000 Project Loan after ~2% service fee & insurance is ~₱73,000+
+      const pName = identifyProduct(
+        `${cv.folder_name || ''} ${cv.particulars || ''}`,
+        cv.payee,
+        {
+          loanId: cv.loan_id,
+          lafNo: extractedLaf,
+          principalAmount: grossLoanAmt >= 76000 || netAmt >= 73000 ? 76000 : effectivePrincipal
+        }
+      );
+
+      // Register payee in projectLoanMemberKeys / salaryLoanMemberKeys so their collections also map accurately
+      const payeeKeys = getPersonNameKeys(cv.payee);
+      if (pName === 'Project Loan') {
+        payeeKeys.forEach(k => {
+          projectLoanMemberKeys.add(k);
+          activeProjectLoanMemberKeys.add(k);
+        });
+      } else if (pName === 'Salary Loan') {
+        payeeKeys.forEach(k => salaryLoanMemberKeys.add(k));
+      }
+
+      if (!matchesPeriod(dDate, period, year, month, date)) return;
+
+      const lafNo = extractedLaf || (cv.voucher_no ? `CV #${cv.voucher_no}` : '—');
+      const stat = ensureProductStat(pName);
       const dateStr = dDate ? new Date(dDate).toISOString().split('T')[0] : 'N/A';
-      const exists = productStats[pName].borrowers.some(b => 
-        (lafMatch && b.laf_no && b.laf_no.includes(lafMatch[1])) || 
-        (b.member_name && cv.payee && b.member_name.toLowerCase() === cv.payee.toLowerCase() && b.date === dateStr)
+
+      const exists = Object.values(productStats).some(ps =>
+        ps.borrowers.some(b => {
+          if (cv.loan_id && b.loan_id === cv.loan_id) return true;
+          if (extractedLaf && b.laf_no && b.laf_no.toLowerCase().includes(extractedLaf.toLowerCase())) return true;
+          const bKeys = getPersonNameKeys(b.member_name);
+          const samePerson = bKeys.some(k => payeeKeys.includes(k));
+          return samePerson && b.date === dateStr;
+        })
       );
 
       if (!exists) {
-        productStats[pName].disbursed_count += 1;
-        productStats[pName].total_disbursed += amt;
+        stat.disbursed_count += 1;
+        stat.total_disbursed += netAmt;
 
-        productStats[pName].borrowers.push({
-          loan_id: null,
+        stat.borrowers.push({
+          loan_id: cv.loan_id || null,
           voucher_id: cv.id,
           voucher_no: cv.voucher_no,
           laf_no: lafNo,
           member_name: cv.payee || 'Coop Member',
           date: dateStr,
-          principal: amt,
-          term_months: 12,
+          principal: netAmt,
+          principal_paid: 0,
+          interest_paid: 0,
+          term_months: pName === 'Project Loan' ? 24 : 12,
           status: 'disbursed',
           product_name: pName,
           source: 'Check Voucher'
+        });
+      }
+    });
+
+    // 4. Process STL Liquidation Items (`stl_liquidation_items` table) if not already in `loans`
+    stlItemsResult.rows.forEach(sli => {
+      const dDate = sli.item_date;
+      if (!matchesPeriod(dDate, period, year, month, date)) return;
+
+      const amt = parseFloat(sli.amount) || 0;
+      if (amt <= 0) return;
+
+      const pName = identifyProduct(sli.loan_type, sli.member_name, {
+        loanId: sli.loan_id,
+        lafNo: sli.laf_no,
+        principalAmount: amt
+      });
+
+      const dateStr = dDate ? new Date(dDate).toISOString().split('T')[0] : 'N/A';
+      const sliKeys = getPersonNameKeys(sli.member_name);
+
+      const exists = Object.values(productStats).some(ps =>
+        ps.borrowers.some(b => {
+          if (sli.loan_id && b.loan_id === sli.loan_id) return true;
+          if (sli.laf_no && b.laf_no && b.laf_no.toLowerCase() === String(sli.laf_no).trim().toLowerCase()) return true;
+          const bKeys = getPersonNameKeys(b.member_name);
+          return bKeys.some(k => sliKeys.includes(k)) && b.date === dateStr && Math.abs(b.principal - amt) < 1;
+        })
+      );
+
+      if (!exists) {
+        const stat = ensureProductStat(pName);
+        stat.disbursed_count += 1;
+        stat.total_disbursed += amt;
+
+        stat.borrowers.push({
+          loan_id: sli.loan_id || null,
+          voucher_id: null,
+          voucher_no: null,
+          laf_no: sli.laf_no || (sli.liquidation_no ? `STL #${sli.liquidation_no}` : '—'),
+          member_name: sli.member_name || 'Coop Member',
+          date: dateStr,
+          principal: amt,
+          principal_paid: 0,
+          interest_paid: 0,
+          term_months: 2,
+          status: 'disbursed',
+          product_name: pName,
+          source: 'STL Liquidation'
         });
       }
     });
@@ -1803,56 +2128,452 @@ export const getLoanProductsReport = async (req, res, next) => {
       p.borrowers.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     });
 
-    collectionsResult.rows.forEach(col => {
-      const cDate = col.date || col.created_at;
-      if (!matchesPeriod(cDate, period, year, month, date)) return;
+    // =========================================================================
+    // MONTHLY & YTD TRACKER ACCUMULATORS (JAN-DEC for targetYear, like GDrive)
+    // =========================================================================
+    const monthlyLoanTracker = {};
+    LOAN_PRODUCT_DEFINITIONS.forEach(p => {
+      monthlyLoanTracker[p.name] = {
+        product_name: p.name,
+        tracker_label: p.trackerLabel,
+        has_interest_row: p.hasInterestRow,
+        repayment_months: Array(12).fill(0),
+        interest_months: Array(12).fill(0),
+        fines_months: Array(12).fill(0)
+      };
+    });
+    const finesMonthly = Array(12).fill(0);
 
-      const loanEntries = Array.isArray(col.loans) && col.loans.length > 0
-        ? col.loans
-        : [{
-            loan_account: col.loan_account || 'Loans Payable',
-            principal_amount: col.principal_amount || 0,
-            interest_amount: col.interest_amount || 0,
-            fines_amount: col.fines_amount || 0
-          }];
+    const OTHER_TRACKER_KEYS = [
+      { key: 'membership_fee', label: 'Membership fee' },
+      { key: 'shared_capital', label: 'Shared Capital' },
+      { key: 'insurance', label: 'Insurance payment' },
+      { key: 'rice_sales', label: 'Rice sales payment' },
+      { key: 'raffle_ticket', label: 'Raffle Ticket payment' },
+      { key: 'donation_grants', label: 'Donation & Grants' },
+      { key: 'laundry_soap_sales', label: 'Laundry soap sales' },
+      { key: 'merchandise_income', label: 'Income from Merchandise' },
+      { key: 'withdrawal_fee', label: 'Withdrawal Fee' }
+    ];
+    const otherMonthlyTracker = {};
+    OTHER_TRACKER_KEYS.forEach(o => {
+      otherMonthlyTracker[o.key] = Array(12).fill(0);
+    });
 
-      loanEntries.forEach(entry => {
-        const pName = identifyProduct(entry.loan_account);
-        const pAmt = parseFloat(String(entry.principal_amount || 0)) || 0;
-        const iAmt = parseFloat(String(entry.interest_amount || 0)) || 0;
-        const fAmt = parseFloat(String(entry.fines_amount || 0)) || 0;
-        const total = pAmt + iAmt + fAmt;
+    const currentCalYear = new Date().getFullYear();
+    const maxSeedYear = Math.max(currentCalYear + 2, targetYear + 1, 2028);
+    const availableYearsSet = new Set();
+    for (let y = 2024; y <= maxSeedYear; y++) {
+      availableYearsSet.add(y);
+    }
 
-        if (total <= 0) return;
+    const getYearAndMonthIdx = (rawDate) => {
+      if (!rawDate) return null;
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return null;
+      const y = d.getFullYear();
+      if (y >= 2024 && y <= 2035) {
+        availableYearsSet.add(y);
+      }
+      return { y, mIdx: d.getMonth() };
+    };
 
-        if (!productStats[pName]) {
-          productStats[pName] = {
+    loansResult.rows.forEach(l => {
+      if (l.disbursed_at && !isPre2025HistoricalDate(l.disbursed_at)) {
+        getYearAndMonthIdx(l.disbursed_at);
+      }
+    });
+    cvLoansResult.rows.forEach(cv => {
+      if (cv.voucher_date && !isPre2025HistoricalDate(cv.voucher_date)) {
+        getYearAndMonthIdx(cv.voucher_date);
+      }
+    });
+
+    const addOtherTrackerAmount = (key, rawDate, amt) => {
+      if (!rawDate || isPre2025HistoricalDate(rawDate)) return;
+      const val = parseFloat(amt) || 0;
+      if (val <= 0) return;
+      const ym = getYearAndMonthIdx(rawDate);
+      if (ym && ym.y === targetYear && otherMonthlyTracker[key]) {
+        otherMonthlyTracker[key][ym.mIdx] += val;
+      }
+    };
+
+    const recordLoanInflow = (pName, rawDate, pAmt, iAmt, fAmt, meta = {}) => {
+      if (!rawDate || isPre2025HistoricalDate(rawDate)) return;
+      const p = parseFloat(pAmt) || 0;
+      const i = parseFloat(iAmt) || 0;
+      const f = parseFloat(fAmt) || 0;
+      const total = p + i + f;
+      if (total <= 0) return;
+
+      // 1. Update selected period stats (Daily / Monthly / Annual)
+      if (matchesPeriod(rawDate, period, year, month, date)) {
+        const stat = ensureProductStat(pName);
+        if (p > 0 || i > 0) {
+          stat.amortizations_count += 1;
+        }
+        stat.principal_collected += p;
+        stat.interest_collected += i;
+        stat.fines_collected += f;
+        stat.total_collected += total;
+
+        stat.repayments.push({
+          date: rawDate ? new Date(rawDate).toISOString().split('T')[0] : 'N/A',
+          or_no: meta.or_no || '—',
+          member_name: meta.member_name || 'Coop Member',
+          principal: p,
+          interest: i,
+          fines: f,
+          total,
+          source: meta.source || 'Collection'
+        });
+      }
+
+      // 2. Update Annual Monthly Tracker (JAN-DEC for targetYear)
+      const ym = getYearAndMonthIdx(rawDate);
+      if (ym && ym.y === targetYear) {
+        if (!monthlyLoanTracker[pName]) {
+          monthlyLoanTracker[pName] = {
             product_name: pName,
-            disbursed_count: 0,
-            total_disbursed: 0,
-            amortizations_count: 0,
-            principal_collected: 0,
-            interest_collected: 0,
-            fines_collected: 0,
-            total_collected: 0
+            tracker_label: pName,
+            has_interest_row: true,
+            repayment_months: Array(12).fill(0),
+            interest_months: Array(12).fill(0),
+            fines_months: Array(12).fill(0)
           };
         }
+        monthlyLoanTracker[pName].repayment_months[ym.mIdx] += p;
+        monthlyLoanTracker[pName].interest_months[ym.mIdx] += i;
+        monthlyLoanTracker[pName].fines_months[ym.mIdx] += f;
+        finesMonthly[ym.mIdx] += f;
+      }
+    };
 
-        productStats[pName].amortizations_count += 1;
-        productStats[pName].principal_collected += pAmt;
-        productStats[pName].interest_collected += iAmt;
-        productStats[pName].fines_collected += fAmt;
-        productStats[pName].total_collected += total;
+    // Pre-index authoritative loan ledger payments by invoice token & (date + person + amount)
+    // so generic 'Regular Loan' collection entries resolve to their exact loan product (e.g. Project Loan, Rice Loan)
+    const ledgerProductByInvoice = new Map();
+    const ledgerProductByFingerprint = new Map();
+
+    loanPaymentsResult.rows.forEach(lp => {
+      if (isSyntheticLoanPayment(lp)) return;
+      const pName = loanProductById.get(lp.loan_id) || classifyLoanRecord({
+        product_name: lp.product_name,
+        principal_amount: lp.loan_principal,
+        term_months: lp.loan_term_months,
+        purpose: lp.loan_purpose,
+        remarks: lp.loan_remarks,
+        laf_no: lp.laf_no
+      });
+      lp._resolvedProduct = pName;
+
+      let pAmt = parseFloat(lp.principal_allocated) || 0;
+      const iAmt = parseFloat(lp.interest_allocated) || 0;
+      const amtPaid = parseFloat(lp.amount) || 0;
+      if (pAmt === 0 && iAmt === 0 && amtPaid > 0) pAmt = amtPaid;
+
+      const invToken = extractInvoiceToken(lp.reference_no);
+      if (invToken && pAmt > 0) {
+        ledgerProductByInvoice.set(`${invToken}::${pAmt.toFixed(2)}`, pName);
+        if (!ledgerProductByInvoice.has(invToken)) {
+          ledgerProductByInvoice.set(invToken, pName);
+        }
+      }
+
+      const dateStr = lp.payment_date ? new Date(lp.payment_date).toISOString().split('T')[0] : '';
+      const ym = getYearAndMonthIdx(lp.payment_date);
+      const nameKeys = getPersonNameKeys(lp.member_name, lp.first_name, lp.last_name);
+      nameKeys.forEach(k => {
+        if (dateStr && pAmt > 0) {
+          ledgerProductByFingerprint.set(`${dateStr}::${k}::${pAmt.toFixed(2)}`, pName);
+        }
+        if (ym && pAmt > 0) {
+          ledgerProductByFingerprint.set(`${ym.y}-${ym.mIdx}::${k}::${pAmt.toFixed(2)}`, pName);
+        }
       });
     });
 
-    const productList = Object.values(productStats).filter(
-      p => p.total_disbursed > 0 || p.total_collected > 0
+    // Deduplication sets so payments in `collections` and `loan_payments` are never double-counted
+    const seenCollectionProductInvoices = new Set();
+    const seenCollectionPaymentFingerprints = new Set();
+    const seenCollectionMonthFingerprints = new Set();
+
+    // -------------------------------------------------------------------------
+    // PASS 1: Process `collections` table (both loan entries & other particulars)
+    // -------------------------------------------------------------------------
+    collectionsResult.rows.forEach(col => {
+      const cDate = col.date || col.created_at;
+      const dateStr = cDate ? new Date(cDate).toISOString().split('T')[0] : '';
+      const ym = getYearAndMonthIdx(cDate);
+      const invToken = extractInvoiceToken(col.or_no);
+      const payorKeys = getPersonNameKeys(col.payor_name);
+
+      // Track non-loan collection particulars for the Full Invoice Tracker
+      const commonShareAmt = parseFloat(col.common_share_amount) || 0;
+      const memFeeAmt = parseFloat(col.membership_fee) || 0;
+      const particularsAmt = parseFloat(col.particulars_amount) || 0;
+      const colAmount = parseFloat(col.amount) || 0;
+      const topPrincipal = parseFloat(col.principal_amount) || 0;
+      const topInterest = parseFloat(col.interest_amount) || 0;
+      const topFines = parseFloat(col.fines_amount) || 0;
+
+      if (commonShareAmt > 0) {
+        addOtherTrackerAmount('shared_capital', cDate, commonShareAmt);
+      }
+      if (memFeeAmt > 0) {
+        addOtherTrackerAmount('membership_fee', cDate, memFeeAmt);
+      }
+      if (particularsAmt > 0 && col.other_category) {
+        const partCat = String(col.other_category).toLowerCase();
+        if (/insurance|climbs|cipl/i.test(partCat)) {
+          addOtherTrackerAmount('insurance', cDate, particularsAmt);
+        } else if (/raffle/i.test(partCat)) {
+          addOtherTrackerAmount('raffle_ticket', cDate, particularsAmt);
+        } else if (/donation|grant/i.test(partCat)) {
+          addOtherTrackerAmount('donation_grants', cDate, particularsAmt);
+        } else if (/withdrawal\s*fee/i.test(partCat)) {
+          addOtherTrackerAmount('withdrawal_fee', cDate, particularsAmt);
+        }
+      }
+
+      const combinedDesc = `${col.loan_account || ''} ${col.particulars || ''} ${col.service_type || ''} ${col.item_name || ''} ${col.other_category || ''} ${col.remarks || ''}`.toLowerCase();
+
+      // Check if standalone non-loan row (or non-loan portion when particulars_amount is not explicitly split)
+      if (commonShareAmt === 0 && (/shared\s*capital|share\s*capital|fixed\s*deposit/i.test(combinedDesc))) {
+        addOtherTrackerAmount('shared_capital', cDate, topPrincipal || colAmount);
+      }
+      if (memFeeAmt === 0 && (/membership\s*fee|application\s*fee|pmes/i.test(combinedDesc))) {
+        addOtherTrackerAmount('membership_fee', cDate, colAmount || topPrincipal);
+      }
+      if (particularsAmt === 0 && (/insurance|climbs|cipl/i.test(combinedDesc))) {
+        addOtherTrackerAmount('insurance', cDate, colAmount || topPrincipal);
+      }
+      if (/rice\s*sales|rice\s*\(store/i.test(combinedDesc)) {
+        addOtherTrackerAmount('rice_sales', cDate, colAmount || topPrincipal);
+      }
+      if (particularsAmt === 0 && (/raffle/i.test(combinedDesc))) {
+        addOtherTrackerAmount('raffle_ticket', cDate, colAmount || topPrincipal);
+      }
+      if (particularsAmt === 0 && (/donation|grant/i.test(combinedDesc))) {
+        addOtherTrackerAmount('donation_grants', cDate, topPrincipal || colAmount);
+      }
+      if (/laundry\s*soap\s*sales|soap\s*\(store|soap\s*sales/i.test(combinedDesc)) {
+        addOtherTrackerAmount('laundry_soap_sales', cDate, colAmount || topPrincipal);
+      }
+      if (/merchandise|uniform/i.test(combinedDesc) && !/rice|soap/i.test(combinedDesc)) {
+        addOtherTrackerAmount('merchandise_income', cDate, colAmount || topPrincipal);
+      }
+      if (particularsAmt === 0 && (/withdrawal\s*fee/i.test(combinedDesc))) {
+        addOtherTrackerAmount('withdrawal_fee', cDate, colAmount || topPrincipal);
+      }
+
+      // Check for standalone Fines & Penalties in services tab
+      const isStandaloneFineService =
+        /fine|penalty|late\s*charge/i.test(`${col.service_type || ''} ${col.fines_account || ''} ${col.particulars || ''}`) &&
+        topPrincipal === 0 &&
+        topInterest === 0 &&
+        (!Array.isArray(col.loans) || col.loans.length === 0);
+
+      if (isStandaloneFineService) {
+        const fineVal = topFines > 0 ? topFines : colAmount;
+        if (fineVal > 0) {
+          const fineProd = identifyProduct(`${col.loan_account || ''} ${col.particulars || ''} ${col.remarks || ''}`, col.payor_name);
+          recordLoanInflow(fineProd, cDate, 0, 0, fineVal, {
+            or_no: col.or_no,
+            member_name: col.payor_name,
+            source: 'Collection (Fines)'
+          });
+        }
+        return;
+      }
+
+      // Process loan entries on this collection row
+      const hasLoansArray = Array.isArray(col.loans) && col.loans.length > 0;
+      const loanEntries = hasLoansArray
+        ? col.loans
+        : [{
+            loan_account: col.loan_account || '',
+            interest_account: col.interest_account || '',
+            fines_account: col.fines_account || '',
+            principal_amount: topPrincipal,
+            interest_amount: topInterest,
+            fines_amount: topFines
+          }];
+
+      let accountedFinesInEntries = 0;
+
+      loanEntries.forEach(entry => {
+        const entryAcctText = `${entry.loan_account || ''} ${entry.interest_account || ''} ${entry.fines_account || ''}`.trim();
+        const fallbackAcctText = !hasLoansArray
+          ? `${entryAcctText} ${col.particulars || ''} ${col.remarks || ''}`.trim()
+          : entryAcctText;
+
+        const pAmt = parseFloat(String(entry.principal_amount || 0)) || 0;
+        const iAmt = parseFloat(String(entry.interest_amount || 0)) || 0;
+        const fAmt = parseFloat(String(entry.fines_amount || 0)) || 0;
+        accountedFinesInEntries += fAmt;
+
+        // Skip non-loan collection accounts (e.g., Shared Capital, Donation, Membership Fee, General Collection fallback)
+        if (isNonLoanCollectionAccount(fallbackAcctText, !hasLoansArray ? col.other_category : '')) {
+          if (fAmt > 0) {
+            recordLoanInflow(identifyProduct('', col.payor_name), cDate, 0, 0, fAmt, {
+              or_no: col.or_no,
+              member_name: col.payor_name,
+              source: 'Collection (Fines)'
+            });
+          }
+          return;
+        }
+
+        if (pAmt + iAmt + fAmt <= 0) return;
+
+        let pName = identifyProduct(fallbackAcctText, col.payor_name);
+
+        // If collection entry says generic 'Regular Loan' (resolved to Salary Loan), check if ledger has an exact match for this invoice/member/amount
+        const isGenericRegularText = !/project|calamity|express|occasion|emergenc|utility|rice|soap|mortuary|petty|product/i.test(fallbackAcctText);
+        if (isGenericRegularText) {
+          if (invToken && ledgerProductByInvoice.has(`${invToken}::${pAmt.toFixed(2)}`)) {
+            pName = ledgerProductByInvoice.get(`${invToken}::${pAmt.toFixed(2)}`);
+          } else {
+            for (const k of payorKeys) {
+              if (dateStr && ledgerProductByFingerprint.has(`${dateStr}::${k}::${pAmt.toFixed(2)}`)) {
+                pName = ledgerProductByFingerprint.get(`${dateStr}::${k}::${pAmt.toFixed(2)}`);
+                break;
+              }
+              if (ym && ledgerProductByFingerprint.has(`${ym.y}-${ym.mIdx}::${k}::${pAmt.toFixed(2)}`)) {
+                pName = ledgerProductByFingerprint.get(`${ym.y}-${ym.mIdx}::${k}::${pAmt.toFixed(2)}`);
+                break;
+              }
+            }
+          }
+        }
+
+        recordLoanInflow(pName, cDate, pAmt, iAmt, fAmt, {
+          or_no: col.or_no,
+          member_name: col.payor_name,
+          source: 'Collection'
+        });
+
+        const groupKey = (pName === 'Salary Loan' || pName === 'Project Loan') ? 'regular_group' : pName;
+        if (invToken) {
+          seenCollectionProductInvoices.add(`${pName}::${invToken}`);
+          seenCollectionProductInvoices.add(`${groupKey}::${invToken}`);
+        }
+        payorKeys.forEach(k => {
+          if (dateStr) {
+            seenCollectionPaymentFingerprints.add(`${pName}::${dateStr}::${k}::${pAmt.toFixed(2)}`);
+            seenCollectionPaymentFingerprints.add(`${groupKey}::${dateStr}::${k}::${pAmt.toFixed(2)}`);
+          }
+          if (ym) {
+            seenCollectionMonthFingerprints.add(`${pName}::${ym.y}-${ym.mIdx}::${k}::${pAmt.toFixed(2)}`);
+            seenCollectionMonthFingerprints.add(`${groupKey}::${ym.y}-${ym.mIdx}::${k}::${pAmt.toFixed(2)}`);
+          }
+        });
+      });
+
+      // If top-level col.fines_amount > accountedFinesInEntries (e.g. fines stored at row level alongside Share Capital)
+      const remainingTopFine = topFines - accountedFinesInEntries;
+      if (remainingTopFine > 0.005) {
+        const fineProd = identifyProduct(`${col.loan_account || ''} ${col.particulars || ''}`, col.payor_name);
+        recordLoanInflow(fineProd, cDate, 0, 0, remainingTopFine, {
+          or_no: col.or_no,
+          member_name: col.payor_name,
+          source: 'Collection (Fines)'
+        });
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // PASS 2: Process `loan_payments` (+ `loan_payment_allocations`) from Loan Monitoring
+    // -------------------------------------------------------------------------
+    loanPaymentsResult.rows.forEach(lp => {
+      if (isSyntheticLoanPayment(lp)) return;
+      const pDate = lp.payment_date;
+      if (!pDate || isPre2025HistoricalDate(pDate)) return;
+      const dateStr = pDate ? new Date(pDate).toISOString().split('T')[0] : '';
+      const ym = getYearAndMonthIdx(pDate);
+      const pName = lp._resolvedProduct || identifyProduct(lp.product_name, lp.member_name, { loanId: lp.loan_id, lafNo: lp.laf_no });
+
+      let pAmt = parseFloat(lp.principal_allocated) || 0;
+      let iAmt = parseFloat(lp.interest_allocated) || 0;
+      const fAmt = 0;
+      const amtPaid = parseFloat(lp.amount) || 0;
+
+      if (pAmt === 0 && iAmt === 0 && amtPaid > 0) {
+        pAmt = amtPaid;
+      }
+
+      if (pAmt + iAmt + fAmt <= 0) return;
+
+      // Update borrower's cumulative repayment inside the modal if they are in the period's borrower list
+      const borrower = borrowerByLoanId.get(lp.loan_id);
+      if (borrower && matchesPeriod(pDate, period, year, month, date)) {
+        borrower.principal_paid = (borrower.principal_paid || 0) + pAmt;
+        borrower.interest_paid = (borrower.interest_paid || 0) + iAmt;
+      }
+
+      // Check if this exact invoice payment was already counted in `collections`
+      const invToken = extractInvoiceToken(lp.reference_no);
+      const memberKeys = getPersonNameKeys(lp.member_name, lp.first_name, lp.last_name);
+      const groupKey = (pName === 'Salary Loan' || pName === 'Project Loan') ? 'regular_group' : pName;
+
+      if (invToken && (seenCollectionProductInvoices.has(`${pName}::${invToken}`) || seenCollectionProductInvoices.has(`${groupKey}::${invToken}`))) {
+        return;
+      }
+      if (dateStr && memberKeys.some(k =>
+        seenCollectionPaymentFingerprints.has(`${pName}::${dateStr}::${k}::${pAmt.toFixed(2)}`) ||
+        seenCollectionPaymentFingerprints.has(`${groupKey}::${dateStr}::${k}::${pAmt.toFixed(2)}`)
+      )) {
+        return;
+      }
+
+      recordLoanInflow(pName, pDate, pAmt, iAmt, fAmt, {
+        or_no: lp.reference_no || (lp.laf_no ? `LAF ${lp.laf_no}` : '—'),
+        member_name: lp.member_name || 'Coop Member',
+        source: 'Loan Ledger'
+      });
+
+      memberKeys.forEach(k => {
+        if (dateStr) {
+          seenCollectionPaymentFingerprints.add(`${pName}::${dateStr}::${k}::${pAmt.toFixed(2)}`);
+          seenCollectionPaymentFingerprints.add(`${groupKey}::${dateStr}::${k}::${pAmt.toFixed(2)}`);
+        }
+        if (ym) {
+          seenCollectionMonthFingerprints.add(`${pName}::${ym.y}-${ym.mIdx}::${k}::${pAmt.toFixed(2)}`);
+          seenCollectionMonthFingerprints.add(`${groupKey}::${ym.y}-${ym.mIdx}::${k}::${pAmt.toFixed(2)}`);
+        }
+      });
+    });
+
+    // Sort repayments descending by date for each product
+    Object.values(productStats).forEach(p => {
+      p.repayments.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    });
+
+    // Order productList following LOAN_PRODUCT_DEFINITIONS, keeping all active/configured loan products
+    const orderedProducts = [];
+    const seenProductNames = new Set();
+    LOAN_PRODUCT_DEFINITIONS.forEach(def => {
+      const st = productStats[def.name];
+      if (st) {
+        orderedProducts.push(st);
+        seenProductNames.add(def.name);
+      }
+    });
+    Object.values(productStats).forEach(st => {
+      if (!seenProductNames.has(st.product_name)) {
+        orderedProducts.push(st);
+      }
+    });
+
+    const productList = orderedProducts.filter(
+      p => p.total_disbursed > 0 || p.total_collected > 0 || ['Salary Loan', 'Project Loan', 'Calamity Loan', 'Cash Express', 'Special Occasion', 'Emergency Loan', 'Utility Loan', 'Rice Loan', 'Laundry Soap Loan', 'Mortuary Loan'].includes(p.product_name)
     );
 
     const summary = {
       total_disbursed_amount: Object.values(productStats).reduce((acc, p) => acc + p.total_disbursed, 0),
       total_disbursed_count: Object.values(productStats).reduce((acc, p) => acc + p.disbursed_count, 0),
+      total_amortizations_count: Object.values(productStats).reduce((acc, p) => acc + p.amortizations_count, 0),
       total_principal_collected: Object.values(productStats).reduce((acc, p) => acc + p.principal_collected, 0),
       total_interest_collected: Object.values(productStats).reduce((acc, p) => acc + p.interest_collected, 0),
       total_fines_collected: Object.values(productStats).reduce((acc, p) => acc + p.fines_collected, 0),
@@ -1860,12 +2581,104 @@ export const getLoanProductsReport = async (req, res, next) => {
       total_collections_volume: Object.values(productStats).reduce((acc, p) => acc + p.total_collected, 0)
     };
 
+    // Build Monthly & YTD Tracker payload
+    const trackerLoanRows = [];
+    const CoreGDriveProducts = [
+      'Salary Loan',
+      'Project Loan',
+      'Calamity Loan',
+      'Cash Express',
+      'Special Occasion',
+      'Emergency Loan',
+      'Utility Loan',
+      'Rice Loan',
+      'Laundry Soap Loan'
+    ];
+
+    LOAN_PRODUCT_DEFINITIONS.forEach(def => {
+      const mStat = monthlyLoanTracker[def.name];
+      if (!mStat) return;
+      const repYtd = mStat.repayment_months.reduce((a, b) => a + b, 0);
+      const intYtd = mStat.interest_months.reduce((a, b) => a + b, 0);
+      const isCore = CoreGDriveProducts.includes(def.name);
+
+      if (!isCore && repYtd === 0 && intYtd === 0) return;
+
+      trackerLoanRows.push({
+        loan_type: def.trackerLabel,
+        product_name: def.name,
+        particulars: 'Repayment',
+        ytd_sum: repYtd,
+        months: mStat.repayment_months
+      });
+
+      if (def.hasInterestRow || intYtd > 0) {
+        trackerLoanRows.push({
+          loan_type: '',
+          product_name: def.name,
+          particulars: 'Interest',
+          ytd_sum: intYtd,
+          months: mStat.interest_months
+        });
+      }
+    });
+
+    const finesYtd = finesMonthly.reduce((a, b) => a + b, 0);
+    trackerLoanRows.push({
+      loan_type: '',
+      product_name: 'Fines & Penalties',
+      particulars: 'Fines/Penalty',
+      ytd_sum: finesYtd,
+      months: finesMonthly
+    });
+
+    const trackerOtherRows = OTHER_TRACKER_KEYS.map(o => {
+      const mArr = otherMonthlyTracker[o.key] || Array(12).fill(0);
+      return {
+        loan_type: '',
+        particulars: o.label,
+        ytd_sum: mArr.reduce((a, b) => a + b, 0),
+        months: mArr
+      };
+    });
+
+    const loansMonthlyTotals = Array(12).fill(0);
+    trackerLoanRows.forEach(r => {
+      for (let m = 0; m < 12; m++) {
+        loansMonthlyTotals[m] += r.months[m] || 0;
+      }
+    });
+    const loansYtdTotal = loansMonthlyTotals.reduce((a, b) => a + b, 0);
+
+    const grandMonthlyTotals = [...loansMonthlyTotals];
+    trackerOtherRows.forEach(r => {
+      for (let m = 0; m < 12; m++) {
+        grandMonthlyTotals[m] += r.months[m] || 0;
+      }
+    });
+    const grandYtdTotal = grandMonthlyTotals.reduce((a, b) => a + b, 0);
+
     return res.status(200).json({
       success: true,
       period,
       filter: { year, month, date },
       summary,
-      products: productList.length > 0 ? productList : Object.values(productStats)
+      products: productList.length > 0 ? productList : Object.values(productStats),
+      monthly_tracker: {
+        year: targetYear,
+        available_years: Array.from(availableYearsSet).sort((a, b) => a - b),
+        month_labels: ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUNE', 'JULY', 'AUG', 'SEPT', 'OCT', 'NOV', 'DEC'],
+        loan_rows: trackerLoanRows,
+        other_rows: trackerOtherRows,
+        loans_totals: {
+          ytd_sum: loansYtdTotal,
+          months: loansMonthlyTotals
+        },
+        grand_totals: {
+          ytd_sum: grandYtdTotal,
+          months: grandMonthlyTotals
+        }
+      }
     });
   } catch (error) {
     next(error);
@@ -2547,7 +3360,20 @@ export const getFinancialStatementReport = async (req, res, next) => {
 
       const interest = parseFloat(col.interest_amount) || 0;
       const fines = parseFloat(col.fines_amount) || 0;
-      const acc = String(col.loan_account || col.interest_account || '').toLowerCase();
+      const memFee = parseFloat(col.membership_fee) || 0;
+      const partAmt = parseFloat(col.particulars_amount) || 0;
+      const acc = String(col.loan_account || col.interest_account || col.fines_account || '').toLowerCase();
+
+      if (memFee > 0) {
+        membershipFees += memFee;
+      }
+
+      if (partAmt > 0 && col.other_category) {
+        const partCat = String(col.other_category).toLowerCase();
+        if (partCat.includes('insurance') || partCat.includes('climbs')) commissionClimbs += partAmt;
+        else if (partCat.includes('raffle')) raffleTicket += partAmt;
+        else if (partCat.includes('withdrawal')) withdrawalFee += partAmt;
+      }
 
       if (interest > 0) {
         if (acc.includes('calamity')) intCalamity += interest;
@@ -2564,7 +3390,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
         else if (acc.includes('cash express')) finesCashExpress += fines;
         else if (acc.includes('emergency')) finesEmergency += fines;
         else if (acc.includes('special')) finesSpecial += fines;
-        else if (acc.includes('rice')) finesRice += fines;
+        else if (acc.includes('rice') || acc.includes('soap')) finesRice += fines;
         else finesRegular += fines;
       }
     });
@@ -2768,7 +3594,8 @@ export const getFinancialStatementReport = async (req, res, next) => {
     const loansAsOf = {};
     const loansCountAsOf = {};
     loansResult.rows.forEach(l => {
-      const lDate = l.disbursed_at || l.created_at;
+      const lDate = l.disbursed_at;
+      if (!lDate) return;
       if (!isAsOfPeriod(lDate, period, year, month, date)) return;
       const p = parseFloat(l.principal_amount) || 0;
       const rep = parseFloat(l.total_repaid) || 0;
@@ -2886,7 +3713,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
         amount: Math.round(cashBal * 100) / 100,
         category: 'Cash & Equivalents',
         description: 'Liquid operational funds, depository bank balances, and digital disbursement accounts.',
-        link_tab: 'books',
+        link_tab: 'categories',
         link_title: 'Book of Accounts',
         sub_accounts: cashBal > 0 ? [
           { name: 'Depository Bank Accounts & Vault Float', amount: Math.round(cashBal * 0.70 * 100) / 100, notes: 'Operational clearing ledger' },
@@ -2898,7 +3725,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
         amount: 0.00,
         category: 'Receivables',
         description: 'Trade receivables from store customer credit sales and clearing settlements in process.',
-        link_tab: 'books',
+        link_tab: 'categories',
         link_title: 'Book of Accounts',
         sub_accounts: []
       },
@@ -2917,10 +3744,10 @@ export const getFinancialStatementReport = async (req, res, next) => {
         account: 'Loans Receivable - Regular',
         amount: regLoan.amount,
         category: 'Loans Receivable',
-        description: 'Gross outstanding balance of principal owed by borrowers under the Regular Loan facility.',
+        description: 'Gross outstanding balance of principal owed by borrowers under the Regular Loan (Salary & Project) facilities.',
         link_tab: 'loans',
         link_title: 'Loan Products',
-        loans_nav: '/dashboard/loans?tab=loans&search=Regular%20Loan',
+        loans_nav: '/dashboard/loans?tab=loans&search=Salary%20Loan',
         sub_accounts: regLoan.amount > 0 ? [
           { name: 'Active Regular Salary & Project Loans Portfolio', amount: regLoan.amount, notes: `${regLoan.count} borrower accounts` }
         ] : []
@@ -3003,7 +3830,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
     ];
 
     const liabilities = [
-      { account: 'Accounts payable', amount: 0.00, category: 'Trade Payables', description: 'Outstanding invoices owed to external suppliers.', link_tab: 'books', link_title: 'Book of Accounts', sub_accounts: [] },
+      { account: 'Accounts payable', amount: 0.00, category: 'Trade Payables', description: 'Outstanding invoices owed to external suppliers.', link_tab: 'categories', link_title: 'Book of Accounts', sub_accounts: [] },
       { account: 'Due to CETF - Apex Organization', amount: 0.00, category: 'Statutory Payables', description: 'Statutory 50% allocation of the CETF due to apex federation.', sub_accounts: [] },
       { account: 'HDMF Contributions Payable', amount: 0.00, category: 'Statutory Payables', description: 'Staff Pag-IBIG Fund contributions withheld awaiting remittance.', sub_accounts: [] },
       { account: 'Insurance Payable - CISP', amount: 0.00, category: 'Insurance Payables', description: 'Loan insurance premiums collected for Cooperative Insurance System.', sub_accounts: [] },

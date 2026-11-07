@@ -122,6 +122,10 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
       lines.push({ description: 'University of Cebu Inc. (Billing)', amount: item.billing_amount });
     }
 
+    if (item.particulars_amount && item.particulars_amount > 0) {
+      lines.push({ description: item.other_category || 'Particulars', amount: item.particulars_amount });
+    }
+
     if (lines.length > 0) return lines;
     return [{ description: item.loan_account || item.particulars || 'Loans Payable', amount: item.amount }];
   }

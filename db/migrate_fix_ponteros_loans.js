@@ -146,31 +146,22 @@ export async function migrateFixPonterosLoans() {
         [loanId]
       );
 
-      // Ensure each schedule has a payment record in loan_payments so payment accounting balances
-      const unpaidSchedules = await client.query(
-        `SELECT rs.id, rs.due_date, rs.principal_due, rs.interest_due, rs.total_due
-         FROM repayment_schedules rs
-         WHERE rs.loan_id = $1
-           AND NOT EXISTS (
-             SELECT 1 FROM loan_payment_allocations lpa WHERE lpa.repayment_schedule_id = rs.id
-           )`,
+      // Remove any synthetic future/settlement payment records previously created from due_date
+      await client.query(
+        `DELETE FROM loan_payment_allocations
+         WHERE loan_payment_id IN (
+           SELECT id FROM loan_payments
+           WHERE loan_id = $1
+             AND (reference_no LIKE 'PAID-%' OR reference_no = 'PAID' OR reference_no = 'HISTORICAL_SETTLEMENT')
+         )`,
         [loanId]
       );
-
-      for (const s of unpaidSchedules.rows) {
-        const pAmt = parseFloat(s.total_due || (parseFloat(s.principal_due) + parseFloat(s.interest_due)));
-        const payRes = await client.query(
-          `INSERT INTO loan_payments (loan_id, amount, payment_date, payment_method, reference_no)
-           VALUES ($1, $2, $3, 'SD', COALESCE($4, 'HISTORICAL_SETTLEMENT'))
-           RETURNING id`,
-          [loanId, pAmt, s.due_date, l.laf_no ? `PAID-${l.laf_no}` : 'PAID']
-        );
-        await client.query(
-          `INSERT INTO loan_payment_allocations (loan_payment_id, repayment_schedule_id, principal_allocated, interest_allocated)
-           VALUES ($1, $2, $3, $4)`,
-          [payRes.rows[0].id, s.id, parseFloat(s.principal_due), parseFloat(s.interest_due)]
-        );
-      }
+      await client.query(
+        `DELETE FROM loan_payments
+         WHERE loan_id = $1
+           AND (reference_no LIKE 'PAID-%' OR reference_no = 'PAID' OR reference_no = 'HISTORICAL_SETTLEMENT')`,
+        [loanId]
+      );
     }
 
     await client.query('COMMIT');

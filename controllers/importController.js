@@ -721,9 +721,12 @@ export const executeImport = async (req, res, next) => {
       if (tag.includes('utility')) return systemProducts.find(p => p.name.toLowerCase().includes('utility')) || systemProducts[0];
       if (tag.includes('calamity')) return systemProducts.find(p => p.name.toLowerCase().includes('calamity')) || systemProducts[0];
       if (tag.includes('project')) return systemProducts.find(p => p.name.toLowerCase().includes('project')) || systemProducts[0];
+      if (tag.includes('rice')) return systemProducts.find(p => p.name.toLowerCase().includes('rice')) || systemProducts[0];
+      if (tag.includes('soap')) return systemProducts.find(p => p.name.toLowerCase().includes('soap')) || systemProducts[0];
       
       const pAmt = parseFloat(l.principalAmount || 0);
       const termsNum = parseInt(l.terms || 0, 10);
+      if (pAmt >= 76000) return systemProducts.find(p => p.name.toLowerCase().includes('project')) || systemProducts[0];
       if (pAmt === 3000 && termsNum === 1) return systemProducts.find(p => p.name.toLowerCase().includes('utility')) || systemProducts[0];
       if (pAmt === 5000 && (termsNum === 2 || l.mode === 'SD2')) return systemProducts.find(p => p.name.toLowerCase().includes('emergency')) || systemProducts[0];
       if (pAmt === 7000 && (termsNum === 2 || l.mode === 'SD2')) return systemProducts.find(p => p.name.toLowerCase().includes('cash express')) || systemProducts[0];

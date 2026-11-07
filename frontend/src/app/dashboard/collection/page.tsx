@@ -115,6 +115,7 @@ export interface CollectionItem {
   common_share_amount?: number;
   membership_fee?: number;
   billing_amount?: number;
+  particulars_amount?: number;
   // Sales specific (itemized & multi-item)
   items?: CollectionMerchandiseItem[];
   item_name?: string;
@@ -195,6 +196,8 @@ export const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
   { value: 'Loans Payable - Emergency', label: 'Loans Payable - Emergency' },
   { value: 'Loans Payable - Special Occasion', label: 'Loans Payable - Special Occasion' },
   { value: 'Loans Payable - Utility', label: 'Loans Payable - Utility' },
+  { value: 'Loans Payable - Rice', label: 'Loans Payable - Rice' },
+  { value: 'Loans Payable - Laundry Soap', label: 'Loans Payable - Laundry Soap' },
 ];
 
 export const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
@@ -208,6 +211,8 @@ export const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
   { value: 'Interest Received - Emergency', label: 'Interest Received - Emergency' },
   { value: 'Interest Received - Special Occasion', label: 'Interest Received - Special Occasion' },
   { value: 'Interest Received - Utility', label: 'Interest Received - Utility' },
+  { value: 'Interest Received - Rice', label: 'Interest Received - Rice' },
+  { value: 'Interest Received - Laundry Soap', label: 'Interest Received - Laundry Soap' },
 ];
 
 export const FINES_OPTIONS: SelectOption[] = [
@@ -221,6 +226,15 @@ export const FINES_OPTIONS: SelectOption[] = [
   { value: 'Fines - Emergency', label: 'Fines - Emergency' },
   { value: 'Fines - Special Occasion', label: 'Fines - Special Occasion' },
   { value: 'Fines - Utility', label: 'Fines - Utility' },
+  { value: 'Fines - Rice', label: 'Fines - Rice' },
+  { value: 'Fines - Laundry Soap', label: 'Fines - Laundry Soap' },
+];
+
+export const CREDIT_PARTICULARS_OPTIONS: SelectOption[] = [
+  { value: 'Insurance Payment', label: 'Insurance Payment' },
+  { value: 'Raffle Ticket', label: 'Raffle Ticket' },
+  { value: 'Donation & Grants', label: 'Donation & Grants' },
+  { value: 'Withdrawal Fee', label: 'Withdrawal Fee' },
 ];
 
 export interface MemberOption {
@@ -589,6 +603,8 @@ export default function CollectionPage() {
     common_share_amount: '',
     membership_fee: '',
     billing_amount: '',
+    other_category: 'Insurance Payment',
+    particulars_amount: '',
     // Sales
     items: [
       {
@@ -931,28 +947,33 @@ export default function CollectionPage() {
 
     let initialLoans: FormLoanEntry[] = [];
     if (item.loans && item.loans.length > 0) {
-      initialLoans = item.loans.map((l, idx) => ({
-        id: `edit-loan-${idx}-${Date.now()}`,
-        loan_account: l.loan_account || 'Loans Payable - Salary',
-        principal_amount: l.principal_amount ? String(l.principal_amount) : '',
-        interest_account: l.interest_account || 'Interest Received - Salary',
-        interest_amount: l.interest_amount ? String(l.interest_amount) : '',
-        fines_account: l.fines_account || 'Fines - Salary',
-        fines_amount: l.fines_amount ? String(l.fines_amount) : '',
-      }));
-    } else if (item.tab === 'credit') {
+      initialLoans = item.loans
+        .filter(l => !/shared\s*capital|share\s*capital|fixed\s*deposit|common\s*share/i.test(l.loan_account || ''))
+        .map((l, idx) => ({
+          id: `edit-loan-${idx}-${Date.now()}`,
+          loan_account: l.loan_account || 'Loans Payable - Salary',
+          principal_amount: l.principal_amount ? String(l.principal_amount) : '',
+          interest_account: l.interest_account || 'Interest Received - Salary',
+          interest_amount: l.interest_amount ? String(l.interest_amount) : '',
+          fines_account: l.fines_account || 'Fines - Salary',
+          fines_amount: l.fines_amount ? String(l.fines_amount) : '',
+        }));
+    }
+
+    if (initialLoans.length === 0 && item.tab === 'credit') {
+      const isLegacyShareCapital = /shared\s*capital|share\s*capital|fixed\s*deposit|common\s*share/i.test(item.loan_account || '');
       initialLoans = [
         {
           id: `edit-loan-0-${++rowCounterRef.current}`,
-          loan_account: item.loan_account || 'Loans Payable - Salary',
-          principal_amount: item.principal_amount ? String(item.principal_amount) : '',
-          interest_account: item.interest_account || 'Interest Received - Salary',
-          interest_amount: item.interest_amount ? String(item.interest_amount) : '',
-          fines_account: item.fines_account || 'Fines - Salary',
-          fines_amount: item.fines_amount ? String(item.fines_amount) : '',
+          loan_account: isLegacyShareCapital ? 'Loans Payable - Salary' : (item.loan_account || 'Loans Payable - Salary'),
+          principal_amount: isLegacyShareCapital ? '' : (item.principal_amount ? String(item.principal_amount) : ''),
+          interest_account: isLegacyShareCapital ? 'Interest Received - Salary' : (item.interest_account || 'Interest Received - Salary'),
+          interest_amount: isLegacyShareCapital ? '' : (item.interest_amount ? String(item.interest_amount) : ''),
+          fines_account: isLegacyShareCapital ? 'Fines - Salary' : (item.fines_account || 'Fines - Salary'),
+          fines_amount: isLegacyShareCapital ? '' : (item.fines_amount ? String(item.fines_amount) : ''),
         }
       ];
-    } else {
+    } else if (initialLoans.length === 0) {
       initialLoans = [
         {
           id: `edit-loan-0-${++rowCounterRef.current}`,
@@ -965,6 +986,13 @@ export default function CollectionPage() {
         }
       ];
     }
+
+    const legacyShareAmt = (item.tab === 'credit' && /shared\s*capital|share\s*capital|fixed\s*deposit|common\s*share/i.test(item.loan_account || ''))
+      ? (item.principal_amount || item.amount || 0)
+      : 0;
+    const resolvedCommonShare = (item.common_share_amount && item.common_share_amount > 0)
+      ? item.common_share_amount
+      : legacyShareAmt;
 
     const isCustom = item.payment_method === 'Cheque' && item.bank_name
       ? !BANK_OPTIONS.some(b => b.value === item.bank_name)
@@ -1013,9 +1041,13 @@ export default function CollectionPage() {
       interest_amount: item.interest_amount ? String(item.interest_amount) : '',
       fines_account: item.fines_account || 'Fines - Salary',
       fines_amount: item.fines_amount ? String(item.fines_amount) : '',
-      common_share_amount: item.common_share_amount ? String(item.common_share_amount) : '',
+      common_share_amount: resolvedCommonShare ? String(resolvedCommonShare) : '',
       membership_fee: item.membership_fee ? String(item.membership_fee) : '',
       billing_amount: item.billing_amount ? String(item.billing_amount) : '',
+      other_category: item.other_category && CREDIT_PARTICULARS_OPTIONS.some(o => o.value === item.other_category)
+        ? item.other_category
+        : 'Insurance Payment',
+      particulars_amount: item.particulars_amount ? String(item.particulars_amount) : '',
       items: initialItems,
       item_name: item.item_name || '',
       item_category: item.item_category || 'Uniform',
@@ -1297,7 +1329,8 @@ export default function CollectionPage() {
       const cs = parseFloat(editFormData.common_share_amount || '0') || 0;
       const mf = parseFloat(editFormData.membership_fee || '0') || 0;
       const billing = parseFloat(editFormData.billing_amount || '0') || 0;
-      if (loansSum + cs + mf + billing > 0) calculatedAmount = loansSum + cs + mf + billing;
+      const partAmt = parseFloat(editFormData.particulars_amount || '0') || 0;
+      if (loansSum + cs + mf + billing + partAmt > 0) calculatedAmount = loansSum + cs + mf + billing + partAmt;
 
       savedLoans = (editFormData.loans || [])
         .map((l: FormLoanEntry) => ({
@@ -1356,15 +1389,21 @@ export default function CollectionPage() {
       payor_name: editFormData.payor_name.trim(),
       member_id: editFormData.member_id?.trim() || undefined,
       loans: savedLoans.length > 0 ? savedLoans : undefined,
-      loan_account: savedLoans[0]?.loan_account || editFormData.loan_account,
+      loan_account: savedLoans[0]?.loan_account || (editFormData.tab === 'credit' ? undefined : editFormData.loan_account),
       principal_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.principal_amount || 0), 0) || undefined) : undefined,
-      interest_account: savedLoans[0]?.interest_account || editFormData.interest_account,
+      interest_account: savedLoans[0]?.interest_account || (editFormData.tab === 'credit' ? undefined : editFormData.interest_account),
       interest_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.interest_amount || 0), 0) || undefined) : undefined,
-      fines_account: savedLoans[0]?.fines_account || editFormData.fines_account,
+      fines_account: savedLoans[0]?.fines_account || (editFormData.tab === 'credit' ? undefined : editFormData.fines_account),
       fines_amount: savedLoans.length > 0 ? (savedLoans.reduce((sum, l) => sum + (l.fines_amount || 0), 0) || undefined) : undefined,
       common_share_amount: parseFloat(editFormData.common_share_amount || '0') || undefined,
       membership_fee: parseFloat(editFormData.membership_fee || '0') || undefined,
       billing_amount: parseFloat(editFormData.billing_amount || '0') || undefined,
+      particulars_amount: editFormData.tab === 'credit'
+        ? (parseFloat(editFormData.particulars_amount || '0') || undefined)
+        : undefined,
+      other_category: editFormData.tab === 'credit'
+        ? (parseFloat(editFormData.particulars_amount || '0') > 0 ? (editFormData.other_category || 'Insurance Payment') : '')
+        : undefined,
       items: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
         ? undefined
         : (savedMerchItems.length > 0 ? savedMerchItems : undefined),
@@ -1404,6 +1443,7 @@ export default function CollectionPage() {
             if (parseFloat(editFormData.common_share_amount || '0') > 0) parts.push('Common Share');
             if (parseFloat(editFormData.membership_fee || '0') > 0) parts.push('Membership Fee');
             if (parseFloat(editFormData.billing_amount || '0') > 0) parts.push('University of Cebu Inc. (Billing)');
+            if (parseFloat(editFormData.particulars_amount || '0') > 0) parts.push(editFormData.other_category || 'Insurance Payment');
             return parts.length > 0 ? parts.join(' + ') : (editFormData.loans?.[0]?.loan_account || 'Credit Collection');
           })()
         : editFormData.tab === 'sales_services'
@@ -1653,6 +1693,8 @@ export default function CollectionPage() {
       common_share_amount: '',
       membership_fee: '',
       billing_amount: '',
+      other_category: 'Insurance Payment',
+      particulars_amount: '',
       items: [
         {
           id: `item-${Date.now()}`,
@@ -1709,7 +1751,8 @@ export default function CollectionPage() {
       const cs = parseFloat(formData.common_share_amount || '0') || 0;
       const mf = parseFloat(formData.membership_fee || '0') || 0;
       const billing = parseFloat(formData.billing_amount || '0') || 0;
-      if (loansSum + cs + mf + billing > 0) calculatedAmount = loansSum + cs + mf + billing;
+      const partAmt = parseFloat(formData.particulars_amount || '0') || 0;
+      if (loansSum + cs + mf + billing + partAmt > 0) calculatedAmount = loansSum + cs + mf + billing + partAmt;
     } else if (formData.tab === 'sales_services' || (formData.tab as any) === 'sales') {
       if (formData.sales_service_type === 'service') {
         const c = parseInt(formData.service_copies || '1', 10) || 1;
@@ -1778,6 +1821,9 @@ export default function CollectionPage() {
       common_share_amount: parseFloat(formData.common_share_amount || '0') || undefined,
       membership_fee: parseFloat(formData.membership_fee || '0') || undefined,
       billing_amount: parseFloat(formData.billing_amount || '0') || undefined,
+      particulars_amount: formData.tab === 'credit'
+        ? (parseFloat(formData.particulars_amount || '0') || undefined)
+        : undefined,
       items: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
         ? undefined
         : (savedMerchItems.length > 0 ? savedMerchItems : undefined),
@@ -1817,6 +1863,7 @@ export default function CollectionPage() {
             if (parseFloat(formData.common_share_amount || '0') > 0) parts.push('Common Share');
             if (parseFloat(formData.membership_fee || '0') > 0) parts.push('Membership Fee');
             if (parseFloat(formData.billing_amount || '0') > 0) parts.push('University of Cebu Inc. (Billing)');
+            if (parseFloat(formData.particulars_amount || '0') > 0) parts.push(formData.other_category || 'Insurance Payment');
             return parts.length > 0 ? parts.join(' + ') : (formData.loans[0]?.loan_account || 'Credit Collection');
           })()
         : formData.tab === 'sales_services'
@@ -1824,7 +1871,9 @@ export default function CollectionPage() {
             ? (formData.service_type || 'Services')
             : (savedMerchItems.length > 0 ? savedMerchItems.map(it => it.item).join(', ') : (formData.item_name || 'Store Sales')))
         : undefined,
-      other_category: undefined,
+      other_category: formData.tab === 'credit' && parseFloat(formData.particulars_amount || '0') > 0
+        ? (formData.other_category || 'Insurance Payment')
+        : undefined,
       amount: calculatedAmount,
       payment_method: formData.payment_method,
       reference_no: (formData.payment_method === 'GCash' || formData.payment_method === 'Bank Transfer' || formData.payment_method === 'Cheque')
@@ -1970,6 +2019,7 @@ export default function CollectionPage() {
           if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
           if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
           if (item.billing_amount && item.billing_amount > 0) parts.push('University of Cebu Inc. (Billing)');
+          if (item.particulars_amount && item.particulars_amount > 0) parts.push(item.other_category || 'Particulars');
           desc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || 'Credit Collection');
         } else if (item.items && item.items.length > 1) {
           desc = `${item.items.length} items (${item.item_name || item.items[0]?.item || 'Item'} + ${item.items.length - 1} more)`;
@@ -2545,6 +2595,7 @@ export default function CollectionPage() {
                       if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
                       if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
                       if (item.billing_amount && item.billing_amount > 0) parts.push('University of Cebu Inc. (Billing)');
+                      if (item.particulars_amount && item.particulars_amount > 0) parts.push(item.other_category || 'Particulars');
                       detailsDesc = parts.length > 0 ? parts.join(' + ') : (item.loan_account || item.particulars || 'Loan Repayment');
                     } else if (item.items && item.items.length > 1) {
                       detailsDesc = `${item.items.length} items (${item.item_name || item.items[0]?.item || 'Item'} + ${item.items.length - 1} more)`;
@@ -3065,7 +3116,7 @@ export default function CollectionPage() {
                       </span>
                     </div>
                     <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                      Total: ₱{(formData.loans.reduce((acc, l) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(formData.common_share_amount || '0') || 0) + (parseFloat(formData.membership_fee || '0') || 0) + (parseFloat(formData.billing_amount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      Total: ₱{(formData.loans.reduce((acc, l) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(formData.common_share_amount || '0') || 0) + (parseFloat(formData.membership_fee || '0') || 0) + (parseFloat(formData.billing_amount || '0') || 0) + (parseFloat(formData.particulars_amount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
 
@@ -3259,6 +3310,34 @@ export default function CollectionPage() {
                           min="0"
                           value={formData.billing_amount}
                           onChange={e => setFormData({ ...formData, billing_amount: e.target.value })}
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 7. Particulars */}
+                  <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50 space-y-1">
+                    <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
+                      Particulars
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                      <AnimatedSelect
+                        value={formData.other_category || 'Insurance Payment'}
+                        onChange={val => setFormData({ ...formData, other_category: val })}
+                        options={CREDIT_PARTICULARS_OPTIONS}
+                        placeholder="Select Particulars..."
+                        buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
+                      />
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.particulars_amount}
+                          onChange={e => setFormData({ ...formData, particulars_amount: e.target.value })}
                           className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                           placeholder="0.00"
                         />
@@ -4010,7 +4089,7 @@ export default function CollectionPage() {
                       </span>
                     </div>
                     <span className="text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                      Total: ₱{(editFormData.loans.reduce((acc: number, l: FormLoanEntry) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(editFormData.common_share_amount || '0') || 0) + (parseFloat(editFormData.membership_fee || '0') || 0) + (parseFloat(editFormData.billing_amount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      Total: ₱{(editFormData.loans.reduce((acc: number, l: FormLoanEntry) => acc + (parseFloat(l.principal_amount || '0') || 0) + (parseFloat(l.interest_amount || '0') || 0) + (parseFloat(l.fines_amount || '0') || 0), 0) + (parseFloat(editFormData.common_share_amount || '0') || 0) + (parseFloat(editFormData.membership_fee || '0') || 0) + (parseFloat(editFormData.billing_amount || '0') || 0) + (parseFloat(editFormData.particulars_amount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
 
@@ -4217,6 +4296,36 @@ export default function CollectionPage() {
                           disabled={isEditLocked}
                           value={editFormData.billing_amount}
                           onChange={e => setEditFormData({ ...editFormData, billing_amount: e.target.value })}
+                          className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Particulars */}
+                  <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50 space-y-1">
+                    <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
+                      Particulars
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
+                      <AnimatedSelect
+                        value={editFormData.other_category || 'Insurance Payment'}
+                        onChange={val => setEditFormData({ ...editFormData, other_category: val })}
+                        options={CREDIT_PARTICULARS_OPTIONS}
+                        placeholder="Select Particulars..."
+                        disabled={isEditLocked}
+                        buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
+                      />
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 text-xs font-bold">₱</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          disabled={isEditLocked}
+                          value={editFormData.particulars_amount}
+                          onChange={e => setEditFormData({ ...editFormData, particulars_amount: e.target.value })}
                           className="w-full pl-6 pr-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                           placeholder="0.00"
                         />
@@ -4929,6 +5038,17 @@ export default function CollectionPage() {
                         </div>
                         <span className="font-mono font-bold text-xs text-emerald-800 dark:text-emerald-300">
                           ₱{selectedItemForModal.billing_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                    {selectedItemForModal.particulars_amount !== undefined && selectedItemForModal.particulars_amount > 0 && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/50 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-emerald-950 dark:text-emerald-200">{selectedItemForModal.other_category || 'Particulars'}</p>
+                          <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400">Cooperative Particular Collection</p>
+                        </div>
+                        <span className="font-mono font-bold text-xs text-emerald-800 dark:text-emerald-300">
+                          ₱{selectedItemForModal.particulars_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     )}
