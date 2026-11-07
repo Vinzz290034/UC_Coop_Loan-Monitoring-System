@@ -27,6 +27,7 @@ export async function migrateCollections() {
         common_share_amount NUMERIC(15, 2) DEFAULT 0,
         membership_fee NUMERIC(15, 2) DEFAULT 0,
         billing_amount NUMERIC(15, 2) DEFAULT 0,
+        particulars_amount NUMERIC(15, 2) DEFAULT 0,
         item_name VARCHAR(255),
         item_category VARCHAR(100),
         quantity INTEGER DEFAULT 1,
@@ -48,11 +49,38 @@ export async function migrateCollections() {
       );
     `);
 
-    // Ensure bank_name, membership_fee, and billing_amount columns exist if table was already created
+    // Ensure bank_name, membership_fee, billing_amount, and particulars_amount columns exist if table was already created
     await client.query(`
       ALTER TABLE collections ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100);
       ALTER TABLE collections ADD COLUMN IF NOT EXISTS membership_fee NUMERIC(15, 2) DEFAULT 0;
       ALTER TABLE collections ADD COLUMN IF NOT EXISTS billing_amount NUMERIC(15, 2) DEFAULT 0;
+      ALTER TABLE collections ADD COLUMN IF NOT EXISTS particulars_amount NUMERIC(15, 2) DEFAULT 0;
+    `);
+
+    // Normalize legacy 'Shared Capital / Fixed Deposit' loan_account entries into common_share_amount
+    await client.query(`
+      UPDATE collections
+      SET
+        common_share_amount = CASE
+          WHEN COALESCE(common_share_amount, 0) > 0 THEN common_share_amount
+          ELSE COALESCE(NULLIF(principal_amount, 0), amount, 0)
+        END,
+        amount = CASE
+          WHEN COALESCE(common_share_amount, 0) > 0 AND COALESCE(principal_amount, 0) > 0 AND amount >= (COALESCE(common_share_amount, 0) + COALESCE(principal_amount, 0))
+          THEN amount - COALESCE(principal_amount, 0)
+          ELSE amount
+        END,
+        principal_amount = 0,
+        loan_account = NULL,
+        loans = '[]'::jsonb,
+        particulars = 'Common Share'
+      WHERE tab = 'credit'
+        AND (
+          LOWER(COALESCE(loan_account, '')) LIKE '%shared capital%'
+          OR LOWER(COALESCE(loan_account, '')) LIKE '%share capital%'
+          OR LOWER(COALESCE(loan_account, '')) LIKE '%fixed deposit%'
+          OR LOWER(COALESCE(loan_account, '')) LIKE '%common share%'
+        );
     `);
 
     await client.query(`

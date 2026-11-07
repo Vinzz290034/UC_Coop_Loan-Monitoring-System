@@ -1,5 +1,36 @@
 import pool from '../config/db.js';
 
+let particularsColEnsured = false;
+async function ensureParticularsColumn(db) {
+  if (particularsColEnsured) return;
+  await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS particulars_amount NUMERIC(15, 2) DEFAULT 0;`);
+  await db.query(`
+    UPDATE collections
+    SET
+      common_share_amount = CASE
+        WHEN COALESCE(common_share_amount, 0) > 0 THEN common_share_amount
+        ELSE COALESCE(NULLIF(principal_amount, 0), amount, 0)
+      END,
+      amount = CASE
+        WHEN COALESCE(common_share_amount, 0) > 0 AND COALESCE(principal_amount, 0) > 0 AND amount >= (COALESCE(common_share_amount, 0) + COALESCE(principal_amount, 0))
+        THEN amount - COALESCE(principal_amount, 0)
+        ELSE amount
+      END,
+      principal_amount = 0,
+      loan_account = NULL,
+      loans = '[]'::jsonb,
+      particulars = 'Common Share'
+    WHERE tab = 'credit'
+      AND (
+        LOWER(COALESCE(loan_account, '')) LIKE '%shared capital%'
+        OR LOWER(COALESCE(loan_account, '')) LIKE '%share capital%'
+        OR LOWER(COALESCE(loan_account, '')) LIKE '%fixed deposit%'
+        OR LOWER(COALESCE(loan_account, '')) LIKE '%common share%'
+      );
+  `);
+  particularsColEnsured = true;
+}
+
 /**
  * Format collection row from PostgreSQL into CollectionItem shape
  */
@@ -32,6 +63,7 @@ function formatCollectionRow(row) {
     common_share_amount: row.common_share_amount !== null && row.common_share_amount !== undefined ? parseFloat(row.common_share_amount) : undefined,
     membership_fee: row.membership_fee !== null && row.membership_fee !== undefined ? parseFloat(row.membership_fee) : undefined,
     billing_amount: row.billing_amount !== null && row.billing_amount !== undefined ? parseFloat(row.billing_amount) : undefined,
+    particulars_amount: row.particulars_amount !== null && row.particulars_amount !== undefined ? parseFloat(row.particulars_amount) : undefined,
     item_name: row.item_name || undefined,
     item_category: row.item_category || undefined,
     quantity: row.quantity !== null && row.quantity !== undefined ? parseInt(row.quantity, 10) : undefined,
@@ -60,6 +92,7 @@ function formatCollectionRow(row) {
  */
 export async function getCollections(req, res) {
   try {
+    await ensureParticularsColumn(pool);
     const { tab, search, payment_method, status } = req.query;
 
     let query = `SELECT * FROM collections WHERE 1=1`;
@@ -176,6 +209,7 @@ export async function createCollection(req, res) {
     const item = req.body;
 
     await client.query('BEGIN');
+    await ensureParticularsColumn(client);
 
     // 1. Acquire transaction-level advisory lock specifically for collection receipt sequencing.
     // Serializes concurrent submissions so the first to record gets the number,
@@ -226,6 +260,7 @@ export async function createCollection(req, res) {
     const common_share_amount = item.common_share_amount || 0;
     const membership_fee = item.membership_fee || 0;
     const billing_amount = item.billing_amount || 0;
+    const particulars_amount = item.particulars_amount || 0;
     const item_name = item.item_name || null;
     const item_category = item.item_category || null;
     const quantity = item.quantity || 1;
@@ -247,7 +282,7 @@ export async function createCollection(req, res) {
       INSERT INTO collections (
         id, tab, date, or_no, payor_name, member_id,
         loans, items, loan_account, principal_amount, interest_account, interest_amount,
-        fines_account, fines_amount, common_share_amount, membership_fee, billing_amount,
+        fines_account, fines_amount, common_share_amount, membership_fee, billing_amount, particulars_amount,
         item_name, item_category, quantity, unit_price,
         service_type, service_copies, service_rate,
         particulars, other_category,
@@ -255,11 +290,11 @@ export async function createCollection(req, res) {
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7::jsonb, $8::jsonb, $9, $10, $11, $12,
-        $13, $14, $15, $16, $17,
-        $18, $19, $20, $21,
-        $22, $23, $24,
-        $25, $26,
-        $27, $28, $29, $30, $31, $32, $33
+        $13, $14, $15, $16, $17, $18,
+        $19, $20, $21, $22,
+        $23, $24, $25,
+        $26, $27,
+        $28, $29, $30, $31, $32, $33, $34
       )
       RETURNING *;
     `;
@@ -267,7 +302,7 @@ export async function createCollection(req, res) {
     const values = [
       id, tab, date, finalOrNo, payor_name, member_id,
       loans, items, loan_account, principal_amount, interest_account, interest_amount,
-      fines_account, fines_amount, common_share_amount, membership_fee, billing_amount,
+      fines_account, fines_amount, common_share_amount, membership_fee, billing_amount, particulars_amount,
       item_name, item_category, quantity, unit_price,
       service_type, service_copies, service_rate,
       particulars, other_category,
@@ -313,6 +348,7 @@ export async function bulkImportCollections(req, res) {
     }
 
     await client.query('BEGIN');
+    await ensureParticularsColumn(client);
 
     let insertedCount = 0;
     let updatedCount = 0;
@@ -323,7 +359,7 @@ export async function bulkImportCollections(req, res) {
       INSERT INTO collections (
         id, tab, date, or_no, payor_name, member_id,
         loans, items, loan_account, principal_amount, interest_account, interest_amount,
-        fines_account, fines_amount, common_share_amount, membership_fee, billing_amount,
+        fines_account, fines_amount, common_share_amount, membership_fee, billing_amount, particulars_amount,
         item_name, item_category, quantity, unit_price,
         service_type, service_copies, service_rate,
         particulars, other_category,
@@ -331,11 +367,11 @@ export async function bulkImportCollections(req, res) {
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7::jsonb, $8::jsonb, $9, $10, $11, $12,
-        $13, $14, $15, $16, $17,
-        $18, $19, $20, $21,
-        $22, $23, $24,
-        $25, $26,
-        $27, $28, $29, $30, $31, $32, $33
+        $13, $14, $15, $16, $17, $18,
+        $19, $20, $21, $22,
+        $23, $24, $25,
+        $26, $27,
+        $28, $29, $30, $31, $32, $33, $34
       )
       ON CONFLICT (id) DO UPDATE SET
         tab = EXCLUDED.tab,
@@ -354,6 +390,7 @@ export async function bulkImportCollections(req, res) {
         common_share_amount = EXCLUDED.common_share_amount,
         membership_fee = EXCLUDED.membership_fee,
         billing_amount = EXCLUDED.billing_amount,
+        particulars_amount = EXCLUDED.particulars_amount,
         item_name = EXCLUDED.item_name,
         item_category = EXCLUDED.item_category,
         quantity = EXCLUDED.quantity,
@@ -391,11 +428,16 @@ export async function bulkImportCollections(req, res) {
         }
       }
 
-      // 2. Receipt Number (or_no) match if ID not already matched
-      if (!isExisting && or_no) {
+      // 2. Receipt Number (or_no) + Payor match if ID not already matched (skip generic placeholders like 'SD' or '-')
+      const isGenericOrNo = !or_no || /^(sd|cd|cash|check|gcash|bank|payroll|deduction|n\/a|na|none|-+)$/i.test(or_no);
+      if (!isExisting && !isGenericOrNo) {
+        const payorForMatch = item.payor_name ? item.payor_name.trim() : '';
         const orCheck = await client.query(
-          'SELECT id, status FROM collections WHERE LOWER(TRIM(or_no)) = LOWER(TRIM($1)) LIMIT 1',
-          [or_no]
+          `SELECT id, status FROM collections
+           WHERE LOWER(TRIM(or_no)) = LOWER(TRIM($1))
+             AND LOWER(TRIM(COALESCE(payor_name, ''))) = LOWER(TRIM($2))
+           LIMIT 1`,
+          [or_no, payorForMatch]
         );
         if (orCheck.rowCount > 0) {
           targetId = orCheck.rows[0].id;
@@ -426,6 +468,7 @@ export async function bulkImportCollections(req, res) {
       const common_share_amount = item.common_share_amount || 0;
       const membership_fee = item.membership_fee || 0;
       const billing_amount = item.billing_amount || 0;
+      const particulars_amount = item.particulars_amount || 0;
       const item_name = item.item_name || null;
       const item_category = item.item_category || null;
       const quantity = item.quantity || 1;
@@ -446,7 +489,7 @@ export async function bulkImportCollections(req, res) {
       const values = [
         targetId, tab, date, or_no, payor_name, member_id,
         loans, items, loan_account, principal_amount, interest_account, interest_amount,
-        fines_account, fines_amount, common_share_amount, membership_fee, billing_amount,
+        fines_account, fines_amount, common_share_amount, membership_fee, billing_amount, particulars_amount,
         item_name, item_category, quantity, unit_price,
         service_type, service_copies, service_rate,
         particulars, other_category,
@@ -494,6 +537,7 @@ export async function updateCollection(req, res) {
   try {
     const { id } = req.params;
     const item = req.body;
+    await ensureParticularsColumn(pool);
 
     // Check existing
     const existingRes = await pool.query('SELECT * FROM collections WHERE id = $1', [id]);
@@ -511,17 +555,44 @@ export async function updateCollection(req, res) {
     const or_no = item.or_no ? item.or_no.trim() : existing.or_no;
     const payor_name = item.payor_name ? item.payor_name.trim() : existing.payor_name;
     const member_id = item.member_id !== undefined ? (item.member_id ? item.member_id.trim() : null) : existing.member_id;
-    const loans = item.loans !== undefined ? JSON.stringify(item.loans) : (existing.loans ? JSON.stringify(existing.loans) : '[]');
-    const items = item.items !== undefined ? JSON.stringify(item.items) : (existing.items ? JSON.stringify(existing.items) : '[]');
-    const loan_account = item.loan_account !== undefined ? item.loan_account : existing.loan_account;
-    const principal_amount = item.principal_amount !== undefined ? item.principal_amount : existing.principal_amount;
-    const interest_account = item.interest_account !== undefined ? item.interest_account : existing.interest_account;
-    const interest_amount = item.interest_amount !== undefined ? item.interest_amount : existing.interest_amount;
-    const fines_account = item.fines_account !== undefined ? item.fines_account : existing.fines_account;
-    const fines_amount = item.fines_amount !== undefined ? item.fines_amount : existing.fines_amount;
-    const common_share_amount = item.common_share_amount !== undefined ? item.common_share_amount : existing.common_share_amount;
-    const membership_fee = item.membership_fee !== undefined ? item.membership_fee : existing.membership_fee;
-    const billing_amount = item.billing_amount !== undefined ? item.billing_amount : existing.billing_amount;
+    const isCredit = tab === 'credit';
+    const loans = item.loans !== undefined
+      ? JSON.stringify(item.loans || [])
+      : (isCredit ? '[]' : (existing.loans ? JSON.stringify(existing.loans) : '[]'));
+    const items = item.items !== undefined
+      ? JSON.stringify(item.items || [])
+      : (!isCredit ? '[]' : (existing.items ? JSON.stringify(existing.items) : '[]'));
+    const hasSavedLoans = Array.isArray(item.loans) && item.loans.length > 0;
+    const loan_account = isCredit
+      ? (hasSavedLoans ? (item.loans[0]?.loan_account || item.loan_account || null) : (item.principal_amount > 0 ? (item.loan_account || null) : null))
+      : (item.loan_account !== undefined ? item.loan_account : existing.loan_account);
+    const principal_amount = isCredit
+      ? (parseFloat(item.principal_amount) || 0)
+      : (item.principal_amount !== undefined ? item.principal_amount : existing.principal_amount);
+    const interest_account = isCredit
+      ? (hasSavedLoans ? (item.loans[0]?.interest_account || item.interest_account || null) : (item.interest_amount > 0 ? (item.interest_account || null) : null))
+      : (item.interest_account !== undefined ? item.interest_account : existing.interest_account);
+    const interest_amount = isCredit
+      ? (parseFloat(item.interest_amount) || 0)
+      : (item.interest_amount !== undefined ? item.interest_amount : existing.interest_amount);
+    const fines_account = isCredit
+      ? (hasSavedLoans ? (item.loans[0]?.fines_account || item.fines_account || null) : (item.fines_amount > 0 ? (item.fines_account || null) : null))
+      : (item.fines_account !== undefined ? item.fines_account : existing.fines_account);
+    const fines_amount = isCredit
+      ? (parseFloat(item.fines_amount) || 0)
+      : (item.fines_amount !== undefined ? item.fines_amount : existing.fines_amount);
+    const common_share_amount = isCredit
+      ? (parseFloat(item.common_share_amount) || 0)
+      : (item.common_share_amount !== undefined ? item.common_share_amount : existing.common_share_amount);
+    const membership_fee = isCredit
+      ? (parseFloat(item.membership_fee) || 0)
+      : (item.membership_fee !== undefined ? item.membership_fee : existing.membership_fee);
+    const billing_amount = isCredit
+      ? (parseFloat(item.billing_amount) || 0)
+      : (item.billing_amount !== undefined ? item.billing_amount : existing.billing_amount);
+    const particulars_amount = isCredit
+      ? (parseFloat(item.particulars_amount) || 0)
+      : (item.particulars_amount !== undefined ? (item.particulars_amount || 0) : (existing.particulars_amount || 0));
     const item_name = item.item_name !== undefined ? item.item_name : existing.item_name;
     const item_category = item.item_category !== undefined ? item.item_category : existing.item_category;
     const quantity = item.quantity !== undefined ? item.quantity : existing.quantity;
@@ -530,7 +601,7 @@ export async function updateCollection(req, res) {
     const service_copies = item.service_copies !== undefined ? item.service_copies : existing.service_copies;
     const service_rate = item.service_rate !== undefined ? item.service_rate : existing.service_rate;
     const particulars = item.particulars !== undefined ? item.particulars : existing.particulars;
-    const other_category = item.other_category !== undefined ? item.other_category : existing.other_category;
+    const other_category = item.other_category !== undefined ? (item.other_category || null) : existing.other_category;
     const amount = item.amount !== undefined ? item.amount : existing.amount;
     const payment_method = item.payment_method || existing.payment_method;
     const reference_no = item.reference_no !== undefined ? item.reference_no : existing.reference_no;
@@ -543,20 +614,20 @@ export async function updateCollection(req, res) {
       UPDATE collections SET
         tab = $1, date = $2, or_no = $3, payor_name = $4, member_id = $5,
         loans = $6::jsonb, items = $7::jsonb, loan_account = $8, principal_amount = $9, interest_account = $10, interest_amount = $11,
-        fines_account = $12, fines_amount = $13, common_share_amount = $14, membership_fee = $15, billing_amount = $16,
-        item_name = $17, item_category = $18, quantity = $19, unit_price = $20,
-        service_type = $21, service_copies = $22, service_rate = $23,
-        particulars = $24, other_category = $25,
-        amount = $26, payment_method = $27, reference_no = $28, bank_name = $29,
-        status = $30, remarks = $31, collected_by = $32, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $33
+        fines_account = $12, fines_amount = $13, common_share_amount = $14, membership_fee = $15, billing_amount = $16, particulars_amount = $17,
+        item_name = $18, item_category = $19, quantity = $20, unit_price = $21,
+        service_type = $22, service_copies = $23, service_rate = $24,
+        particulars = $25, other_category = $26,
+        amount = $27, payment_method = $28, reference_no = $29, bank_name = $30,
+        status = $31, remarks = $32, collected_by = $33, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $34
       RETURNING *;
     `;
 
     const values = [
       tab, date, or_no, payor_name, member_id,
       loans, items, loan_account, principal_amount, interest_account, interest_amount,
-      fines_account, fines_amount, common_share_amount, membership_fee, billing_amount,
+      fines_account, fines_amount, common_share_amount, membership_fee, billing_amount, particulars_amount,
       item_name, item_category, quantity, unit_price,
       service_type, service_copies, service_rate,
       particulars, other_category,

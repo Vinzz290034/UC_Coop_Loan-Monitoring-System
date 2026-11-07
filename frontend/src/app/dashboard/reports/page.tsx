@@ -177,6 +177,22 @@ function ReportsPageContent() {
   const [merchandiseCatalogFilter, setMerchandiseCatalogFilter] = useState<'all' | 'sold'>('all');
   const [selectedLoanProductModal, setSelectedLoanProductModal] = useState<any | null>(null);
   const [loanProductModalSearch, setLoanProductModalSearch] = useState('');
+  const [loanProductModalTab, setLoanProductModalTab] = useState<'borrowers' | 'repayments'>('borrowers');
+  const [loanTrackerViewMode, setLoanTrackerViewMode] = useState<'loans_only' | 'full_tracker'>('full_tracker');
+  const [loanTrackerSelectedMonth, setLoanTrackerSelectedMonth] = useState<'ytd' | number>('ytd');
+  const [expandedTrackerRowKey, setExpandedTrackerRowKey] = useState<string | null>(null);
+  const [isLoanYearDropdownOpen, setIsLoanYearDropdownOpen] = useState(false);
+  const loanYearDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (loanYearDropdownRef.current && !loanYearDropdownRef.current.contains(e.target as Node)) {
+        setIsLoanYearDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Book of Accounts by Category States
   const [categorySearch, setCategorySearch] = useState('');
@@ -351,6 +367,19 @@ function ReportsPageContent() {
       String(b.laf_no || '').toLowerCase().includes(q) ||
       String(b.voucher_no || '').toLowerCase().includes(q) ||
       String(b.date || '').toLowerCase().includes(q)
+    );
+  }, [selectedLoanProductModal, loanProductModalSearch]);
+
+  const loanProductModalRepayments = useMemo(() => {
+    if (!selectedLoanProductModal) return [];
+    const list = selectedLoanProductModal.repayments || [];
+    if (!loanProductModalSearch.trim()) return list;
+    const q = loanProductModalSearch.toLowerCase();
+    return list.filter((r: any) =>
+      String(r.member_name || '').toLowerCase().includes(q) ||
+      String(r.or_no || '').toLowerCase().includes(q) ||
+      String(r.source || '').toLowerCase().includes(q) ||
+      String(r.date || '').toLowerCase().includes(q)
     );
   }, [selectedLoanProductModal, loanProductModalSearch]);
 
@@ -702,7 +731,7 @@ function ReportsPageContent() {
 
       const endpoint = endpointMap[activeTab];
       const params = {
-        period,
+        period: activeTab === 'loans' ? 'annual' : period,
         year,
         month,
         date
@@ -956,8 +985,53 @@ function ReportsPageContent() {
           'Fines Collected (PHP)': lp.fines_collected,
           'Total Inflow (PHP)': lp.total_collected
         }));
+        rows.push({
+          'Loan Product': 'TOTAL SUMMARY',
+          'Disbursements Count': reportData.summary?.total_disbursed_count || 0,
+          'Total Disbursed (PHP)': reportData.summary?.total_disbursed_amount || 0,
+          'Amortizations Count': reportData.summary?.total_amortizations_count || 0,
+          'Principal Collected (PHP)': reportData.summary?.total_principal_collected || 0,
+          'Interest Collected (PHP)': reportData.summary?.total_interest_collected || 0,
+          'Fines Collected (PHP)': reportData.summary?.total_fines_collected || 0,
+          'Total Inflow (PHP)': reportData.summary?.total_collections_volume || 0
+        });
         const ws = XLSX.utils.json_to_sheet(rows);
         XLSX.utils.book_append_sheet(wb, ws, 'Loan Products');
+
+        if (reportData.monthly_tracker) {
+          const mt = reportData.monthly_tracker;
+          const mLabels: string[] = mt.month_labels || ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUNE', 'JULY', 'AUG', 'SEPT', 'OCT', 'NOV', 'DEC'];
+          const trackerRows: any[] = [];
+          const sourceRows = [
+            ...(mt.loan_rows || []),
+            ...(loanTrackerViewMode === 'full_tracker' ? (mt.other_rows || []) : [])
+          ];
+          for (const r of sourceRows) {
+            const rowObj: any = {
+              'Loan Type': r.loan_type || '',
+              'Particulars': r.particulars || '',
+              'YTD SUM': r.ytd_sum || 0
+            };
+            mLabels.forEach((lbl, idx) => {
+              rowObj[lbl] = r.months?.[idx] || 0;
+            });
+            trackerRows.push(rowObj);
+          }
+          const totalsObj = loanTrackerViewMode === 'full_tracker' ? mt.grand_totals : mt.loans_totals;
+          if (totalsObj) {
+            const totalRow: any = {
+              'Loan Type': 'TOTAL',
+              'Particulars': '',
+              'YTD SUM': totalsObj.ytd_sum || 0
+            };
+            mLabels.forEach((lbl, idx) => {
+              totalRow[lbl] = totalsObj.months?.[idx] || 0;
+            });
+            trackerRows.push(totalRow);
+          }
+          const trackerWs = XLSX.utils.json_to_sheet(trackerRows);
+          XLSX.utils.book_append_sheet(wb, trackerWs, `INVOICE ${mt.year || year} TRACKER`);
+        }
       } else if (activeTab === 'membership') {
         const rows = (reportData.new_members || []).map((m: any) => ({
           'Member No.': m.member_no,
@@ -1041,111 +1115,113 @@ function ReportsPageContent() {
           </div>
         </div>
 
-        {/* Global Period & Date Filter Control Bar */}
-        <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-neutral-900 p-1.5 rounded-2xl border border-emerald-300 dark:border-emerald-800/80 shadow-xs">
-          {/* Period Toggle */}
-          <div className="flex items-center bg-emerald-50 dark:bg-emerald-950/60 p-0.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 text-xs font-bold">
-            {(['daily', 'monthly', 'annual'] as ReportPeriod[]).map((p) => {
-              return (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1.5 rounded-lg capitalize transition-all cursor-pointer ${
-                    period === p
-                      ? 'bg-emerald-700 text-white shadow-xs'
-                      : 'text-emerald-900 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
-                  }`}
-                >
-                  {p}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Date Picker for Daily */}
-          {period === 'daily' && (
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/60 text-xs font-semibold">
-              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="bg-transparent border-0 outline-none text-neutral-900 dark:text-white font-mono text-xs cursor-pointer"
-              />
+        {/* Global Period & Date Filter Control Bar (hidden on Loan Products tab) */}
+        {activeTab !== 'loans' && (
+          <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-neutral-900 p-1.5 rounded-2xl border border-emerald-300 dark:border-emerald-800/80 shadow-xs">
+            {/* Period Toggle */}
+            <div className="flex items-center bg-emerald-50 dark:bg-emerald-950/60 p-0.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 text-xs font-bold">
+              {(['daily', 'monthly', 'annual'] as ReportPeriod[]).map((p) => {
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                    className={`px-3 py-1.5 rounded-lg capitalize transition-all cursor-pointer ${
+                      period === p
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'text-emerald-900 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
             </div>
-          )}
 
-          {/* Month & Year Selectors for Monthly */}
-          {period === 'monthly' && (
-            <div className="flex items-center gap-1.5">
-              <select
-                value={month}
-                onChange={(e) => setMonth(parseInt(e.target.value))}
-                className="px-2.5 py-1.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/60 text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer"
-              >
-                {MONTH_NAMES.map((m, idx) => (
-                  <option key={m} value={idx + 1}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+            {/* Date Picker for Daily */}
+            {period === 'daily' && (
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/60 text-xs font-semibold">
+                <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="bg-transparent border-0 outline-none text-neutral-900 dark:text-white font-mono text-xs cursor-pointer"
+                />
+              </div>
+            )}
+
+            {/* Month & Year Selectors for Monthly */}
+            {period === 'monthly' && (
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={month}
+                  onChange={(e) => setMonth(parseInt(e.target.value))}
+                  className="px-2.5 py-1.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/60 text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer"
+                >
+                  {MONTH_NAMES.map((m, idx) => (
+                    <option key={m} value={idx + 1}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={year}
+                  onChange={(e) => setYear(parseInt(e.target.value))}
+                  className="px-2.5 py-1.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/60 text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer font-mono"
+                >
+                  {Array.from(new Set([2024, 2025, 2026, 2027, 2028, year])).sort((a, b) => a - b).map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Year Selector for Annual */}
+            {period === 'annual' && (
               <select
                 value={year}
                 onChange={(e) => setYear(parseInt(e.target.value))}
-                className="px-2.5 py-1.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/60 text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer font-mono"
+                className="px-3 py-1.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/60 text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer font-mono"
               >
-                {[2026, 2025, 2024, 2023].map((y) => (
+                {Array.from(new Set([2024, 2025, 2026, 2027, 2028, year])).sort((a, b) => a - b).map((y) => (
                   <option key={y} value={y}>
-                    {y}
+                    Year {y}
                   </option>
                 ))}
               </select>
-            </div>
-          )}
+            )}
 
-          {/* Year Selector for Annual */}
-          {period === 'annual' && (
-            <select
-              value={year}
-              onChange={(e) => setYear(parseInt(e.target.value))}
-              className="px-3 py-1.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/60 text-xs font-bold text-neutral-900 dark:text-white outline-none cursor-pointer font-mono"
+            {/* Refresh Button */}
+            <button
+              onClick={fetchReport}
+              disabled={loading}
+              className="p-1.5 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer"
+              title="Refresh Data"
             >
-              {[2026, 2025, 2024, 2023].map((y) => (
-                <option key={y} value={y}>
-                  Year {y}
-                </option>
-              ))}
-            </select>
-          )}
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+            </button>
 
-          {/* Refresh Button */}
-          <button
-            onClick={fetchReport}
-            disabled={loading}
-            className="p-1.5 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer"
-            title="Refresh Data"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
-          </button>
+            {/* Export to Excel */}
+            <button
+              onClick={handleExportExcel}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Excel</span>
+            </button>
 
-          {/* Export to Excel */}
-          <button
-            onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Excel</span>
-          </button>
-
-          {/* Print Button */}
-          <button
-            onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold text-xs transition-all cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print</span>
-          </button>
-        </div>
+            {/* Print Button */}
+            <button
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold text-xs transition-all cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Navigation Tabs (Summary + 5 Manager Reports + Financial Statement) */}
@@ -2378,129 +2454,854 @@ function ReportsPageContent() {
           {/* ============================================================== */}
           {activeTab === 'loans' && (
             <div className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                <div className="p-3.5 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">Loans Released</div>
-                  <div className="text-xl font-extrabold text-neutral-900 dark:text-white mt-1">
-                    {reportData.summary?.total_disbursed_count || 0} loans
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Approved in period</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">Principal Disbursed</div>
-                  <div className="text-xl font-extrabold text-neutral-900 dark:text-white mt-1 font-mono">
-                    {fmt(reportData.summary?.total_disbursed_amount)}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Loan capital outflow</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">Principal Recovered</div>
-                  <div className="text-xl font-extrabold text-neutral-900 dark:text-white mt-1 font-mono">
-                    {fmt(reportData.summary?.total_principal_collected)}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Amortization principal</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                    Interest Earned
-                  </div>
-                  <div className="text-xl font-extrabold text-emerald-700 dark:text-emerald-400 mt-1 font-mono">
-                    {fmt(reportData.summary?.total_interest_collected)}
-                  </div>
-                  <div className="text-[10px] text-emerald-600/80 mt-0.5">Direct loan earnings</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">Fines & Penalties</div>
-                  <div className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mt-1 font-mono">
-                    {fmt(reportData.summary?.total_fines_collected)}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Late charge revenue</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">Total Inflow Volume</div>
-                  <div className="text-xl font-extrabold text-neutral-900 dark:text-white mt-1 font-mono">
-                    {fmt(reportData.summary?.total_collections_volume)}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Principal + Interest + Fines</div>
-                </div>
-              </div>
+              {/* System-Styled Monthly & Annual Inflow Breakdown */}
+              {reportData.monthly_tracker && (() => {
+                const mt = reportData.monthly_tracker;
+                const monthLabels: string[] = mt.month_labels || ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUNE', 'JULY', 'AUG', 'SEPT', 'OCT', 'NOV', 'DEC'];
+                const rawLoanRows: any[] = mt.loan_rows || [];
+                const rawOtherRows: any[] = mt.other_rows || [];
 
-              {/* 10 Loan Products Master Breakdown Table */}
-              <div className="border border-emerald-300 dark:border-emerald-800/80 rounded-2xl overflow-hidden shadow-2xs">
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-900/60 flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
-                    Portfolio Schedule Across 10 Cooperative Loan Products
-                  </span>
-                  <span className="text-[11px] text-neutral-500">Disbursements & Amortizations</span>
-                </div>
-                <div className="overflow-x-auto max-h-[550px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
-                      <tr>
-                        <th className="p-2.5 w-10 text-center border-r border-emerald-700/60">#</th>
-                        <th className="p-2.5 min-w-[200px] border-r border-emerald-700/60">Loan Product Name</th>
-                        <th className="p-2.5 w-24 text-center border-r border-emerald-700/60">Disbursed (Qty)</th>
-                        <th className="p-2.5 w-32 text-right border-r border-emerald-700/60">Disbursed (₱)</th>
-                        <th className="p-2.5 w-24 text-center border-r border-emerald-700/60">Amort. (Qty)</th>
-                        <th className="p-2.5 w-32 text-right border-r border-emerald-700/60">Principal Paid</th>
-                        <th className="p-2.5 w-28 text-right border-r border-emerald-700/60">Interest (₱)</th>
-                        <th className="p-2.5 w-24 text-right border-r border-emerald-700/60">Fines (₱)</th>
-                        <th className="p-2.5 w-32 text-right">Total Inflow (₱)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-neutral-900 text-xs">
-                      {(reportData.products || []).map((lp: any, idx: number) => (
-                        <tr
-                          key={idx}
-                          onClick={() => {
-                            setSelectedLoanProductModal(lp);
-                            setLoanProductModalSearch('');
-                          }}
-                          className="hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer group"
-                          title={`Click to view borrowers and contracts for ${lp.product_name}`}
-                        >
-                          <td className="p-2 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
-                            {idx + 1}
-                          </td>
-                          <td className="p-2 font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
-                                {lp.product_name}
-                              </span>
-                              <span className="text-[10px] font-normal text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
-                                <span>View borrowers</span>
-                                <ExternalLink className="w-3 h-3" />
+                // Consolidate stacked Repayment + Interest rows into unified Loan Product items
+                const unifiedProductsMap = new Map<string, {
+                  product_name: string;
+                  display_name: string;
+                  repayment_ytd: number;
+                  interest_ytd: number;
+                  repayment_months: number[];
+                  interest_months: number[];
+                }>();
+
+                let finesRowData: { ytd_sum: number; months: number[] } = {
+                  ytd_sum: 0,
+                  months: Array(12).fill(0)
+                };
+
+                rawLoanRows.forEach((r: any) => {
+                  if (r.particulars === 'Fines/Penalty') {
+                    finesRowData = {
+                      ytd_sum: r.ytd_sum || 0,
+                      months: Array.isArray(r.months) ? r.months : Array(12).fill(0)
+                    };
+                    return;
+                  }
+                  const pKey = r.product_name || r.loan_type || 'Salary Loan';
+                  if (!unifiedProductsMap.has(pKey)) {
+                    unifiedProductsMap.set(pKey, {
+                      product_name: pKey,
+                      display_name: pKey,
+                      repayment_ytd: 0,
+                      interest_ytd: 0,
+                      repayment_months: Array(12).fill(0),
+                      interest_months: Array(12).fill(0)
+                    });
+                  }
+                  const item = unifiedProductsMap.get(pKey)!;
+                  if (r.particulars === 'Interest') {
+                    item.interest_ytd += r.ytd_sum || 0;
+                    item.interest_months = Array.isArray(r.months) ? r.months : Array(12).fill(0);
+                  } else {
+                    item.repayment_ytd += r.ytd_sum || 0;
+                    item.repayment_months = Array.isArray(r.months) ? r.months : Array(12).fill(0);
+                  }
+                });
+
+                const unifiedLoanProducts = Array.from(unifiedProductsMap.values());
+
+                const getValForSelection = (ytdVal: number, monthsArr: number[]) =>
+                  loanTrackerSelectedMonth === 'ytd' ? ytdVal : (monthsArr[loanTrackerSelectedMonth] || 0);
+
+                const totalPrincipalSelected = unifiedLoanProducts.reduce(
+                  (acc, p) => acc + getValForSelection(p.repayment_ytd, p.repayment_months),
+                  0
+                );
+                const totalInterestSelected = unifiedLoanProducts.reduce(
+                  (acc, p) => acc + getValForSelection(p.interest_ytd, p.interest_months),
+                  0
+                );
+                const totalFinesSelected = getValForSelection(finesRowData.ytd_sum, finesRowData.months);
+                const totalLoansAndFinesSelected = totalPrincipalSelected + totalInterestSelected + totalFinesSelected;
+
+                const otherParticularsWithFines = [
+                  {
+                    key: 'fines_penalty',
+                    particulars: 'Fines & Late Penalties',
+                    category: 'Loan Penalty',
+                    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300',
+                    ytd_sum: finesRowData.ytd_sum,
+                    months: finesRowData.months
+                  },
+                  ...rawOtherRows.map((o: any, idx: number) => {
+                    const lower = String(o.particulars || '').toLowerCase();
+                    let category = 'Coop Collection';
+                    let badgeClass = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300';
+                    if (lower.includes('capital')) {
+                      category = 'Member Equity';
+                      badgeClass = 'bg-teal-100 text-teal-800 dark:bg-teal-950/70 dark:text-teal-300';
+                    } else if (lower.includes('sale') || lower.includes('merchandise')) {
+                      category = 'Store & Merchandise';
+                      badgeClass = 'bg-blue-100 text-blue-800 dark:bg-blue-950/70 dark:text-blue-300';
+                    } else if (lower.includes('insurance')) {
+                      category = 'Insurance Remittance';
+                      badgeClass = 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/70 dark:text-indigo-300';
+                    } else if (lower.includes('donation') || lower.includes('grant')) {
+                      category = 'Grants & Donations';
+                      badgeClass = 'bg-violet-100 text-violet-800 dark:bg-violet-950/70 dark:text-violet-300';
+                    } else if (lower.includes('fee') || lower.includes('raffle')) {
+                      category = 'Service & Fees';
+                      badgeClass = 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300';
+                    }
+                    return {
+                      key: `other_${idx}`,
+                      particulars: o.particulars,
+                      category,
+                      badgeClass,
+                      ytd_sum: o.ytd_sum || 0,
+                      months: Array.isArray(o.months) ? o.months : Array(12).fill(0)
+                    };
+                  })
+                ];
+
+                const totalOtherSelected = otherParticularsWithFines.reduce(
+                  (acc, item) => acc + getValForSelection(item.ytd_sum, item.months),
+                  0
+                );
+                const grandSelectedTotal = totalPrincipalSelected + totalInterestSelected + totalOtherSelected;
+
+                const selectedPeriodLabel =
+                  loanTrackerSelectedMonth === 'ytd'
+                    ? `Full Year ${mt.year || year} (YTD)`
+                    : `${monthLabels[loanTrackerSelectedMonth]} ${mt.year || year}`;
+
+                return (
+                  <div className="space-y-4">
+                    {/* Control & Month Selector Card */}
+                    <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs space-y-3.5">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-neutral-100 dark:border-neutral-800 pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                            <Calendar className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-sm font-extrabold text-neutral-900 dark:text-white">
+                                {mt.year || year} Cooperative Collection & Repayment Analytics
+                              </h3>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                {selectedPeriodLabel}
                               </span>
                             </div>
-                          </td>
-                          <td className="p-2 text-center font-mono text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 group-hover:bg-emerald-100 group-hover:text-emerald-800 dark:group-hover:bg-emerald-950 dark:group-hover:text-emerald-300 transition-colors">
-                              {lp.disbursed_count}
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                              Filter by month or inspect full-year YTD repayments, interest revenue, and cooperative collections. Click any row to expand its 12-month timeline.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Year Navigation & View Switcher */}
+                        <div className="flex items-center gap-2 flex-wrap self-start md:self-auto shrink-0">
+                          {/* Year Selector (Previous Year / Animated Year Dropdown starting 2024+ / Next Year) */}
+                          <div className="flex items-center gap-1 bg-emerald-50/90 dark:bg-emerald-950/60 p-1 rounded-xl border border-emerald-200 dark:border-emerald-800/80">
+                            <button
+                              type="button"
+                              disabled={Number(year) <= 2024}
+                              onClick={() => {
+                                if (Number(year) > 2024) {
+                                  setYear(Number(year) - 1);
+                                  setIsLoanYearDropdownOpen(false);
+                                }
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1 ${
+                                Number(year) <= 2024
+                                  ? 'text-neutral-300 dark:text-neutral-600 cursor-not-allowed'
+                                  : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200/70 dark:hover:bg-emerald-900/70 cursor-pointer active:scale-95'
+                              }`}
+                              title={Number(year) <= 2024 ? 'Starts at Year 2024' : `Switch to Previous Year (${Number(year) - 1})`}
+                            >
+                              <span>‹</span>
+                              <span className="hidden sm:inline">{Math.max(2024, Number(year) - 1)}</span>
+                            </button>
+
+                            <div className="relative" ref={loanYearDropdownRef}>
+                              <button
+                                type="button"
+                                onClick={() => setIsLoanYearDropdownOpen(prev => !prev)}
+                                className="px-3 py-1 rounded-lg text-xs font-extrabold bg-[#064e3b] hover:bg-emerald-800 text-white cursor-pointer shadow-2xs font-mono inline-flex items-center gap-1.5 transition-all duration-200 active:scale-95"
+                              >
+                                <span>Year {Number(mt.year || year)}</span>
+                                <ChevronDown
+                                  className={`w-3.5 h-3.5 text-emerald-300 transition-transform duration-200 ease-out ${
+                                    isLoanYearDropdownOpen ? 'rotate-180' : 'rotate-0'
+                                  }`}
+                                />
+                              </button>
+
+                              {/* Animated Dropdown Menu */}
+                              <div
+                                className={`absolute left-1/2 -translate-x-1/2 mt-2 w-36 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-200 dark:border-emerald-800/80 shadow-xl py-1.5 z-50 origin-top transition-all duration-200 ease-out ${
+                                  isLoanYearDropdownOpen
+                                    ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                                    : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                                }`}
+                              >
+                                <div className="px-3 py-1 text-[9.5px] font-bold uppercase tracking-wider text-neutral-400 border-b border-neutral-100 dark:border-neutral-800 mb-1">
+                                  Select Fiscal Year
+                                </div>
+                                <div className="max-h-56 overflow-y-auto px-1.5 space-y-0.5">
+                                  {(() => {
+                                    const rawYears: number[] =
+                                      Array.isArray(mt.available_years) && mt.available_years.length > 0
+                                        ? mt.available_years
+                                        : [2024, 2025, 2026, 2027, 2028];
+                                    const filteredYears = Array.from(
+                                      new Set([
+                                        ...rawYears.filter((yr: number) => yr >= 2024),
+                                        2024,
+                                        2025,
+                                        2026,
+                                        2027,
+                                        2028,
+                                        Math.max(2024, Number(year)),
+                                        Math.max(2024, Number(year) + 1)
+                                      ])
+                                    ).sort((a, b) => a - b);
+
+                                    return filteredYears.map((yr: number) => {
+                                      const isSelectedYear = Number(mt.year || year) === yr;
+                                      return (
+                                        <button
+                                          key={yr}
+                                          type="button"
+                                          onClick={() => {
+                                            setYear(yr);
+                                            setIsLoanYearDropdownOpen(false);
+                                          }}
+                                          className={`w-full px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center justify-between transition-all duration-150 cursor-pointer ${
+                                            isSelectedYear
+                                              ? 'bg-[#064e3b] text-white shadow-2xs'
+                                              : 'text-neutral-700 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 hover:text-emerald-800 dark:hover:text-emerald-300 hover:translate-x-0.5'
+                                          }`}
+                                        >
+                                          <span>Year {yr}</span>
+                                          {isSelectedYear && <Check className="w-3.5 h-3.5 text-emerald-300" />}
+                                        </button>
+                                      );
+                                    });
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setYear(Number(year) + 1);
+                                setIsLoanYearDropdownOpen(false);
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-xs font-extrabold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200/70 dark:hover:bg-emerald-900/70 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                              title={`Switch to Next Year (${Number(year) + 1})`}
+                            >
+                              <span className="hidden sm:inline">{Number(year) + 1}</span>
+                              <span>›</span>
+                            </button>
+                          </div>
+
+                          {/* View Switcher */}
+                          <div className="flex items-center gap-1.5 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl border border-neutral-200 dark:border-neutral-700">
+                            <button
+                              type="button"
+                              onClick={() => setLoanTrackerViewMode('loans_only')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                loanTrackerViewMode === 'loans_only'
+                                  ? 'bg-[#064e3b] text-white shadow-xs'
+                                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+                              }`}
+                            >
+                              Loan Products Breakdown
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setLoanTrackerViewMode('full_tracker')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                loanTrackerViewMode === 'full_tracker'
+                                  ? 'bg-[#064e3b] text-white shadow-xs'
+                                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+                              }`}
+                            >
+                              Include Share Capital, Sales & Fees
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interactive Month Pills */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setLoanTrackerSelectedMonth('ytd')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            loanTrackerSelectedMonth === 'ytd'
+                              ? 'bg-[#064e3b] text-white shadow-xs'
+                              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                          }`}
+                        >
+                          <span>Full Year (YTD)</span>
+                        </button>
+                        {monthLabels.map((mLbl: string, mIdx: number) => {
+                          const monthActivity =
+                            (mt.grand_totals?.months?.[mIdx] || 0) > 0 ||
+                            (mt.loans_totals?.months?.[mIdx] || 0) > 0;
+                          const isSelected = loanTrackerSelectedMonth === mIdx;
+                          return (
+                            <button
+                              key={mIdx}
+                              type="button"
+                              onClick={() => setLoanTrackerSelectedMonth(mIdx)}
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                isSelected
+                                  ? 'bg-[#064e3b] text-white shadow-xs'
+                                  : monthActivity
+                                  ? 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/70 hover:bg-emerald-100/80'
+                                  : 'bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 dark:text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                              }`}
+                            >
+                              <span>{mLbl}</span>
+                              {monthActivity && (
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    isSelected ? 'bg-emerald-300' : 'bg-emerald-500'
+                                  }`}
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Dynamic Period Summary Mini-Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                        <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-800">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                            Loan Principal Repaid ({selectedPeriodLabel})
+                          </div>
+                          <div className="text-lg font-extrabold text-neutral-900 dark:text-white mt-1 font-mono">
+                            {fmt(totalPrincipalSelected)}
+                          </div>
+                          <div className="text-[10px] text-neutral-400 mt-0.5">
+                            Across {unifiedLoanProducts.filter(p => getValForSelection(p.repayment_ytd, p.repayment_months) > 0).length} active loan products
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                            Loan Interest Earned ({selectedPeriodLabel})
+                          </div>
+                          <div className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400 mt-1 font-mono">
+                            {fmt(totalInterestSelected)}
+                          </div>
+                          <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/70 mt-0.5">
+                            Interest revenue from amortizations
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/25 border border-amber-200/80 dark:border-amber-900/50">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                            {loanTrackerViewMode === 'full_tracker' ? 'Fines, Capital & Store Inflow' : 'Fines & Penalties Collected'}
+                          </div>
+                          <div className="text-lg font-extrabold text-amber-700 dark:text-amber-400 mt-1 font-mono">
+                            {fmt(loanTrackerViewMode === 'full_tracker' ? totalOtherSelected : totalFinesSelected)}
+                          </div>
+                          <div className="text-[10px] text-amber-700/70 dark:text-amber-400/70 mt-0.5">
+                            {loanTrackerViewMode === 'full_tracker' ? 'Penalties, Share Capital, Fees & Sales' : 'Late payment charges & penalties'}
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-2xl bg-[#064e3b] text-white shadow-2xs">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">
+                            Total Combined Inflow ({selectedPeriodLabel})
+                          </div>
+                          <div className="text-lg font-black text-white mt-1 font-mono">
+                            {fmt(loanTrackerViewMode === 'full_tracker' ? grandSelectedTotal : totalLoansAndFinesSelected)}
+                          </div>
+                          <div className="text-[10px] text-emerald-200/80 mt-0.5">
+                            {loanTrackerViewMode === 'full_tracker' ? 'All Loan Products + Cooperative Particulars' : 'Total Principal + Interest + Fines'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 1. Unified Loan Products Repayment & Interest Schedule */}
+                    <div className="border border-emerald-300 dark:border-emerald-800/80 rounded-2xl overflow-hidden shadow-2xs bg-white dark:bg-neutral-900">
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-900/60 flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                          Loan Products Repayment & Interest Summary — {selectedPeriodLabel}
+                        </span>
+                        <span className="text-[11px] text-neutral-500">
+                          Click any loan product to toggle its 12-month breakdown
+                        </span>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider border-b border-emerald-800">
+                            <tr>
+                              <th className="p-2.5 w-10 text-center border-r border-emerald-700/60">#</th>
+                              <th className="p-2.5 min-w-[210px] border-r border-emerald-700/60">Loan Product</th>
+                              <th className="p-2.5 w-36 text-right border-r border-emerald-700/60">Principal Repayment (₱)</th>
+                              <th className="p-2.5 w-36 text-right border-r border-emerald-700/60">Interest Earned (₱)</th>
+                              <th className="p-2.5 w-36 text-right border-r border-emerald-700/60">Total Loan Inflow (₱)</th>
+                              <th className="p-2.5 w-44 border-r border-emerald-700/60">Share of Loan Inflow</th>
+                              <th className="p-2.5 w-28 text-center">Monthly Trend</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                            {unifiedLoanProducts.map((lp, idx) => {
+                              const repVal = getValForSelection(lp.repayment_ytd, lp.repayment_months);
+                              const intVal = getValForSelection(lp.interest_ytd, lp.interest_months);
+                              const totVal = repVal + intVal;
+                              const baseLoanSum = totalPrincipalSelected + totalInterestSelected;
+                              const sharePct = baseLoanSum > 0 ? (totVal / baseLoanSum) * 100 : 0;
+                              const activeMonthsCount = lp.repayment_months.filter((v, i) => v > 0 || (lp.interest_months[i] || 0) > 0).length;
+                              const rowKey = `loan_prod_${lp.product_name}`;
+                              const isExpanded = expandedTrackerRowKey === rowKey;
+
+                              return (
+                                <React.Fragment key={rowKey}>
+                                  <tr
+                                    onClick={() => setExpandedTrackerRowKey(isExpanded ? null : rowKey)}
+                                    className="hover:bg-emerald-50/70 dark:hover:bg-emerald-950/30 transition-colors cursor-pointer group"
+                                  >
+                                    <td className="p-2.5 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
+                                      {idx + 1}
+                                    </td>
+                                    <td className="p-2.5 font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
+                                          {lp.display_name}
+                                        </span>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                          activeMonthsCount > 0
+                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                            : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500'
+                                        }`}>
+                                          {activeMonthsCount} {activeMonthsCount === 1 ? 'mo' : 'mos'} active
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-semibold text-neutral-800 dark:text-neutral-200 border-r border-neutral-200 dark:border-neutral-800">
+                                      {fmt(repVal)}
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 border-r border-neutral-200 dark:border-neutral-800">
+                                      {fmt(intVal)}
+                                    </td>
+                                    <td className="p-2.5 text-right font-mono font-black text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                                      {fmt(totVal)}
+                                    </td>
+                                    <td className="p-2.5 border-r border-neutral-200 dark:border-neutral-800">
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex-1 h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+                                          <div
+                                            className="h-full rounded-full bg-emerald-600 dark:bg-emerald-500 transition-all"
+                                            style={{ width: `${Math.min(100, sharePct)}%` }}
+                                          />
+                                        </div>
+                                        <span className="font-mono text-[11px] font-bold text-neutral-600 dark:text-neutral-300 w-12 text-right">
+                                          {sharePct.toFixed(1)}%
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="p-2.5 text-center">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedTrackerRowKey(isExpanded ? null : rowKey);
+                                        }}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] font-bold bg-neutral-100 hover:bg-emerald-100 dark:bg-neutral-800 dark:hover:bg-emerald-950/70 text-neutral-700 hover:text-emerald-800 dark:text-neutral-300 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+                                      >
+                                        <span>12-Mo</span>
+                                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                      </button>
+                                    </td>
+                                  </tr>
+
+                                  {isExpanded && (
+                                    <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
+                                      <td colSpan={7} className="p-3.5 border-b border-emerald-200/70 dark:border-emerald-900/50">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <span className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
+                                            {lp.display_name} — {mt.year || year} Monthly Repayment & Interest Timeline
+                                          </span>
+                                          <span className="text-[11px] font-mono text-neutral-500">
+                                            Annual YTD: Principal {fmt(lp.repayment_ytd)} • Interest {fmt(lp.interest_ytd)}
+                                          </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                          {monthLabels.map((mLbl: string, mIdx: number) => {
+                                            const mRep = lp.repayment_months[mIdx] || 0;
+                                            const mInt = lp.interest_months[mIdx] || 0;
+                                            const hasVal = mRep > 0 || mInt > 0;
+                                            return (
+                                              <div
+                                                key={mIdx}
+                                                onClick={() => setLoanTrackerSelectedMonth(mIdx)}
+                                                className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                                  loanTrackerSelectedMonth === mIdx
+                                                    ? 'bg-emerald-100/80 dark:bg-emerald-900/50 border-emerald-500'
+                                                    : hasVal
+                                                    ? 'bg-white dark:bg-neutral-900 border-emerald-200 dark:border-emerald-800/80 hover:border-emerald-400'
+                                                    : 'bg-neutral-50/70 dark:bg-neutral-900/40 border-neutral-200/70 dark:border-neutral-800/60 opacity-60'
+                                                }`}
+                                              >
+                                                <div className="flex items-center justify-between">
+                                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                                                    {mLbl}
+                                                  </span>
+                                                  {hasVal && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                                                </div>
+                                                <div className="mt-1 font-mono text-xs font-bold text-neutral-900 dark:text-white">
+                                                  {fmt(mRep)}
+                                                </div>
+                                                <div className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">
+                                                  Int: {fmt(mInt)}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot className="bg-emerald-50/90 dark:bg-emerald-950/60 font-extrabold text-xs border-t-2 border-emerald-600 dark:border-emerald-700">
+                            <tr>
+                              <td colSpan={2} className="p-2.5 text-right uppercase tracking-wider text-emerald-950 dark:text-emerald-200 border-r border-emerald-200 dark:border-emerald-800">
+                                Total Loan Repayments & Interest ({selectedPeriodLabel})
+                              </td>
+                              <td className="p-2.5 text-right font-mono text-emerald-950 dark:text-white border-r border-emerald-200 dark:border-emerald-800">
+                                {fmt(totalPrincipalSelected)}
+                              </td>
+                              <td className="p-2.5 text-right font-mono text-emerald-700 dark:text-emerald-300 border-r border-emerald-200 dark:border-emerald-800">
+                                {fmt(totalInterestSelected)}
+                              </td>
+                              <td className="p-2.5 text-right font-mono text-emerald-950 dark:text-white border-r border-emerald-200 dark:border-emerald-800">
+                                {fmt(totalPrincipalSelected + totalInterestSelected)}
+                              </td>
+                              <td colSpan={2} className="p-2.5 text-center font-mono text-[11px] text-emerald-800 dark:text-emerald-300">
+                                100.0% of Loan Inflows
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* 2. Fines, Share Capital, Store Sales & Cooperative Collection Particulars Card */}
+                    {loanTrackerViewMode === 'full_tracker' && (
+                      <div className="border border-emerald-300 dark:border-emerald-800/80 rounded-2xl overflow-hidden shadow-2xs bg-white dark:bg-neutral-900">
+                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-900/60 flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-200 flex items-center gap-2">
+                            <Layers className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                            Penalties, Share Capital & Cooperative Particulars — {selectedPeriodLabel}
+                          </span>
+                          <span className="text-[11px] text-neutral-500">
+                            Click any row to view its 12-month collection timeline
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider border-b border-emerald-800">
+                              <tr>
+                                <th className="p-2.5 w-10 text-center border-r border-emerald-700/60">#</th>
+                                <th className="p-2.5 min-w-[220px] border-r border-emerald-700/60">Collection Particular</th>
+                                <th className="p-2.5 w-40 text-center border-r border-emerald-700/60">Category</th>
+                                <th className="p-2.5 w-36 text-right border-r border-emerald-700/60">Selected Period (₱)</th>
+                                <th className="p-2.5 w-36 text-right border-r border-emerald-700/60">Annual YTD Total (₱)</th>
+                                <th className="p-2.5 w-44 border-r border-emerald-700/60">Share of Grand Inflow</th>
+                                <th className="p-2.5 w-28 text-center">Monthly Trend</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                              {otherParticularsWithFines.map((item, idx) => {
+                                const periodVal = getValForSelection(item.ytd_sum, item.months);
+                                const sharePct = grandSelectedTotal > 0 ? (periodVal / grandSelectedTotal) * 100 : 0;
+                                const rowKey = `part_${item.key}`;
+                                const isExpanded = expandedTrackerRowKey === rowKey;
+
+                                return (
+                                  <React.Fragment key={rowKey}>
+                                    <tr
+                                      onClick={() => setExpandedTrackerRowKey(isExpanded ? null : rowKey)}
+                                      className="hover:bg-emerald-50/70 dark:hover:bg-emerald-950/30 transition-colors cursor-pointer group"
+                                    >
+                                      <td className="p-2.5 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
+                                        {idx + 1}
+                                      </td>
+                                      <td className="p-2.5 font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                                        <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
+                                          {item.particulars}
+                                        </span>
+                                      </td>
+                                      <td className="p-2.5 text-center border-r border-neutral-200 dark:border-neutral-800">
+                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${item.badgeClass}`}>
+                                          {item.category}
+                                        </span>
+                                      </td>
+                                      <td className="p-2.5 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                                        {fmt(periodVal)}
+                                      </td>
+                                      <td className="p-2.5 text-right font-mono text-neutral-600 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
+                                        {fmt(item.ytd_sum)}
+                                      </td>
+                                      <td className="p-2.5 border-r border-neutral-200 dark:border-neutral-800">
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex-1 h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+                                            <div
+                                              className="h-full rounded-full bg-emerald-600 dark:bg-emerald-500 transition-all"
+                                              style={{ width: `${Math.min(100, sharePct)}%` }}
+                                            />
+                                          </div>
+                                          <span className="font-mono text-[11px] font-bold text-neutral-600 dark:text-neutral-300 w-12 text-right">
+                                            {sharePct.toFixed(1)}%
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className="p-2.5 text-center">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedTrackerRowKey(isExpanded ? null : rowKey);
+                                          }}
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] font-bold bg-neutral-100 hover:bg-emerald-100 dark:bg-neutral-800 dark:hover:bg-emerald-950/70 text-neutral-700 hover:text-emerald-800 dark:text-neutral-300 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+                                        >
+                                          <span>12-Mo</span>
+                                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+                                      </td>
+                                    </tr>
+
+                                    {isExpanded && (
+                                      <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
+                                        <td colSpan={7} className="p-3.5 border-b border-emerald-200/70 dark:border-emerald-900/50">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
+                                              {item.particulars} — {mt.year || year} Monthly Breakdown
+                                            </span>
+                                            <span className="text-[11px] font-mono text-neutral-500">
+                                              Annual YTD: {fmt(item.ytd_sum)}
+                                            </span>
+                                          </div>
+                                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                            {monthLabels.map((mLbl: string, mIdx: number) => {
+                                              const mVal = item.months[mIdx] || 0;
+                                              return (
+                                                <div
+                                                  key={mIdx}
+                                                  onClick={() => setLoanTrackerSelectedMonth(mIdx)}
+                                                  className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                                    loanTrackerSelectedMonth === mIdx
+                                                      ? 'bg-emerald-100/80 dark:bg-emerald-900/50 border-emerald-500'
+                                                      : mVal > 0
+                                                      ? 'bg-white dark:bg-neutral-900 border-emerald-200 dark:border-emerald-800/80 hover:border-emerald-400'
+                                                      : 'bg-neutral-50/70 dark:bg-neutral-900/40 border-neutral-200/70 dark:border-neutral-800/60 opacity-60'
+                                                  }`}
+                                                >
+                                                  <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                                                      {mLbl}
+                                                    </span>
+                                                    {mVal > 0 && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                                                  </div>
+                                                  <div className="mt-1 font-mono text-xs font-bold text-neutral-900 dark:text-white">
+                                                    {fmt(mVal)}
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot className="bg-emerald-50/90 dark:bg-emerald-950/60 font-extrabold text-xs border-t-2 border-emerald-600 dark:border-emerald-700">
+                              <tr>
+                                <td colSpan={3} className="p-2.5 text-right uppercase tracking-wider text-emerald-950 dark:text-emerald-200 border-r border-emerald-200 dark:border-emerald-800">
+                                  Grand Total Cooperative Inflow (Loans + Particulars)
+                                </td>
+                                <td className="p-2.5 text-right font-mono text-emerald-950 dark:text-white border-r border-emerald-200 dark:border-emerald-800">
+                                  {fmt(grandSelectedTotal)}
+                                </td>
+                                <td className="p-2.5 text-right font-mono text-emerald-700 dark:text-emerald-300 border-r border-emerald-200 dark:border-emerald-800">
+                                  {fmt(mt.grand_totals?.ytd_sum || 0)}
+                                </td>
+                                <td colSpan={2} className="p-2.5 text-center font-mono text-[11px] text-emerald-800 dark:text-emerald-300">
+                                  100.0% Total Combined Volume
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Interactive Loan Product Boxes (Bottom Section — Click to View Borrowers Who Availed) */}
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#064e3b] text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-emerald-950 dark:text-emerald-200">
+                        Portfolio Schedule Across {(reportData.products || []).length} Cooperative Loan Products
+                      </h3>
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                        Click any loan product box below to view the members who availed the loan and their repayment ledger
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-white dark:bg-neutral-900 text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-mono">
+                      {reportData.summary?.total_disbursed_count || 0} Total Loans Availed
+                    </span>
+                  </div>
+                </div>
+
+                {/* Responsive Grid of Clickable Loan Product Boxes */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(reportData.products || []).map((lp: any, idx: number) => {
+                    const hasDisbursed = (lp.disbursed_count || 0) > 0;
+                    const hasInflow = (lp.total_collected || 0) > 0;
+                    const totalDisbursedAll = reportData.summary?.total_disbursed_amount || 0;
+                    const disbursedSharePct = totalDisbursedAll > 0 ? ((lp.total_disbursed || 0) / totalDisbursedAll) * 100 : 0;
+                    const sampleBorrowers = (lp.borrowers || []).slice(0, 2);
+
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          setSelectedLoanProductModal(lp);
+                          setLoanProductModalSearch('');
+                          setLoanProductModalTab(hasDisbursed ? 'borrowers' : 'repayments');
+                        }}
+                        className="group relative rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300/90 dark:border-emerald-800/80 hover:border-emerald-500 dark:hover:border-emerald-500 p-4 shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between space-y-3.5"
+                      >
+                        {/* Top Header: Product Name & Borrowers Count Badge */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-900 dark:text-emerald-300 font-mono font-extrabold text-xs flex items-center justify-center shrink-0 group-hover:bg-[#064e3b] group-hover:text-white transition-colors">
+                              #{idx + 1}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-extrabold text-neutral-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors truncate">
+                                {lp.product_name}
+                              </h4>
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  hasDisbursed
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'
+                                }`}>
+                                  {lp.disbursed_count} {lp.disbursed_count === 1 ? 'borrower availed' : 'borrowers availed'}
+                                </span>
+                                {lp.amortizations_count > 0 && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300">
+                                    {lp.amortizations_count} amort.
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="px-2.5 py-1 rounded-xl text-[10.5px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 group-hover:bg-[#064e3b] group-hover:text-white transition-colors flex items-center gap-1 shrink-0">
+                            <span>View Borrowers</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </div>
+                        </div>
+
+                        {/* Primary Amounts Grid: Disbursed vs Total Inflow */}
+                        <div className="grid grid-cols-2 gap-2.5 pt-1">
+                          <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200/80 dark:border-neutral-800">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                              Principal Disbursed
+                            </div>
+                            <div className="text-base font-black text-neutral-900 dark:text-white mt-0.5 font-mono truncate">
+                              {fmt(lp.total_disbursed)}
+                            </div>
+                            <div className="text-[10px] text-neutral-400 mt-0.5 font-mono">
+                              {disbursedSharePct.toFixed(1)}% of portfolio
+                            </div>
+                          </div>
+
+                          <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/60">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                              Total Inflow (₱)
+                            </div>
+                            <div className="text-base font-black text-emerald-800 dark:text-emerald-300 mt-0.5 font-mono truncate">
+                              {fmt(lp.total_collected)}
+                            </div>
+                            <div className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5 font-mono">
+                              {lp.amortizations_count} repayments
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 3-Column Sub-Breakdown: Principal Paid | Interest | Fines */}
+                        <div className="grid grid-cols-3 gap-2 pt-0.5 text-center">
+                          <div className="p-2 rounded-xl bg-neutral-50/80 dark:bg-neutral-800/40 border border-neutral-200/60 dark:border-neutral-800">
+                            <div className="text-[9.5px] font-bold uppercase text-neutral-400">Principal Paid</div>
+                            <div className="text-xs font-bold font-mono text-neutral-800 dark:text-neutral-200 mt-0.5 truncate">
+                              {fmt(lp.principal_collected)}
+                            </div>
+                          </div>
+                          <div className="p-2 rounded-xl bg-neutral-50/80 dark:bg-neutral-800/40 border border-neutral-200/60 dark:border-neutral-800">
+                            <div className="text-[9.5px] font-bold uppercase text-neutral-400">Interest (₱)</div>
+                            <div className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
+                              {fmt(lp.interest_collected)}
+                            </div>
+                          </div>
+                          <div className="p-2 rounded-xl bg-neutral-50/80 dark:bg-neutral-800/40 border border-neutral-200/60 dark:border-neutral-800">
+                            <div className="text-[9.5px] font-bold uppercase text-neutral-400">Fines (₱)</div>
+                            <div className="text-xs font-bold font-mono text-amber-600 dark:text-amber-400 mt-0.5 truncate">
+                              {fmt(lp.fines_collected)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bottom Borrower Preview Strip */}
+                        <div className="pt-2 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-2 text-[11px]">
+                          {sampleBorrowers.length > 0 ? (
+                            <div className="text-neutral-500 dark:text-neutral-400 truncate">
+                              <span className="font-semibold text-neutral-700 dark:text-neutral-300">Recent: </span>
+                              {sampleBorrowers.map((b: any) => b.member_name).join(', ')}
+                              {(lp.borrowers?.length || 0) > 2 ? ` +${lp.borrowers.length - 2} more` : ''}
+                            </div>
+                          ) : hasInflow ? (
+                            <span className="text-neutral-500 dark:text-neutral-400">
+                              Click to view {lp.amortizations_count} repayment records
                             </span>
-                          </td>
-                          <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
-                            {fmt(lp.total_disbursed)}
-                          </td>
-                          <td className="p-2 text-center font-mono text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
-                            {lp.amortizations_count}
-                          </td>
-                          <td className="p-2 text-right font-mono text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
-                            {fmt(lp.principal_collected)}
-                          </td>
-                          <td className="p-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 border-r border-neutral-200 dark:border-neutral-800">
-                            {fmt(lp.interest_collected)}
-                          </td>
-                          <td className="p-2 text-right font-mono text-amber-600 dark:text-amber-400 border-r border-neutral-200 dark:border-neutral-800">
-                            {fmt(lp.fines_collected)}
-                          </td>
-                          <td className="p-2 text-right font-mono font-black text-neutral-900 dark:text-white">
-                            {fmt(lp.total_collected)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          ) : (
+                            <span className="text-neutral-400 dark:text-neutral-500 italic">
+                              No borrowers recorded in this period
+                            </span>
+                          )}
+                          <span className="text-[10.5px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0 group-hover:underline">
+                            Open list →
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -3448,7 +4249,8 @@ function ReportsPageContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      const tab = selectedFsAccountModal.link_tab;
+                      const rawTab = selectedFsAccountModal.link_tab;
+                      const tab = rawTab === 'books' ? 'categories' : rawTab;
                       setSelectedFsAccountModal(null);
                       setActiveTab(tab);
                     }}
@@ -3586,134 +4388,270 @@ function ReportsPageContent() {
               </div>
             </div>
 
-            {/* Filter Search inside Modal */}
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-neutral-400" />
-              <input
-                type="text"
-                placeholder="Search borrowers by member name, LAF #, or date..."
-                value={loanProductModalSearch}
-                onChange={(e) => setLoanProductModalSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
-              />
+            {/* Sub-tab Toggle + Filter Search inside Modal */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-xl border border-neutral-200 dark:border-neutral-700 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setLoanProductModalTab('borrowers')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    loanProductModalTab === 'borrowers'
+                      ? 'bg-[#064e3b] text-white shadow-xs'
+                      : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/60'
+                  }`}
+                >
+                  Disbursed Contracts ({selectedLoanProductModal.borrowers?.length || 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLoanProductModalTab('repayments')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    loanProductModalTab === 'repayments'
+                      ? 'bg-[#064e3b] text-white shadow-xs'
+                      : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/60'
+                  }`}
+                >
+                  Repayment & Interest Ledger ({selectedLoanProductModal.repayments?.length || 0})
+                </button>
+              </div>
+
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-neutral-400" />
+                <input
+                  type="text"
+                  placeholder={
+                    loanProductModalTab === 'borrowers'
+                      ? 'Search borrowers by member name, LAF #, or date...'
+                      : 'Search repayments by member name, Invoice/OR #, or date...'
+                  }
+                  value={loanProductModalSearch}
+                  onChange={(e) => setLoanProductModalSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
             </div>
 
-            {/* Itemized Borrowers Table */}
-            <div className="flex-1 flex flex-col border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden min-h-[180px] max-h-[380px]">
-              <div className="px-3 py-2 bg-emerald-50/70 dark:bg-emerald-950/40 border-b border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-between text-[11px] text-neutral-500 shrink-0">
-                <span className="font-bold text-emerald-900 dark:text-emerald-300">
-                  Borrowers & Loan Accounts ({loanProductModalBorrowers.length})
-                </span>
-                <span className="text-[10px] text-neutral-400">
-                  Click any borrower row to open in Loan Tracker
-                </span>
-              </div>
-              <div className="flex-1 overflow-y-auto overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] sticky top-0 z-10 shadow-xs">
-                    <tr>
-                      <th className="p-2.5 w-10 text-center border-r border-emerald-700/60">#</th>
-                      <th className="p-2.5 w-24 border-r border-emerald-700/60">Date</th>
-                      <th className="p-2.5 min-w-[180px] border-r border-emerald-700/60">Borrower / Member</th>
-                      <th className="p-2.5 w-28 border-r border-emerald-700/60">LAF / Ref #</th>
-                      <th className="p-2.5 w-28 text-right border-r border-emerald-700/60">Principal (₱)</th>
-                      <th className="p-2.5 w-24 text-center border-r border-emerald-700/60">Status</th>
-                      <th className="p-2.5 w-32 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                    {loanProductModalBorrowers.length === 0 ? (
+            {loanProductModalTab === 'borrowers' ? (
+              /* Itemized Borrowers Table */
+              <div className="flex-1 flex flex-col border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden min-h-[180px] max-h-[380px]">
+                <div className="px-3 py-2 bg-emerald-50/70 dark:bg-emerald-950/40 border-b border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-between text-[11px] text-neutral-500 shrink-0">
+                  <span className="font-bold text-emerald-900 dark:text-emerald-300">
+                    Borrowers & Loan Accounts ({loanProductModalBorrowers.length})
+                  </span>
+                  <span className="text-[10px] text-neutral-400">
+                    Click any borrower row to open in Loan Tracker
+                  </span>
+                </div>
+                <div className="flex-1 overflow-y-auto overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] sticky top-0 z-10 shadow-xs">
                       <tr>
-                        <td colSpan={7} className="py-8 text-center text-neutral-400 italic">
-                          No borrowers found matching your search.
-                        </td>
+                        <th className="p-2.5 w-10 text-center border-r border-emerald-700/60">#</th>
+                        <th className="p-2.5 w-24 border-r border-emerald-700/60">Date</th>
+                        <th className="p-2.5 min-w-[180px] border-r border-emerald-700/60">Borrower / Member</th>
+                        <th className="p-2.5 w-28 border-r border-emerald-700/60">LAF / Ref #</th>
+                        <th className="p-2.5 w-28 text-right border-r border-emerald-700/60">Principal (₱)</th>
+                        <th className="p-2.5 w-28 text-right border-r border-emerald-700/60">Principal Paid (₱)</th>
+                        <th className="p-2.5 w-24 text-right border-r border-emerald-700/60">Interest Paid (₱)</th>
+                        <th className="p-2.5 w-24 text-center border-r border-emerald-700/60">Status</th>
+                        <th className="p-2.5 w-32 text-center">Action</th>
                       </tr>
-                    ) : (
-                      loanProductModalBorrowers.map((b: any, idx: number) => (
-                        <tr
-                          key={idx}
-                          onClick={() => {
-                            const isVoucher = b.source === 'Check Voucher' || Boolean(b.voucher_no);
-                            const searchVal = isVoucher
-                              ? (b.voucher_no || String(b.laf_no || '').replace(/^CV\s*#?\s*/i, ''))
-                              : (b.laf_no || b.loan_id || b.member_name);
-                            const targetTab = isVoucher ? 'vouchers' : 'loans';
-                            router.push(`/dashboard/loans?tab=${targetTab}&search=${encodeURIComponent(searchVal)}`);
-                          }}
-                          className="hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer group"
-                          title={b.source === 'Check Voucher' || b.voucher_no ? `Click to open Voucher #${b.voucher_no || b.laf_no} in Loan Vouchers` : `Click to open Contract #${b.laf_no || b.member_name} in Loan Tracker`}
-                        >
-                          <td className="p-2 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
-                            {idx + 1}
-                          </td>
-                          <td className="p-2 font-mono text-[11px] text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
-                            {b.date}
-                          </td>
-                          <td className="p-2 font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
-                            <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
-                              {b.member_name}
-                            </span>
-                          </td>
-                          <td className="p-2 font-mono font-bold text-neutral-800 dark:text-neutral-200 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
-                            {b.laf_no}
-                          </td>
-                          <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
-                            {fmt(b.principal)}
-                          </td>
-                          <td className="p-2 text-center border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              b.status === 'fully_paid'
-                                ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
-                                : b.status === 'active' || b.status === 'disbursed'
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
-                            }`}>
-                              {b.status}
-                            </span>
-                          </td>
-                          <td className="p-2 text-center whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const isVoucher = b.source === 'Check Voucher' || Boolean(b.voucher_no);
-                                const searchVal = isVoucher
-                                  ? (b.voucher_no || String(b.laf_no || '').replace(/^CV\s*#?\s*/i, ''))
-                                  : (b.laf_no || b.loan_id || b.member_name);
-                                const targetTab = isVoucher ? 'vouchers' : 'loans';
-                                router.push(`/dashboard/loans?tab=${targetTab}&search=${encodeURIComponent(searchVal)}`);
-                              }}
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:text-emerald-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
-                            >
-                              <span>View in Loans</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </button>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                      {loanProductModalBorrowers.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="py-8 text-center text-neutral-400 italic">
+                            No borrowers found matching your search.
                           </td>
                         </tr>
-                      ))
+                      ) : (
+                        loanProductModalBorrowers.map((b: any, idx: number) => (
+                          <tr
+                            key={idx}
+                            onClick={() => {
+                              const isVoucher = b.source === 'Check Voucher' || Boolean(b.voucher_no);
+                              const searchVal = isVoucher
+                                ? (b.voucher_no || String(b.laf_no || '').replace(/^CV\s*#?\s*/i, ''))
+                                : (b.laf_no || b.loan_id || b.member_name);
+                              const targetTab = isVoucher ? 'vouchers' : 'loans';
+                              router.push(`/dashboard/loans?tab=${targetTab}&search=${encodeURIComponent(searchVal)}`);
+                            }}
+                            className="hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer group"
+                            title={b.source === 'Check Voucher' || b.voucher_no ? `Click to open Voucher #${b.voucher_no || b.laf_no} in Loan Vouchers` : `Click to open Contract #${b.laf_no || b.member_name} in Loan Tracker`}
+                          >
+                            <td className="p-2 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
+                              {idx + 1}
+                            </td>
+                            <td className="p-2 font-mono text-[11px] text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {b.date}
+                            </td>
+                            <td className="p-2 font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                              <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
+                                {b.member_name}
+                              </span>
+                            </td>
+                            <td className="p-2 font-mono font-bold text-neutral-800 dark:text-neutral-200 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {b.laf_no}
+                            </td>
+                            <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {fmt(b.principal)}
+                            </td>
+                            <td className="p-2 text-right font-mono font-bold text-emerald-700 dark:text-emerald-300 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {fmt(b.principal_paid || 0)}
+                            </td>
+                            <td className="p-2 text-right font-mono font-bold text-teal-600 dark:text-teal-400 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {fmt(b.interest_paid || 0)}
+                            </td>
+                            <td className="p-2 text-center border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                b.status === 'fully_paid'
+                                  ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
+                                  : b.status === 'active' || b.status === 'disbursed'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
+                              }`}>
+                                {b.status}
+                              </span>
+                            </td>
+                            <td className="p-2 text-center whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const isVoucher = b.source === 'Check Voucher' || Boolean(b.voucher_no);
+                                  const searchVal = isVoucher
+                                    ? (b.voucher_no || String(b.laf_no || '').replace(/^CV\s*#?\s*/i, ''))
+                                    : (b.laf_no || b.loan_id || b.member_name);
+                                  const targetTab = isVoucher ? 'vouchers' : 'loans';
+                                  router.push(`/dashboard/loans?tab=${targetTab}&search=${encodeURIComponent(searchVal)}`);
+                                }}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:text-emerald-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <span>View in Loans</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    {loanProductModalBorrowers.length > 0 && (
+                      <tfoot className="bg-neutral-100 dark:bg-neutral-800 font-bold border-t border-neutral-300 dark:border-neutral-700 sticky bottom-0 z-10 shadow-xs">
+                        <tr>
+                          <td colSpan={4} className="p-2 text-right uppercase text-[10px] text-neutral-600 dark:text-neutral-400">
+                            Totals:
+                          </td>
+                          <td className="p-2 text-right font-mono text-neutral-900 dark:text-white font-black">
+                            {fmt(loanProductModalBorrowers.reduce((acc: number, b: any) => acc + (parseFloat(b.principal) || 0), 0))}
+                          </td>
+                          <td className="p-2 text-right font-mono text-emerald-700 dark:text-emerald-300 font-black">
+                            {fmt(loanProductModalBorrowers.reduce((acc: number, b: any) => acc + (parseFloat(b.principal_paid) || 0), 0))}
+                          </td>
+                          <td className="p-2 text-right font-mono text-teal-600 dark:text-teal-400 font-black">
+                            {fmt(loanProductModalBorrowers.reduce((acc: number, b: any) => acc + (parseFloat(b.interest_paid) || 0), 0))}
+                          </td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
                     )}
-                  </tbody>
-                  {loanProductModalBorrowers.length > 0 && (
-                    <tfoot className="bg-neutral-100 dark:bg-neutral-800 font-bold border-t border-neutral-300 dark:border-neutral-700 sticky bottom-0 z-10 shadow-xs">
-                      <tr>
-                        <td colSpan={4} className="p-2 text-right uppercase text-[10px] text-neutral-600 dark:text-neutral-400">
-                          Total Principal:
-                        </td>
-                        <td className="p-2 text-right font-mono text-neutral-900 dark:text-white font-black">
-                          {fmt(loanProductModalBorrowers.reduce((acc: number, b: any) => acc + (parseFloat(b.principal) || 0), 0))}
-                        </td>
-                        <td colSpan={2}></td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
+                  </table>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* Itemized Repayments & Interest Ledger Table */
+              <div className="flex-1 flex flex-col border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden min-h-[180px] max-h-[380px]">
+                <div className="px-3 py-2 bg-emerald-50/70 dark:bg-emerald-950/40 border-b border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-between text-[11px] text-neutral-500 shrink-0">
+                  <span className="font-bold text-emerald-900 dark:text-emerald-300">
+                    Repayment & Interest Ledger ({loanProductModalRepayments.length})
+                  </span>
+                  <span className="text-[10px] text-neutral-400">
+                    Summarized from Member Ledgers & Collection Receipts
+                  </span>
+                </div>
+                <div className="flex-1 overflow-y-auto overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] sticky top-0 z-10 shadow-xs">
+                      <tr>
+                        <th className="p-2.5 w-10 text-center border-r border-emerald-700/60">#</th>
+                        <th className="p-2.5 w-24 border-r border-emerald-700/60">Date</th>
+                        <th className="p-2.5 min-w-[170px] border-r border-emerald-700/60">Payor / Member</th>
+                        <th className="p-2.5 w-28 border-r border-emerald-700/60">Invoice / Ref #</th>
+                        <th className="p-2.5 w-28 text-right border-r border-emerald-700/60">Repayment (₱)</th>
+                        <th className="p-2.5 w-24 text-right border-r border-emerald-700/60">Interest (₱)</th>
+                        <th className="p-2.5 w-24 text-right border-r border-emerald-700/60">Fines (₱)</th>
+                        <th className="p-2.5 w-28 text-right">Total (₱)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                      {loanProductModalRepayments.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="py-8 text-center text-neutral-400 italic">
+                            No repayment records found matching your search.
+                          </td>
+                        </tr>
+                      ) : (
+                        loanProductModalRepayments.map((r: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-colors">
+                            <td className="p-2 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
+                              {idx + 1}
+                            </td>
+                            <td className="p-2 font-mono text-[11px] text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {r.date}
+                            </td>
+                            <td className="p-2 font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                              {r.member_name}
+                            </td>
+                            <td className="p-2 font-mono text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {r.or_no}
+                            </td>
+                            <td className="p-2 text-right font-mono font-semibold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {fmt(r.principal)}
+                            </td>
+                            <td className="p-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {fmt(r.interest)}
+                            </td>
+                            <td className="p-2 text-right font-mono text-amber-600 dark:text-amber-400 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                              {fmt(r.fines)}
+                            </td>
+                            <td className="p-2 text-right font-mono font-black text-neutral-900 dark:text-white whitespace-nowrap">
+                              {fmt(r.total)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    {loanProductModalRepayments.length > 0 && (
+                      <tfoot className="bg-neutral-100 dark:bg-neutral-800 font-bold border-t border-neutral-300 dark:border-neutral-700 sticky bottom-0 z-10 shadow-xs">
+                        <tr>
+                          <td colSpan={4} className="p-2 text-right uppercase text-[10px] text-neutral-600 dark:text-neutral-400">
+                            Total Summary:
+                          </td>
+                          <td className="p-2 text-right font-mono text-neutral-900 dark:text-white font-black">
+                            {fmt(loanProductModalRepayments.reduce((acc: number, r: any) => acc + (parseFloat(r.principal) || 0), 0))}
+                          </td>
+                          <td className="p-2 text-right font-mono text-emerald-700 dark:text-emerald-400 font-black">
+                            {fmt(loanProductModalRepayments.reduce((acc: number, r: any) => acc + (parseFloat(r.interest) || 0), 0))}
+                          </td>
+                          <td className="p-2 text-right font-mono text-amber-600 dark:text-amber-400 font-black">
+                            {fmt(loanProductModalRepayments.reduce((acc: number, r: any) => acc + (parseFloat(r.fines) || 0), 0))}
+                          </td>
+                          <td className="p-2 text-right font-mono text-neutral-900 dark:text-white font-black">
+                            {fmt(loanProductModalRepayments.reduce((acc: number, r: any) => acc + (parseFloat(r.total) || 0), 0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Modal Bottom Close */}
             <div className="flex items-center justify-between pt-2">
               <span className="text-[11px] text-neutral-400">
-                Showing {loanProductModalBorrowers.length} of {selectedLoanProductModal.borrowers?.length || 0} borrower records
+                {loanProductModalTab === 'borrowers'
+                  ? `Showing ${loanProductModalBorrowers.length} of ${selectedLoanProductModal.borrowers?.length || 0} borrower records`
+                  : `Showing ${loanProductModalRepayments.length} of ${selectedLoanProductModal.repayments?.length || 0} repayment entries`}
               </span>
               <button
                 type="button"

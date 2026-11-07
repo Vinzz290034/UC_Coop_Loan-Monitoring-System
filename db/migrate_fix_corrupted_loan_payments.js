@@ -53,6 +53,22 @@ export async function migrateFixCorruptedLoanPayments() {
         WHERE EXTRACT(YEAR FROM lp_inner.payment_date) < 2020 OR EXTRACT(YEAR FROM lp_inner.payment_date) > 2028
       ) sub
       WHERE lp.id = sub.id;
+
+      -- Clean up synthetic PAID-* / HISTORICAL_SETTLEMENT rows or balance-column misparses (decimal reference_no)
+      DELETE FROM loan_payment_allocations
+      WHERE loan_payment_id IN (
+        SELECT id FROM loan_payments
+        WHERE reference_no LIKE 'PAID-%'
+           OR reference_no = 'PAID'
+           OR reference_no = 'HISTORICAL_SETTLEMENT'
+           OR reference_no ~ '^[0-9]+\\.[0-9]+$'
+      );
+
+      DELETE FROM loan_payments
+      WHERE reference_no LIKE 'PAID-%'
+         OR reference_no = 'PAID'
+         OR reference_no = 'HISTORICAL_SETTLEMENT'
+         OR reference_no ~ '^[0-9]+\\.[0-9]+$';
     `);
 
     await client.query('COMMIT');

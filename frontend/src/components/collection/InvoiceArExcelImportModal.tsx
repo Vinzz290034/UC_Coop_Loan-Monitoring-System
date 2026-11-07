@@ -48,7 +48,7 @@ const ALL_JAN_TO_AUG = '__ALL_JAN_TO_AUG__';
 const ALL_MONTHS = '__ALL_MONTHS__';
 const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 const JAN_TO_AUG_MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug'];
-const isSummarySheet = (name: string) => /sum\b|summary\b|totals?\b|ar\b|template/i.test(name.trim());
+const isSummarySheet = (name: string) => /\bsum\b|\bsummary\b|\btotals?\b|\bar\b|\btemplate\b|\btracker\b/i.test(name.trim());
 
 export default function InvoiceArExcelImportModal({
   isOpen,
@@ -86,61 +86,107 @@ export default function InvoiceArExcelImportModal({
     };
   }, [isSheetDropdownOpen]);
 
-  // Robust date parser for Excel (prevents UTC/local timezone day-shift)
-  const parseExcelDate = (val: any): string => {
-    if (!val) return new Date().toISOString().split('T')[0];
+  // Detect target 1-based month number (1-12) from a sheet name (e.g. "JAN" -> 1, "FEB" -> 2, "SEPT" -> 9)
+  const getSheetMonthNumber = (sheetName?: string): number | null => {
+    if (!sheetName) return null;
+    const lower = sheetName.toLowerCase();
+    for (let i = 0; i < MONTH_NAMES.length; i++) {
+      if (lower.includes(MONTH_NAMES[i])) return i + 1;
+    }
+    return null;
+  };
 
-    // 1. Direct formatted string (e.g., "9/1/2026", "09/01/2026", "2026-09-01")
+  // Robust date parser for Excel (prevents UTC/local timezone day-shift & DD/MM vs MM/DD swap on monthly sheets)
+  const parseExcelDate = (val: any, sheetMonthNum?: number | null, fallbackDate?: string): string => {
+    const defaultDate =
+      fallbackDate ||
+      (sheetMonthNum ? `2026-${String(sheetMonthNum).padStart(2, '0')}-01` : new Date().toISOString().split('T')[0]);
+
+    if (val === null || val === undefined || String(val).trim() === '') {
+      return defaultDate;
+    }
+
+    // 1. Numeric Excel serial date (e.g. 46031 for 2026-01-09) — most authoritative when cellObj.v is numeric
+    if (typeof val === 'number' && val > 20000) {
+      const utcMs = Math.round((val - 25569) * 86400 * 1000);
+      const date = new Date(utcMs);
+      if (!isNaN(date.getTime())) {
+        const y = date.getUTCFullYear();
+        let mNum = date.getUTCMonth() + 1;
+        let dNum = date.getUTCDate();
+        // If Excel parsed a DD/MM string into MM/DD on a known monthly sheet (e.g., 9/1/2026 on JAN sheet -> Sept 1 instead of Jan 9)
+        if (sheetMonthNum && mNum !== sheetMonthNum && dNum === sheetMonthNum && mNum <= 31) {
+          const swappedDay = mNum;
+          mNum = sheetMonthNum;
+          dNum = swappedDay;
+        }
+        return `${y}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+      }
+    }
+
+    // 2. Direct formatted string (e.g., "9/1/2026", "09/01/2026", "2026-09-01")
     if (typeof val === 'string') {
       const trimmed = val.trim();
       const parts = trimmed.split(/[/.-]/);
       if (parts.length === 3) {
-        if (parts[2].length === 4) {
-          // Month/Day/Year (e.g. 9/1/2026 -> 2026-09-01)
-          const m = parts[0].padStart(2, '0');
-          const d = parts[1].padStart(2, '0');
-          const y = parts[2];
-          return `${y}-${m}-${d}`;
+        if (parts[2].length === 4 || parts[2].length === 2) {
+          const y = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+          const p0 = parseInt(parts[0], 10);
+          const p1 = parseInt(parts[1], 10);
+          if (!isNaN(p0) && !isNaN(p1)) {
+            let mNum = p0;
+            let dNum = p1;
+            if (p0 > 12 && p1 <= 12) {
+              // Definitely DD/MM/YYYY
+              dNum = p0;
+              mNum = p1;
+            } else if (sheetMonthNum && p0 !== sheetMonthNum && p1 === sheetMonthNum) {
+              // Sheet is e.g. JAN (1) and date string is "9/1/2026" -> Day 9, Month 1
+              dNum = p0;
+              mNum = p1;
+            }
+            return `${y}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+          }
         } else if (parts[0].length === 4) {
-          // Year-Month-Day (e.g. 2026-09-01)
+          // Year-Month-Day (e.g. 2026-01-09)
           const y = parts[0];
-          const m = parts[1].padStart(2, '0');
-          const d = parts[2].padStart(2, '0');
-          return `${y}-${m}-${d}`;
+          let mNum = parseInt(parts[1], 10);
+          let dNum = parseInt(parts[2], 10);
+          if (sheetMonthNum && mNum !== sheetMonthNum && dNum === sheetMonthNum) {
+            dNum = mNum;
+            mNum = sheetMonthNum;
+          }
+          return `${y}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
         }
       }
       const directDate = new Date(trimmed);
       if (!isNaN(directDate.getTime())) {
         const adjusted = new Date(directDate.getTime() + 12 * 60 * 60 * 1000);
         const y = adjusted.getUTCFullYear();
-        const m = String(adjusted.getUTCMonth() + 1).padStart(2, '0');
-        const d = String(adjusted.getUTCDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
+        let mNum = adjusted.getUTCMonth() + 1;
+        let dNum = adjusted.getUTCDate();
+        if (sheetMonthNum && mNum !== sheetMonthNum && dNum === sheetMonthNum) {
+          dNum = mNum;
+          mNum = sheetMonthNum;
+        }
+        return `${y}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
       }
     }
 
-    // 2. JavaScript Date object from SheetJS (neutralize UTC+8 timezone rollback)
+    // 3. JavaScript Date object from SheetJS (neutralize UTC+8 timezone rollback)
     if (val instanceof Date && !isNaN(val.getTime())) {
       const adjusted = new Date(val.getTime() + 12 * 60 * 60 * 1000);
       const y = adjusted.getUTCFullYear();
-      const m = String(adjusted.getUTCMonth() + 1).padStart(2, '0');
-      const d = String(adjusted.getUTCDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-
-    // 3. Numeric Excel serial date (e.g. 46266 for 2026-09-01)
-    if (typeof val === 'number') {
-      const utcMs = Math.round((val - 25569) * 86400 * 1000);
-      const date = new Date(utcMs);
-      if (!isNaN(date.getTime())) {
-        const y = date.getUTCFullYear();
-        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const d = String(date.getUTCDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
+      let mNum = adjusted.getUTCMonth() + 1;
+      let dNum = adjusted.getUTCDate();
+      if (sheetMonthNum && mNum !== sheetMonthNum && dNum === sheetMonthNum) {
+        dNum = mNum;
+        mNum = sheetMonthNum;
       }
+      return `${y}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
     }
 
-    return new Date().toISOString().split('T')[0];
+    return defaultDate;
   };
 
   // Robust numeric parser
@@ -213,12 +259,24 @@ export default function InvoiceArExcelImportModal({
       headerRowIdx = 1; // Default to row 2 (0-indexed 1)
     }
 
-    const groupHeaderRow = headerRowIdx > 0 ? [...rawRows[headerRowIdx - 1]] : [];
-    const subHeaderRow = [...rawRows[headerRowIdx]];
+    // Detect if the sub-header row ("Repayment" / "Interest") is the row BELOW headerRowIdx
+    const nextRowStr = headerRowIdx + 1 < rawRows.length
+      ? rawRows[headerRowIdx + 1].map(c => String(c || '').toLowerCase()).join(' ')
+      : '';
+    const currRowStr = rawRows[headerRowIdx].map(c => String(c || '').toLowerCase()).join(' ');
+    const isSubHeaderBelow =
+      (/\brepay|\binterest\b/i.test(nextRowStr)) &&
+      !(/\brepay|\binterest\b/i.test(currRowStr));
+
+    const groupRowIdx = isSubHeaderBelow ? headerRowIdx : Math.max(0, headerRowIdx - 1);
+    const subRowIdx = isSubHeaderBelow ? headerRowIdx + 1 : headerRowIdx;
+
+    const groupHeaderRow = groupRowIdx !== subRowIdx ? [...rawRows[groupRowIdx]] : [];
+    const subHeaderRow = [...rawRows[subRowIdx]];
 
     // Propagate merged group headers if ws['!merges'] exists
-    if (ws['!merges'] && headerRowIdx > 0) {
-      const targetR = headerRowIdx - 1;
+    if (ws['!merges'] && groupHeaderRow.length > 0) {
+      const targetR = groupRowIdx;
       for (const merge of (ws['!merges'] as any[])) {
         if (merge.s.r <= targetR && merge.e.r >= targetR) {
           const parentVal = groupHeaderRow[merge.s.c];
@@ -250,7 +308,8 @@ export default function InvoiceArExcelImportModal({
       }
 
       // Inherit group header if sub is repayment/interest or adjacent merged column
-      const activeGroup = (g || (s.toLowerCase().includes('interest') ? lastGroupHeader : g)).trim();
+      const isRepayOrInterestSub = /repay|principal|interest/i.test(s);
+      const activeGroup = (g || (isRepayOrInterestSub ? lastGroupHeader : g)).trim();
       const combined = `${activeGroup} ${s}`.trim();
 
       colMetadata.push({
@@ -299,9 +358,13 @@ export default function InvoiceArExcelImportModal({
     });
 
     const finalBreakdowns: ParsedRowBreakdown[] = [];
+    const sheetMonthNum = getSheetMonthNumber(sheetName);
+    let lastValidDate = sheetMonthNum
+      ? `2026-${String(sheetMonthNum).padStart(2, '0')}-01`
+      : new Date().toISOString().split('T')[0];
 
-    // Parse each data row
-    for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
+    // Parse each data row (starting after the sub-header row)
+    for (let r = subRowIdx + 1; r < rawRows.length; r++) {
       const row = rawRows[r];
       if (!row || row.length === 0) continue;
 
@@ -332,8 +395,11 @@ export default function InvoiceArExcelImportModal({
       const dateColIdx = dateCol !== -1 ? dateCol : 0;
       const cellAddr = XLSX.utils.encode_cell({ r, c: dateColIdx });
       const cellObj = ws[cellAddr];
-      const rawDate = cellObj?.w || row[dateColIdx];
-      const parsedDate = parseExcelDate(rawDate);
+      const rawDate = (typeof cellObj?.v === 'number' && cellObj.v > 20000) ? cellObj.v : (cellObj?.w || row[dateColIdx]);
+      const parsedDate = parseExcelDate(rawDate, sheetMonthNum, lastValidDate);
+      if (rawDate !== null && rawDate !== undefined && String(rawDate).trim() !== '') {
+        lastValidDate = parsedDate;
+      }
 
       const rawInvoice = String(row[invoiceCol !== -1 ? invoiceCol : 2] || '').trim();
       const invoiceNo = rawInvoice ? rawInvoice.replace(/^INV#\s*/i, '').trim() : String(Math.floor(1000 + Math.random() * 9000));
@@ -478,7 +544,10 @@ export default function InvoiceArExcelImportModal({
       }
 
       // 7. RICE LOAN PAYMENT
-      const riceLoan = getAmount(m => /rice\s*loan/i.test(m.group || m.label || m.sub));
+      const riceLoan = getAmount(m =>
+        /rice\s*loan/i.test(m.group || m.label || m.sub) ||
+        (/rice/i.test(m.group || m.label) && !/sale/i.test(m.label) && /repay|principal/i.test(m.sub))
+      );
       if (riceLoan > 0) {
         rowItems.push({
           id: `imp-${r}-rl-${Math.random().toString(36).substring(7)}`,
@@ -497,7 +566,10 @@ export default function InvoiceArExcelImportModal({
       }
 
       // 8. LAUNDRY SOAP LOAN PAYMENT
-      const soapLoan = getAmount(m => /laundry\s*soap\s*loan/i.test(m.group || m.label || m.sub));
+      const soapLoan = getAmount(m =>
+        /laundry\s*soap\s*loan|soap\s*loan/i.test(m.group || m.label || m.sub) ||
+        (/laundry\s*soap|\bsoap\b/i.test(m.group || m.label) && !/sale/i.test(m.label) && /repay|principal/i.test(m.sub))
+      );
       if (soapLoan > 0) {
         rowItems.push({
           id: `imp-${r}-sl-${Math.random().toString(36).substring(7)}`,
@@ -516,7 +588,7 @@ export default function InvoiceArExcelImportModal({
       }
 
       // 9. FINES & PENALTIES
-      const fines = getAmount(m => /fine/i.test(m.group || m.label || m.sub));
+      const fines = getAmount(m => /fine|penalty/i.test(m.group || m.label || m.sub));
       if (fines > 0) {
         rowItems.push({
           id: `imp-${r}-fn-${Math.random().toString(36).substring(7)}`,
@@ -525,6 +597,8 @@ export default function InvoiceArExcelImportModal({
           or_no: invoiceNo,
           payor_name: rawPayee,
           service_type: 'Fines & Late Charges',
+          fines_account: 'Fines & Late Charges',
+          fines_amount: fines,
           amount: fines,
           payment_method: paymentMethod,
           remarks: rawDetails || 'Penalty fee collection',
@@ -652,11 +726,10 @@ export default function InvoiceArExcelImportModal({
           date: parsedDate,
           or_no: invoiceNo,
           payor_name: rawPayee,
-          loan_account: 'Shared Capital / Fixed Deposit',
-          particulars: 'Shared Capital / Fixed Deposit Contribution',
-          principal_amount: sharedCap,
+          particulars: 'Common Share',
+          common_share_amount: sharedCap,
+          principal_amount: 0,
           interest_amount: 0,
-          other_category: 'Share Capital',
           amount: sharedCap,
           payment_method: paymentMethod,
           remarks: rawDetails || 'Share capital deposit',
@@ -702,6 +775,42 @@ export default function InvoiceArExcelImportModal({
           amount: grants,
           payment_method: paymentMethod,
           remarks: rawDetails || 'Institutional grant',
+          collected_by: currentUser
+        });
+      }
+
+      // 19. RAFFLE TICKET PAYMENT
+      const raffle = getAmount(m => /raffle/i.test(m.group || m.label || m.sub));
+      if (raffle > 0) {
+        rowItems.push({
+          id: `imp-${r}-rf-${Math.random().toString(36).substring(7)}`,
+          tab: 'services',
+          date: parsedDate,
+          or_no: invoiceNo,
+          payor_name: rawPayee,
+          service_type: 'Raffle Ticket Payment',
+          particulars: 'Raffle Ticket Payment',
+          amount: raffle,
+          payment_method: paymentMethod,
+          remarks: rawDetails || 'Raffle ticket payment',
+          collected_by: currentUser
+        });
+      }
+
+      // 20. WITHDRAWAL FEE
+      const withdrawalFee = getAmount(m => /withdrawal\s*fee/i.test(m.group || m.label || m.sub));
+      if (withdrawalFee > 0) {
+        rowItems.push({
+          id: `imp-${r}-wf-${Math.random().toString(36).substring(7)}`,
+          tab: 'services',
+          date: parsedDate,
+          or_no: invoiceNo,
+          payor_name: rawPayee,
+          service_type: 'Withdrawal Fee',
+          particulars: 'Withdrawal Fee',
+          amount: withdrawalFee,
+          payment_method: paymentMethod,
+          remarks: rawDetails || 'Withdrawal fee',
           collected_by: currentUser
         });
       }
