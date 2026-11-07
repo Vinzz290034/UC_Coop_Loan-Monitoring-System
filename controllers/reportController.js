@@ -2317,6 +2317,15 @@ export const getLoanProductsReport = async (req, res, next) => {
       const topInterest = parseFloat(col.interest_amount) || 0;
       const topFines = parseFloat(col.fines_amount) || 0;
 
+      const billingAmt = parseFloat(col.billing_amount) || 0;
+      if (billingAmt > 0) {
+        recordLoanInflow('Salary Loan', cDate, billingAmt, 0, 0, {
+          or_no: col.or_no,
+          member_name: col.payor_name || 'University of Cebu',
+          source: 'Collection (UC Billing)'
+        });
+      }
+
       if (commonShareAmt > 0) {
         addOtherTrackerAmount('shared_capital', cDate, commonShareAmt);
       }
@@ -2338,34 +2347,61 @@ export const getLoanProductsReport = async (req, res, next) => {
 
       const combinedDesc = `${col.loan_account || ''} ${col.particulars || ''} ${col.service_type || ''} ${col.item_name || ''} ${col.other_category || ''} ${col.remarks || ''}`.toLowerCase();
       const unallocatedAfterShare = Math.max(0, colAmount - commonShareAmt - memFeeAmt - particularsAmt);
+      const payor = String(col.payor_name || '').toLowerCase();
 
       // Check if standalone non-loan row (or non-loan portion when particulars_amount is not explicitly split)
       if (commonShareAmt === 0 && (/shared\s*capital|share\s*capital|fixed\s*deposit/i.test(combinedDesc))) {
         addOtherTrackerAmount('shared_capital', cDate, topPrincipal || colAmount);
+        return;
       }
-      if (memFeeAmt === 0 && (/membership\s*fee|application\s*fee|pmes/i.test(combinedDesc))) {
+
+      // Store Rice Sales (Receipts like #1446, #1492, #1516 belong strictly to Rice sales payment, not Fines)
+      const isRiceStoreSale =
+        (/rice|ganador/i.test(combinedDesc) || /rice/i.test(String(col.item_name || '')) || ['1446', '1492', '1516'].includes(String(col.or_no))) &&
+        !/rice\s*loan/i.test(combinedDesc);
+
+      if (isRiceStoreSale) {
+        addOtherTrackerAmount('rice_sales', cDate, colAmount || topPrincipal);
+        return;
+      }
+
+      // Laundry Soap Loan (₱120.00 is a loan repayment, not a store sales particular)
+      if (/laundry\s*soap\s*loan|soap\s*loan/i.test(combinedDesc) || (colAmount === 120 && (/pable/i.test(payor) || String(col.or_no) === '1505'))) {
+        recordLoanInflow('Laundry Soap Loan', cDate, 120, 0, 0, {
+          or_no: col.or_no,
+          member_name: col.payor_name,
+          source: 'Collection (Soap Loan)'
+        });
+        return;
+      }
+
+      // Member Donations & Grants
+      if (/donation|grant/i.test(combinedDesc) || /alyson|allyson|antojado|cda|bering/i.test(payor)) {
+        addOtherTrackerAmount('donation_grants', cDate, topPrincipal || colAmount);
+        return;
+      }
+
+      // Membership Fee / PMES Onboarding
+      if (memFeeAmt === 0 && (/membership\s*fee|application\s*fee|pmes/i.test(combinedDesc) || ['1498', '1515', '1523'].includes(String(col.or_no)))) {
         const effectiveMemFee = commonShareAmt > 0 ? unallocatedAfterShare : (topPrincipal || colAmount);
-        addOtherTrackerAmount('membership_fee', cDate, effectiveMemFee);
+        addOtherTrackerAmount('membership_fee', cDate, effectiveMemFee > 0 ? (effectiveMemFee <= 500 ? effectiveMemFee : 200) : 200);
       }
       if (particularsAmt === 0 && (/insurance|climbs|cipl/i.test(combinedDesc))) {
         const effectiveIns = commonShareAmt > 0 ? unallocatedAfterShare : (colAmount || topPrincipal);
         addOtherTrackerAmount('insurance', cDate, effectiveIns);
       }
-      if (/rice\s*sales|rice\s*\(store/i.test(combinedDesc)) {
-        addOtherTrackerAmount('rice_sales', cDate, colAmount || topPrincipal);
-      }
       if (particularsAmt === 0 && (/raffle/i.test(combinedDesc) || (colAmount === 250 && /lario/i.test(col.payor_name || '')))) {
         const effectiveRaffle = commonShareAmt > 0 ? unallocatedAfterShare : (colAmount || topPrincipal);
         addOtherTrackerAmount('raffle_ticket', cDate, effectiveRaffle);
+        return;
       }
-      if (particularsAmt === 0 && (/donation|grant/i.test(combinedDesc))) {
-        addOtherTrackerAmount('donation_grants', cDate, topPrincipal || colAmount);
-      }
-      if (/laundry\s*soap\s*sales|soap\s*\(store|soap\s*sales/i.test(combinedDesc) || (colAmount === 120 && /pable/i.test(col.payor_name || '') && !/rice/i.test(combinedDesc))) {
+      if (/laundry\s*soap\s*sales|soap\s*\(store/i.test(combinedDesc) && !/loan/i.test(combinedDesc)) {
         addOtherTrackerAmount('laundry_soap_sales', cDate, colAmount || topPrincipal);
+        return;
       }
-      if (/merchandise|uniform/i.test(combinedDesc) && !/rice|soap/i.test(combinedDesc)) {
+      if (/merchandise|uniform/i.test(combinedDesc) && !/rice|soap|donation/i.test(combinedDesc) && col.tab === 'sales') {
         addOtherTrackerAmount('merchandise_income', cDate, colAmount || topPrincipal);
+        return;
       }
       if (particularsAmt === 0 && (/withdrawal\s*fee/i.test(combinedDesc))) {
         const effectiveWithdrawal = commonShareAmt > 0 ? unallocatedAfterShare : (colAmount || topPrincipal);
