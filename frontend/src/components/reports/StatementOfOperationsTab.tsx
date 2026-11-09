@@ -18,7 +18,9 @@ import {
   Receipt,
   Scale,
   Eye,
-  EyeOff
+  EyeOff,
+  Search,
+  X
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -93,6 +95,29 @@ const peso = (n: number) =>
 const plain = (n: number) =>
   (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const HighlightText = ({ text, query }: { text?: string; query: string }) => {
+  if (!text) return null;
+  if (!query) return <>{text}</>;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark
+            key={i}
+            className="bg-emerald-200 dark:bg-emerald-800 text-emerald-950 dark:text-emerald-100 rounded-xs px-0.5 font-bold"
+          >
+            {part}
+          </mark>
+        ) : (
+          <React.Fragment key={i}>{part}</React.Fragment>
+        )
+      )}
+    </>
+  );
+};
+
 interface Props {
   initialYear: number;
   initialMonth: number; // 1-12
@@ -106,8 +131,19 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const [error, setError] = useState<string | null>(null);
   const [hideEmpty, setHideEmpty] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
+
+  const q = searchQuery.toLowerCase().trim();
+
+  const doesLineMatch = useCallback((l: SooLine) => {
+    if (!q) return true;
+    return (
+      l.title.toLowerCase().includes(q) ||
+      (l.description && l.description.toLowerCase().includes(q))
+    );
+  }, [q]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -168,13 +204,42 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     return { revenue, expenses, net: subFigures(revenue, expenses) };
   }, [data, sectionFigures]);
 
-  const isLineVisible = (l: SooLine) => {
+  const isLineVisible = useCallback((l: SooLine, ignoreSearch = false) => {
+    if (!ignoreSearch && q && !doesLineMatch(l)) return false;
     const f = lineFigures(l);
     const hasValue = Math.abs(f.thisMonth) > 0.004 || Math.abs(f.ytd) > 0.004 || Math.abs(f.lastYtd) > 0.004;
     if (hasValue) return true;
     if (hideEmpty) return false;
+    if (!ignoreSearch && q) return true;
     return l.always_show;
-  };
+  }, [q, doesLineMatch, lineFigures, hideEmpty]);
+
+  const matchCount = useMemo(() => {
+    if (!q || !data) return 0;
+    let count = 0;
+    const countInSections = (sections: SooSection[]) => {
+      sections.forEach(s => {
+        s.groups.forEach(g => {
+          g.lines.forEach(l => {
+            if (isLineVisible(l)) count++;
+          });
+        });
+      });
+    };
+    countInSections(data.statement.revenues);
+    countInSections(data.statement.expenses);
+    return count;
+  }, [q, data, isLineVisible]);
+
+  const hasRevenueMatches = useMemo(() => {
+    if (!q || !data) return true;
+    return data.statement.revenues.some(s => s.groups.some(g => g.lines.some(l => isLineVisible(l))));
+  }, [q, data, isLineVisible]);
+
+  const hasExpenseMatches = useMemo(() => {
+    if (!q || !data) return true;
+    return data.statement.expenses.some(s => s.groups.some(g => g.lines.some(l => isLineVisible(l))));
+  }, [q, data, isLineVisible]);
 
   const periodEndLabel = useMemo(() => {
     const lastDay = new Date(year, monthIdx + 1, 0).getDate();
@@ -201,7 +266,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
         rows.push([s.title.toUpperCase()]);
         s.groups.forEach(g => {
           if (s.groups.length > 1) rows.push([g.title]);
-          g.lines.filter(isLineVisible).forEach(l => push(l.title, lineFigures(l)));
+          g.lines.filter(l => isLineVisible(l, true)).forEach(l => push(l.title, lineFigures(l)));
           if (g.total_label) push(g.total_label, groupFigures(g));
         });
         push(s.total_label, sectionFigures(s));
@@ -265,8 +330,12 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   );
 
   const renderSection = (s: SooSection, isExpense: boolean, number: number) => {
+    const isCollapsed = q ? false : !!collapsed[s.key];
     const sf = sectionFigures(s);
-    const isCollapsed = !!collapsed[s.key];
+
+    const hasAnyMatchingLine = s.groups.some(g => g.lines.some(l => isLineVisible(l)));
+    if (q && !hasAnyMatchingLine) return null;
+
     const accent = isExpense
       ? 'border-amber-300 dark:border-amber-800/70'
       : 'border-emerald-300 dark:border-emerald-800/80';
@@ -287,8 +356,12 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
               {number}
             </span>
             <div>
-              <div className="text-sm font-black text-neutral-900 dark:text-white">{s.plain_title}</div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">{s.title}</div>
+              <div className="text-sm font-black text-neutral-900 dark:text-white">
+                <HighlightText text={s.plain_title} query={q} />
+              </div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+                <HighlightText text={s.title} query={q} />
+              </div>
               <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5 max-w-xl">{s.description}</div>
             </div>
           </div>
@@ -310,14 +383,14 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
               <TableHead />
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                 {s.groups.map((g, gi) => {
-                  const visible = g.lines.filter(isLineVisible);
-                  if (visible.length === 0 && hideEmpty) return null;
+                  const visible = g.lines.filter(l => isLineVisible(l));
+                  if (visible.length === 0 && (hideEmpty || q)) return null;
                   return (
                     <React.Fragment key={`${s.key}-${gi}`}>
                       {s.groups.length > 1 && (
                         <tr className="bg-neutral-50/60 dark:bg-neutral-800/30">
                           <td colSpan={5} className="px-2.5 pt-3 pb-1.5 text-[11px] font-black uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-                            {g.title}
+                            <HighlightText text={g.title} query={q} />
                           </td>
                         </tr>
                       )}
@@ -330,8 +403,12 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                       ) : visible.map((l, li) => (
                         <tr key={`${s.key}-${gi}-${li}`} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30 text-neutral-800 dark:text-neutral-200">
                           <td className="p-2.5">
-                            <div className="font-semibold text-neutral-900 dark:text-white">{l.title}</div>
-                            <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 print:hidden">{l.description}</div>
+                            <div className="font-semibold text-neutral-900 dark:text-white">
+                              <HighlightText text={l.title} query={q} />
+                            </div>
+                            <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 print:hidden">
+                              <HighlightText text={l.description} query={q} />
+                            </div>
                           </td>
                           <FigureCells f={lineFigures(l)} isExpense={isExpense} />
                         </tr>
@@ -548,16 +625,44 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
           </div>
         </div>
 
-        {/* Options */}
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <button
-            type="button"
-            onClick={() => setHideEmpty(v => !v)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 cursor-pointer"
-          >
-            {hideEmpty ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-            {hideEmpty ? 'Show all accounts' : 'Hide accounts with no amount'}
-          </button>
+        {/* Search & Options */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-neutral-100 dark:border-neutral-800 print:hidden">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search account or line item (e.g. Salary, CLIMBS, Fines, Taxes)..."
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700/60 focus:border-emerald-500 focus:bg-white dark:focus:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 transition-all outline-none"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {searchQuery.trim() && (
+              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 rounded-xl">
+                {matchCount} {matchCount === 1 ? 'account match' : 'account matches'}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setHideEmpty(v => !v)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+            >
+              {hideEmpty ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              {hideEmpty ? 'Show all accounts' : 'Hide accounts with no amount'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -629,37 +734,63 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
           </div>
 
           {/* ================= REVENUES ================= */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-[11px] font-black uppercase tracking-wider">Part A</span>
-              <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Revenues — Money Coming In</h3>
+          {hasRevenueMatches && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-[11px] font-black uppercase tracking-wider">Part A</span>
+                <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Revenues — Money Coming In</h3>
+              </div>
+              {data.statement.revenues.map((s, i) => renderSection(s, false, i + 1))}
+              {!q && <TotalRow label="TOTAL: REVENUES" f={totals.revenue} tone="green" />}
             </div>
-            {data.statement.revenues.map((s, i) => renderSection(s, false, i + 1))}
-            <TotalRow label="TOTAL: REVENUES" f={totals.revenue} tone="green" />
-          </div>
+          )}
 
           {/* ================= EXPENSES ================= */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-[11px] font-black uppercase tracking-wider">Part B</span>
-              <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Expenses — Money Going Out</h3>
+          {hasExpenseMatches && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-[11px] font-black uppercase tracking-wider">Part B</span>
+                <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Expenses — Money Going Out</h3>
+              </div>
+              {data.statement.expenses.map((s, i) => renderSection(s, true, i + 1))}
+              {!q && <TotalRow label="TOTAL: EXPENSES" f={totals.expenses} tone="amber" isExpense />}
             </div>
-            {data.statement.expenses.map((s, i) => renderSection(s, true, i + 1))}
-            <TotalRow label="TOTAL: EXPENSES" f={totals.expenses} tone="amber" isExpense />
-          </div>
+          )}
 
           {/* ================= NET SURPLUS ================= */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-[#064e3b] text-white text-[11px] font-black uppercase tracking-wider">Part C</span>
-              <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Result — What Is Left Over</h3>
+          {!q && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-[#064e3b] text-white text-[11px] font-black uppercase tracking-wider">Part C</span>
+                <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Result — What Is Left Over</h3>
+              </div>
+              <TotalRow label="Net Surplus Before Other Items" f={totals.net} tone="green" />
+              <TotalRow label="TOTAL NET SURPLUS" f={totals.net} tone="dark" />
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                Net Surplus = Total Revenues − Total Expenses. A positive amount means the cooperative earned more than it spent.
+              </p>
             </div>
-            <TotalRow label="Net Surplus Before Other Items" f={totals.net} tone="green" />
-            <TotalRow label="TOTAL NET SURPLUS" f={totals.net} tone="dark" />
-            <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-              Net Surplus = Total Revenues − Total Expenses. A positive amount means the cooperative earned more than it spent.
-            </p>
-          </div>
+          )}
+
+          {/* ================= No matches state ================= */}
+          {q && matchCount === 0 && (
+            <div className="p-8 text-center rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800">
+              <Search className="w-8 h-8 text-neutral-400 mx-auto mb-2" />
+              <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                No accounts or line items match &ldquo;{searchQuery}&rdquo;
+              </div>
+              <div className="text-xs text-neutral-500 mt-1">
+                Try searching for a different loan product, expense, or income category.
+              </div>
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="mt-3 px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold cursor-pointer"
+              >
+                Clear Search
+              </button>
+            </div>
+          )}
         </div>
       ) : null}
     </div>
