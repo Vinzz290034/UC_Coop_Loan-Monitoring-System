@@ -756,7 +756,14 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
                             : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
                         }`}
                       >
-                        <span>Year {y}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span>Year {y}</span>
+                          {y === 2026 && (
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-100 font-sans font-bold">
+                              Audited
+                            </span>
+                          )}
+                        </span>
                         {y === year && <Check className="w-3.5 h-3.5 text-emerald-600" />}
                       </button>
                     ))}
@@ -997,6 +1004,16 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
               )}
             </div>
           </div>
+
+          {/* No Records for Fiscal Year Alert Banner */}
+          {Math.abs(totals.assets.thisMonth) < 0.005 && Math.abs(totals.liabilities.thisMonth) < 0.005 && Math.abs(totals.equity.thisMonth) < 0.005 && (
+            <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                No financial condition records or audited baseline figures exist for Fiscal Year {year}. All balances display ₱0.00.
+              </span>
+            </div>
+          )}
 
           {/* ============================================================== */}
           {/* PART A: ASSETS */}
