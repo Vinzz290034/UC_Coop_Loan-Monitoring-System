@@ -4079,24 +4079,28 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       previous: store.previous.map(v => Math.round(v * 100) / 100)
     });
 
-    const interestLines = [
-      line('411.01', 'Interest Income - Regular Loan', 'Interest paid on Salary and Project loans.', fromTracker(interestFor, ['Salary Loan', 'Project Loan'])),
-      line('411.02', 'Interest Income - Cash Express Loan', 'Interest paid on Cash Express loans.', fromTracker(interestFor, ['Cash Express'])),
-      line('411.04', 'Interest Income - Special Loan', 'Interest paid on Special Occasion loans.', fromTracker(interestFor, ['Special Occasion'])),
-      line('411.05', 'Interest Income - Emergency Loan', 'Interest paid on Emergency loans.', fromTracker(interestFor, ['Emergency Loan'])),
-      line('', 'Interest Income - Calamity Loan', 'Interest paid on Calamity loans.', fromTracker(interestFor, ['Calamity Loan']), false),
-      line('', 'Interest Income - Utility Loan', 'Interest paid on Utility loans.', fromTracker(interestFor, ['Utility Loan']), false),
-      line('', 'Interest Income - Other Loans', 'Interest from Mortuary, Petty Cash, Product, Rice and Soap loans.', fromTracker(interestFor, ['Mortuary Loan', 'Petty Cash', 'Product Loan', 'Rice Loan', 'Laundry Soap Loan']), false)
+    const ALL_LOAN_PRODUCTS = [
+      { name: 'Salary Loan', isCore: true, desc: 'Interest paid on Salary loans.' },
+      { name: 'Project Loan', isCore: true, desc: 'Interest paid on Project loans.' },
+      { name: 'Calamity Loan', isCore: true, desc: 'Interest paid on Calamity loans.' },
+      { name: 'Cash Express', isCore: true, desc: 'Interest paid on Cash Express loans.' },
+      { name: 'Special Occasion', isCore: true, desc: 'Interest paid on Special Occasion loans.' },
+      { name: 'Emergency Loan', isCore: true, desc: 'Interest paid on Emergency loans.' },
+      { name: 'Utility Loan', isCore: true, desc: 'Interest paid on Utility loans.' },
+      { name: 'Rice Loan', isCore: true, desc: 'Interest paid on Rice commodity loans.' },
+      { name: 'Laundry Soap Loan', isCore: true, desc: 'Interest paid on Laundry Soap commodity loans.' },
+      { name: 'Product Loan', isCore: false, desc: 'Interest paid on Product purchase loans.' },
+      { name: 'Mortuary Loan', isCore: false, desc: 'Interest paid on Mortuary assistance loans.' },
+      { name: 'Petty Cash', isCore: false, desc: 'Interest paid on Petty Cash loans.' }
     ];
 
-    const finesLines = [
-      line('414.01', 'Fines - Regular Loan', 'Late-payment penalties on Salary and Project loans.', fromTracker(finesFor, ['Salary Loan', 'Project Loan'])),
-      line('414.02', 'Fines - Cash Express Loan', 'Late-payment penalties on Cash Express loans.', fromTracker(finesFor, ['Cash Express'])),
-      line('414.04', 'Fines - Special Loan', 'Late-payment penalties on Special Occasion loans.', fromTracker(finesFor, ['Special Occasion'])),
-      line('', 'Fines - Emergency Loan', 'Late-payment penalties on Emergency loans.', fromTracker(finesFor, ['Emergency Loan']), false),
-      line('', 'Fines - Calamity Loan', 'Late-payment penalties on Calamity loans.', fromTracker(finesFor, ['Calamity Loan']), false),
-      line('', 'Fines - Other Loans', 'Penalties on Utility, Rice, Soap, Mortuary, Petty Cash and Product loans.', fromTracker(finesFor, ['Utility Loan', 'Rice Loan', 'Laundry Soap Loan', 'Mortuary Loan', 'Petty Cash', 'Product Loan']), false)
-    ];
+    const interestLines = ALL_LOAN_PRODUCTS.map(p =>
+      line('', `Interest Income - ${p.name}`, p.desc, fromTracker(interestFor, [p.name]), p.isCore)
+    );
+
+    const finesLines = ALL_LOAN_PRODUCTS.map(p =>
+      line('', `Fines - ${p.name}`, `Late-payment penalties on ${p.name}.`, fromTracker(finesFor, [p.name]), p.isCore)
+    );
 
     const statement = {
       revenues: [
