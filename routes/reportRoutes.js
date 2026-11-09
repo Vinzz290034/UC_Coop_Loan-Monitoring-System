@@ -11,7 +11,8 @@ import {
   getLoanProductsReport,
   getMembershipUpdateReport,
   getBooksOfAccountsReport,
-  getFinancialStatementReport
+  getFinancialStatementReport,
+  getStatementOfOperationsReport
 } from '../controllers/reportController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -56,5 +57,6 @@ router.get('/loan-products', getLoanProductsReport);
 router.get('/membership-update', getMembershipUpdateReport);
 router.get('/books-of-accounts', getBooksOfAccountsReport);
 router.get('/financial-statement', getFinancialStatementReport);
+router.get('/statement-of-operations', getStatementOfOperationsReport);
 
 export default router;

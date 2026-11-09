@@ -40,6 +40,7 @@ import {
   Check
 } from 'lucide-react';
 import FinancialSummaryGraphs from '@/components/reports/FinancialSummaryGraphs';
+import StatementOfOperationsTab from '@/components/reports/StatementOfOperationsTab';
 import {
   ACCOUNT_CATEGORIES,
   CATEGORY_THEMES,
@@ -57,6 +58,7 @@ export type ReportTab =
   | 'categories'
   | 'loans'
   | 'membership'
+  | 'statement_of_operations'
   | 'financial_statement'
   | 'summary';
 
@@ -120,7 +122,7 @@ function ReportsPageContent() {
   // Active Report Tab - supports deep-linking via ?tab=expenses
   const [activeTab, setActiveTab] = useState<ReportTab>(() => {
     const t = searchParams?.get('tab') as ReportTab | null;
-    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'financial_statement'].includes(t)) {
+    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement'].includes(t)) {
       return t;
     }
     return 'summary';
@@ -129,7 +131,7 @@ function ReportsPageContent() {
   // Keep activeTab synchronized when ?tab= query parameter changes
   useEffect(() => {
     const t = searchParams?.get('tab') as ReportTab | null;
-    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'financial_statement'].includes(t)) {
+    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement'].includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
@@ -715,6 +717,11 @@ function ReportsPageContent() {
 
   // Fetch report data based on active tab and period
   const fetchReport = useCallback(async () => {
+    // Statement of Operations loads its own data inside its tab component
+    if (activeTab === 'statement_of_operations') {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -725,6 +732,7 @@ function ReportsPageContent() {
         categories: '/reports/expenses-breakdown',
         loans: '/reports/loan-products',
         membership: '/reports/membership-update',
+        statement_of_operations: '/reports/statement-of-operations',
         financial_statement: '/reports/financial-statement',
         summary: '/reports/financial-statement'
       };
@@ -1115,8 +1123,8 @@ function ReportsPageContent() {
           </div>
         </div>
 
-        {/* Global Period & Date Filter Control Bar (hidden on Loan Products tab) */}
-        {activeTab !== 'loans' && (
+        {/* Global Period & Date Filter Control Bar (hidden on Loan Products & Statement of Operations tabs) */}
+        {activeTab !== 'loans' && activeTab !== 'statement_of_operations' && (
           <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-neutral-900 p-1.5 rounded-2xl border border-emerald-300 dark:border-emerald-800/80 shadow-xs">
             {/* Period Toggle */}
             <div className="flex items-center bg-emerald-50 dark:bg-emerald-950/60 p-0.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 text-xs font-bold">
@@ -1233,6 +1241,7 @@ function ReportsPageContent() {
           { id: 'categories', label: 'Book of Accounts', icon: FolderTree },
           { id: 'loans', label: 'Loan Products', icon: CreditCard },
           { id: 'membership', label: 'Membership Updates', icon: Users },
+          { id: 'statement_of_operations', label: 'Statement of Operations', icon: FileText },
           { id: 'financial_statement', label: 'Financial Statement', icon: PieChart },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -1280,7 +1289,9 @@ function ReportsPageContent() {
       )}
 
       {/* Loading Skeleton */}
-      {loading ? (
+      {activeTab === 'statement_of_operations' ? (
+        <StatementOfOperationsTab initialYear={year} initialMonth={month} />
+      ) : loading ? (
         <div className="p-12 text-center">
           <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
           <p className="text-xs font-bold text-neutral-500">Calculating report aggregation...</p>
