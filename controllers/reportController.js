@@ -3997,19 +3997,28 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       });
     });
 
-    // ---------- Store merchandise, services, deposit interest, CTPL (Collections page) ----------
+    // ---------- Store merchandise, services, deposit interest, CTPL, CISP, CLIMBS (Collections page) ----------
     const merchSales = newStore();
     const serviceIncome = newStore();
     const depositInterest = newStore();
     const ctplIncome = newStore();
+    const cispIncome = newStore();
+    const climbsIncome = newStore();
+
     colResult.rows.forEach(col => {
       const cDate = col.date || col.created_at;
       const amt = parseFloat(col.amount) || 0;
       const text = `${col.item_name || ''} ${col.service_type || ''} ${col.particulars || ''} ${col.other_category || ''} ${col.remarks || ''}`.toLowerCase();
 
       if (/ctpl/.test(text)) { bucket(ctplIncome, cDate, amt); return; }
+      if (/cisp/.test(text)) { bucket(cispIncome, cDate, amt); return; }
+      if (/climbs/.test(text)) { bucket(climbsIncome, cDate, amt); return; }
       if (/interest\s*(income\s*)?(from|on)\s*deposit|bank\s*interest|deposit\s*interest/.test(text)) {
         bucket(depositInterest, cDate, amt);
+        return;
+      }
+      if (/insurance/.test(text)) {
+        bucket(climbsIncome, cDate, amt);
         return;
       }
       if (!['sales', 'sales_services', 'services'].includes(col.tab)) return;
@@ -4022,6 +4031,18 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         bucket(merchSales, cDate, amt);
       }
     });
+
+    const trackerIns = fromTracker(otherFor, 'Insurance payment');
+    for (let m = 0; m < 12; m++) {
+      const sumCur = climbsIncome.current[m] + cispIncome.current[m] + ctplIncome.current[m];
+      if (trackerIns.current[m] > sumCur) {
+        climbsIncome.current[m] += (trackerIns.current[m] - sumCur);
+      }
+      const sumPrev = climbsIncome.previous[m] + cispIncome.previous[m] + ctplIncome.previous[m];
+      if (trackerIns.previous[m] > sumPrev) {
+        climbsIncome.previous[m] += (trackerIns.previous[m] - sumPrev);
+      }
+    }
 
     // ---------- Expenses (from the Expense Breakdown report) ----------
     const EXPENSE_LINES = [
@@ -4112,7 +4133,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           total_label: 'TOTAL: Income from Credit Operations',
           groups: [
             { title: 'Interest Income from Loans', total_label: 'TOTAL: Interest Income from Loans', lines: interestLines },
-            { title: 'Service Fees', total_label: null, lines: [line('412', 'Service Fees', 'Fees deducted when a loan is released.', serviceFees)] },
+            { title: 'Service Fees', total_label: null, lines: [line('', 'Service Fees', 'Fees deducted when a loan is released.', serviceFees)] },
             { title: 'Fines, Penalties, Surcharges', total_label: 'TOTAL: Fines, Penalties, Surcharges', lines: finesLines }
           ]
         },
@@ -4123,18 +4144,19 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           description: 'Membership fees, insurance commissions, bank interest, and other small income.',
           total_label: 'TOTAL: Other Income',
           groups: [
-            { title: 'Interest from Deposits', total_label: null, lines: [line('460.1', 'Income / Interest from Deposits', 'Interest earned from the cooperative’s bank deposits.', depositInterest)] },
+            { title: 'Interest from Deposits', total_label: null, lines: [line('', 'Income / Interest from Deposits', 'Interest earned from the cooperative’s bank deposits.', depositInterest)] },
             {
               title: 'Miscellaneous Income',
               total_label: 'TOTAL: Miscellaneous Income',
               lines: [
-                line('460.71', 'Membership Fees', 'One-time fees paid by new members when they join.', fromTracker(otherFor, 'Membership fee')),
-                line('460.79.8', 'Miscellaneous Income (Income - CLIMBS / CISP)', 'Insurance payments collected for CLIMBS / CISP.', fromTracker(otherFor, 'Insurance payment')),
+                line('', 'Membership Fees', 'One-time fees paid by new members when they join.', fromTracker(otherFor, 'Membership fee')),
+                line('', 'Insurance Income - CLIMBS', 'Insurance payments collected for CLIMBS.', climbsIncome),
+                line('', 'Insurance Income - CISP', 'Insurance payments collected for CISP.', cispIncome),
+                line('', 'Insurance Income from CTPL', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome),
                 line('', 'Raffle Ticket Income', 'Money collected from raffle ticket sales.', fromTracker(otherFor, 'Raffle Ticket payment'), false),
                 line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', fromTracker(otherFor, 'Withdrawal Fee'), false)
               ]
-            },
-            { title: 'Income from CTPL', total_label: null, lines: [line('461.9', 'Income from CTPL (formerly Income from CLIMBS)', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome)] }
+            }
           ]
         },
         {
@@ -4172,7 +4194,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 ...EXPENSE_LINES
                   .slice()
                   .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }))
-                  .map(l => line(l.code, l.title, l.description, expenseStores[l.title])),
+                  .map(l => line('', l.title, l.description, expenseStores[l.title])),
                 ...Object.entries(otherAdmin)
                   .sort(([a], [b]) => a.localeCompare(b))
                   .map(([acc, store]) => line('', acc, 'Other operating expense recorded in Disbursements.', store, false))
