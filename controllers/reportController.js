@@ -1435,7 +1435,9 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
 
           itemized.push({
             id: `cv-${cv.id}-${idx}`,
+            voucher_id: cv.id || null,
             voucher_no: cv.voucher_no || 'CV',
+            payee: d.remarks || d.recipient || cv.payee || '',
             date: cv.voucher_date ? new Date(cv.voucher_date).toISOString().split('T')[0] : 'N/A',
             particulars: cv.particulars || 'Disbursement Voucher',
             account_name: cleanAccName,
@@ -1497,7 +1499,9 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
 
             itemized.push({
               id: `cv-${cv.id}-0`,
+              voucher_id: cv.id || null,
               voucher_no: cv.voucher_no || 'CV',
+              payee: cv.payee || '',
               date: cv.voucher_date ? new Date(cv.voucher_date).toISOString().split('T')[0] : 'N/A',
               particulars: cv.particulars || 'Disbursement Voucher',
               account_name: cleanAccName,
@@ -3941,12 +3945,12 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       runReportInternally(getExpensesBreakdownReport, { period: 'annual', year: String(targetYear) }),
       runReportInternally(getExpensesBreakdownReport, { period: 'annual', year: String(prevYear) }),
       pool.query(`
-        SELECT date, created_at, tab, items, item_name, service_type, particulars, other_category, remarks, amount
+        SELECT id, or_no, payor_name, date, created_at, tab, items, item_name, service_type, particulars, other_category, remarks, amount
         FROM collections
         WHERE COALESCE(status, 'completed') != 'cancelled'
       `),
       pool.query(`
-        SELECT voucher_date, details
+        SELECT id, voucher_no, voucher_date, payee, particulars, details
         FROM check_vouchers
         WHERE status != 'cancelled' AND (
           CAST(details AS TEXT) ILIKE '%service fee%'
@@ -3956,17 +3960,34 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       `)
     ]);
 
-    // Helper: put an amount in the right [year][month] bucket
-    const bucket = (store, rawDate, amt) => {
+    // Helper: put an amount in the right [year][month] bucket and collect transaction records
+    const newStore = () => ({ current: zeros(), previous: zeros(), transactions: [] });
+
+    const bucket = (store, rawDate, amt, meta = {}) => {
       const val = parseFloat(amt) || 0;
       if (!rawDate || val === 0) return;
       const d = new Date(rawDate);
       if (isNaN(d.getTime())) return;
       const y = d.getFullYear();
-      if (y === targetYear) store.current[d.getMonth()] += val;
-      else if (y === prevYear) store.previous[d.getMonth()] += val;
+      if (y === targetYear) {
+        store.current[d.getMonth()] += val;
+        store.transactions.push({
+          date: d.toISOString().split('T')[0],
+          month: d.getMonth() + 1,
+          year: y,
+          payee: meta.payee || meta.member_name || 'Member',
+          particulars: meta.particulars || '',
+          voucher_no: meta.voucher_no || null,
+          voucher_id: meta.voucher_id || null,
+          or_no: meta.or_no || null,
+          lf_no: meta.lf_no || null,
+          source: meta.source || (meta.voucher_no ? 'check_voucher' : meta.or_no ? 'collection' : undefined),
+          amount: val
+        });
+      } else if (y === prevYear) {
+        store.previous[d.getMonth()] += val;
+      }
     };
-    const newStore = () => ({ current: zeros(), previous: zeros() });
 
     // ---------- Loan Products tracker (interest / fines / other particulars) ----------
     const trackerRow = (data, predicate) => {
@@ -3990,13 +4011,58 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     };
     const fromTracker = (fn, ...args) => ({ current: fn(loanCur, ...args), previous: fn(loanPrev, ...args) });
 
+    const getInterestTransactions = (pName) => {
+      const p = (loanCur?.products || []).find(prod => prod.product_name === pName);
+      if (!p || !Array.isArray(p.repayments)) return [];
+      return p.repayments
+        .filter(r => (parseFloat(r.interest) || 0) > 0)
+        .map(r => ({
+          date: r.date,
+          month: r.date && r.date !== 'N/A' ? Number(r.date.slice(5, 7)) : null,
+          year: targetYear,
+          payee: r.member_name || 'Member',
+          particulars: `Interest payment on ${pName}`,
+          voucher_no: r.voucher_no || null,
+          voucher_id: r.voucher_id || null,
+          or_no: r.or_no && r.or_no !== '—' ? r.or_no : null,
+          source: 'collection',
+          amount: parseFloat(r.interest) || 0
+        }));
+    };
+
+    const getFinesTransactions = (pName) => {
+      const p = (loanCur?.products || []).find(prod => prod.product_name === pName);
+      if (!p || !Array.isArray(p.repayments)) return [];
+      return p.repayments
+        .filter(r => (parseFloat(r.fines) || 0) > 0)
+        .map(r => ({
+          date: r.date,
+          month: r.date && r.date !== 'N/A' ? Number(r.date.slice(5, 7)) : null,
+          year: targetYear,
+          payee: r.member_name || 'Member',
+          particulars: `Late payment penalty on ${pName}`,
+          voucher_no: r.voucher_no || null,
+          voucher_id: r.voucher_id || null,
+          or_no: r.or_no && r.or_no !== '—' ? r.or_no : null,
+          source: 'collection',
+          amount: parseFloat(r.fines) || 0
+        }));
+    };
+
     // ---------- Service Fees (deducted from loan releases in Check Vouchers & Collections) ----------
     const serviceFees = newStore();
     cvResult.rows.forEach(cv => {
       if (!Array.isArray(cv.details)) return;
       cv.details.forEach(d => {
         if (/service\s*(fee|charge)/i.test(String(d.book_of_account || ''))) {
-          bucket(serviceFees, cv.voucher_date, Math.abs(parseFloat(d.amount) || 0));
+          const amt = Math.abs(parseFloat(d.amount) || 0);
+          bucket(serviceFees, cv.voucher_date, amt, {
+            voucher_id: cv.id,
+            voucher_no: cv.voucher_no || 'CV',
+            payee: cv.payee || '',
+            particulars: d.remarks || cv.particulars || 'Service Fee / Charge',
+            source: 'check_voucher'
+          });
         }
       });
     });
@@ -4008,35 +4074,65 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const ctplIncome = newStore();
     const cispIncome = newStore();
     const climbsIncome = newStore();
+    const membershipFees = newStore();
+    const raffleIncome = newStore();
+    const withdrawalFees = newStore();
+    const riceSales = newStore();
+    const soapSales = newStore();
 
     colResult.rows.forEach(col => {
       const cDate = col.date || col.created_at;
       const amt = parseFloat(col.amount) || 0;
       const text = `${col.item_name || ''} ${col.service_type || ''} ${col.particulars || ''} ${col.other_category || ''} ${col.remarks || ''}`.toLowerCase();
+      const meta = {
+        payee: col.payor_name || 'Member',
+        particulars: col.particulars || col.item_name || col.service_type || col.other_category || 'Cashier Collection',
+        or_no: col.or_no || null,
+        source: 'collection'
+      };
 
-      if (/ctpl/.test(text)) { bucket(ctplIncome, cDate, amt); return; }
-      if (/cisp/.test(text)) { bucket(cispIncome, cDate, amt); return; }
-      if (/climbs/.test(text)) { bucket(climbsIncome, cDate, amt); return; }
+      if (/ctpl/.test(text)) { bucket(ctplIncome, cDate, amt, meta); return; }
+      if (/cisp/.test(text)) { bucket(cispIncome, cDate, amt, meta); return; }
+      if (/climbs/.test(text)) { bucket(climbsIncome, cDate, amt, meta); return; }
       if (/interest\s*(income\s*)?(from|on)\s*deposit|bank\s*interest|deposit\s*interest/.test(text)) {
-        bucket(depositInterest, cDate, amt);
+        bucket(depositInterest, cDate, amt, meta);
         return;
       }
       if (/insurance/.test(text)) {
-        bucket(climbsIncome, cDate, amt);
+        bucket(climbsIncome, cDate, amt, meta);
         return;
       }
       if (/service\s*(fee|charge)/i.test(text) && !/print|photo|vendo|wifi|rotc|rental/i.test(text)) {
-        bucket(serviceFees, cDate, amt);
+        bucket(serviceFees, cDate, amt, meta);
+        return;
+      }
+      if (/membership|application\s*fee|pmes/i.test(text) || ['1498', '1515', '1523'].includes(String(col.or_no))) {
+        bucket(membershipFees, cDate, amt, meta);
+        return;
+      }
+      if (/raffle/i.test(text)) {
+        bucket(raffleIncome, cDate, amt, meta);
+        return;
+      }
+      if (/withdrawal\s*fee/i.test(text)) {
+        bucket(withdrawalFees, cDate, amt, meta);
+        return;
+      }
+      if (/rice|ganador/i.test(text)) {
+        bucket(riceSales, cDate, amt, meta);
+        return;
+      }
+      if (/soap/i.test(text)) {
+        bucket(soapSales, cDate, amt, meta);
         return;
       }
       if (!['sales', 'sales_services', 'services'].includes(col.tab)) return;
-      if (/rice|ganador|soap/.test(text)) return; // counted under Rice / Laundry Soap Sales
-      if (/membership|application\s*fee|pmes|fine|penalt|late\s*charge|donation|grant|share\s*capital/.test(text)) return;
+      if (/donation|grant|share\s*capital/.test(text)) return;
 
       if (col.service_type) {
-        bucket(serviceIncome, cDate, amt);
+        bucket(serviceIncome, cDate, amt, meta);
       } else {
-        bucket(merchSales, cDate, amt);
+        bucket(merchSales, cDate, amt, meta);
       }
     });
 
@@ -4080,10 +4176,24 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         // Liabilities / fund transfers are not expenses of the period
         if (/payable|replenish|fund\s*transfer|advances\s*to/i.test(acc)) return;
 
+        const tx = which === 'current' ? {
+          date: String(rec.date).slice(0, 10),
+          month: mIdx + 1,
+          year: targetYear,
+          payee: rec.payee || rec.remarks || 'Payee',
+          particulars: rec.particulars || acc,
+          voucher_no: rec.voucher_no || (rec.lf_no ? `LF #${rec.lf_no}` : null),
+          voucher_id: rec.voucher_id || null,
+          lf_no: rec.lf_no || null,
+          source: (rec.voucher_no && !String(rec.voucher_no).startsWith('LF')) ? 'check_voucher' : (rec.lf_no ? 'revolving_fund' : 'disbursement'),
+          amount: amt
+        } : null;
+
         // Check standard administrative expense accounts first
         const line = EXPENSE_LINES.find(l => l.match.test(acc));
         if (line) {
           expenseStores[line.title][which][mIdx] += amt;
+          if (tx) expenseStores[line.title].transactions.push(tx);
           return;
         }
 
@@ -4091,25 +4201,32 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
             /inventory|merchandise|uniform|shirt|short|gloves|id\s*case|cos\s*-|cogs/i.test(acc)) {
           if (!costOfSales[acc]) costOfSales[acc] = newStore();
           costOfSales[acc][which][mIdx] += amt;
+          if (tx) costOfSales[acc].transactions.push(tx);
           return;
         }
 
         if (!otherAdmin[acc]) otherAdmin[acc] = newStore();
         otherAdmin[acc][which][mIdx] += amt;
+        if (tx) otherAdmin[acc].transactions.push(tx);
       });
     };
     addExpenses(expCur, 'current');
     addExpenses(expPrev, 'previous');
 
     // ---------- Assemble the statement ----------
-    const line = (code, title, description, store, alwaysShow = true) => ({
-      code,
-      title,
-      description,
-      always_show: alwaysShow,
-      current: store.current.map(v => Math.round(v * 100) / 100),
-      previous: store.previous.map(v => Math.round(v * 100) / 100)
-    });
+    const line = (code, title, description, store, alwaysShow = true, customTransactions = null) => {
+      const txs = customTransactions !== null ? customTransactions : (store.transactions || []);
+      const sortedTxs = [...txs].sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
+      return {
+        code,
+        title,
+        description,
+        always_show: alwaysShow,
+        current: store.current.map(v => Math.round(v * 100) / 100),
+        previous: store.previous.map(v => Math.round(v * 100) / 100),
+        transactions: sortedTxs
+      };
+    };
 
     const ALL_LOAN_PRODUCTS = [
       { name: 'Salary Loan', isCore: true, desc: 'Interest paid on Salary loans.' },
@@ -4127,11 +4244,11 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     ];
 
     const interestLines = ALL_LOAN_PRODUCTS.map(p =>
-      line('', `Interest Income - ${p.name}`, p.desc, fromTracker(interestFor, [p.name]), p.isCore)
+      line('', `Interest Income - ${p.name}`, p.desc, fromTracker(interestFor, [p.name]), p.isCore, getInterestTransactions(p.name))
     );
 
     const finesLines = ALL_LOAN_PRODUCTS.map(p =>
-      line('', `Fines - ${p.name}`, `Late-payment penalties on ${p.name}.`, fromTracker(finesFor, [p.name]), p.isCore)
+      line('', `Fines - ${p.name}`, `Late-payment penalties on ${p.name}.`, fromTracker(finesFor, [p.name]), p.isCore, getFinesTransactions(p.name))
     );
 
     const statement = {
@@ -4160,12 +4277,12 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               title: 'Miscellaneous Income',
               total_label: 'TOTAL: Miscellaneous Income',
               lines: [
-                line('', 'Membership Fees', 'One-time fees paid by new members when they join.', fromTracker(otherFor, 'Membership fee')),
+                line('', 'Membership Fees', 'One-time fees paid by new members when they join.', fromTracker(otherFor, 'Membership fee'), true, membershipFees.transactions),
                 line('', 'Insurance Income - CLIMBS', 'Insurance payments collected for CLIMBS.', climbsIncome),
                 line('', 'Insurance Income - CISP', 'Insurance payments collected for CISP.', cispIncome),
                 line('', 'Insurance Income - CTPL', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome),
-                line('', 'Raffle Ticket Income', 'Money collected from raffle ticket sales.', fromTracker(otherFor, 'Raffle Ticket payment'), false),
-                line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', fromTracker(otherFor, 'Withdrawal Fee'), false)
+                line('', 'Raffle Ticket Income', 'Money collected from raffle ticket sales.', fromTracker(otherFor, 'Raffle Ticket payment'), false, raffleIncome.transactions),
+                line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', fromTracker(otherFor, 'Withdrawal Fee'), false, withdrawalFees.transactions)
               ]
             }
           ]
@@ -4182,8 +4299,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               total_label: null,
               lines: [
                 line('', 'Store Merchandise / Uniform Sales', 'Uniforms and other items sold in the cooperative store.', merchSales),
-                line('', 'Rice Sales', 'Rice sold to members.', fromTracker(otherFor, 'Rice sales payment')),
-                line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', fromTracker(otherFor, 'Laundry soap sales')),
+                line('', 'Rice Sales', 'Rice sold to members.', fromTracker(otherFor, 'Rice sales payment'), true, riceSales.transactions),
+                line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', fromTracker(otherFor, 'Laundry soap sales'), true, soapSales.transactions),
                 line('', 'Income from Services', 'Printing, photocopy, rentals and other store services.', serviceIncome, false)
               ]
             }
