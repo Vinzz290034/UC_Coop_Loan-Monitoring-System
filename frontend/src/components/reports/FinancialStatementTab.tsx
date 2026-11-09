@@ -157,10 +157,12 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
 
-  const now = useMemo(() => new Date(), []);
-  const currentYear = now.getFullYear();
-  const currentMonthIdx = now.getMonth(); // 10 = November for 2026
-  const ytdEndMonthIdx = year === currentYear ? currentMonthIdx : (year < currentYear ? 11 : 0);
+  // The system's active operating fiscal year is 2026, and operations run through November (month index 10).
+  const ytdEndMonthIdx = useMemo(() => {
+    if (year === 2026) return 10; // November
+    if (year < 2026) return 11; // December for completed past years
+    return 10;
+  }, [year]);
 
   const router = useRouter();
   const [selectedLineModal, setSelectedLineModal] = useState<FsLine | null>(null);
@@ -227,7 +229,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
 
   const monthHasActivity = useCallback((mIdx: number) => {
     if (!data) return false;
-    if (year === currentYear && mIdx > currentMonthIdx) return false;
+    if (year === 2026 && mIdx > 10) return false;
     const inSections = (sections: FsSection[]) =>
       sections.some(s =>
         s.groups.some(g =>
@@ -239,7 +241,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
       inSections(data.statement.liabilities) ||
       inSections(data.statement.equity)
     );
-  }, [data, year, currentYear, currentMonthIdx]);
+  }, [data, year]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -347,19 +349,18 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
   // Period label for headers
   const periodEndLabel = useMemo(() => {
     if (isYtd) {
-      if (year === currentYear) {
-        const lastDay = new Date(year, currentMonthIdx + 1, 0).getDate();
-        return `${MONTHS[currentMonthIdx]} ${lastDay}, ${year}`;
+      if (year === 2026) {
+        return 'November 30, 2026';
       }
-      if (year < currentYear) {
+      if (year < 2026) {
         return `December 31, ${year}`;
       }
-      return `January 1, ${year}`;
+      return `December 31, ${year}`;
     }
     const m = selectedPeriod as number;
     const lastDay = new Date(year, m + 1, 0).getDate();
     return `${MONTHS[m]} ${lastDay}, ${year}`;
-  }, [isYtd, selectedPeriod, year, currentYear, currentMonthIdx]);
+  }, [isYtd, selectedPeriod, year]);
 
   const currentColumnLabel = isYtd ? 'Current Period (YTD)' : 'This Month';
   const previousColumnLabel = isYtd ? 'Same Period Last Year' : 'Same Month Last Year';
@@ -1027,11 +1028,11 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
           )}
 
           {/* Upcoming Month Notice */}
-          {year === currentYear && typeof selectedPeriod === 'number' && selectedPeriod > currentMonthIdx && (
+          {year === 2026 && typeof selectedPeriod === 'number' && selectedPeriod > 10 && (
             <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
               <span>
-                {MONTHS[selectedPeriod]} {year} has not started yet. The current fiscal period is {MONTHS[currentMonthIdx]} {year}.
+                {MONTHS[selectedPeriod]} {year} has not operated yet. Active records currently run from January to November {year}.
               </span>
             </div>
           )}

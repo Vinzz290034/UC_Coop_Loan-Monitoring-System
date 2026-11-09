@@ -157,10 +157,12 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
 
-  const now = useMemo(() => new Date(), []);
-  const currentYear = now.getFullYear();
-  const currentMonthIdx = now.getMonth(); // 10 = November for 2026
-  const ytdEndMonthIdx = year === currentYear ? currentMonthIdx : (year < currentYear ? 11 : 0);
+  // The system's active operating fiscal year is 2026, and operations run through November (month index 10).
+  const ytdEndMonthIdx = useMemo(() => {
+    if (year === 2026) return 10; // November
+    if (year < 2026) return 11; // December for completed past years
+    return 10;
+  }, [year]);
 
   const router = useRouter();
   const [selectedLineModal, setSelectedLineModal] = useState<SooLine | null>(null);
@@ -286,7 +288,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
 
   const monthHasActivity = useCallback((mIdx: number) => {
     if (!data) return false;
-    if (year === currentYear && mIdx > currentMonthIdx) return false;
+    if (year === 2026 && mIdx > 10) return false;
     const inSections = (sections: SooSection[]) =>
       sections.some(s =>
         s.groups.some(g =>
@@ -294,7 +296,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
         )
       );
     return inSections(data.statement.revenues) || inSections(data.statement.expenses);
-  }, [data, year, currentYear, currentMonthIdx]);
+  }, [data, year]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -396,19 +398,18 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
 
   const periodEndLabel = useMemo(() => {
     if (isYtd) {
-      if (year === currentYear) {
-        const lastDay = new Date(year, currentMonthIdx + 1, 0).getDate();
-        return `January 1 – ${MONTHS[currentMonthIdx]} ${lastDay}, ${year}`;
+      if (year === 2026) {
+        return 'January 1 – November 30, 2026';
       }
-      if (year < currentYear) {
+      if (year < 2026) {
         return `Full Year ${year} (YTD)`;
       }
-      return `Year ${year}`;
+      return `January 1 – December 31, ${year}`;
     }
     const mIdx = selectedPeriod as number;
     const lastDay = new Date(year, mIdx + 1, 0).getDate();
     return `${MONTHS[mIdx]} ${lastDay}, ${year}`;
-  }, [isYtd, year, selectedPeriod, currentYear, currentMonthIdx]);
+  }, [isYtd, year, selectedPeriod]);
 
   const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -916,11 +917,11 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
           </div>
 
           {/* Upcoming Month Notice */}
-          {year === currentYear && typeof selectedPeriod === 'number' && selectedPeriod > currentMonthIdx && (
+          {year === 2026 && typeof selectedPeriod === 'number' && selectedPeriod > 10 && (
             <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
               <span>
-                {MONTHS[selectedPeriod]} {year} has not started yet. The current fiscal period is {MONTHS[currentMonthIdx]} {year}.
+                {MONTHS[selectedPeriod]} {year} has not operated yet. Active records currently run from January to November {year}.
               </span>
             </div>
           )}

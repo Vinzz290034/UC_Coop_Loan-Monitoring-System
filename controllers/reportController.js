@@ -3304,10 +3304,6 @@ export const getFinancialStatementReport = async (req, res, next) => {
     // Helper: create a monthly cumulative store initialized with baseline
     // The official audited baseline from iAccs is as of January 01, 2026 (comparing 2026 vs 2025).
     // Years without records (such as 2024 or future years like 2027+) must NOT be seeded with 2026 baseline.
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonthIdx = targetYear === currentYear ? now.getMonth() : (targetYear < currentYear ? 11 : 0);
-
     const isBaselineYear = targetYear === 2026;
     const isPrevBaselineYear = targetYear === 2025;
 
@@ -3324,22 +3320,9 @@ export const getFinancialStatementReport = async (req, res, next) => {
         initPrev = 0;
       }
 
-      // For the current year (2026), only populate months up to the current month (November = index 10).
-      // Future months (December = index 11) must NOT have computations.
-      const curArr = Array(12).fill(0);
-      const prevArr = Array(12).fill(0);
-
-      const maxMonth = targetYear === currentYear ? currentMonthIdx : 11;
-      for (let m = 0; m <= maxMonth; m++) {
-        curArr[m] = initCur;
-      }
-      for (let m = 0; m < 12; m++) {
-        prevArr[m] = initPrev;
-      }
-
       return {
-        current: curArr,
-        previous: prevArr,
+        current: Array(12).fill(initCur),
+        previous: Array(12).fill(initPrev),
         transactions: []
       };
     };
@@ -3364,8 +3347,8 @@ export const getFinancialStatementReport = async (req, res, next) => {
         (sooCur.statement.expenses || []).forEach(sec => sec.groups.forEach(g => expLines.push(...g.lines)));
 
         let cumNetCur = 0;
-        const maxNetMonth = targetYear === currentYear ? currentMonthIdx : 11;
-        for (let m = 0; m <= maxNetMonth; m++) {
+        // The cooperative's active operations for 2026 run from January to November (months 0 to 10).
+        for (let m = 0; m <= 10; m++) {
           const mRev = revLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
           const mExp = expLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
           cumNetCur += (mRev - mExp);
@@ -3373,6 +3356,9 @@ export const getFinancialStatementReport = async (req, res, next) => {
           // Keep fundamental equation balanced by having operating cash reflect net operating surplus
           stores.cash_in_vault.current[m] += cumNetCur;
         }
+        // Month 11 (December) has not operated yet; carry forward November's position
+        stores.net_surplus_period.current[11] = stores.net_surplus_period.current[10];
+        stores.cash_in_vault.current[11] = stores.cash_in_vault.current[10];
       }
 
       if (sooPrev?.statement) {
