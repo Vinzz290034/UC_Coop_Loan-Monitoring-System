@@ -12,7 +12,6 @@ import {
   Printer,
   RefreshCw,
   AlertCircle,
-  HelpCircle,
   TrendingUp,
   TrendingDown,
   Wallet,
@@ -106,7 +105,6 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hideEmpty, setHideEmpty] = useState(false);
-  const [showGuide, setShowGuide] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
@@ -554,14 +552,6 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
         <div className="flex flex-wrap items-center gap-2 print:hidden">
           <button
             type="button"
-            onClick={() => setShowGuide(v => !v)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-900 cursor-pointer"
-          >
-            <HelpCircle className="w-3.5 h-3.5" />
-            {showGuide ? 'Hide guide' : 'How do I read this report?'}
-          </button>
-          <button
-            type="button"
             onClick={() => setHideEmpty(v => !v)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 cursor-pointer"
           >
@@ -569,22 +559,6 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
             {hideEmpty ? 'Show all accounts' : 'Hide accounts with no amount'}
           </button>
         </div>
-
-        {showGuide && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 print:hidden">
-            {[
-              { t: 'This Month', d: `Only what happened in ${MONTHS[monthIdx]} ${year}.` },
-              { t: 'YTD This Month', d: `"Year-to-date": everything from January 1 up to the end of ${MONTHS[monthIdx]} ${year}.` },
-              { t: 'YTD Same Month Last Year', d: `The same January–${MONTHS[monthIdx]} period, but in ${year - 1}, for comparison.` },
-              { t: 'YTD Variance', d: 'The difference between this year and last year. Green = good news, red = needs attention.' }
-            ].map(g => (
-              <div key={g.t} className="p-3 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900">
-                <div className="text-xs font-black text-sky-900 dark:text-sky-200">{g.t}</div>
-                <div className="text-[11px] text-sky-800/80 dark:text-sky-300/80 mt-0.5">{g.d}</div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {error && (
