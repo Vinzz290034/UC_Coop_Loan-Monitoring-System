@@ -118,6 +118,8 @@ const HighlightText = ({ text, query }: { text?: string; query: string }) => {
   );
 };
 
+type SelectedPeriod = number | 'ytd';
+
 interface Props {
   initialYear: number;
   initialMonth: number; // 1-12
@@ -125,7 +127,7 @@ interface Props {
 
 export default function StatementOfOperationsTab({ initialYear, initialMonth }: Props) {
   const [year, setYear] = useState<number>(initialYear);
-  const [monthIdx, setMonthIdx] = useState<number>(Math.min(Math.max(initialMonth - 1, 0), 11));
+  const [selectedPeriod, setSelectedPeriod] = useState<SelectedPeriod>('ytd');
   const [data, setData] = useState<SooResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -135,6 +137,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
 
+  const isYtd = selectedPeriod === 'ytd';
   const q = searchQuery.toLowerCase().trim();
 
   const doesLineMatch = useCallback((l: SooLine) => {
@@ -144,6 +147,17 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
       (l.description && l.description.toLowerCase().includes(q))
     );
   }, [q]);
+
+  const monthHasActivity = useCallback((mIdx: number) => {
+    if (!data) return false;
+    const inSections = (sections: SooSection[]) =>
+      sections.some(s =>
+        s.groups.some(g =>
+          g.lines.some(l => Math.abs((l.current || [])[mIdx] || 0) > 0.004)
+        )
+      );
+    return inSections(data.statement.revenues) || inSections(data.statement.expenses);
+  }, [data]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -180,16 +194,18 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
 
   // ---- Figure calculators -------------------------------------------------
   const lineFigures = useCallback((line: SooLine): Figures => {
-    const sumTo = (arr: number[]) => arr.slice(0, monthIdx + 1).reduce((a, b) => a + (b || 0), 0);
+    const endIdx = isYtd ? 11 : (selectedPeriod as number);
+    const sumTo = (arr: number[]) => (arr || []).slice(0, endIdx + 1).reduce((a, b) => a + (b || 0), 0);
     const ytd = sumTo(line.current || []);
     const lastYtd = sumTo(line.previous || []);
+    const thisMonthVal = isYtd ? ytd : ((line.current || [])[selectedPeriod as number] || 0);
     return {
-      thisMonth: (line.current || [])[monthIdx] || 0,
+      thisMonth: thisMonthVal,
       ytd,
       lastYtd,
       variance: ytd - lastYtd
     };
-  }, [monthIdx]);
+  }, [isYtd, selectedPeriod]);
 
   const groupFigures = useCallback((g: SooGroup) =>
     g.lines.reduce((acc, l) => addFigures(acc, lineFigures(l)), emptyFigures()), [lineFigures]);
@@ -242,9 +258,13 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   }, [q, data, isLineVisible]);
 
   const periodEndLabel = useMemo(() => {
-    const lastDay = new Date(year, monthIdx + 1, 0).getDate();
-    return `${MONTHS[monthIdx]} ${lastDay}, ${year}`;
-  }, [year, monthIdx]);
+    if (isYtd) {
+      return `Full Year ${year} (YTD)`;
+    }
+    const mIdx = selectedPeriod as number;
+    const lastDay = new Date(year, mIdx + 1, 0).getDate();
+    return `${MONTHS[mIdx]} ${lastDay}, ${year}`;
+  }, [isYtd, year, selectedPeriod]);
 
   const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -256,7 +276,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
       ['STATEMENT OF OPERATIONS'],
       [`For the period ended ${periodEndLabel}`],
       [],
-      ['Account Title', 'This Month', 'YTD This Month', 'YTD Same Month Last Year', 'YTD Variance']
+      ['Account Title', isYtd ? 'Full Year Total' : 'This Month', isYtd ? `Full Year ${year}` : 'YTD This Month', isYtd ? `Full Year ${data.previous_year}` : 'YTD Same Month Last Year', 'YTD Variance']
     ];
     const push = (title: string, f: Figures) =>
       rows.push([title, f.thisMonth, f.ytd, f.lastYtd, f.variance]);
@@ -286,10 +306,13 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     push('TOTAL NET SURPLUS', totals.net);
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch: 50 }, { wch: 16 }, { wch: 16 }, { wch: 24 }, { wch: 16 }];
+    ws['!cols'] = [{ wch: 50 }, { wch: 18 }, { wch: 18 }, { wch: 26 }, { wch: 18 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Statement of Operations');
-    XLSX.writeFile(wb, `Statement_of_Operations_${MONTHS[monthIdx]}_${year}.xlsx`);
+    const fileName = isYtd
+      ? `Statement_of_Operations_Full_Year_${year}.xlsx`
+      : `Statement_of_Operations_${MONTHS[selectedPeriod as number]}_${year}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   };
 
   // ---- Small render helpers ----------------------------------------------
@@ -321,9 +344,9 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     <thead className="bg-neutral-50 dark:bg-neutral-800/60 text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 font-bold">
       <tr>
         <th className="p-2.5 text-left min-w-[280px]">Account Title</th>
-        <th className="p-2.5 text-right w-32">This Month</th>
-        <th className="p-2.5 text-right w-36">YTD This Month</th>
-        <th className="p-2.5 text-right w-40">YTD Same Month Last Year</th>
+        <th className="p-2.5 text-right w-32">{isYtd ? 'Full Year Total' : 'This Month'}</th>
+        <th className="p-2.5 text-right w-36">{isYtd ? `Full Year ${year}` : 'YTD This Month'}</th>
+        <th className="p-2.5 text-right w-40">{isYtd ? `Full Year ${data?.previous_year || year - 1}` : 'YTD Same Month Last Year'}</th>
         <th className="p-2.5 text-right w-36">YTD Variance</th>
       </tr>
     </thead>
@@ -371,7 +394,9 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
               <div className={`text-lg font-black font-mono ${isExpense ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
                 {peso(sf.ytd)}
               </div>
-              <div className="text-[10px] text-neutral-400 font-mono">This month: {peso(sf.thisMonth)}</div>
+              <div className="text-[10px] text-neutral-400 font-mono">
+                {isYtd ? `Full Year: ${peso(sf.ytd)}` : `This month: ${peso(sf.thisMonth)}`}
+              </div>
             </div>
             <ChevronDown className={`w-5 h-5 text-neutral-400 transition-transform print:hidden ${isCollapsed ? '' : 'rotate-180'}`} />
           </div>
@@ -602,26 +627,46 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
           </div>
         </div>
 
-        {/* Step 1: choose a month */}
+        {/* Step 1: choose a month or Full Year (YTD) */}
         <div className="print:hidden">
           <div className="text-[11px] font-bold text-neutral-600 dark:text-neutral-300 mb-1.5">
-            Step 1 — Pick the month you want to see:
+            Step 1 — Filter by month or Full Year (YTD):
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {MONTHS_SHORT.map((m, idx) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMonthIdx(idx)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  monthIdx === idx
-                    ? 'bg-[#064e3b] text-white shadow-xs'
-                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50'
-                }`}
-              >
-                {m}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSelectedPeriod('ytd')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                isYtd
+                  ? 'bg-[#064e3b] text-white shadow-xs'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50'
+              }`}
+            >
+              <span>Full Year (YTD)</span>
+            </button>
+            {MONTHS_SHORT.map((m, idx) => {
+              const isSelected = selectedPeriod === idx;
+              const hasActivity = monthHasActivity(idx);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setSelectedPeriod(idx)}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-[#064e3b] text-white shadow-xs'
+                      : hasActivity
+                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/70 hover:bg-emerald-100/80'
+                      : 'bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 dark:text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                  }`}
+                >
+                  <span>{m}</span>
+                  {hasActivity && (
+                    <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-emerald-300' : 'bg-emerald-500'}`} />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -689,13 +734,25 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
             <Scale className={`w-6 h-6 shrink-0 ${totals.net.ytd >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} />
             <div className="text-sm text-neutral-800 dark:text-neutral-200">
               <div className="font-black">In short:</div>
-              From January to {MONTHS[monthIdx]} {year}, the cooperative earned <b>{peso(totals.revenue.ytd)}</b> and spent{' '}
-              <b>{peso(totals.expenses.ytd)}</b>. That leaves a{' '}
-              <b className={totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
-                {totals.net.ytd >= 0 ? 'surplus (extra money)' : 'deficit (shortage)'} of {peso(Math.abs(totals.net.ytd))}
-              </b>.
-              {' '}For {MONTHS[monthIdx]} alone, the result is{' '}
-              <b>{totals.net.thisMonth >= 0 ? '' : '−'}{peso(Math.abs(totals.net.thisMonth))}</b>.
+              {isYtd ? (
+                <>
+                  For the full year <b>{year}</b> (YTD), the cooperative earned <b>{peso(totals.revenue.ytd)}</b> and spent{' '}
+                  <b>{peso(totals.expenses.ytd)}</b>. That leaves a{' '}
+                  <b className={totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
+                    {totals.net.ytd >= 0 ? 'surplus (extra money)' : 'deficit (shortage)'} of {peso(Math.abs(totals.net.ytd))}
+                  </b>.
+                </>
+              ) : (
+                <>
+                  From January to {MONTHS[selectedPeriod as number]} {year}, the cooperative earned <b>{peso(totals.revenue.ytd)}</b> and spent{' '}
+                  <b>{peso(totals.expenses.ytd)}</b>. That leaves a{' '}
+                  <b className={totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
+                    {totals.net.ytd >= 0 ? 'surplus (extra money)' : 'deficit (shortage)'} of {peso(Math.abs(totals.net.ytd))}
+                  </b>.
+                  {' '}For {MONTHS[selectedPeriod as number]} alone, the result is{' '}
+                  <b>{totals.net.thisMonth >= 0 ? '' : '−'}{peso(Math.abs(totals.net.thisMonth))}</b>.
+                </>
+              )}
             </div>
           </div>
 
@@ -717,10 +774,12 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                     <Icon className={`w-5 h-5 ${c.color}`} />
                   </div>
                   <div className={`text-2xl font-black font-mono mt-2 ${c.color}`}>{peso(c.f.ytd)}</div>
-                  <div className="text-[10.5px] text-neutral-500">Year to date (Jan – {MONTHS_SHORT[monthIdx]} {year})</div>
+                  <div className="text-[10.5px] text-neutral-500">
+                    {isYtd ? `Full Year ${year} (YTD)` : `Year to date (Jan – ${MONTHS_SHORT[selectedPeriod as number]} ${year})`}
+                  </div>
                   <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800 grid grid-cols-2 gap-2 text-[11px]">
                     <div>
-                      <div className="text-neutral-400">This month</div>
+                      <div className="text-neutral-400">{isYtd ? 'Annual' : 'This month'}</div>
                       <div className="font-mono font-bold text-neutral-800 dark:text-neutral-200">{peso(c.f.thisMonth)}</div>
                     </div>
                     <div>
