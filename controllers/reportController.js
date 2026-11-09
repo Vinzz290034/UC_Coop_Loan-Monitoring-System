@@ -4152,7 +4152,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 line('', 'Membership Fees', 'One-time fees paid by new members when they join.', fromTracker(otherFor, 'Membership fee')),
                 line('', 'Insurance Income - CLIMBS', 'Insurance payments collected for CLIMBS.', climbsIncome),
                 line('', 'Insurance Income - CISP', 'Insurance payments collected for CISP.', cispIncome),
-                line('', 'Insurance Income from CTPL', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome),
+                line('', 'Insurance Income - CTPL', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome),
                 line('', 'Raffle Ticket Income', 'Money collected from raffle ticket sales.', fromTracker(otherFor, 'Raffle Ticket payment'), false),
                 line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', fromTracker(otherFor, 'Withdrawal Fee'), false)
               ]
