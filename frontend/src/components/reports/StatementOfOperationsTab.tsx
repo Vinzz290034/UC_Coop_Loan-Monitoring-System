@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Check,
   FileSpreadsheet,
   Printer,
   RefreshCw,
@@ -107,6 +108,23 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const [hideEmpty, setHideEmpty] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
+  const yearDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (yearDropdownRef.current && !yearDropdownRef.current.contains(e.target as Node)) {
+        setIsYearDropdownOpen(false);
+      }
+    };
+    if (isYearDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isYearDropdownOpen]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -392,24 +410,93 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
           </div>
 
           <div className="flex flex-wrap items-center gap-2 print:hidden">
-            {/* Year stepper */}
-            <div className="flex items-center rounded-xl border border-emerald-300 dark:border-emerald-800 overflow-hidden text-xs font-bold">
+            {/* Year Selector matching Loan Products Tab format */}
+            <div className="flex items-center gap-1 bg-emerald-50/90 dark:bg-emerald-950/60 p-1 rounded-xl border border-emerald-200 dark:border-emerald-800/80">
               <button
                 type="button"
-                onClick={() => setYear(y => y - 1)}
-                className="px-2.5 py-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 cursor-pointer"
-                title="Previous year"
+                disabled={year <= 2024}
+                onClick={() => {
+                  if (year > 2024) {
+                    setYear(year - 1);
+                    setIsYearDropdownOpen(false);
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1 ${
+                  year <= 2024
+                    ? 'text-neutral-300 dark:text-neutral-600 cursor-not-allowed'
+                    : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200/70 dark:hover:bg-emerald-900/70 cursor-pointer active:scale-95'
+                }`}
+                title={year <= 2024 ? 'Starts at Year 2024' : `Switch to Previous Year (${year - 1})`}
               >
-                <ChevronLeft className="w-4 h-4" />
+                <span>‹</span>
+                <span className="hidden sm:inline">{Math.max(2024, year - 1)}</span>
               </button>
-              <span className="px-3 py-1.5 bg-emerald-700 text-white font-mono">Year {year}</span>
+
+              <div className="relative" ref={yearDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsYearDropdownOpen(prev => !prev)}
+                  className="px-3 py-1 rounded-lg text-xs font-extrabold bg-[#064e3b] hover:bg-emerald-800 text-white cursor-pointer shadow-2xs font-mono inline-flex items-center gap-1.5 transition-all duration-200 active:scale-95"
+                >
+                  <span>Year {year}</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-emerald-300 transition-transform duration-200 ease-out ${
+                      isYearDropdownOpen ? 'rotate-180' : 'rotate-0'
+                    }`}
+                  />
+                </button>
+
+                {/* Animated Dropdown Menu */}
+                <div
+                  className={`absolute left-1/2 -translate-x-1/2 mt-2 w-36 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-200 dark:border-emerald-800/80 shadow-xl py-1.5 z-50 origin-top transition-all duration-200 ease-out ${
+                    isYearDropdownOpen
+                      ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                      : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                  }`}
+                >
+                  <div className="px-3 py-1 text-[9.5px] font-bold uppercase tracking-wider text-neutral-400 border-b border-neutral-100 dark:border-neutral-800 mb-1">
+                    Select Fiscal Year
+                  </div>
+                  <div className="max-h-56 overflow-y-auto px-1.5 space-y-0.5">
+                    {Array.from(new Set([2024, 2025, 2026, 2027, 2028, year, year - 1, year + 1]))
+                      .filter(yr => yr >= 2024)
+                      .sort((a, b) => a - b)
+                      .map((yr: number) => {
+                        const isSelectedYear = year === yr;
+                        return (
+                          <button
+                            key={yr}
+                            type="button"
+                            onClick={() => {
+                              setYear(yr);
+                              setIsYearDropdownOpen(false);
+                            }}
+                            className={`w-full px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center justify-between transition-all duration-150 cursor-pointer ${
+                              isSelectedYear
+                                ? 'bg-[#064e3b] text-white shadow-2xs'
+                                : 'text-neutral-700 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 hover:text-emerald-800 dark:hover:text-emerald-300 hover:translate-x-0.5'
+                            }`}
+                          >
+                            <span>Year {yr}</span>
+                            {isSelectedYear && <Check className="w-3.5 h-3.5 text-emerald-300" />}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setYear(y => y + 1)}
-                className="px-2.5 py-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 cursor-pointer"
-                title="Next year"
+                onClick={() => {
+                  setYear(year + 1);
+                  setIsYearDropdownOpen(false);
+                }}
+                className="px-2.5 py-1 rounded-lg text-xs font-extrabold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200/70 dark:hover:bg-emerald-900/70 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                title={`Switch to Next Year (${year + 1})`}
               >
-                <ChevronRight className="w-4 h-4" />
+                <span className="hidden sm:inline">{year + 1}</span>
+                <span>›</span>
               </button>
             </div>
 
