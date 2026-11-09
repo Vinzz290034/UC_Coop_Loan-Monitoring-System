@@ -157,6 +157,11 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
 
+  const now = useMemo(() => new Date(), []);
+  const currentYear = now.getFullYear();
+  const currentMonthIdx = now.getMonth(); // 10 = November for 2026
+  const ytdEndMonthIdx = year === currentYear ? currentMonthIdx : (year < currentYear ? 11 : 0);
+
   const router = useRouter();
   const [selectedLineModal, setSelectedLineModal] = useState<SooLine | null>(null);
   const [lineModalSearch, setLineModalSearch] = useState('');
@@ -281,6 +286,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
 
   const monthHasActivity = useCallback((mIdx: number) => {
     if (!data) return false;
+    if (year === currentYear && mIdx > currentMonthIdx) return false;
     const inSections = (sections: SooSection[]) =>
       sections.some(s =>
         s.groups.some(g =>
@@ -288,7 +294,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
         )
       );
     return inSections(data.statement.revenues) || inSections(data.statement.expenses);
-  }, [data]);
+  }, [data, year, currentYear, currentMonthIdx]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -325,7 +331,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
 
   // ---- Figure calculators -------------------------------------------------
   const lineFigures = useCallback((line: SooLine): Figures => {
-    const endIdx = isYtd ? 11 : (selectedPeriod as number);
+    const endIdx = isYtd ? ytdEndMonthIdx : (selectedPeriod as number);
     const sumTo = (arr: number[]) => (arr || []).slice(0, endIdx + 1).reduce((a, b) => a + (b || 0), 0);
     const ytd = sumTo(line.current || []);
     const lastYtd = sumTo(line.previous || []);
@@ -336,7 +342,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
       lastYtd,
       variance: ytd - lastYtd
     };
-  }, [isYtd, selectedPeriod]);
+  }, [isYtd, ytdEndMonthIdx, selectedPeriod]);
 
   const groupFigures = useCallback((g: SooGroup) =>
     g.lines.reduce((acc, l) => addFigures(acc, lineFigures(l)), emptyFigures()), [lineFigures]);
@@ -390,12 +396,19 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
 
   const periodEndLabel = useMemo(() => {
     if (isYtd) {
-      return `Full Year ${year} (YTD)`;
+      if (year === currentYear) {
+        const lastDay = new Date(year, currentMonthIdx + 1, 0).getDate();
+        return `January 1 – ${MONTHS[currentMonthIdx]} ${lastDay}, ${year}`;
+      }
+      if (year < currentYear) {
+        return `Full Year ${year} (YTD)`;
+      }
+      return `Year ${year}`;
     }
     const mIdx = selectedPeriod as number;
     const lastDay = new Date(year, mIdx + 1, 0).getDate();
     return `${MONTHS[mIdx]} ${lastDay}, ${year}`;
-  }, [isYtd, year, selectedPeriod]);
+  }, [isYtd, year, selectedPeriod, currentYear, currentMonthIdx]);
 
   const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -882,7 +895,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
               <div className="font-black">In short:</div>
               {isYtd ? (
                 <>
-                  For the full year <b>{year}</b> (YTD), the cooperative earned <b>{peso(totals.revenue.ytd)}</b> and spent{' '}
+                  From January to {MONTHS[ytdEndMonthIdx]} <b>{year}</b> (YTD), the cooperative earned <b>{peso(totals.revenue.ytd)}</b> and spent{' '}
                   <b>{peso(totals.expenses.ytd)}</b>. That leaves a{' '}
                   <b className={totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
                     {totals.net.ytd >= 0 ? 'surplus (extra money)' : 'deficit (shortage)'} of {peso(Math.abs(totals.net.ytd))}
@@ -901,6 +914,16 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
               )}
             </div>
           </div>
+
+          {/* Upcoming Month Notice */}
+          {year === currentYear && typeof selectedPeriod === 'number' && selectedPeriod > currentMonthIdx && (
+            <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>
+                {MONTHS[selectedPeriod]} {year} has not started yet. The current fiscal period is {MONTHS[currentMonthIdx]} {year}.
+              </span>
+            </div>
+          )}
 
           {/* ================= Big summary cards ================= */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

@@ -147,9 +147,7 @@ interface Props {
 
 export default function FinancialStatementTab({ initialYear, initialMonth }: Props) {
   const [year, setYear] = useState<number>(initialYear);
-  const [selectedPeriod, setSelectedPeriod] = useState<SelectedPeriod>(
-    initialMonth >= 1 && initialMonth <= 12 ? initialMonth - 1 : 'ytd'
-  );
+  const [selectedPeriod, setSelectedPeriod] = useState<SelectedPeriod>('ytd');
   const [data, setData] = useState<FsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +156,11 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
   const [searchQuery, setSearchQuery] = useState('');
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
+
+  const now = useMemo(() => new Date(), []);
+  const currentYear = now.getFullYear();
+  const currentMonthIdx = now.getMonth(); // 10 = November for 2026
+  const ytdEndMonthIdx = year === currentYear ? currentMonthIdx : (year < currentYear ? 11 : 0);
 
   const router = useRouter();
   const [selectedLineModal, setSelectedLineModal] = useState<FsLine | null>(null);
@@ -224,6 +227,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
 
   const monthHasActivity = useCallback((mIdx: number) => {
     if (!data) return false;
+    if (year === currentYear && mIdx > currentMonthIdx) return false;
     const inSections = (sections: FsSection[]) =>
       sections.some(s =>
         s.groups.some(g =>
@@ -235,7 +239,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
       inSections(data.statement.liabilities) ||
       inSections(data.statement.equity)
     );
-  }, [data]);
+  }, [data, year, currentYear, currentMonthIdx]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -273,7 +277,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
   // ---- Figure calculators -------------------------------------------------
   // Balance sheet accounts represent positions as of the selected period (month m, or full year YTD)
   const lineFigures = useCallback((line: FsLine): Figures => {
-    const mIdx = isYtd ? 11 : (selectedPeriod as number);
+    const mIdx = isYtd ? ytdEndMonthIdx : (selectedPeriod as number);
     const thisMonthVal = (line.current || [])[mIdx] || 0;
     const lastYearVal = (line.previous || [])[mIdx] || 0;
     return {
@@ -281,7 +285,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
       sameMonthLastYear: lastYearVal,
       variance: thisMonthVal - lastYearVal
     };
-  }, [isYtd, selectedPeriod]);
+  }, [isYtd, ytdEndMonthIdx, selectedPeriod]);
 
   const groupFigures = useCallback((g: FsGroup) =>
     g.lines.reduce((acc, l) => addFigures(acc, lineFigures(l)), emptyFigures()), [lineFigures]);
@@ -343,12 +347,19 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
   // Period label for headers
   const periodEndLabel = useMemo(() => {
     if (isYtd) {
-      return `December 31, ${year}`;
+      if (year === currentYear) {
+        const lastDay = new Date(year, currentMonthIdx + 1, 0).getDate();
+        return `${MONTHS[currentMonthIdx]} ${lastDay}, ${year}`;
+      }
+      if (year < currentYear) {
+        return `December 31, ${year}`;
+      }
+      return `January 1, ${year}`;
     }
     const m = selectedPeriod as number;
     const lastDay = new Date(year, m + 1, 0).getDate();
     return `${MONTHS[m]} ${lastDay}, ${year}`;
-  }, [isYtd, selectedPeriod, year]);
+  }, [isYtd, selectedPeriod, year, currentYear, currentMonthIdx]);
 
   const currentColumnLabel = isYtd ? 'Current Period (YTD)' : 'This Month';
   const previousColumnLabel = isYtd ? 'Same Period Last Year' : 'Same Month Last Year';
@@ -1011,6 +1022,16 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
                 No financial condition records or audited baseline figures exist for Fiscal Year {year}. All balances display ₱0.00.
+              </span>
+            </div>
+          )}
+
+          {/* Upcoming Month Notice */}
+          {year === currentYear && typeof selectedPeriod === 'number' && selectedPeriod > currentMonthIdx && (
+            <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>
+                {MONTHS[selectedPeriod]} {year} has not started yet. The current fiscal period is {MONTHS[currentMonthIdx]} {year}.
               </span>
             </div>
           )}
