@@ -2684,6 +2684,11 @@ export const getLoanProductsReport = async (req, res, next) => {
         month_labels: ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUNE', 'JULY', 'AUG', 'SEPT', 'OCT', 'NOV', 'DEC'],
         loan_rows: trackerLoanRows,
         other_rows: trackerOtherRows,
+        // Per-product fines & penalties (used by the Statement of Operations)
+        fines_by_product: Object.values(monthlyLoanTracker).map(m => ({
+          product_name: m.product_name,
+          months: m.fines_months
+        })),
         loans_totals: {
           ytd_sum: loansYtdTotal,
           months: loansMonthlyTotals
@@ -3900,6 +3905,339 @@ export const getFinancialStatementReport = async (req, res, next) => {
         income_subsidy_breakdown: incomeSubsidyBreakdown,
         statutory_allocations: statutoryAllocations
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ==========================================
+// 11. STATEMENT OF OPERATIONS (INCOME STATEMENT)
+// ==========================================
+// @desc    Statement of Operations following the cooperative's iAccs layout.
+//          Returns 12-month arrays for the selected year AND the previous year
+//          for every line, so the client can compute "This Month",
+//          "YTD This Month", "YTD Same Month Last Year" and "YTD Variance"
+//          for any month without refetching.
+// @route   GET /api/reports/statement-of-operations?year=2026
+// @access  Protected (Admin, Staff)
+const runReportInternally = (handler, queryParams) => new Promise((resolve, reject) => {
+  const fakeRes = {
+    status() { return this; },
+    json(payload) { resolve(payload); return this; }
+  };
+  Promise.resolve(handler({ query: queryParams }, fakeRes, reject)).catch(reject);
+});
+
+export const getStatementOfOperationsReport = async (req, res, next) => {
+  try {
+    const targetYear = Number(req.query.year) || new Date().getFullYear();
+    const prevYear = targetYear - 1;
+    const zeros = () => Array(12).fill(0);
+
+    const [loanCur, loanPrev, expCur, expPrev, colResult, cvResult] = await Promise.all([
+      runReportInternally(getLoanProductsReport, { period: 'annual', year: String(targetYear) }),
+      runReportInternally(getLoanProductsReport, { period: 'annual', year: String(prevYear) }),
+      runReportInternally(getExpensesBreakdownReport, { period: 'annual', year: String(targetYear) }),
+      runReportInternally(getExpensesBreakdownReport, { period: 'annual', year: String(prevYear) }),
+      pool.query(`
+        SELECT date, created_at, tab, items, item_name, service_type, particulars, other_category, remarks, amount
+        FROM collections
+        WHERE COALESCE(status, 'completed') != 'cancelled'
+      `),
+      pool.query(`
+        SELECT voucher_date, details
+        FROM check_vouchers
+        WHERE status != 'cancelled' AND (
+          CAST(details AS TEXT) ILIKE '%service fee%'
+          OR CAST(details AS TEXT) ILIKE '%service charge%'
+          OR CAST(details AS TEXT) ILIKE '%service fee revenue%'
+        )
+      `)
+    ]);
+
+    // Helper: put an amount in the right [year][month] bucket
+    const bucket = (store, rawDate, amt) => {
+      const val = parseFloat(amt) || 0;
+      if (!rawDate || val === 0) return;
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return;
+      const y = d.getFullYear();
+      if (y === targetYear) store.current[d.getMonth()] += val;
+      else if (y === prevYear) store.previous[d.getMonth()] += val;
+    };
+    const newStore = () => ({ current: zeros(), previous: zeros() });
+
+    // ---------- Loan Products tracker (interest / fines / other particulars) ----------
+    const trackerRow = (data, predicate) => {
+      const rows = data?.monthly_tracker?.loan_rows || [];
+      const out = zeros();
+      rows.filter(predicate).forEach(r => r.months.forEach((v, i) => { out[i] += v || 0; }));
+      return out;
+    };
+    const interestFor = (data, products) =>
+      trackerRow(data, r => r.particulars === 'Interest' && products.includes(r.product_name));
+    const finesFor = (data, products) => {
+      const out = zeros();
+      (data?.monthly_tracker?.fines_by_product || [])
+        .filter(f => products.includes(f.product_name))
+        .forEach(f => f.months.forEach((v, i) => { out[i] += v || 0; }));
+      return out;
+    };
+    const otherFor = (data, label) => {
+      const row = (data?.monthly_tracker?.other_rows || []).find(o => o.particulars === label);
+      return row ? row.months.map(v => v || 0) : zeros();
+    };
+    const fromTracker = (fn, ...args) => ({ current: fn(loanCur, ...args), previous: fn(loanPrev, ...args) });
+
+    // ---------- Service Fees (deducted from loan releases in Check Vouchers & Collections) ----------
+    const serviceFees = newStore();
+    cvResult.rows.forEach(cv => {
+      if (!Array.isArray(cv.details)) return;
+      cv.details.forEach(d => {
+        if (/service\s*(fee|charge)/i.test(String(d.book_of_account || ''))) {
+          bucket(serviceFees, cv.voucher_date, Math.abs(parseFloat(d.amount) || 0));
+        }
+      });
+    });
+
+    // ---------- Store merchandise, services, deposit interest, CTPL, CISP, CLIMBS (Collections page) ----------
+    const merchSales = newStore();
+    const serviceIncome = newStore();
+    const depositInterest = newStore();
+    const ctplIncome = newStore();
+    const cispIncome = newStore();
+    const climbsIncome = newStore();
+
+    colResult.rows.forEach(col => {
+      const cDate = col.date || col.created_at;
+      const amt = parseFloat(col.amount) || 0;
+      const text = `${col.item_name || ''} ${col.service_type || ''} ${col.particulars || ''} ${col.other_category || ''} ${col.remarks || ''}`.toLowerCase();
+
+      if (/ctpl/.test(text)) { bucket(ctplIncome, cDate, amt); return; }
+      if (/cisp/.test(text)) { bucket(cispIncome, cDate, amt); return; }
+      if (/climbs/.test(text)) { bucket(climbsIncome, cDate, amt); return; }
+      if (/interest\s*(income\s*)?(from|on)\s*deposit|bank\s*interest|deposit\s*interest/.test(text)) {
+        bucket(depositInterest, cDate, amt);
+        return;
+      }
+      if (/insurance/.test(text)) {
+        bucket(climbsIncome, cDate, amt);
+        return;
+      }
+      if (/service\s*(fee|charge)/i.test(text) && !/print|photo|vendo|wifi|rotc|rental/i.test(text)) {
+        bucket(serviceFees, cDate, amt);
+        return;
+      }
+      if (!['sales', 'sales_services', 'services'].includes(col.tab)) return;
+      if (/rice|ganador|soap/.test(text)) return; // counted under Rice / Laundry Soap Sales
+      if (/membership|application\s*fee|pmes|fine|penalt|late\s*charge|donation|grant|share\s*capital/.test(text)) return;
+
+      if (col.service_type) {
+        bucket(serviceIncome, cDate, amt);
+      } else {
+        bucket(merchSales, cDate, amt);
+      }
+    });
+
+    const trackerIns = fromTracker(otherFor, 'Insurance payment');
+    for (let m = 0; m < 12; m++) {
+      const sumCur = climbsIncome.current[m] + cispIncome.current[m] + ctplIncome.current[m];
+      if (trackerIns.current[m] > sumCur) {
+        climbsIncome.current[m] += (trackerIns.current[m] - sumCur);
+      }
+      const sumPrev = climbsIncome.previous[m] + cispIncome.previous[m] + ctplIncome.previous[m];
+      if (trackerIns.previous[m] > sumPrev) {
+        climbsIncome.previous[m] += (trackerIns.previous[m] - sumPrev);
+      }
+    }
+
+    // ---------- Expenses (from the Expense Breakdown report) ----------
+    const EXPENSE_LINES = [
+      { code: '503.01', title: 'Salaries and Wages', match: /salar|wage|payroll|labor/i, description: 'Pay given to cooperative staff and workers.' },
+      { code: '503.05', title: 'Honorarium and Allowances', match: /honorari|allowance/i, description: 'Honoraria and allowances of officers and committee members.' },
+      { code: '503.08', title: 'Office Supplies Expenses', match: /office\s*suppl|office\s*use|supplies/i, description: 'Paper, ink, and other things used in the office.' },
+      { code: '503.10', title: 'Meetings and Conferences', match: /meeting|conference|assembly|meal|snack|representation|seminar|training/i, description: 'Meetings, assemblies, seminars, and meals during them.' },
+      { code: '503.15', title: 'Repairs & Maintenance', match: /repair|maintenance/i, description: 'Fixing and maintaining equipment and the office.' },
+      { code: '503.43', title: 'Licenses Expense', match: /^(?!.*tax).*(license|permit|cedula|clearance)/i, description: 'Business permits, licenses, and clearances.' },
+      { code: '503.17', title: 'Taxes, Fees and Charges', match: /tax|dst|stamp|bank\s*charge|convenience\s*fee|notarial|penalty/i, description: 'Government taxes, bank charges, and other fees.' },
+      { code: '503.26', title: 'Miscellaneous Expense', match: /miscellaneous|misc\b/i, description: 'Small expenses that do not fit other accounts.' }
+    ];
+    const expenseStores = {};
+    EXPENSE_LINES.forEach(l => { expenseStores[l.title] = newStore(); });
+    const otherAdmin = {};   // dynamically discovered admin accounts
+    const costOfSales = {};  // service / merchandise direct costs
+
+    const addExpenses = (data, which) => {
+      (data?.itemized_records || []).forEach(rec => {
+        const amt = parseFloat(rec.amount) || 0;
+        if (amt <= 0 || !rec.date || rec.date === 'N/A') return;
+        const mIdx = Number(String(rec.date).slice(5, 7)) - 1;
+        if (mIdx < 0 || mIdx > 11) return;
+        const acc = String(rec.account_name || 'Other Expense').trim();
+        const cat = String(rec.category || '');
+
+        // Liabilities / fund transfers are not expenses of the period
+        if (/payable|replenish|fund\s*transfer|advances\s*to/i.test(acc)) return;
+
+        // Check standard administrative expense accounts first
+        const line = EXPENSE_LINES.find(l => l.match.test(acc));
+        if (line) {
+          expenseStores[line.title][which][mIdx] += amt;
+          return;
+        }
+
+        if (cat === 'Merchandise Expense' || cat === 'Service Expense' ||
+            /inventory|merchandise|uniform|shirt|short|gloves|id\s*case|cos\s*-|cogs/i.test(acc)) {
+          if (!costOfSales[acc]) costOfSales[acc] = newStore();
+          costOfSales[acc][which][mIdx] += amt;
+          return;
+        }
+
+        if (!otherAdmin[acc]) otherAdmin[acc] = newStore();
+        otherAdmin[acc][which][mIdx] += amt;
+      });
+    };
+    addExpenses(expCur, 'current');
+    addExpenses(expPrev, 'previous');
+
+    // ---------- Assemble the statement ----------
+    const line = (code, title, description, store, alwaysShow = true) => ({
+      code,
+      title,
+      description,
+      always_show: alwaysShow,
+      current: store.current.map(v => Math.round(v * 100) / 100),
+      previous: store.previous.map(v => Math.round(v * 100) / 100)
+    });
+
+    const ALL_LOAN_PRODUCTS = [
+      { name: 'Salary Loan', isCore: true, desc: 'Interest paid on Salary loans.' },
+      { name: 'Project Loan', isCore: true, desc: 'Interest paid on Project loans.' },
+      { name: 'Calamity Loan', isCore: true, desc: 'Interest paid on Calamity loans.' },
+      { name: 'Cash Express', isCore: true, desc: 'Interest paid on Cash Express loans.' },
+      { name: 'Special Occasion', isCore: true, desc: 'Interest paid on Special Occasion loans.' },
+      { name: 'Emergency Loan', isCore: true, desc: 'Interest paid on Emergency loans.' },
+      { name: 'Utility Loan', isCore: true, desc: 'Interest paid on Utility loans.' },
+      { name: 'Rice Loan', isCore: true, desc: 'Interest paid on Rice commodity loans.' },
+      { name: 'Laundry Soap Loan', isCore: true, desc: 'Interest paid on Laundry Soap commodity loans.' },
+      { name: 'Product Loan', isCore: false, desc: 'Interest paid on Product purchase loans.' },
+      { name: 'Mortuary Loan', isCore: false, desc: 'Interest paid on Mortuary assistance loans.' },
+      { name: 'Petty Cash', isCore: false, desc: 'Interest paid on Petty Cash loans.' }
+    ];
+
+    const interestLines = ALL_LOAN_PRODUCTS.map(p =>
+      line('', `Interest Income - ${p.name}`, p.desc, fromTracker(interestFor, [p.name]), p.isCore)
+    );
+
+    const finesLines = ALL_LOAN_PRODUCTS.map(p =>
+      line('', `Fines - ${p.name}`, `Late-payment penalties on ${p.name}.`, fromTracker(finesFor, [p.name]), p.isCore)
+    );
+
+    const statement = {
+      revenues: [
+        {
+          key: 'credit_operations',
+          title: 'Income from Credit Operations',
+          plain_title: 'Money earned from loans',
+          description: 'Interest, service fees, and penalties the cooperative earns from the loans it gives to members.',
+          total_label: 'TOTAL: Income from Credit Operations',
+          groups: [
+            { title: 'Interest Income from Loans', total_label: 'TOTAL: Interest Income from Loans', lines: interestLines },
+            { title: 'Service Fees', total_label: null, lines: [line('', 'Service Fees', 'Fees deducted when a loan is released.', serviceFees)] },
+            { title: 'Fines, Penalties, Surcharges', total_label: 'TOTAL: Fines, Penalties, Surcharges', lines: finesLines }
+          ]
+        },
+        {
+          key: 'other_income',
+          title: 'Other Income',
+          plain_title: 'Money earned from other sources',
+          description: 'Membership fees, insurance commissions, bank interest, and other small income.',
+          total_label: 'TOTAL: Other Income',
+          groups: [
+            { title: 'Interest from Deposits', total_label: null, lines: [line('', 'Income / Interest from Deposits', 'Interest earned from the cooperative’s bank deposits.', depositInterest)] },
+            {
+              title: 'Miscellaneous Income',
+              total_label: 'TOTAL: Miscellaneous Income',
+              lines: [
+                line('', 'Membership Fees', 'One-time fees paid by new members when they join.', fromTracker(otherFor, 'Membership fee')),
+                line('', 'Insurance Income - CLIMBS', 'Insurance payments collected for CLIMBS.', climbsIncome),
+                line('', 'Insurance Income - CISP', 'Insurance payments collected for CISP.', cispIncome),
+                line('', 'Insurance Income - CTPL', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome),
+                line('', 'Raffle Ticket Income', 'Money collected from raffle ticket sales.', fromTracker(otherFor, 'Raffle Ticket payment'), false),
+                line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', fromTracker(otherFor, 'Withdrawal Fee'), false)
+              ]
+            }
+          ]
+        },
+        {
+          key: 'merchandise',
+          title: 'Income from Merchandise',
+          plain_title: 'Money earned from the store',
+          description: 'Sales of uniforms, rice, laundry soap and other store items, plus store services.',
+          total_label: 'TOTAL: Income from Merchandise',
+          groups: [
+            {
+              title: 'Store Sales & Services',
+              total_label: null,
+              lines: [
+                line('', 'Store Merchandise / Uniform Sales', 'Uniforms and other items sold in the cooperative store.', merchSales),
+                line('', 'Rice Sales', 'Rice sold to members.', fromTracker(otherFor, 'Rice sales payment')),
+                line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', fromTracker(otherFor, 'Laundry soap sales')),
+                line('', 'Income from Services', 'Printing, photocopy, rentals and other store services.', serviceIncome, false)
+              ]
+            }
+          ]
+        }
+      ],
+      expenses: [
+        {
+          key: 'administrative_cost',
+          title: 'Administrative Cost',
+          plain_title: 'Money spent to run the cooperative',
+          description: 'Salaries, supplies, meetings, repairs, taxes and other costs of daily operations.',
+          total_label: 'TOTAL: Administrative Cost',
+          groups: [
+            {
+              title: 'Administrative Cost',
+              total_label: null,
+              lines: [
+                ...EXPENSE_LINES
+                  .slice()
+                  .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }))
+                  .map(l => line('', l.title, l.description, expenseStores[l.title])),
+                ...Object.entries(otherAdmin)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([acc, store]) => line('', acc, 'Other operating expense recorded in Disbursements.', store, false))
+              ]
+            }
+          ]
+        },
+        {
+          key: 'cost_of_sales',
+          title: 'Cost of Sales & Services',
+          plain_title: 'Money spent on store goods and services',
+          description: 'Direct costs of the items and services sold by the cooperative store.',
+          total_label: 'TOTAL: Cost of Sales & Services',
+          groups: [
+            {
+              title: 'Cost of Sales & Services',
+              total_label: null,
+              lines: Object.entries(costOfSales)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
+            }
+          ]
+        }
+      ]
+    };
+
+    return res.status(200).json({
+      success: true,
+      year: targetYear,
+      previous_year: prevYear,
+      month_labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+      statement
     });
   } catch (error) {
     next(error);

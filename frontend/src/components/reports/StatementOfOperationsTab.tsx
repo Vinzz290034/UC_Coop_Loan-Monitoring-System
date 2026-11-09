@@ -1,0 +1,858 @@
+'use client';
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
+import api from '@/lib/api';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  FileSpreadsheet,
+  Printer,
+  RefreshCw,
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  Receipt,
+  Scale,
+  Eye,
+  EyeOff,
+  Search,
+  X
+} from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Types (shape returned by GET /reports/statement-of-operations)
+// ---------------------------------------------------------------------------
+interface SooLine {
+  code: string;
+  title: string;
+  description: string;
+  always_show: boolean;
+  current: number[];
+  previous: number[];
+}
+
+interface SooGroup {
+  title: string;
+  total_label: string | null;
+  lines: SooLine[];
+}
+
+interface SooSection {
+  key: string;
+  title: string;
+  plain_title: string;
+  description: string;
+  total_label: string;
+  groups: SooGroup[];
+}
+
+interface SooResponse {
+  year: number;
+  previous_year: number;
+  statement: {
+    revenues: SooSection[];
+    expenses: SooSection[];
+  };
+}
+
+// The 4 columns of the official statement
+interface Figures {
+  thisMonth: number;
+  ytd: number;
+  lastYtd: number;
+  variance: number;
+}
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+const MONTHS_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+const emptyFigures = (): Figures => ({ thisMonth: 0, ytd: 0, lastYtd: 0, variance: 0 });
+
+const addFigures = (a: Figures, b: Figures): Figures => ({
+  thisMonth: a.thisMonth + b.thisMonth,
+  ytd: a.ytd + b.ytd,
+  lastYtd: a.lastYtd + b.lastYtd,
+  variance: a.variance + b.variance
+});
+
+const subFigures = (a: Figures, b: Figures): Figures => ({
+  thisMonth: a.thisMonth - b.thisMonth,
+  ytd: a.ytd - b.ytd,
+  lastYtd: a.lastYtd - b.lastYtd,
+  variance: a.variance - b.variance
+});
+
+const peso = (n: number) =>
+  `₱${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const plain = (n: number) =>
+  (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const HighlightText = ({ text, query }: { text?: string; query: string }) => {
+  if (!text) return null;
+  if (!query) return <>{text}</>;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark
+            key={i}
+            className="bg-emerald-200 dark:bg-emerald-800 text-emerald-950 dark:text-emerald-100 rounded-xs px-0.5 font-bold"
+          >
+            {part}
+          </mark>
+        ) : (
+          <React.Fragment key={i}>{part}</React.Fragment>
+        )
+      )}
+    </>
+  );
+};
+
+type SelectedPeriod = number | 'ytd';
+
+interface Props {
+  initialYear: number;
+  initialMonth: number; // 1-12
+}
+
+export default function StatementOfOperationsTab({ initialYear, initialMonth }: Props) {
+  const [year, setYear] = useState<number>(initialYear);
+  const [selectedPeriod, setSelectedPeriod] = useState<SelectedPeriod>('ytd');
+  const [data, setData] = useState<SooResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [hideEmpty, setHideEmpty] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
+  const yearDropdownRef = useRef<HTMLDivElement>(null);
+
+  const isYtd = selectedPeriod === 'ytd';
+  const q = searchQuery.toLowerCase().trim();
+
+  const doesLineMatch = useCallback((l: SooLine) => {
+    if (!q) return true;
+    return (
+      l.title.toLowerCase().includes(q) ||
+      (l.description && l.description.toLowerCase().includes(q))
+    );
+  }, [q]);
+
+  const monthHasActivity = useCallback((mIdx: number) => {
+    if (!data) return false;
+    const inSections = (sections: SooSection[]) =>
+      sections.some(s =>
+        s.groups.some(g =>
+          g.lines.some(l => Math.abs((l.current || [])[mIdx] || 0) > 0.004)
+        )
+      );
+    return inSections(data.statement.revenues) || inSections(data.statement.expenses);
+  }, [data]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (yearDropdownRef.current && !yearDropdownRef.current.contains(e.target as Node)) {
+        setIsYearDropdownOpen(false);
+      }
+    };
+    if (isYearDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isYearDropdownOpen]);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await api.get('/reports/statement-of-operations', { params: { year } });
+      setData(res.data);
+    } catch (err: any) {
+      console.error('Failed to load Statement of Operations:', err);
+      setError(err.response?.data?.message || 'Failed to load the Statement of Operations.');
+    } finally {
+      setLoading(false);
+    }
+  }, [year]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // ---- Figure calculators -------------------------------------------------
+  const lineFigures = useCallback((line: SooLine): Figures => {
+    const endIdx = isYtd ? 11 : (selectedPeriod as number);
+    const sumTo = (arr: number[]) => (arr || []).slice(0, endIdx + 1).reduce((a, b) => a + (b || 0), 0);
+    const ytd = sumTo(line.current || []);
+    const lastYtd = sumTo(line.previous || []);
+    const thisMonthVal = isYtd ? ytd : ((line.current || [])[selectedPeriod as number] || 0);
+    return {
+      thisMonth: thisMonthVal,
+      ytd,
+      lastYtd,
+      variance: ytd - lastYtd
+    };
+  }, [isYtd, selectedPeriod]);
+
+  const groupFigures = useCallback((g: SooGroup) =>
+    g.lines.reduce((acc, l) => addFigures(acc, lineFigures(l)), emptyFigures()), [lineFigures]);
+
+  const sectionFigures = useCallback((s: SooSection) =>
+    s.groups.reduce((acc, g) => addFigures(acc, groupFigures(g)), emptyFigures()), [groupFigures]);
+
+  const totals = useMemo(() => {
+    if (!data) return null;
+    const revenue = data.statement.revenues.reduce((acc, s) => addFigures(acc, sectionFigures(s)), emptyFigures());
+    const expenses = data.statement.expenses.reduce((acc, s) => addFigures(acc, sectionFigures(s)), emptyFigures());
+    return { revenue, expenses, net: subFigures(revenue, expenses) };
+  }, [data, sectionFigures]);
+
+  const isLineVisible = useCallback((l: SooLine, ignoreSearch = false) => {
+    if (!ignoreSearch && q && !doesLineMatch(l)) return false;
+    const f = lineFigures(l);
+    const hasValue = Math.abs(f.thisMonth) > 0.004 || Math.abs(f.ytd) > 0.004 || Math.abs(f.lastYtd) > 0.004;
+    if (hasValue) return true;
+    if (hideEmpty) return false;
+    if (!ignoreSearch && q) return true;
+    return l.always_show;
+  }, [q, doesLineMatch, lineFigures, hideEmpty]);
+
+  const matchCount = useMemo(() => {
+    if (!q || !data) return 0;
+    let count = 0;
+    const countInSections = (sections: SooSection[]) => {
+      sections.forEach(s => {
+        s.groups.forEach(g => {
+          g.lines.forEach(l => {
+            if (isLineVisible(l)) count++;
+          });
+        });
+      });
+    };
+    countInSections(data.statement.revenues);
+    countInSections(data.statement.expenses);
+    return count;
+  }, [q, data, isLineVisible]);
+
+  const hasRevenueMatches = useMemo(() => {
+    if (!q || !data) return true;
+    return data.statement.revenues.some(s => s.groups.some(g => g.lines.some(l => isLineVisible(l))));
+  }, [q, data, isLineVisible]);
+
+  const hasExpenseMatches = useMemo(() => {
+    if (!q || !data) return true;
+    return data.statement.expenses.some(s => s.groups.some(g => g.lines.some(l => isLineVisible(l))));
+  }, [q, data, isLineVisible]);
+
+  const periodEndLabel = useMemo(() => {
+    if (isYtd) {
+      return `Full Year ${year} (YTD)`;
+    }
+    const mIdx = selectedPeriod as number;
+    const lastDay = new Date(year, mIdx + 1, 0).getDate();
+    return `${MONTHS[mIdx]} ${lastDay}, ${year}`;
+  }, [isYtd, year, selectedPeriod]);
+
+  const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // ---- Excel export -------------------------------------------------------
+  const handleExport = () => {
+    if (!data || !totals) return;
+    const rows: (string | number)[][] = [
+      ['UNIVERSITY OF CEBU-METC MULTIPURPOSE COOPERATIVE'],
+      ['STATEMENT OF OPERATIONS'],
+      [`For the period ended ${periodEndLabel}`],
+      [],
+      ['Account Title', isYtd ? 'Full Year Total' : 'This Month', isYtd ? `Full Year ${year}` : 'YTD This Month', isYtd ? `Full Year ${data.previous_year}` : 'YTD Same Month Last Year', 'YTD Variance']
+    ];
+    const push = (title: string, f: Figures) =>
+      rows.push([title, f.thisMonth, f.ytd, f.lastYtd, f.variance]);
+
+    const exportSections = (sections: SooSection[]) => {
+      sections.forEach(s => {
+        rows.push([s.title.toUpperCase()]);
+        s.groups.forEach(g => {
+          if (s.groups.length > 1) rows.push([g.title]);
+          g.lines.filter(l => isLineVisible(l, true)).forEach(l => push(l.title, lineFigures(l)));
+          if (g.total_label) push(g.total_label, groupFigures(g));
+        });
+        push(s.total_label, sectionFigures(s));
+        rows.push([]);
+      });
+    };
+
+    rows.push(['REVENUES']);
+    exportSections(data.statement.revenues);
+    push('TOTAL: REVENUES', totals.revenue);
+    rows.push([]);
+    rows.push(['EXPENSES']);
+    exportSections(data.statement.expenses);
+    push('TOTAL: EXPENSES', totals.expenses);
+    rows.push([]);
+    push('NET SURPLUS BEFORE OTHER ITEMS', totals.net);
+    push('TOTAL NET SURPLUS', totals.net);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 50 }, { wch: 18 }, { wch: 18 }, { wch: 26 }, { wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Statement of Operations');
+    const fileName = isYtd
+      ? `Statement_of_Operations_Full_Year_${year}.xlsx`
+      : `Statement_of_Operations_${MONTHS[selectedPeriod as number]}_${year}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
+  // ---- Small render helpers ----------------------------------------------
+  const VarianceCell = ({ value, isExpense, bold }: { value: number; isExpense?: boolean; bold?: boolean }) => {
+    if (Math.abs(value) < 0.005) {
+      return <span className="text-neutral-400">{plain(0)}</span>;
+    }
+    // For income, going up is good. For expenses, going up is a warning.
+    const good = isExpense ? value < 0 : value > 0;
+    const Icon = value > 0 ? TrendingUp : TrendingDown;
+    return (
+      <span className={`inline-flex items-center justify-end gap-1 ${bold ? 'font-black' : 'font-semibold'} ${good ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+        <Icon className="w-3 h-3 shrink-0" />
+        {value > 0 ? '+' : '−'}{plain(Math.abs(value))}
+      </span>
+    );
+  };
+
+  const FigureCells = ({ f, isExpense, bold }: { f: Figures; isExpense?: boolean; bold?: boolean }) => (
+    <>
+      <td className={`p-2.5 text-right font-mono ${bold ? 'font-black' : ''}`}>{plain(f.thisMonth)}</td>
+      <td className={`p-2.5 text-right font-mono ${bold ? 'font-black' : 'font-semibold'}`}>{plain(f.ytd)}</td>
+      <td className={`p-2.5 text-right font-mono text-neutral-500 dark:text-neutral-400 ${bold ? 'font-black' : ''}`}>{plain(f.lastYtd)}</td>
+      <td className="p-2.5 text-right font-mono"><VarianceCell value={f.variance} isExpense={isExpense} bold={bold} /></td>
+    </>
+  );
+
+  const TableHead = () => (
+    <thead className="bg-neutral-50 dark:bg-neutral-800/60 text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 font-bold">
+      <tr>
+        <th className="p-2.5 text-left min-w-[280px]">Account Title</th>
+        <th className="p-2.5 text-right w-32">{isYtd ? 'Full Year Total' : 'This Month'}</th>
+        <th className="p-2.5 text-right w-36">{isYtd ? `Full Year ${year}` : 'YTD This Month'}</th>
+        <th className="p-2.5 text-right w-40">{isYtd ? `Full Year ${data?.previous_year || year - 1}` : 'YTD Same Month Last Year'}</th>
+        <th className="p-2.5 text-right w-36">YTD Variance</th>
+      </tr>
+    </thead>
+  );
+
+  const renderSection = (s: SooSection, isExpense: boolean, number: number) => {
+    const isCollapsed = q ? false : !!collapsed[s.key];
+    const sf = sectionFigures(s);
+
+    const hasAnyMatchingLine = s.groups.some(g => g.lines.some(l => isLineVisible(l)));
+    if (q && !hasAnyMatchingLine) return null;
+
+    const accent = isExpense
+      ? 'border-amber-300 dark:border-amber-800/70'
+      : 'border-emerald-300 dark:border-emerald-800/80';
+    const badge = isExpense
+      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300'
+      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300';
+
+    return (
+      <div key={s.key} className={`rounded-2xl border ${accent} bg-white dark:bg-neutral-900 overflow-hidden shadow-2xs print:shadow-none print:break-inside-avoid`}>
+        {/* Section header (click to open / close) */}
+        <button
+          type="button"
+          onClick={() => toggleSection(s.key)}
+          className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors cursor-pointer"
+        >
+          <div className="flex items-start gap-3">
+            <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center text-sm font-black ${badge}`}>
+              {number}
+            </span>
+            <div>
+              <div className="text-sm font-black text-neutral-900 dark:text-white">
+                <HighlightText text={s.plain_title} query={q} />
+              </div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+                <HighlightText text={s.title} query={q} />
+              </div>
+              <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5 max-w-xl">{s.description}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 self-end sm:self-auto">
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wider font-bold text-neutral-400">Year to date</div>
+              <div className={`text-lg font-black font-mono ${isExpense ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                {peso(sf.ytd)}
+              </div>
+              <div className="text-[10px] text-neutral-400 font-mono">
+                {isYtd ? `Full Year: ${peso(sf.ytd)}` : `This month: ${peso(sf.thisMonth)}`}
+              </div>
+            </div>
+            <ChevronDown className={`w-5 h-5 text-neutral-400 transition-transform print:hidden ${isCollapsed ? '' : 'rotate-180'}`} />
+          </div>
+        </button>
+
+        {!isCollapsed && (
+          <div className="overflow-x-auto border-t border-neutral-200 dark:border-neutral-800">
+            <table className="w-full text-xs border-collapse">
+              <TableHead />
+              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                {s.groups.map((g, gi) => {
+                  const visible = g.lines.filter(l => isLineVisible(l));
+                  if (visible.length === 0 && (hideEmpty || q)) return null;
+                  return (
+                    <React.Fragment key={`${s.key}-${gi}`}>
+                      {s.groups.length > 1 && (
+                        <tr className="bg-neutral-50/60 dark:bg-neutral-800/30">
+                          <td colSpan={5} className="px-2.5 pt-3 pb-1.5 text-[11px] font-black uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
+                            <HighlightText text={g.title} query={q} />
+                          </td>
+                        </tr>
+                      )}
+                      {visible.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-3 text-center text-[11px] text-neutral-400 italic">
+                            No amounts recorded yet.
+                          </td>
+                        </tr>
+                      ) : visible.map((l, li) => (
+                        <tr key={`${s.key}-${gi}-${li}`} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30 text-neutral-800 dark:text-neutral-200">
+                          <td className="p-2.5">
+                            <div className="font-semibold text-neutral-900 dark:text-white">
+                              <HighlightText text={l.title} query={q} />
+                            </div>
+                            <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 print:hidden">
+                              <HighlightText text={l.description} query={q} />
+                            </div>
+                          </td>
+                          <FigureCells f={lineFigures(l)} isExpense={isExpense} />
+                        </tr>
+                      ))}
+                      {g.total_label && visible.length > 0 && (
+                        <tr className="bg-neutral-50 dark:bg-neutral-800/40 text-neutral-900 dark:text-white border-t border-neutral-300 dark:border-neutral-700">
+                          <td className="p-2.5 text-[11px] font-bold uppercase tracking-wide">{g.total_label}</td>
+                          <FigureCells f={groupFigures(g)} isExpense={isExpense} bold />
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className={`${isExpense ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-emerald-50 dark:bg-emerald-950/40'} text-neutral-900 dark:text-white border-t-2 ${isExpense ? 'border-amber-500' : 'border-emerald-600'}`}>
+                  <td className="p-2.5 text-[11px] font-black uppercase tracking-wide">{s.total_label}</td>
+                  <FigureCells f={sf} isExpense={isExpense} bold />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const TotalRow = ({ label, f, tone, isExpense }: { label: string; f: Figures; tone: 'green' | 'amber' | 'dark'; isExpense?: boolean }) => {
+    const toneClass =
+      tone === 'green'
+        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800'
+        : tone === 'amber'
+        ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800'
+        : 'bg-[#064e3b] text-white border-emerald-900';
+    const isDark = tone === 'dark';
+    return (
+      <div className={`rounded-2xl border overflow-x-auto ${toneClass}`}>
+        <table className="w-full text-xs">
+          <tbody>
+            <tr className={isDark ? 'text-white' : 'text-neutral-900 dark:text-white'}>
+              <td className="p-3 min-w-[280px] text-xs font-black uppercase tracking-wider">{label}</td>
+              <td className="p-3 w-32 text-right font-mono font-black">{plain(f.thisMonth)}</td>
+              <td className="p-3 w-36 text-right font-mono font-black">{plain(f.ytd)}</td>
+              <td className={`p-3 w-40 text-right font-mono font-bold ${isDark ? 'text-emerald-200' : 'text-neutral-500'}`}>{plain(f.lastYtd)}</td>
+              <td className="p-3 w-36 text-right font-mono">
+                {isDark ? (
+                  <span className="font-black">{f.variance > 0 ? '+' : f.variance < 0 ? '−' : ''}{plain(Math.abs(f.variance))}</span>
+                ) : (
+                  <VarianceCell value={f.variance} isExpense={isExpense} bold />
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  // ---- Render -------------------------------------------------------------
+  return (
+    <div className="space-y-5">
+      {/* ================= Header & period picker ================= */}
+      <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs space-y-4 print:border-0 print:shadow-none">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+          <div>
+            <div className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              University of Cebu-METC Multipurpose Cooperative
+            </div>
+            <h2 className="text-xl font-black text-neutral-900 dark:text-white">Statement of Operations</h2>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              For the period ended <span className="font-bold text-neutral-800 dark:text-neutral-200">{periodEndLabel}</span>
+              {' '}— shows how much the cooperative <b>earned</b>, how much it <b>spent</b>, and what was <b>left over</b>.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            {/* Year Selector matching Loan Products Tab format */}
+            <div className="flex items-center gap-1 bg-emerald-50/90 dark:bg-emerald-950/60 p-1 rounded-xl border border-emerald-200 dark:border-emerald-800/80">
+              <button
+                type="button"
+                disabled={year <= 2024}
+                onClick={() => {
+                  if (year > 2024) {
+                    setYear(year - 1);
+                    setIsYearDropdownOpen(false);
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1 ${
+                  year <= 2024
+                    ? 'text-neutral-300 dark:text-neutral-600 cursor-not-allowed'
+                    : 'text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200/70 dark:hover:bg-emerald-900/70 cursor-pointer active:scale-95'
+                }`}
+                title={year <= 2024 ? 'Starts at Year 2024' : `Switch to Previous Year (${year - 1})`}
+              >
+                <span>‹</span>
+                <span className="hidden sm:inline">{Math.max(2024, year - 1)}</span>
+              </button>
+
+              <div className="relative" ref={yearDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsYearDropdownOpen(prev => !prev)}
+                  className="px-3 py-1 rounded-lg text-xs font-extrabold bg-[#064e3b] hover:bg-emerald-800 text-white cursor-pointer shadow-2xs font-mono inline-flex items-center gap-1.5 transition-all duration-200 active:scale-95"
+                >
+                  <span>Year {year}</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-emerald-300 transition-transform duration-200 ease-out ${
+                      isYearDropdownOpen ? 'rotate-180' : 'rotate-0'
+                    }`}
+                  />
+                </button>
+
+                {/* Animated Dropdown Menu */}
+                <div
+                  className={`absolute left-1/2 -translate-x-1/2 mt-2 w-36 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-200 dark:border-emerald-800/80 shadow-xl py-1.5 z-50 origin-top transition-all duration-200 ease-out ${
+                    isYearDropdownOpen
+                      ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                      : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+                  }`}
+                >
+                  <div className="px-3 py-1 text-[9.5px] font-bold uppercase tracking-wider text-neutral-400 border-b border-neutral-100 dark:border-neutral-800 mb-1">
+                    Select Fiscal Year
+                  </div>
+                  <div className="max-h-56 overflow-y-auto px-1.5 space-y-0.5">
+                    {Array.from(new Set([2024, 2025, 2026, 2027, 2028, year, year - 1, year + 1]))
+                      .filter(yr => yr >= 2024)
+                      .sort((a, b) => a - b)
+                      .map((yr: number) => {
+                        const isSelectedYear = year === yr;
+                        return (
+                          <button
+                            key={yr}
+                            type="button"
+                            onClick={() => {
+                              setYear(yr);
+                              setIsYearDropdownOpen(false);
+                            }}
+                            className={`w-full px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center justify-between transition-all duration-150 cursor-pointer ${
+                              isSelectedYear
+                                ? 'bg-[#064e3b] text-white shadow-2xs'
+                                : 'text-neutral-700 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 hover:text-emerald-800 dark:hover:text-emerald-300 hover:translate-x-0.5'
+                            }`}
+                          >
+                            <span>Year {yr}</span>
+                            {isSelectedYear && <Check className="w-3.5 h-3.5 text-emerald-300" />}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setYear(year + 1);
+                  setIsYearDropdownOpen(false);
+                }}
+                className="px-2.5 py-1 rounded-lg text-xs font-extrabold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200/70 dark:hover:bg-emerald-900/70 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                title={`Switch to Next Year (${year + 1})`}
+              >
+                <span className="hidden sm:inline">{year + 1}</span>
+                <span>›</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchData}
+              disabled={loading}
+              className="p-1.5 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+              title="Refresh"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={!data}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs cursor-pointer disabled:opacity-50"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold text-xs cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" /> Print
+            </button>
+          </div>
+        </div>
+
+        {/* Step 1: choose a month or Full Year (YTD) */}
+        <div className="print:hidden">
+          <div className="text-[11px] font-bold text-neutral-600 dark:text-neutral-300 mb-1.5">
+            Step 1 — Filter by month or Full Year (YTD):
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSelectedPeriod('ytd')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                isYtd
+                  ? 'bg-[#064e3b] text-white shadow-xs'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50'
+              }`}
+            >
+              <span>Full Year (YTD)</span>
+            </button>
+            {MONTHS_SHORT.map((m, idx) => {
+              const isSelected = selectedPeriod === idx;
+              const hasActivity = monthHasActivity(idx);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setSelectedPeriod(idx)}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-[#064e3b] text-white shadow-xs'
+                      : hasActivity
+                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/70 hover:bg-emerald-100/80'
+                      : 'bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 dark:text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                  }`}
+                >
+                  <span>{m}</span>
+                  {hasActivity && (
+                    <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-emerald-300' : 'bg-emerald-500'}`} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Search & Options */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-neutral-100 dark:border-neutral-800 print:hidden">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search account or line item (e.g. Salary, CLIMBS, Fines, Taxes)..."
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700/60 focus:border-emerald-500 focus:bg-white dark:focus:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 transition-all outline-none"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {searchQuery.trim() && (
+              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 rounded-xl">
+                {matchCount} {matchCount === 1 ? 'account match' : 'account matches'}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setHideEmpty(v => !v)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+            >
+              {hideEmpty ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              {hideEmpty ? 'Show all accounts' : 'Hide accounts with no amount'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-rose-600" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {loading && !data ? (
+        <div className="p-12 text-center">
+          <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
+          <p className="text-xs font-bold text-neutral-500">Preparing the Statement of Operations… this may take a moment.</p>
+        </div>
+      ) : data && totals ? (
+        <div className={`space-y-5 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+          {/* ================= Quick answer ================= */}
+          <div className={`p-4 rounded-2xl border flex items-start gap-3 ${
+            totals.net.ytd >= 0
+              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800'
+              : 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800'
+          }`}>
+            <Scale className={`w-6 h-6 shrink-0 ${totals.net.ytd >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} />
+            <div className="text-sm text-neutral-800 dark:text-neutral-200">
+              <div className="font-black">In short:</div>
+              {isYtd ? (
+                <>
+                  For the full year <b>{year}</b> (YTD), the cooperative earned <b>{peso(totals.revenue.ytd)}</b> and spent{' '}
+                  <b>{peso(totals.expenses.ytd)}</b>. That leaves a{' '}
+                  <b className={totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
+                    {totals.net.ytd >= 0 ? 'surplus (extra money)' : 'deficit (shortage)'} of {peso(Math.abs(totals.net.ytd))}
+                  </b>.
+                </>
+              ) : (
+                <>
+                  From January to {MONTHS[selectedPeriod as number]} {year}, the cooperative earned <b>{peso(totals.revenue.ytd)}</b> and spent{' '}
+                  <b>{peso(totals.expenses.ytd)}</b>. That leaves a{' '}
+                  <b className={totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
+                    {totals.net.ytd >= 0 ? 'surplus (extra money)' : 'deficit (shortage)'} of {peso(Math.abs(totals.net.ytd))}
+                  </b>.
+                  {' '}For {MONTHS[selectedPeriod as number]} alone, the result is{' '}
+                  <b>{totals.net.thisMonth >= 0 ? '' : '−'}{peso(Math.abs(totals.net.thisMonth))}</b>.
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* ================= Big summary cards ================= */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              { label: 'Total Income (Revenues)', hint: 'All money earned', f: totals.revenue, icon: Wallet, color: 'text-emerald-700 dark:text-emerald-400', isExpense: false },
+              { label: 'Total Expenses', hint: 'All money spent', f: totals.expenses, icon: Receipt, color: 'text-amber-700 dark:text-amber-400', isExpense: true },
+              { label: 'Total Net Surplus', hint: 'Income minus expenses', f: totals.net, icon: Scale, color: totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400', isExpense: false }
+            ].map(c => {
+              const Icon = c.icon;
+              return (
+                <div key={c.label} className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[11px] font-black uppercase tracking-wider text-neutral-600 dark:text-neutral-300">{c.label}</div>
+                      <div className="text-[10.5px] text-neutral-400">{c.hint}</div>
+                    </div>
+                    <Icon className={`w-5 h-5 ${c.color}`} />
+                  </div>
+                  <div className={`text-2xl font-black font-mono mt-2 ${c.color}`}>{peso(c.f.ytd)}</div>
+                  <div className="text-[10.5px] text-neutral-500">
+                    {isYtd ? `Full Year ${year} (YTD)` : `Year to date (Jan – ${MONTHS_SHORT[selectedPeriod as number]} ${year})`}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800 grid grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <div className="text-neutral-400">{isYtd ? 'Annual' : 'This month'}</div>
+                      <div className="font-mono font-bold text-neutral-800 dark:text-neutral-200">{peso(c.f.thisMonth)}</div>
+                    </div>
+                    <div>
+                      <div className="text-neutral-400">vs. last year</div>
+                      <div className="font-mono"><VarianceCell value={c.f.variance} isExpense={c.isExpense} bold /></div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ================= REVENUES ================= */}
+          {hasRevenueMatches && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-[11px] font-black uppercase tracking-wider">Part A</span>
+                <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Revenues — Money Coming In</h3>
+              </div>
+              {data.statement.revenues.map((s, i) => renderSection(s, false, i + 1))}
+              {!q && <TotalRow label="TOTAL: REVENUES" f={totals.revenue} tone="green" />}
+            </div>
+          )}
+
+          {/* ================= EXPENSES ================= */}
+          {hasExpenseMatches && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-[11px] font-black uppercase tracking-wider">Part B</span>
+                <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Expenses — Money Going Out</h3>
+              </div>
+              {data.statement.expenses.map((s, i) => renderSection(s, true, i + 1))}
+              {!q && <TotalRow label="TOTAL: EXPENSES" f={totals.expenses} tone="amber" isExpense />}
+            </div>
+          )}
+
+          {/* ================= NET SURPLUS ================= */}
+          {!q && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-[#064e3b] text-white text-[11px] font-black uppercase tracking-wider">Part C</span>
+                <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Result — What Is Left Over</h3>
+              </div>
+              <TotalRow label="Net Surplus Before Other Items" f={totals.net} tone="green" />
+              <TotalRow label="TOTAL NET SURPLUS" f={totals.net} tone="dark" />
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                Net Surplus = Total Revenues − Total Expenses. A positive amount means the cooperative earned more than it spent.
+              </p>
+            </div>
+          )}
+
+          {/* ================= No matches state ================= */}
+          {q && matchCount === 0 && (
+            <div className="p-8 text-center rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800">
+              <Search className="w-8 h-8 text-neutral-400 mx-auto mb-2" />
+              <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                No accounts or line items match &ldquo;{searchQuery}&rdquo;
+              </div>
+              <div className="text-xs text-neutral-500 mt-1">
+                Try searching for a different loan product, expense, or income category.
+              </div>
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="mt-3 px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold cursor-pointer"
+              >
+                Clear Search
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
