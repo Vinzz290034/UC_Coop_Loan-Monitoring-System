@@ -117,7 +117,7 @@ interface Loan {
 }
 
 // Standard cooperative loan purpose choices and account classifications
-export const LOAN_PURPOSES = [
+const LOAN_PURPOSES = [
   'Education',
   'Medical/Emergency',
   'House Renovation',
@@ -130,8 +130,8 @@ export const LOAN_PURPOSES = [
   'Others'
 ] as const;
 
-export const ACCOUNT_CLASSIFICATIONS = ['Non DOSRI', 'DOSRI'] as const;
-export const PAYMENT_MODES = ['SD 2', 'Hand -in', 'SD 30', 'SD 15'] as const;
+const ACCOUNT_CLASSIFICATIONS = ['Non DOSRI', 'DOSRI'] as const;
+const PAYMENT_MODES = ['SD 2', 'Hand -in', 'SD 30', 'SD 15'] as const;
 
 // --- Google Drive Spreadsheet Formatters & Helpers ---
 const formatSheetDate = (dateVal: string | Date | null | undefined, shortYear = false) => {

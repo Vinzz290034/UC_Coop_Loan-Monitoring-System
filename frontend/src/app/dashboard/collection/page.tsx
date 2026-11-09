@@ -50,15 +50,19 @@ import {
   Tag
 } from 'lucide-react';
 
-export type CollectionTab = 'all' | 'credit' | 'sales_services' | 'sales_registry' | 'billing';
+import type {
+  CollectionTab,
+  TabConfig,
+  CollectionLoanPayment,
+  FormLoanEntry,
+  CollectionMerchandiseItem,
+  CollectionItem,
+  PaymentMethod,
+  SelectOption,
+  MemberOption
+} from '@/types/collection';
 
-export interface TabConfig {
-  id: CollectionTab;
-  label: string;
-  description: string;
-}
-
-export const COLLECTION_TABS: TabConfig[] = [
+const COLLECTION_TABS: TabConfig[] = [
   { id: 'all', label: 'All Collections', description: 'Consolidated master collection registry across all revenue categories' },
   { id: 'credit', label: 'Credit', description: 'Daily member loan amortizations, credit repayments, share capital & deposits' },
   { id: 'sales_services', label: 'Sales & Services', description: 'Itemized merchandise sales, uniforms, store inventory, photocopying, and printing services' },
@@ -66,87 +70,7 @@ export const COLLECTION_TABS: TabConfig[] = [
   { id: 'billing', label: 'Billing', description: 'Official METC Coop Salary Deduction List for Accounting (Payroll Collection)' },
 ];
 
-export interface CollectionLoanPayment {
-  loan_account: string;
-  principal_amount?: number;
-  interest_account: string;
-  interest_amount?: number;
-  fines_account: string;
-  fines_amount?: number;
-}
-
-export interface FormLoanEntry {
-  id: string;
-  loan_account: string;
-  principal_amount: string;
-  interest_account: string;
-  interest_amount: string;
-  fines_account: string;
-  fines_amount: string;
-}
-
-export interface CollectionMerchandiseItem {
-  id: string;
-  item: string;
-  description: string;
-  size: string;
-  quantity: string | number;
-  cost_price: string | number;
-  selling_price: string | number;
-  revenue?: number;
-  gross_profit?: number;
-}
-
-export interface CollectionItem {
-  id: string;
-  tab: 'credit' | 'sales' | 'services' | 'sales_services' | 'others';
-  date: string;
-  or_no: string;
-  payor_name: string;
-  member_id?: string;
-  // Credit specific
-  loans?: CollectionLoanPayment[];
-  loan_account?: string;
-  principal_amount?: number;
-  interest_account?: string;
-  interest_amount?: number;
-  fines_account?: string;
-  fines_amount?: number;
-  common_share_amount?: number;
-  membership_fee?: number;
-  billing_amount?: number;
-  particulars_amount?: number;
-  // Sales specific (itemized & multi-item)
-  items?: CollectionMerchandiseItem[];
-  item_name?: string;
-  item_category?: string;
-  quantity?: number;
-  unit_price?: number;
-  size?: string;
-  cost_price?: number;
-  selling_price?: number;
-  revenue?: number;
-  gross_profit?: number;
-  // Services specific
-  service_type?: string;
-  service_copies?: number;
-  service_rate?: number;
-  // Others specific
-  particulars?: string;
-  other_category?: string;
-  // General
-  amount: number;
-  payment_method: PaymentMethod;
-  reference_no?: string;
-  bank_name?: string;
-  status?: 'completed' | 'on process' | 'filed';
-  remarks?: string;
-  collected_by: string;
-}
-
-export type PaymentMethod = 'Cash' | 'Salary Deduction' | 'GCash' | 'Bank Transfer' | 'Cheque' | 'Cash in Vault' | 'Check' | 'Payroll Deduction';
-
-export const BANK_OPTIONS: SelectOption[] = [
+const BANK_OPTIONS: SelectOption[] = [
   { value: 'BDO Unibank', label: 'BDO Unibank' },
   { value: 'Bank of the Philippine Islands (BPI)', label: 'Bank of the Philippine Islands (BPI)' },
   { value: 'Metrobank', label: 'Metrobank' },
@@ -164,13 +88,13 @@ export const BANK_OPTIONS: SelectOption[] = [
   { value: 'Other Bank', label: 'Other Bank (Specify...)' },
 ];
 
-export const CASHIER_OPTIONS: SelectOption[] = [
+const CASHIER_OPTIONS: SelectOption[] = [
   { value: 'CHINNETTE A. LAMOSTE', label: 'CHINNETTE A. LAMOSTE' },
   { value: 'VANESSA MAE A. MONDRANO', label: 'VANESSA MAE A. MONDRANO' },
   { value: 'DAILYN JAY J. LEDESMA', label: 'DAILYN JAY J. LEDESMA' },
 ];
 
-export const PAYMENT_METHOD_OPTIONS: SelectOption[] = [
+const PAYMENT_METHOD_OPTIONS: SelectOption[] = [
   { value: 'Cash', label: 'Cash' },
   { value: 'Salary Deduction', label: 'Salary Deduction' },
   { value: 'GCash', label: 'GCash' },
@@ -179,13 +103,7 @@ export const PAYMENT_METHOD_OPTIONS: SelectOption[] = [
   { value: 'Cash in Vault', label: 'Cash in Vault' },
 ];
 
-export interface SelectOption {
-  value: string;
-  label: string;
-  description?: string;
-}
-
-export const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
+const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
   { value: 'Loans Payable - Salary', label: 'Loans Payable - Salary' },
   { value: 'Loans Payable - Project', label: 'Loans Payable - Project' },
   { value: 'Loans Payable - Product', label: 'Loans Payable - Product' },
@@ -200,7 +118,7 @@ export const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
   { value: 'Loans Payable - Laundry Soap', label: 'Loans Payable - Laundry Soap' },
 ];
 
-export const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
+const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
   { value: 'Interest Received - Salary', label: 'Interest Received - Salary' },
   { value: 'Interest Received - Project', label: 'Interest Received - Project' },
   { value: 'Interest Received - Product', label: 'Interest Received - Product' },
@@ -215,7 +133,7 @@ export const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
   { value: 'Interest Received - Laundry Soap', label: 'Interest Received - Laundry Soap' },
 ];
 
-export const FINES_OPTIONS: SelectOption[] = [
+const FINES_OPTIONS: SelectOption[] = [
   { value: 'Fines - Salary', label: 'Fines - Salary' },
   { value: 'Fines - Project', label: 'Fines - Project' },
   { value: 'Fines - Product', label: 'Fines - Product' },
@@ -230,18 +148,12 @@ export const FINES_OPTIONS: SelectOption[] = [
   { value: 'Fines - Laundry Soap', label: 'Fines - Laundry Soap' },
 ];
 
-export const CREDIT_PARTICULARS_OPTIONS: SelectOption[] = [
+const CREDIT_PARTICULARS_OPTIONS: SelectOption[] = [
   { value: 'Insurance Payment', label: 'Insurance Payment' },
   { value: 'Raffle Ticket', label: 'Raffle Ticket' },
   { value: 'Donation & Grants', label: 'Donation & Grants' },
   { value: 'Withdrawal Fee', label: 'Withdrawal Fee' },
 ];
-
-export interface MemberOption {
-  id: string;
-  name: string;
-  member_no: string;
-}
 
 interface AnimatedSelectProps {
   value: string;

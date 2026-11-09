@@ -53,7 +53,7 @@ import {
   restoreRfDeletedAccount
 } from '@/lib/accountCategories';
 
-export type ReportTab =
+type ReportTab =
   | 'merchandise'
   | 'expenses'
   | 'categories'
@@ -63,7 +63,7 @@ export type ReportTab =
   | 'financial_statement'
   | 'summary';
 
-export type ReportPeriod = 'daily' | 'monthly' | 'annual';
+type ReportPeriod = 'daily' | 'monthly' | 'annual';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import type { CollectionItem } from '@/app/dashboard/collection/page';
+import type { CollectionItem } from '@/types/collection';
 
 interface Props {
   item: CollectionItem | null;

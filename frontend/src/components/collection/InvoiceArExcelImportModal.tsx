@@ -22,7 +22,7 @@ import {
   FileText,
   Trash2
 } from 'lucide-react';
-import { CollectionItem, CollectionTab, CollectionLoanPayment } from '@/app/dashboard/collection/page';
+import type { CollectionItem, CollectionTab, CollectionLoanPayment } from '@/types/collection';
 
 interface Props {
   isOpen: boolean;

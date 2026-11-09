@@ -46,7 +46,7 @@ import {
 } from 'lucide-react';
 
 // Tab configuration matching the user spreadsheet structure
-export type DisbursementTab =
+type DisbursementTab =
   | 'summary'
   | 'stl_replenishment'
   | 'revolving_fund_replenishment'
@@ -63,7 +63,7 @@ interface TabConfig {
   description: string;
 }
 
-export const DISBURSEMENT_TABS: TabConfig[] = [
+const DISBURSEMENT_TABS: TabConfig[] = [
   {
     id: 'summary',
     label: 'All Vouchers',
@@ -115,9 +115,9 @@ export const DISBURSEMENT_TABS: TabConfig[] = [
   }
 ];
 
-export const CATEGORY_TABS: TabConfig[] = DISBURSEMENT_TABS.filter(t => t.id !== 'summary');
+const CATEGORY_TABS: TabConfig[] = DISBURSEMENT_TABS.filter(t => t.id !== 'summary');
 
-export const DISBURSEMENT_CATEGORY_OPTIONS: { value: string; label: string }[] = [
+const DISBURSEMENT_CATEGORY_OPTIONS: { value: string; label: string }[] = [
   { value: 'Regular Loans', label: 'Regular Loans' },
   { value: 'STL', label: 'STL Replenishment' },
   { value: 'Revolving Fund', label: 'Revolving Fund Replenishment' },
@@ -128,20 +128,20 @@ export const DISBURSEMENT_CATEGORY_OPTIONS: { value: string; label: string }[] =
   { value: 'Others', label: 'Others' }
 ];
 
-export interface RevolvingFundClassification {
+interface RevolvingFundClassification {
   name: string;
   defaultAmount: number;
   shortName: string;
 }
 
-export const REVOLVING_FUND_CLASSIFICATIONS: RevolvingFundClassification[] = [
+const REVOLVING_FUND_CLASSIFICATIONS: RevolvingFundClassification[] = [
   { name: 'Revolving Fund - Honorarium & Wages', defaultAmount: 56100, shortName: 'Honorarium & Wages' },
   { name: 'Revolving Fund - Petty Cash', defaultAmount: 3000, shortName: 'Petty Cash' },
   { name: 'Revolving Fund - Rice', defaultAmount: 50000, shortName: 'Rice' },
   { name: 'Revolving Fund - Manager', defaultAmount: 100000, shortName: 'Manager' },
 ];
 
-export const detectRfClassification = (cv?: any, rows?: any[]): string => {
+const detectRfClassification = (cv?: any, rows?: any[]): string => {
   const directClass = String(cv?.rf_classification || cv?.revolving_fund_classification || '').trim();
   if (directClass) {
     for (const c of REVOLVING_FUND_CLASSIFICATIONS) {
@@ -210,7 +210,7 @@ export const detectRfClassification = (cv?: any, rows?: any[]): string => {
   return '';
 };
 
-export const formatCategoryLabel = (folderName?: string, cv?: any): string => {
+const formatCategoryLabel = (folderName?: string, cv?: any): string => {
   const targetFolder = folderName || cv?.folder_name;
   if (targetFolder) {
     if (/revolving/i.test(targetFolder)) {
@@ -274,7 +274,7 @@ export const formatCategoryLabel = (folderName?: string, cv?: any): string => {
   return 'Regular Loans';
 };
 
-export const DRAW_BANK_OPTIONS: { value: string; label: string }[] = [
+const DRAW_BANK_OPTIONS: { value: string; label: string }[] = [
   { value: 'BDO', label: 'BDO' },
   { value: 'MBTC', label: 'MBTC' }
 ];
@@ -399,7 +399,7 @@ function AnimatedSelect({
   );
 }
 
-export interface CvRowItem {
+interface CvRowItem {
   id?: string;
   date?: string;
   voucher_no?: string;
@@ -412,7 +412,7 @@ export interface CvRowItem {
   pairedWithId?: string;
 }
 
-export const formatPayeeName = (name?: string): string => {
+const formatPayeeName = (name?: string): string => {
   if (!name || typeof name !== 'string') return name || '';
   const trimmed = name.trim();
   if (!trimmed) return '';
@@ -429,7 +429,7 @@ export const formatPayeeName = (name?: string): string => {
   return trimmed.replace(/\s+/g, ' ').toUpperCase();
 };
 
-export const formatSignatoryName = (name?: string, fallback: string = 'CHINNETTE A. LAMOSTE'): string => {
+const formatSignatoryName = (name?: string, fallback: string = 'CHINNETTE A. LAMOSTE'): string => {
   if (!name) return fallback;
   const trimmed = name.trim();
   if (/^(lamoste|lamoste,?\s*chinnette(\s*a\.?)?|chinnette\s*lamoste)$/i.test(trimmed)) {
@@ -444,20 +444,19 @@ export const formatSignatoryName = (name?: string, fallback: string = 'CHINNETTE
   return trimmed;
 };
 
-export const isCreditAccountDesc = (desc?: string): boolean => {
+const isCreditAccountDesc = (desc?: string): boolean => {
   if (!desc) return false;
   return /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test(desc.trim());
 };
 
-export const checkIsCreditRow = (row: { isAutoCredit?: boolean; is_credit?: boolean; description?: string; credit?: any; debit?: any }): boolean => {
+const checkIsCreditRow = (row: { isAutoCredit?: boolean; is_credit?: boolean; description?: string; credit?: any; debit?: any }): boolean => {
   if (row.isAutoCredit === true || row.is_credit === true) return true;
   if (isCreditAccountDesc(row.description)) return true;
   if (row.credit !== null && row.credit !== undefined && row.credit !== '' && Number(row.credit) > 0 && (!row.debit || Number(row.debit) === 0)) return true;
   return false;
 };
 
-
-export const PETTY_CASH_ACCOUNT_OPTIONS = [
+const PETTY_CASH_ACCOUNT_OPTIONS = [
   'Communication',
   'COS -water',
   'COS - Water Vendo',
@@ -475,7 +474,7 @@ export const PETTY_CASH_ACCOUNT_OPTIONS = [
   'Travel & Transportation'
 ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-export const MERCHANDISE_ACCOUNT_OPTIONS = [
+const MERCHANDISE_ACCOUNT_OPTIONS = [
   'black shoes',
   'CE - Gala',
   'COGS - FREIGHT IN - Pershing Cap',
@@ -496,7 +495,7 @@ export const MERCHANDISE_ACCOUNT_OPTIONS = [
   'Uniform items'
 ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-export const OPERATION_EXPENSE_ACCOUNT_OPTIONS = [
+const OPERATION_EXPENSE_ACCOUNT_OPTIONS = [
   'Account Payable',
   'Advances to employee',
   'Allowances',
@@ -532,7 +531,7 @@ export const OPERATION_EXPENSE_ACCOUNT_OPTIONS = [
   'Wages'
 ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-export const SERVICES_EXPENSE_ACCOUNT_OPTIONS = [
+const SERVICES_EXPENSE_ACCOUNT_OPTIONS = [
   'COS - Scoresheet',
   'COS -water',
   'COS - Water Vendo',
@@ -548,7 +547,7 @@ export const SERVICES_EXPENSE_ACCOUNT_OPTIONS = [
   'Toga Rental Revenue'
 ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-export const REVOLVING_FUND_ACCOUNT_OPTIONS = [
+const REVOLVING_FUND_ACCOUNT_OPTIONS = [
   'Advances to employee',
   'Allowances',
   'Honorarium',
@@ -563,7 +562,7 @@ export const REVOLVING_FUND_ACCOUNT_OPTIONS = [
   'Wages'
 ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-export const REPLENISHMENT_ACCOUNT_OPTIONS = Array.from(new Set([
+const REPLENISHMENT_ACCOUNT_OPTIONS = Array.from(new Set([
   ...PETTY_CASH_ACCOUNT_OPTIONS,
   ...MERCHANDISE_ACCOUNT_OPTIONS,
   ...OPERATION_EXPENSE_ACCOUNT_OPTIONS,
@@ -572,7 +571,7 @@ export const REPLENISHMENT_ACCOUNT_OPTIONS = Array.from(new Set([
   'Short Term Loan'
 ])).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-export const normalizeDisbursementCategoryKey = (cat?: string): 'Petty Cash' | 'Merchandise' | 'Operation' | 'Service' | 'All' => {
+const normalizeDisbursementCategoryKey = (cat?: string): 'Petty Cash' | 'Merchandise' | 'Operation' | 'Service' | 'All' => {
   const lower = (cat || '').toLowerCase().trim();
   if (lower.includes('petty')) return 'Petty Cash';
   if (lower.includes('merchandise')) return 'Merchandise';
@@ -582,7 +581,7 @@ export const normalizeDisbursementCategoryKey = (cat?: string): 'Petty Cash' | '
   return 'All';
 };
 
-export const isExpenseOrMerchandise = (folderOrCat?: string): boolean => {
+const isExpenseOrMerchandise = (folderOrCat?: string): boolean => {
   const cat = (folderOrCat || '').toLowerCase();
   return (
     cat.includes('merchandise') ||
@@ -591,7 +590,7 @@ export const isExpenseOrMerchandise = (folderOrCat?: string): boolean => {
   );
 };
 
-export const getTransactionRefHeader = (categoryOrFolder?: string, rfClass?: string): string => {
+const getTransactionRefHeader = (categoryOrFolder?: string, rfClass?: string): string => {
   const cat = (categoryOrFolder || '').toLowerCase();
   const rfc = (rfClass || '').toLowerCase();
   if (rfc.includes('honorarium') || rfc.includes('wages') || rfc.includes('salary') || cat.includes('honorarium') || cat.includes('wages') || cat.includes('salary')) {
@@ -605,7 +604,7 @@ export const getTransactionRefHeader = (categoryOrFolder?: string, rfClass?: str
   return 'RF Voucher #';
 };
 
-export const getCategorySpecificAccounts = (
+const getCategorySpecificAccounts = (
   targetCategory: string,
   allAccounts: string[],
   categoryMap: Record<string, string> = {}
@@ -665,7 +664,7 @@ export const getCategorySpecificAccounts = (
   return merged.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 };
 
-export const getRfDeletedAccountsSet = (): Set<string> => {
+const getRfDeletedAccountsSet = (): Set<string> => {
   if (typeof window === 'undefined') return new Set();
   try {
     const saved = localStorage.getItem('rf_deleted_accounts');
@@ -679,7 +678,7 @@ export const getRfDeletedAccountsSet = (): Set<string> => {
   return new Set();
 };
 
-export const saveRfDeletedAccount = (name: string) => {
+const saveRfDeletedAccount = (name: string) => {
   if (typeof window === 'undefined') return;
   try {
     const set = getRfDeletedAccountsSet();
@@ -688,7 +687,7 @@ export const saveRfDeletedAccount = (name: string) => {
   } catch {}
 };
 
-export const restoreRfDeletedAccount = (name: string) => {
+const restoreRfDeletedAccount = (name: string) => {
   if (typeof window === 'undefined') return;
   try {
     const set = getRfDeletedAccountsSet();
@@ -698,7 +697,7 @@ export const restoreRfDeletedAccount = (name: string) => {
 };
 
 
-export const ACCOUNT_CATEGORIES = [
+const ACCOUNT_CATEGORIES = [
   { value: 'Operation', label: 'Operation', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border-blue-300 dark:border-blue-700' },
   { value: 'Merchandise', label: 'Merchandise', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700' },
   { value: 'Service', label: 'Service', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 border-purple-300 dark:border-purple-700' },
@@ -711,7 +710,7 @@ export const ACCOUNT_CATEGORIES = [
   { value: 'Wages', label: 'Wages', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700' }
 ] as const;
 
-export const getCategoryForAccount = (acct: string, categoryMap?: Record<string, string>): string => {
+const getCategoryForAccount = (acct: string, categoryMap?: Record<string, string>): string => {
   const trimmed = (acct || '').trim();
   if (!trimmed) return 'Operation';
   const lower = trimmed.toLowerCase();
