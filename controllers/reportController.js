@@ -3302,11 +3302,27 @@ export const getFinancialStatementReport = async (req, res, next) => {
     };
 
     // Helper: create a monthly cumulative store initialized with baseline
+    // The official audited baseline from iAccs is as of January 01, 2026 (comparing 2026 vs 2025).
+    // Years without records (such as 2024 or future years like 2027+) must NOT be seeded with 2026 baseline.
+    const isBaselineYear = targetYear === 2026;
+    const isPrevBaselineYear = targetYear === 2025;
+
     const newCumulativeStore = (key) => {
       const b = BASELINE[key] || { cur: 0, prev: 0 };
+      let initCur = 0;
+      let initPrev = 0;
+
+      if (isBaselineYear) {
+        initCur = b.cur;
+        initPrev = b.prev;
+      } else if (isPrevBaselineYear) {
+        initCur = b.prev;
+        initPrev = 0;
+      }
+
       return {
-        current: Array(12).fill(b.cur),
-        previous: Array(12).fill(b.prev),
+        current: Array(12).fill(initCur),
+        previous: Array(12).fill(initPrev),
         transactions: []
       };
     };
@@ -3323,36 +3339,38 @@ export const getFinancialStatementReport = async (req, res, next) => {
       transactions: []
     };
 
-    if (sooCur?.statement) {
-      const revLines = [];
-      const expLines = [];
-      (sooCur.statement.revenues || []).forEach(sec => sec.groups.forEach(g => revLines.push(...g.lines)));
-      (sooCur.statement.expenses || []).forEach(sec => sec.groups.forEach(g => expLines.push(...g.lines)));
+    if (isBaselineYear || isPrevBaselineYear) {
+      if (sooCur?.statement) {
+        const revLines = [];
+        const expLines = [];
+        (sooCur.statement.revenues || []).forEach(sec => sec.groups.forEach(g => revLines.push(...g.lines)));
+        (sooCur.statement.expenses || []).forEach(sec => sec.groups.forEach(g => expLines.push(...g.lines)));
 
-      let cumNetCur = 0;
-      for (let m = 0; m < 12; m++) {
-        const mRev = revLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
-        const mExp = expLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
-        cumNetCur += (mRev - mExp);
-        stores.net_surplus_period.current[m] = cumNetCur;
-        // Keep fundamental equation balanced by having operating cash reflect net operating surplus
-        stores.cash_in_vault.current[m] += cumNetCur;
+        let cumNetCur = 0;
+        for (let m = 0; m < 12; m++) {
+          const mRev = revLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
+          const mExp = expLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
+          cumNetCur += (mRev - mExp);
+          stores.net_surplus_period.current[m] = cumNetCur;
+          // Keep fundamental equation balanced by having operating cash reflect net operating surplus
+          stores.cash_in_vault.current[m] += cumNetCur;
+        }
       }
-    }
 
-    if (sooPrev?.statement) {
-      const revLinesPrev = [];
-      const expLinesPrev = [];
-      (sooPrev.statement.revenues || []).forEach(sec => sec.groups.forEach(g => revLinesPrev.push(...g.lines)));
-      (sooPrev.statement.expenses || []).forEach(sec => sec.groups.forEach(g => expLinesPrev.push(...g.lines)));
+      if (sooPrev?.statement) {
+        const revLinesPrev = [];
+        const expLinesPrev = [];
+        (sooPrev.statement.revenues || []).forEach(sec => sec.groups.forEach(g => revLinesPrev.push(...g.lines)));
+        (sooPrev.statement.expenses || []).forEach(sec => sec.groups.forEach(g => expLinesPrev.push(...g.lines)));
 
-      let cumNetPrev = 0;
-      for (let m = 0; m < 12; m++) {
-        const mRev = revLinesPrev.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
-        const mExp = expLinesPrev.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
-        cumNetPrev += (mRev - mExp);
-        stores.net_surplus_period.previous[m] = cumNetPrev;
-        stores.cash_in_vault.previous[m] += cumNetPrev;
+        let cumNetPrev = 0;
+        for (let m = 0; m < 12; m++) {
+          const mRev = revLinesPrev.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
+          const mExp = expLinesPrev.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
+          cumNetPrev += (mRev - mExp);
+          stores.net_surplus_period.previous[m] = cumNetPrev;
+          stores.cash_in_vault.previous[m] += cumNetPrev;
+        }
       }
     }
 
