@@ -383,13 +383,18 @@ export default function CollectionPage() {
     return d.toISOString().split('T')[0];
   });
 
-  // Support ?tab= URL query param (e.g. ?tab=billing)
+  // Support ?tab= and ?search= URL query param (e.g. ?tab=billing or ?search=OR#2499)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
       if (tabParam === 'billing' || tabParam === 'credit' || tabParam === 'sales_services' || tabParam === 'all') {
         setActiveTab(tabParam as CollectionTab);
+      }
+      const searchParam = params.get('search') || params.get('q') || params.get('or_no');
+      if (searchParam) {
+        setSearchQuery(searchParam);
+        setActiveTab('all');
       }
     }
   }, []);

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import {
@@ -20,12 +22,29 @@ import {
   Eye,
   EyeOff,
   Search,
-  X
+  X,
+  ExternalLink,
+  FileText,
+  CreditCard
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Types (shape returned by GET /reports/statement-of-operations)
 // ---------------------------------------------------------------------------
+export interface SooTransaction {
+  date: string;
+  month?: number | null;
+  year?: number | null;
+  payee: string;
+  particulars?: string;
+  voucher_no?: string | null;
+  voucher_id?: string | null;
+  or_no?: string | null;
+  lf_no?: string | null;
+  source?: 'check_voucher' | 'revolving_fund' | 'collection' | 'disbursement' | string;
+  amount: number;
+}
+
 interface SooLine {
   code: string;
   title: string;
@@ -33,6 +52,7 @@ interface SooLine {
   always_show: boolean;
   current: number[];
   previous: number[];
+  transactions?: SooTransaction[];
 }
 
 interface SooGroup {
@@ -136,6 +156,117 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const [searchQuery, setSearchQuery] = useState('');
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
+
+  const router = useRouter();
+  const [selectedLineModal, setSelectedLineModal] = useState<SooLine | null>(null);
+  const [lineModalSearch, setLineModalSearch] = useState('');
+  const [lineModalMonthFilter, setLineModalMonthFilter] = useState<number | 'all'>('all');
+
+  const closeLineModal = useCallback(() => {
+    setSelectedLineModal(null);
+    setLineModalSearch('');
+  }, []);
+
+  // Close modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedLineModal) {
+        closeLineModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLineModal, closeLineModal]);
+
+  const lineModalTransactions = useMemo(() => {
+    if (!selectedLineModal) return [];
+    let list = selectedLineModal.transactions || [];
+
+    // Filter by month
+    if (lineModalMonthFilter !== 'all') {
+      const targetMonthNum = lineModalMonthFilter + 1; // 1-12
+      list = list.filter(t => {
+        if (t.month) return t.month === targetMonthNum;
+        if (t.date && t.date !== 'N/A') {
+          return Number(t.date.slice(5, 7)) === targetMonthNum;
+        }
+        return false;
+      });
+    }
+
+    // Filter by search query
+    if (lineModalSearch.trim()) {
+      const qModal = lineModalSearch.toLowerCase().trim();
+      list = list.filter(t =>
+        String(t.payee || '').toLowerCase().includes(qModal) ||
+        String(t.particulars || '').toLowerCase().includes(qModal) ||
+        String(t.voucher_no || '').toLowerCase().includes(qModal) ||
+        String(t.or_no || '').toLowerCase().includes(qModal) ||
+        String(t.lf_no || '').toLowerCase().includes(qModal) ||
+        String(t.date || '').toLowerCase().includes(qModal) ||
+        String(t.amount || '').includes(qModal)
+      );
+    }
+
+    return list;
+  }, [selectedLineModal, lineModalMonthFilter, lineModalSearch]);
+
+  const modalPeriodTotal = useMemo(() => {
+    if (!selectedLineModal) return 0;
+    if (lineModalMonthFilter === 'all') {
+      return (selectedLineModal.current || []).reduce((a, b) => a + (b || 0), 0);
+    }
+    return (selectedLineModal.current || [])[lineModalMonthFilter] || 0;
+  }, [selectedLineModal, lineModalMonthFilter]);
+
+  const modalFilteredTotal = useMemo(() => {
+    return lineModalTransactions.reduce((acc, t) => acc + (parseFloat(String(t.amount)) || 0), 0);
+  }, [lineModalTransactions]);
+
+  const handleOpenTransaction = useCallback((t: SooTransaction) => {
+    const isCheckVoucher = Boolean(
+      (t.voucher_no && t.voucher_no !== '—' && !t.voucher_no.startsWith('LF') && !t.voucher_no.includes('Liquidation')) ||
+      t.voucher_id
+    );
+    const isRevolvingFund = Boolean(
+      !isCheckVoucher && (t.lf_no || (t.voucher_no && (t.voucher_no.startsWith('LF') || t.voucher_no.includes('Liquidation'))))
+    );
+
+    if (isCheckVoucher) {
+      const params = new URLSearchParams();
+      params.set('tab', 'summary');
+      if (t.voucher_no && !t.voucher_no.startsWith('LF') && !t.voucher_no.includes('Liquidation')) {
+        params.set('voucher', t.voucher_no);
+      }
+      if (t.voucher_id) params.set('id', t.voucher_id);
+      params.set('fromReport', 'statement_of_operations');
+      params.set('year', String(year));
+      router.push(`/dashboard/disbursement?${params.toString()}`);
+      return;
+    }
+
+    if (isRevolvingFund) {
+      const params = new URLSearchParams();
+      params.set('tab', 'revolving_fund_replenishment');
+      if (t.lf_no) params.set('search', t.lf_no);
+      params.set('fromReport', 'statement_of_operations');
+      params.set('year', String(year));
+      router.push(`/dashboard/disbursement?${params.toString()}`);
+      return;
+    }
+
+    // Default: Cashier Collection OR Loan Repayment
+    if (t.or_no || t.source === 'collection') {
+      const searchVal = t.or_no || t.payee;
+      router.push(`/dashboard/collection?search=${encodeURIComponent(searchVal)}`);
+      return;
+    }
+
+    // Fallback: loans tracker
+    if (t.payee) {
+      router.push(`/dashboard/loans?tab=loans&search=${encodeURIComponent(t.payee)}`);
+    }
+  }, [router, year]);
 
   const isYtd = selectedPeriod === 'ytd';
   const q = searchQuery.toLowerCase().trim();
@@ -426,10 +557,25 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                           </td>
                         </tr>
                       ) : visible.map((l, li) => (
-                        <tr key={`${s.key}-${gi}-${li}`} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/30 text-neutral-800 dark:text-neutral-200">
+                        <tr
+                          key={`${s.key}-${gi}-${li}`}
+                          onClick={() => {
+                            setSelectedLineModal(l);
+                            setLineModalSearch('');
+                            setLineModalMonthFilter(isYtd ? 'all' : (selectedPeriod as number));
+                          }}
+                          className="hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 text-neutral-800 dark:text-neutral-200 cursor-pointer group transition-colors"
+                          title={`Click to view itemized records and vouchers for ${l.title}`}
+                        >
                           <td className="p-2.5">
-                            <div className="font-semibold text-neutral-900 dark:text-white">
-                              <HighlightText text={l.title} query={q} />
+                            <div className="flex items-center gap-1.5 font-semibold text-neutral-900 dark:text-white">
+                              <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
+                                <HighlightText text={l.title} query={q} />
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                                <ExternalLink className="w-3 h-3 shrink-0" />
+                                <span className="hidden sm:inline">View Records</span>
+                              </span>
                             </div>
                             <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 print:hidden">
                               <HighlightText text={l.description} query={q} />
@@ -852,6 +998,304 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
           )}
         </div>
       ) : null}
+
+      {/* ================= Transaction Breakdown Modal ================= */}
+      {selectedLineModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-neutral-900 border border-emerald-400/90 dark:border-emerald-800 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-neutral-200 dark:border-neutral-800 flex items-start justify-between gap-3 bg-emerald-50/70 dark:bg-emerald-950/40 shrink-0">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-800">
+                      Account Ledger Breakdown
+                    </span>
+                    <span className="text-[10.5px] font-bold text-neutral-500 font-mono">
+                      Fiscal Year {year}
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-black text-neutral-900 dark:text-white mt-1">
+                    {selectedLineModal.title}
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 max-w-xl">
+                    {selectedLineModal.description}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeLineModal}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-200 dark:hover:bg-neutral-800 text-neutral-500 hover:text-neutral-900 dark:hover:text-white text-base font-bold transition-colors cursor-pointer shrink-0"
+                title="Close (Esc)"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Top Quick Stats */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                {/* 1. Origin / System Link */}
+                <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-800">
+                  <div className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Source Module</div>
+                  <div className="font-bold text-neutral-900 dark:text-white mt-1 flex items-center gap-1.5">
+                    {selectedLineModal.title.includes('Interest') || selectedLineModal.title.includes('Fines') ? (
+                      <>
+                        <CreditCard className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Loan Credit Operations</span>
+                      </>
+                    ) : selectedLineModal.transactions?.some(t => t.source === 'check_voucher' || t.voucher_no) ? (
+                      <>
+                        <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Disbursements & Check Vouchers</span>
+                      </>
+                    ) : (
+                      <>
+                        <Receipt className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Cashier Collections</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">
+                    Click any transaction row below to navigate directly to its voucher or collection record.
+                  </div>
+                </div>
+
+                {/* 2. Amount in Period */}
+                <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60">
+                  <div className="text-[10px] text-emerald-700 dark:text-emerald-300 uppercase font-bold tracking-wider">
+                    {lineModalMonthFilter === 'all' ? `Full Year ${year} (YTD)` : `${MONTHS_SHORT[lineModalMonthFilter]} ${year} Amount`}
+                  </div>
+                  <div className="font-mono font-black text-lg text-emerald-900 dark:text-emerald-200 mt-0.5">
+                    {peso(modalPeriodTotal)}
+                  </div>
+                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
+                    {modalFilteredTotal !== modalPeriodTotal ? (
+                      <span>Filtered sum: {peso(modalFilteredTotal)}</span>
+                    ) : (
+                      <span>Official Statement figure</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Record Count */}
+                <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-800">
+                  <div className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Transaction Count</div>
+                  <div className="font-mono font-black text-lg text-neutral-900 dark:text-white mt-0.5">
+                    {lineModalTransactions.length} {lineModalTransactions.length === 1 ? 'record' : 'records'}
+                  </div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">
+                    {selectedLineModal.transactions?.length || 0} total recorded in {year}
+                  </div>
+                </div>
+              </div>
+
+              {/* Month Filter Selector & Search Bar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                {/* Search Bar */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-neutral-400" />
+                  <input
+                    type="text"
+                    placeholder="Search payee, particulars, voucher #, or OR #..."
+                    value={lineModalSearch}
+                    onChange={(e) => setLineModalSearch(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                  />
+                  {lineModalSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setLineModalSearch('')}
+                      className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                      title="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Month Toggle Pills */}
+                <div className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800/80 p-1 rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-x-auto text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setLineModalMonthFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                      lineModalMonthFilter === 'all'
+                        ? 'bg-[#064e3b] text-white shadow-xs'
+                        : 'text-neutral-600 dark:text-neutral-300 hover:text-emerald-700'
+                    }`}
+                  >
+                    All Year
+                  </button>
+                  {MONTHS_SHORT.map((m, idx) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setLineModalMonthFilter(idx)}
+                      className={`px-2 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                        lineModalMonthFilter === idx
+                          ? 'bg-[#064e3b] text-white shadow-xs'
+                          : 'text-neutral-600 dark:text-neutral-300 hover:text-emerald-700'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Itemized Table */}
+              <div className="flex-1 flex flex-col border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden min-h-[200px] max-h-[380px]">
+                <div className="px-3 py-2 bg-emerald-50/70 dark:bg-emerald-950/40 border-b border-emerald-200/80 dark:border-emerald-900/60 flex items-center justify-between text-[11px] text-neutral-500 shrink-0">
+                  <span className="font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                    <span>Underlying Transactions ({lineModalTransactions.length})</span>
+                  </span>
+                  <span className="text-[10px] text-neutral-400 hidden sm:inline">
+                    Click any row or &quot;Open Voucher&quot; to inspect in Disbursement / Collection
+                  </span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] sticky top-0 z-10 shadow-xs">
+                      <tr>
+                        <th className="p-2 w-10 text-center border-r border-emerald-700/60">#</th>
+                        <th className="p-2 w-24 border-r border-emerald-700/60">Date</th>
+                        <th className="p-2 w-32 border-r border-emerald-700/60">Voucher / Ref #</th>
+                        <th className="p-2 min-w-[170px] border-r border-emerald-700/60">Payee / Member</th>
+                        <th className="p-2 min-w-[200px] border-r border-emerald-700/60">Particulars / Details</th>
+                        <th className="p-2 w-28 text-right border-r border-emerald-700/60">Amount (₱)</th>
+                        <th className="p-2 w-32 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                      {lineModalTransactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-10 text-center text-neutral-400 italic">
+                            No transactions recorded for this period.
+                          </td>
+                        </tr>
+                      ) : (
+                        lineModalTransactions.map((t, idx) => {
+                          const hasVoucher = Boolean(
+                            (t.voucher_no && t.voucher_no !== '—' && !t.voucher_no.startsWith('LF') && !t.voucher_no.includes('Liquidation')) ||
+                            t.voucher_id
+                          );
+                          const isLf = Boolean(t.lf_no || (t.voucher_no && (t.voucher_no.startsWith('LF') || t.voucher_no.includes('Liquidation'))));
+                          const hasOr = Boolean(t.or_no && t.or_no !== '—');
+
+                          const displayRef = t.voucher_no
+                            ? (t.voucher_no.startsWith('CV') || t.voucher_no.startsWith('LF') ? t.voucher_no : `CV ${t.voucher_no}`)
+                            : t.lf_no
+                            ? `LF #${t.lf_no}`
+                            : hasOr
+                            ? `OR #${t.or_no}`
+                            : '—';
+
+                          return (
+                            <tr
+                              key={idx}
+                              onClick={() => handleOpenTransaction(t)}
+                              className="hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer group"
+                              title={
+                                hasVoucher
+                                  ? `Click to open Check Voucher #${t.voucher_no} in Disbursement`
+                                  : isLf
+                                  ? `Click to view Revolving Fund Liquidation in Disbursement`
+                                  : hasOr
+                                  ? `Click to view Receipt #${t.or_no} in Collections`
+                                  : 'Click to open details'
+                              }
+                            >
+                              <td className="p-2 text-center font-mono text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
+                                {idx + 1}
+                              </td>
+                              <td className="p-2 font-mono text-[11px] text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                                {t.date}
+                              </td>
+                              <td className="p-2 font-mono font-bold text-neutral-800 dark:text-neutral-200 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold ${
+                                  hasVoucher
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : isLf
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                    : hasOr
+                                    ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
+                                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+                                }`}>
+                                  {displayRef}
+                                </span>
+                              </td>
+                              <td className="p-2 font-semibold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
+                                <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
+                                  {t.payee || '—'}
+                                </span>
+                              </td>
+                              <td className="p-2 text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
+                                {t.particulars || '—'}
+                              </td>
+                              <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
+                                {peso(t.amount)}
+                              </td>
+                              <td className="p-2 text-center whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenTransaction(t);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:text-emerald-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>{hasVoucher ? 'Open Voucher' : isLf ? 'Open RF' : hasOr ? 'Open Receipt' : 'Open'}</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    {lineModalTransactions.length > 0 && (
+                      <tfoot className="bg-neutral-100 dark:bg-neutral-800 font-bold border-t border-neutral-300 dark:border-neutral-700 sticky bottom-0 z-10 shadow-xs">
+                        <tr>
+                          <td colSpan={5} className="p-2 text-right uppercase text-[10px] text-neutral-600 dark:text-neutral-400">
+                            Total Filtered Amount:
+                          </td>
+                          <td className="p-2 text-right font-mono text-emerald-800 dark:text-emerald-400 font-black">
+                            {peso(modalFilteredTotal)}
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 sm:p-4 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between bg-neutral-50 dark:bg-neutral-900/60 shrink-0">
+              <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                Showing <b>{lineModalTransactions.length}</b> of <b>{selectedLineModal.transactions?.length || 0}</b> transactions
+              </span>
+              <button
+                type="button"
+                onClick={closeLineModal}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
