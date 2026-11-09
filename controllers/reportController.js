@@ -3948,7 +3948,11 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       pool.query(`
         SELECT voucher_date, details
         FROM check_vouchers
-        WHERE status != 'cancelled' AND CAST(details AS TEXT) ILIKE '%service fee%'
+        WHERE status != 'cancelled' AND (
+          CAST(details AS TEXT) ILIKE '%service fee%'
+          OR CAST(details AS TEXT) ILIKE '%service charge%'
+          OR CAST(details AS TEXT) ILIKE '%service fee revenue%'
+        )
       `)
     ]);
 
@@ -3986,12 +3990,12 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     };
     const fromTracker = (fn, ...args) => ({ current: fn(loanCur, ...args), previous: fn(loanPrev, ...args) });
 
-    // ---------- Service Fees (deducted from loan releases in Check Vouchers) ----------
+    // ---------- Service Fees (deducted from loan releases in Check Vouchers & Collections) ----------
     const serviceFees = newStore();
     cvResult.rows.forEach(cv => {
       if (!Array.isArray(cv.details)) return;
       cv.details.forEach(d => {
-        if (/service\s*fee/i.test(String(d.book_of_account || ''))) {
+        if (/service\s*(fee|charge)/i.test(String(d.book_of_account || ''))) {
           bucket(serviceFees, cv.voucher_date, Math.abs(parseFloat(d.amount) || 0));
         }
       });
@@ -4019,6 +4023,10 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       }
       if (/insurance/.test(text)) {
         bucket(climbsIncome, cDate, amt);
+        return;
+      }
+      if (/service\s*(fee|charge)/i.test(text) && !/print|photo|vendo|wifi|rotc|rental/i.test(text)) {
+        bucket(serviceFees, cDate, amt);
         return;
       }
       if (!['sales', 'sales_services', 'services'].includes(col.tab)) return;
@@ -4052,7 +4060,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       { code: '503.10', title: 'Meetings and Conferences', match: /meeting|conference|assembly|meal|snack|representation|seminar|training/i, description: 'Meetings, assemblies, seminars, and meals during them.' },
       { code: '503.15', title: 'Repairs & Maintenance', match: /repair|maintenance/i, description: 'Fixing and maintaining equipment and the office.' },
       { code: '503.43', title: 'Licenses Expense', match: /^(?!.*tax).*(license|permit|cedula|clearance)/i, description: 'Business permits, licenses, and clearances.' },
-      { code: '503.17', title: 'Taxes, Fees and Charges', match: /tax|dst|stamp|service\s*charge|bank\s*charge|convenience\s*fee|notarial|penalty/i, description: 'Government taxes, bank charges, and other fees.' },
+      { code: '503.17', title: 'Taxes, Fees and Charges', match: /tax|dst|stamp|bank\s*charge|convenience\s*fee|notarial|penalty/i, description: 'Government taxes, bank charges, and other fees.' },
       { code: '503.26', title: 'Miscellaneous Expense', match: /miscellaneous|misc\b/i, description: 'Small expenses that do not fit other accounts.' }
     ];
     const expenseStores = {};
@@ -4072,19 +4080,22 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         // Liabilities / fund transfers are not expenses of the period
         if (/payable|replenish|fund\s*transfer|advances\s*to/i.test(acc)) return;
 
+        // Check standard administrative expense accounts first
+        const line = EXPENSE_LINES.find(l => l.match.test(acc));
+        if (line) {
+          expenseStores[line.title][which][mIdx] += amt;
+          return;
+        }
+
         if (cat === 'Merchandise Expense' || cat === 'Service Expense' ||
-            /inventory|merchandise|uniform|shirt|short|gloves|id\s*case/i.test(acc)) {
+            /inventory|merchandise|uniform|shirt|short|gloves|id\s*case|cos\s*-|cogs/i.test(acc)) {
           if (!costOfSales[acc]) costOfSales[acc] = newStore();
           costOfSales[acc][which][mIdx] += amt;
           return;
         }
-        const line = EXPENSE_LINES.find(l => l.match.test(acc));
-        if (line) {
-          expenseStores[line.title][which][mIdx] += amt;
-        } else {
-          if (!otherAdmin[acc]) otherAdmin[acc] = newStore();
-          otherAdmin[acc][which][mIdx] += amt;
-        }
+
+        if (!otherAdmin[acc]) otherAdmin[acc] = newStore();
+        otherAdmin[acc][which][mIdx] += amt;
       });
     };
     addExpenses(expCur, 'current');
