@@ -2798,7 +2798,7 @@ export default function CollectionPage() {
                   </th>
                   <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Payment Mode</th>
                   <th className="py-3 px-3 font-bold">Description / Details</th>
-                  <th className="py-3 px-3 font-bold text-right whitespace-nowrap">Collected Amount</th>
+                  <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Collected Amount</th>
                   <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Status</th>
                   <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Remarks</th>
                   <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Actions</th>
@@ -2956,7 +2956,7 @@ export default function CollectionPage() {
                             </span>
                           </div>
                         </td>
-                        <td className="py-3 px-3 font-headline font-bold text-right text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                        <td className="py-3 px-3 font-headline font-bold text-center text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
                           ₱{item.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
