@@ -265,8 +265,8 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
       const res = await api.get('/reports/financial-statement', { params: { year } });
       setData(res.data);
     } catch (err: any) {
-      console.error('Failed to load Financial Statement:', err);
-      setError(err.response?.data?.message || 'Failed to load the Financial Statement.');
+      console.error('Failed to load Balance Sheet:', err);
+      setError(err.response?.data?.message || 'Failed to load the Balance Sheet.');
     } finally {
       setLoading(false);
     }
@@ -460,8 +460,8 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Financial Condition');
-    const filename = `Coop_Statement_of_Financial_Condition_${year}_${isYtd ? 'YTD' : MONTHS_SHORT[selectedPeriod as number]}.xlsx`;
+    XLSX.utils.book_append_sheet(wb, ws, 'Balance Sheet');
+    const filename = `Coop_Balance_Sheet_${year}_${isYtd ? 'YTD' : MONTHS_SHORT[selectedPeriod as number]}.xlsx`;
     XLSX.writeFile(wb, filename);
   };
 
@@ -710,11 +710,11 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
               University of Cebu-METC Multipurpose Cooperative
             </div>
             <h2 className="text-xl font-black text-neutral-900 dark:text-white">
-              Statement of Financial Condition
+              Balance Sheet
             </h2>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
               As of <span className="font-bold text-neutral-800 dark:text-neutral-200">{periodEndLabel}</span>
-              {' '}— official balance sheet schedule presenting Assets, Liabilities, and Member's Equity.
+              {' '}— official Statement of Financial Condition presenting Assets, Liabilities, and Member's Equity.
             </p>
           </div>
 
@@ -919,7 +919,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
         <div className="p-12 text-center bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800">
           <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
           <p className="text-xs font-bold text-neutral-600 dark:text-neutral-300">
-            Compiling Official Statement of Financial Condition for {year}...
+            Compiling Official Balance Sheet for {year}...
           </p>
         </div>
       )}
@@ -1022,7 +1022,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
             <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
-                No financial condition records or audited baseline figures exist for Fiscal Year {year}. All balances display ₱0.00.
+                No balance sheet records or audited baseline figures exist for Fiscal Year {year}. All balances display ₱0.00.
               </span>
             </div>
           )}

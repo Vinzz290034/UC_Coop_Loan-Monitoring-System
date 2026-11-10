@@ -3250,10 +3250,12 @@ export const getFinancialStatementReport = async (req, res, next) => {
       climbs_federation: { cur: 105076.43, prev: 100000.00 },
       other_funds: { cur: 71695.35, prev: 0.00 },
       nafe: { cur: 10000.00, prev: 0.00 },
-      petty_cash: { cur: 3000.00, prev: 10000.00 },
-      rf_microfinance: { cur: 100000.00, prev: 100000.00 },
+      rf_stl: { cur: 43900.00, prev: 43900.00 },
+      rf_haw: { cur: 56100.00, prev: 56100.00 },
       rf_operation: { cur: 100000.00, prev: 40000.00 },
       rf_rice: { cur: 50000.00, prev: 0.00 },
+      petty_cash: { cur: 3000.00, prev: 10000.00 },
+      petty_cash_loan: { cur: 0.00, prev: 0.00 },
       reg_loans: { cur: 3021041.35, prev: 2723224.50 },
       cash_express: { cur: 61088.93, prev: 57250.00 },
       special_loans: { cur: 126799.00, prev: 119046.00 },
@@ -3408,6 +3410,19 @@ export const getFinancialStatementReport = async (req, res, next) => {
         stores.cib_bdo.transactions.push(tx);
       }
 
+      // Revolving funds attribution
+      if (text.includes('stl') || text.includes('short term loan')) {
+        stores.rf_stl.transactions.push(tx);
+      } else if (text.includes('haw') || text.includes('honorarium') || text.includes('wage') || text.includes('allowance')) {
+        stores.rf_haw.transactions.push(tx);
+      } else if (text.includes('rf - operation') || text.includes('revolving fund - operation') || (text.includes('operation') && text.includes('revolving'))) {
+        stores.rf_operation.transactions.push(tx);
+      } else if (text.includes('rf - rice') || text.includes('revolving fund - rice') || (text.includes('rice') && text.includes('revolving'))) {
+        stores.rf_rice.transactions.push(tx);
+      } else if (text.includes('petty cash') && !text.includes('loan')) {
+        stores.petty_cash.transactions.push(tx);
+      }
+
       // Accounts Payable trade
       if (text.includes('ap') || text.includes('trade') || text.includes('supplier')) {
         stores.ap_trade.transactions.push(tx);
@@ -3465,6 +3480,9 @@ export const getFinancialStatementReport = async (req, res, next) => {
       if (text.includes('receivable') || text.includes('member')) {
         stores.rec_members.transactions.push(tx);
       }
+      if (text.includes('petty cash loan') || (text.includes('petty cash') && text.includes('loan'))) {
+        stores.petty_cash_loan.transactions.push(tx);
+      }
     });
 
     // Attach Loan portfolio transactions from Loan Products report
@@ -3492,6 +3510,8 @@ export const getFinancialStatementReport = async (req, res, next) => {
     attachLoanTxs('Special Occasion', 'special_loans');
     attachLoanTxs('Emergency Loan', 'emergency_loans');
     attachLoanTxs('Calamity Loan', 'calamity_loans');
+    attachLoanTxs('Petty Cash', 'petty_cash_loan');
+    attachLoanTxs('Petty Cash Loan', 'petty_cash_loan');
 
     // Helper to format line
     const line = (title, description, store, alwaysShow = true, isDeduction = false, customTransactions = null) => {
@@ -3528,11 +3548,19 @@ export const getFinancialStatementReport = async (req, res, next) => {
                 line('Cash in Coop Federation - VICTO', 'Funds on deposit with VICTO Federation.', stores.victo),
                 line('Cash in Coop Federation - CLIMBS', 'Funds on deposit with CLIMBS Federation.', stores.climbs_federation),
                 line('Other Funds and Deposits', 'Other cooperative funds on deposit.', stores.other_funds),
-                line('Cash in Federation - NAFE', 'Funds on deposit with NAFE Federation.', stores.nafe),
-                line('Petty Cash Fund', 'Petty cash revolving fund for minor daily office disbursements.', stores.petty_cash),
-                line('Revolving Fund - Microfinance', 'Dedicated revolving fund for microfinance credit.', stores.rf_microfinance),
-                line('Revolving Fund - Operation', 'Dedicated revolving fund for daily cooperative operations.', stores.rf_operation),
-                line('Revolving Fund - Rice', 'Dedicated revolving fund for member rice commodity loans.', stores.rf_rice)
+                line('Cash in Federation - NAFE', 'Funds on deposit with NAFE Federation.', stores.nafe)
+              ]
+            },
+            {
+              title: 'Revolving Funds',
+              total_label: 'TOTAL: REVOLVING FUNDS',
+              lines: [
+                line('STL', 'Short Term Loan revolving fund facility for member credit advances.', stores.rf_stl),
+                line('HAW (Honorarium, Allowances, and Wages)', 'Dedicated revolving fund facility for staff honorarium, allowances, and wages.', stores.rf_haw),
+                line('Operation', 'Dedicated revolving fund for daily cooperative operations.', stores.rf_operation),
+                line('Rice', 'Dedicated revolving fund for member rice commodity loans.', stores.rf_rice),
+                line('Petty Cash', 'Revolving petty cash fund kept on premises for minor immediate office expenses.', stores.petty_cash),
+                line('Petty Cash Loan', 'Short-term credit loan advances extended to members (distinct from office petty cash fund).', stores.petty_cash_loan)
               ]
             },
             {
@@ -3732,7 +3760,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
     };
 
     const totalAssets = Object.keys(BASELINE)
-      .filter(k => ['cash_in_vault', 'cib_bdo', 'cib_metrobank', 'victo', 'climbs_federation', 'other_funds', 'nafe', 'petty_cash', 'rf_microfinance', 'rf_operation', 'rf_rice', 'reg_loans', 'cash_express', 'special_loans', 'emergency_loans', 'calamity_loans', 'unearned_interest', 'ar_insurance', 'ar_uc', 'rec_members', 'inv_type_c', 'inv_rice', 'inv_pe', 'inv_ppe', 'inv_accessories', 'inv_soap', 'inv_type_ab', 'inv_rotc', 'inv_gala', 'inv_hardbound', 'inv_plotting', 'inv_bsname', 'unused_supplies', 'prepaid_expenses', 'office_equipment', 'depr_office_equipment', 'furnitures_fixtures', 'depr_furnitures_fixtures', 'deposit_container'].includes(k))
+      .filter(k => ['cash_in_vault', 'cib_bdo', 'cib_metrobank', 'victo', 'climbs_federation', 'other_funds', 'nafe', 'rf_stl', 'rf_haw', 'rf_operation', 'rf_rice', 'petty_cash', 'petty_cash_loan', 'reg_loans', 'cash_express', 'special_loans', 'emergency_loans', 'calamity_loans', 'unearned_interest', 'ar_insurance', 'ar_uc', 'rec_members', 'inv_type_c', 'inv_rice', 'inv_pe', 'inv_ppe', 'inv_accessories', 'inv_soap', 'inv_type_ab', 'inv_rotc', 'inv_gala', 'inv_hardbound', 'inv_plotting', 'inv_bsname', 'unused_supplies', 'prepaid_expenses', 'office_equipment', 'depr_office_equipment', 'furnitures_fixtures', 'depr_furnitures_fixtures', 'deposit_container'].includes(k))
       .reduce((sum, k) => sum + (stores[k]?.current[11] || 0), 0);
 
     const totalLiabilities = Object.keys(BASELINE)

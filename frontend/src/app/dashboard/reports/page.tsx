@@ -37,7 +37,8 @@ import {
   ChevronRight,
   Plus,
   Trash2,
-  Check
+  Check,
+  Scale
 } from 'lucide-react';
 import FinancialSummaryGraphs from '@/components/reports/FinancialSummaryGraphs';
 import StatementOfOperationsTab from '@/components/reports/StatementOfOperationsTab';
@@ -1095,7 +1096,7 @@ function ReportsPageContent() {
         ];
 
         const ws = XLSX.utils.json_to_sheet(rows);
-        XLSX.utils.book_append_sheet(wb, ws, 'Financial Statement');
+        XLSX.utils.book_append_sheet(wb, ws, 'Balance Sheet');
       }
 
       XLSX.writeFile(wb, `Coop_${activeTab}_Report_${periodLabel.replace(/[\s,]+/g, '_')}.xlsx`);
@@ -1243,7 +1244,7 @@ function ReportsPageContent() {
           { id: 'loans', label: 'Loan Products', icon: CreditCard },
           { id: 'membership', label: 'Membership Updates', icon: Users },
           { id: 'statement_of_operations', label: 'Statement of Operations', icon: FileText },
-          { id: 'financial_statement', label: 'Financial Statement', icon: PieChart },
+          { id: 'financial_statement', label: 'Balance Sheet', icon: Scale },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -3454,7 +3455,7 @@ function ReportsPageContent() {
                     </span>
                   </div>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    {selectedFsAccountModal.statement_type || 'Financial Statement'} Schedule • As of {period === 'daily' ? date : period === 'monthly' ? `${MONTH_NAMES[month - 1]} ${year}` : `FY ${year}`}
+                    {selectedFsAccountModal.statement_type || 'Balance Sheet'} Schedule • As of {period === 'daily' ? date : period === 'monthly' ? `${MONTH_NAMES[month - 1]} ${year}` : `FY ${year}`}
                   </p>
                 </div>
               </div>
