@@ -2615,17 +2615,16 @@ export default function CollectionPage() {
             {availableYears.length > 1 && (
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[11px] font-semibold text-neutral-500">Year:</span>
-                <select
+                <AnimatedSelect
                   value={selectedYear}
-                  onChange={e => setSelectedYear(e.target.value)}
-                  className="px-2 py-1 rounded-xl text-xs font-bold bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 outline-none cursor-pointer"
-                  title="Filter collections by Year"
-                >
-                  <option value="all">All Years</option>
-                  {availableYears.map(y => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
+                  onChange={setSelectedYear}
+                  options={[
+                    { value: 'all', label: 'All Years' },
+                    ...availableYears.map(y => ({ value: y, label: y }))
+                  ]}
+                  className="w-28"
+                  buttonClassName="font-bold text-xs py-1.5"
+                />
               </div>
             )}
 
