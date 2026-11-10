@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -49,7 +49,8 @@ import {
   Package,
   Tag,
   Building2,
-  Wallet
+  Wallet,
+  Calendar
 } from 'lucide-react';
 
 import type {
@@ -120,6 +121,30 @@ const isCollectionSealed = (item?: { remarks?: string; status?: string } | null)
   const rem = (item.remarks || '').trim().toLowerCase();
   const stat = (item.status || '').trim().toLowerCase();
   return rem === 'sealed' || rem === 'filed' || stat === 'filed';
+};
+
+const MONTHS_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const parseCollectionDate = (rawDate?: string) => {
+  if (!rawDate) return { year: null, month: null };
+  const str = String(rawDate).trim();
+  if (str.includes('-')) {
+    const p = str.split('T')[0].split('-');
+    if (p.length >= 3 && p[0].length === 4) {
+      const y = p[0];
+      const m = parseInt(p[1], 10) - 1;
+      return { year: y, month: isNaN(m) ? null : m };
+    }
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return { year: String(d.getFullYear()), month: d.getMonth() };
+  }
+  return { year: null, month: null };
 };
 
 const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
@@ -365,10 +390,59 @@ export default function CollectionPage() {
   const [selectedMethod, setSelectedMethod] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedRemarks, setSelectedRemarks] = useState<string>('all');
+  const [selectedYear, setSelectedYear] = useState<string>('2026');
+  const [selectedMonth, setSelectedMonth] = useState<string | number>('all');
   const [sortBy, setSortBy] = useState<'or_no' | 'date'>('or_no');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCustomBank, setIsCustomBank] = useState(false);
+
+  // Available years dynamically discovered from collection dates
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<string>();
+    yearsSet.add('2026');
+    collections.forEach(c => {
+      const parsed = parseCollectionDate(c.date);
+      if (parsed.year && Number(parsed.year) > 1990 && Number(parsed.year) < 2100) {
+        yearsSet.add(parsed.year);
+      }
+    });
+    return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
+  }, [collections]);
+
+  // Activity map per month (0..11) for currently selected year
+  const monthActivity = useMemo(() => {
+    const act: Record<number, boolean> = {};
+    collections.forEach(c => {
+      const parsed = parseCollectionDate(c.date);
+      if (parsed.month !== null && (selectedYear === 'all' || parsed.year === selectedYear)) {
+        act[parsed.month] = true;
+      }
+    });
+    return act;
+  }, [collections, selectedYear]);
+
+  // Future month disable rule (e.g. December disabled until Dec 1 for 2026)
+  const isMonthDisabled = useCallback((mIdx: number) => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth(); // 0 = Jan, 10 = Nov, 11 = Dec
+    const yr = selectedYear === 'all' ? curYear : parseInt(selectedYear, 10);
+
+    if (yr > curYear) return true;
+    if (yr === curYear && mIdx > curMonth) return true;
+    if (yr === 2026 && mIdx > 10 && (curYear < 2026 || (curYear === 2026 && curMonth < 11))) {
+      return true;
+    }
+    return false;
+  }, [selectedYear]);
+
+  // Safeguard: if active month filter is disabled, revert to 'all'
+  useEffect(() => {
+    if (typeof selectedMonth === 'number' && isMonthDisabled(selectedMonth)) {
+      setSelectedMonth('all');
+    }
+  }, [selectedMonth, isMonthDisabled]);
 
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
@@ -1488,6 +1562,18 @@ export default function CollectionPage() {
         if (selectedRemarks === 'edit' && isSealed) return false;
       }
 
+      // Year filter
+      if (selectedYear !== 'all') {
+        const parsed = parseCollectionDate(item.date);
+        if (parsed.year && parsed.year !== selectedYear) return false;
+      }
+
+      // Month filter (0..11 or 'all')
+      if (selectedMonth !== 'all') {
+        const parsed = parseCollectionDate(item.date);
+        if (parsed.month !== null && parsed.month !== Number(selectedMonth)) return false;
+      }
+
       // Search filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -1536,7 +1622,7 @@ export default function CollectionPage() {
     });
 
     return result;
-  }, [collections, activeTab, selectedMethod, selectedStatus, selectedRemarks, searchQuery, sortBy, sortOrder]);
+  }, [collections, activeTab, selectedMethod, selectedStatus, selectedRemarks, selectedYear, selectedMonth, searchQuery, sortBy, sortOrder]);
 
   // Tab Stats for 4 KPI Cards (Calculated over current tab's scope or all)
   const tabStats = useMemo(() => {
@@ -1595,7 +1681,7 @@ export default function CollectionPage() {
   // Reset pagination on filter or search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, searchQuery, selectedMethod, selectedStatus, selectedRemarks, sortBy, sortOrder, itemsPerPage]);
+  }, [activeTab, searchQuery, selectedMethod, selectedStatus, selectedRemarks, selectedYear, selectedMonth, sortBy, sortOrder, itemsPerPage]);
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filteredCollections.length / itemsPerPage));
@@ -2480,9 +2566,11 @@ export default function CollectionPage() {
                   setSelectedMethod('all');
                   setSelectedStatus('all');
                   setSelectedRemarks('all');
+                  setSelectedYear('2026');
+                  setSelectedMonth('all');
                 }}
                 className="p-2.5 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
-                title="Reset filters"
+                title="Reset all filters"
               >
                 <RefreshCw className="w-4 h-4" />
               </button>
@@ -2501,8 +2589,119 @@ export default function CollectionPage() {
           </div>
         </div>
 
+        {/* Monthly Filter Pills Strip */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 rounded-2xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 shrink-0">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200">
+                Filter by Month:
+              </span>
+              {selectedMonth !== 'all' ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                  {MONTH_NAMES[selectedMonth as number]} {selectedYear === 'all' ? '' : selectedYear}
+                </span>
+              ) : (
+                <span className="text-[11px] text-neutral-400">
+                  {selectedYear === 'all' ? 'All Time' : `Full Year ${selectedYear}`}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {availableYears.length > 1 && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[11px] font-semibold text-neutral-500">Year:</span>
+                <select
+                  value={selectedYear}
+                  onChange={e => setSelectedYear(e.target.value)}
+                  className="px-2 py-1 rounded-xl text-xs font-bold bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 outline-none cursor-pointer"
+                  title="Filter collections by Year"
+                >
+                  <option value="all">All Years</option>
+                  {availableYears.map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5">
+              <button
+                type="button"
+                onClick={() => setSelectedMonth('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  selectedMonth === 'all'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300'
+                }`}
+              >
+                <span>All Months</span>
+              </button>
+
+            {MONTHS_SHORT.map((mShort, idx) => {
+              const isSelected = selectedMonth === idx;
+              const hasData = !!monthActivity[idx];
+              const disabled = isMonthDisabled(idx);
+              return (
+                <button
+                  key={mShort}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => !disabled && setSelectedMonth(idx)}
+                  className={`relative px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold transition-all whitespace-nowrap flex items-center gap-1 ${
+                    disabled
+                      ? 'opacity-30 bg-neutral-100 dark:bg-neutral-800/40 text-neutral-400 dark:text-neutral-600 cursor-not-allowed select-none'
+                      : isSelected
+                      ? 'bg-emerald-700 text-white shadow-xs cursor-pointer'
+                      : hasData
+                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/70 hover:bg-emerald-100/80 cursor-pointer'
+                      : 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 cursor-pointer'
+                  }`}
+                  title={disabled ? `${MONTH_NAMES[idx]} is disabled until ${MONTH_NAMES[idx]} 1` : `Filter collections by ${MONTH_NAMES[idx]} ${selectedYear === 'all' ? '' : selectedYear}`}
+                >
+                  <span>{mShort}</span>
+                  {!disabled && hasData && (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isSelected ? 'bg-amber-300' : 'bg-emerald-500'
+                      }`}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
         {/* Monthly Deposit Distribution Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs px-1">
+            <div className="flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="font-bold text-neutral-800 dark:text-neutral-200">
+                Deposit Custody Breakdown {selectedMonth !== 'all' ? `— ${MONTH_NAMES[selectedMonth as number]} ${selectedYear === 'all' ? '' : selectedYear}` : selectedYear !== 'all' ? `— Full Year ${selectedYear}` : '— All Records'}
+              </span>
+              <span className="text-[11px] text-neutral-400 font-medium">
+                ({filteredCollections.length} receipt{filteredCollections.length === 1 ? '' : 's'})
+              </span>
+            </div>
+            {selectedMonth !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setSelectedMonth('all')}
+                className="text-[11px] text-emerald-700 dark:text-emerald-400 hover:underline font-semibold cursor-pointer"
+              >
+                Clear month filter
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs">
           <div className="flex items-center gap-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20">
             <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
               <Wallet className="w-4 h-4" />
@@ -2542,6 +2741,7 @@ export default function CollectionPage() {
             </div>
           </div>
         </div>
+      </div>
 
         {/* Master Registry Table Container */}
         <div className="rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs overflow-hidden">
