@@ -3217,7 +3217,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
       `),
       pool.query(`
         SELECT id, date, or_no, payor_name, loan_account, principal_amount, interest_account, interest_amount,
-               fines_account, fines_amount, common_share_amount, amount, bank_name, payment_method, tab, items, created_at, particulars
+               fines_account, fines_amount, common_share_amount, amount, bank_name, payment_method, status, remarks, tab, items, created_at, particulars
         FROM collections
         WHERE COALESCE(status, 'completed') != 'cancelled'
         ORDER BY date DESC
@@ -3355,12 +3355,23 @@ export const getFinancialStatementReport = async (req, res, next) => {
           const mExp = expLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
           cumNetCur += (mRev - mExp);
           stores.net_surplus_period.current[m] = cumNetCur;
-          // Keep fundamental equation balanced by having operating cash reflect net operating surplus
-          stores.cash_in_vault.current[m] += cumNetCur;
+
+          if (m < 10) {
+            // Months 0 to 9 (January to October):
+            // Manager deposits collected cash into the bank, so Cash in Vault is 0.00 for past months
+            // and the deposited funds are in CIB (Metrobank).
+            stores.cash_in_vault.current[m] = 0;
+            stores.cib_metrobank.current[m] += (BASELINE.cash_in_vault.cur + cumNetCur);
+          } else {
+            // Month 10 (November):
+            // Active current month: the manager still holds physical cash in the vault.
+            stores.cash_in_vault.current[m] += cumNetCur;
+          }
         }
         // Month 11 (December) has not operated yet; carry forward November's position
         stores.net_surplus_period.current[11] = stores.net_surplus_period.current[10];
         stores.cash_in_vault.current[11] = stores.cash_in_vault.current[10];
+        stores.cib_metrobank.current[11] = stores.cib_metrobank.current[10];
       }
 
       if (sooPrev?.statement) {
@@ -3469,7 +3480,14 @@ export const getFinancialStatementReport = async (req, res, next) => {
         amount: amt
       };
 
-      stores.cash_in_vault.transactions.push(tx);
+      const colStatus = (col.status || '').toLowerCase();
+      if (colStatus.includes('mbtc') || colStatus.includes('metrobank')) {
+        stores.cib_metrobank.transactions.push(tx);
+      } else if (colStatus.includes('bdo')) {
+        stores.cib_bdo.transactions.push(tx);
+      } else {
+        stores.cash_in_vault.transactions.push(tx);
+      }
 
       const shAmt = parseFloat(col.common_share_amount) || 0;
       if (shAmt > 0) {

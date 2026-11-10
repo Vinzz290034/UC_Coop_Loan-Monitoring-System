@@ -74,11 +74,30 @@ function formatCollectionRow(row) {
     particulars: row.particulars || undefined,
     other_category: row.other_category || undefined,
     amount: parseFloat(row.amount || 0),
-    payment_method: row.payment_method || 'Cash',
+    payment_method: (() => {
+      const pm = String(row.payment_method || 'Hand in').trim();
+      const pmLower = pm.toLowerCase();
+      if (pmLower === 'cash') return 'Hand in';
+      if (pmLower === 'salary deduction') return 'salary deduction';
+      if (pmLower === 'gcash') return 'Gcash';
+      if (pmLower === 'bank transfer') return 'Bank transfer';
+      if (pmLower === 'cheque' || pmLower === 'check') return 'cheque';
+      return pm;
+    })(),
     reference_no: row.reference_no || undefined,
     bank_name: row.bank_name || undefined,
-    status: row.status || 'completed',
-    remarks: row.remarks || undefined,
+    status: (() => {
+      const sLower = String(row.status || '').toLowerCase();
+      if (sLower.includes('mbtc') || sLower.includes('metrobank')) return 'Cash in MBTC';
+      if (sLower.includes('bdo')) return 'Cash in BDO';
+      return 'Cash in vault';
+    })(),
+    remarks: (() => {
+      const rLower = String(row.remarks || '').toLowerCase();
+      const sLower = String(row.status || '').toLowerCase();
+      if (rLower === 'sealed' || rLower === 'filed' || sLower === 'filed') return 'sealed';
+      return 'edit';
+    })(),
     collected_by: row.collected_by || 'CHINNETTE A. LAMOSTE',
     created_at: row.created_at,
     updated_at: row.updated_at
@@ -271,11 +290,11 @@ export async function createCollection(req, res) {
     const particulars = item.particulars || null;
     const other_category = item.other_category || null;
     const amount = item.amount || 0;
-    const payment_method = item.payment_method || 'Cash';
+    const payment_method = item.payment_method || 'Hand in';
     const reference_no = item.reference_no || null;
     const bank_name = item.bank_name || null;
-    const status = item.status || 'completed';
-    const remarks = item.remarks || null;
+    const status = item.status || 'Cash in vault';
+    const remarks = item.remarks || 'edit';
     const collected_by = item.collected_by || 'CHINNETTE A. LAMOSTE';
 
     const insertQuery = `
@@ -479,11 +498,11 @@ export async function bulkImportCollections(req, res) {
       const particulars = item.particulars || null;
       const other_category = item.other_category || null;
       const amount = item.amount || 0;
-      const payment_method = item.payment_method || 'Cash';
+      const payment_method = item.payment_method || 'Hand in';
       const reference_no = item.reference_no || null;
       const bank_name = item.bank_name || null;
-      const status = item.status || 'completed';
-      const remarks = item.remarks || null;
+      const status = item.status || 'Cash in vault';
+      const remarks = item.remarks || 'edit';
       const collected_by = item.collected_by || 'CHINNETTE A. LAMOSTE';
 
       const values = [
@@ -662,8 +681,8 @@ export async function deleteCollection(req, res) {
   try {
     const { id } = req.params;
 
-    // Check if status is filed
-    const check = await pool.query('SELECT status FROM collections WHERE id = $1', [id]);
+    // Check if status is filed or remarks is sealed
+    const check = await pool.query('SELECT status, remarks FROM collections WHERE id = $1', [id]);
     if (check.rowCount === 0) {
       return res.status(404).json({
         success: false,
@@ -671,8 +690,10 @@ export async function deleteCollection(req, res) {
       });
     }
 
+    const row = check.rows[0];
+    const isFiled = row.status === 'filed' || String(row.remarks || '').toLowerCase() === 'sealed';
     const isOverride = req.query.override === 'true' || req.body?.override === true || req.user?.role === 'admin';
-    if (check.rows[0].status === 'filed' && !isOverride) {
+    if (isFiled && !isOverride) {
       return res.status(403).json({
         success: false,
         error: { message: 'This collection entry is Sealed & Filed and cannot be deleted without Admin Override.' }
@@ -713,7 +734,7 @@ export async function bulkDeleteCollections(req, res) {
     const result = await pool.query(
       allowFiled
         ? "DELETE FROM collections WHERE id = ANY($1::text[]) RETURNING id"
-        : "DELETE FROM collections WHERE id = ANY($1::text[]) AND status != 'filed' RETURNING id",
+        : "DELETE FROM collections WHERE id = ANY($1::text[]) AND status != 'filed' AND LOWER(COALESCE(remarks, '')) != 'sealed' RETURNING id",
       [ids]
     );
 

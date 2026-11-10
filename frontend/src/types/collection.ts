@@ -38,6 +38,11 @@ export interface CollectionMerchandiseItem {
 }
 
 export type PaymentMethod =
+  | 'Hand in'
+  | 'salary deduction'
+  | 'Gcash'
+  | 'Bank transfer'
+  | 'cheque'
   | 'Cash'
   | 'Salary Deduction'
   | 'GCash'
@@ -45,7 +50,22 @@ export type PaymentMethod =
   | 'Cheque'
   | 'Cash in Vault'
   | 'Check'
-  | 'Payroll Deduction';
+  | 'Payroll Deduction'
+  | string;
+
+export type CollectionStatus =
+  | 'Cash in vault'
+  | 'Cash in MBTC'
+  | 'Cash in BDO'
+  | 'completed'
+  | 'on process'
+  | 'filed'
+  | string;
+
+export type CollectionRemarks =
+  | 'edit'
+  | 'sealed'
+  | string;
 
 export interface CollectionItem {
   id: string;
@@ -89,8 +109,8 @@ export interface CollectionItem {
   payment_method: PaymentMethod;
   reference_no?: string;
   bank_name?: string;
-  status?: 'completed' | 'on process' | 'filed';
-  remarks?: string;
+  status?: CollectionStatus;
+  remarks?: CollectionRemarks;
   collected_by: string;
 }
 

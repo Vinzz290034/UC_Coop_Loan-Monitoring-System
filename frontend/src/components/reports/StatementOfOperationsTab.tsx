@@ -164,6 +164,27 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     return 10;
   }, [year]);
 
+  // Disable upcoming months (e.g. December) until that month actually arrives on the 1st
+  const isMonthDisabled = useCallback((mIdx: number) => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth(); // 0 = Jan, 10 = Nov, 11 = Dec
+
+    if (year > curYear) return true;
+    if (year === curYear) return mIdx > curMonth;
+    if (year === 2026 && mIdx > 10 && (curYear < 2026 || (curYear === 2026 && curMonth < 11))) {
+      return true;
+    }
+    return false;
+  }, [year]);
+
+  // Safeguard: if a disabled month is selected, automatically switch back to YTD
+  useEffect(() => {
+    if (typeof selectedPeriod === 'number' && isMonthDisabled(selectedPeriod)) {
+      setSelectedPeriod('ytd');
+    }
+  }, [selectedPeriod, isMonthDisabled]);
+
   const router = useRouter();
   const [selectedLineModal, setSelectedLineModal] = useState<SooLine | null>(null);
   const [lineModalSearch, setLineModalSearch] = useState('');
@@ -807,21 +828,26 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
             {MONTHS_SHORT.map((m, idx) => {
               const isSelected = selectedPeriod === idx;
               const hasActivity = monthHasActivity(idx);
+              const disabled = isMonthDisabled(idx);
               return (
                 <button
                   key={m}
                   type="button"
-                  onClick={() => setSelectedPeriod(idx)}
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    isSelected
-                      ? 'bg-[#064e3b] text-white shadow-xs'
+                  disabled={disabled}
+                  onClick={() => !disabled && setSelectedPeriod(idx)}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    disabled
+                      ? 'opacity-30 bg-neutral-100 dark:bg-neutral-800/40 text-neutral-400 dark:text-neutral-600 cursor-not-allowed border border-transparent select-none'
+                      : isSelected
+                      ? 'bg-[#064e3b] text-white shadow-xs cursor-pointer'
                       : hasActivity
-                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/70 hover:bg-emerald-100/80'
-                      : 'bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 dark:text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/70 hover:bg-emerald-100/80 cursor-pointer'
+                      : 'bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 dark:text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer'
                   }`}
+                  title={disabled ? `${MONTHS[idx]} ${year} is disabled until ${MONTHS[idx]} 1, ${year}` : `View ${MONTHS[idx]} ${year}`}
                 >
                   <span>{m}</span>
-                  {hasActivity && (
+                  {!disabled && hasActivity && (
                     <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-emerald-300' : 'bg-emerald-500'}`} />
                   )}
                 </button>
@@ -916,15 +942,6 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
             </div>
           </div>
 
-          {/* Upcoming Month Notice */}
-          {year === 2026 && typeof selectedPeriod === 'number' && selectedPeriod > 10 && (
-            <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>
-                {MONTHS[selectedPeriod]} {year} has not operated yet. Active records currently run from January to November {year}.
-              </span>
-            </div>
-          )}
 
           {/* ================= Big summary cards ================= */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1157,20 +1174,27 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                   >
                     All Year
                   </button>
-                  {MONTHS_SHORT.map((m, idx) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setLineModalMonthFilter(idx)}
-                      className={`px-2 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                        lineModalMonthFilter === idx
-                          ? 'bg-[#064e3b] text-white shadow-xs'
-                          : 'text-neutral-600 dark:text-neutral-300 hover:text-emerald-700'
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  ))}
+                  {MONTHS_SHORT.map((m, idx) => {
+                    const disabled = isMonthDisabled(idx);
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => !disabled && setLineModalMonthFilter(idx)}
+                        className={`px-2 py-1 rounded-lg transition-all whitespace-nowrap ${
+                          disabled
+                            ? 'opacity-30 cursor-not-allowed text-neutral-400 select-none'
+                            : lineModalMonthFilter === idx
+                            ? 'bg-[#064e3b] text-white shadow-xs cursor-pointer'
+                            : 'text-neutral-600 dark:text-neutral-300 hover:text-emerald-700 cursor-pointer'
+                        }`}
+                        title={disabled ? `Disabled until ${MONTHS[idx]} 1, ${year}` : undefined}
+                      >
+                        {m}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

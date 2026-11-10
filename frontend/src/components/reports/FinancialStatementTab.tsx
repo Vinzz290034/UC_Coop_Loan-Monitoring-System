@@ -164,6 +164,27 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
     return 10;
   }, [year]);
 
+  // Disable upcoming months (e.g. December) until that month actually arrives on the 1st
+  const isMonthDisabled = useCallback((mIdx: number) => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth(); // 0 = Jan, 10 = Nov, 11 = Dec
+
+    if (year > curYear) return true;
+    if (year === curYear) return mIdx > curMonth;
+    if (year === 2026 && mIdx > 10 && (curYear < 2026 || (curYear === 2026 && curMonth < 11))) {
+      return true;
+    }
+    return false;
+  }, [year]);
+
+  // Safeguard: if a disabled month is selected, automatically switch back to YTD
+  useEffect(() => {
+    if (typeof selectedPeriod === 'number' && isMonthDisabled(selectedPeriod)) {
+      setSelectedPeriod('ytd');
+    }
+  }, [selectedPeriod, isMonthDisabled]);
+
   const router = useRouter();
   const [selectedLineModal, setSelectedLineModal] = useState<FsLine | null>(null);
   const [lineModalSearch, setLineModalSearch] = useState('');
@@ -846,20 +867,24 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
           {MONTHS_SHORT.map((mShort, idx) => {
             const isSelected = selectedPeriod === idx;
             const hasData = monthHasActivity(idx);
+            const disabled = isMonthDisabled(idx);
             return (
               <button
                 key={mShort}
                 type="button"
-                onClick={() => setSelectedPeriod(idx)}
-                className={`relative px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all whitespace-nowrap cursor-pointer ${
-                  isSelected
-                    ? 'bg-emerald-700 text-white shadow-xs'
-                    : 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300'
+                disabled={disabled}
+                onClick={() => !disabled && setSelectedPeriod(idx)}
+                className={`relative px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all whitespace-nowrap ${
+                  disabled
+                    ? 'opacity-30 bg-neutral-100 dark:bg-neutral-800/40 text-neutral-400 dark:text-neutral-600 cursor-not-allowed border border-transparent select-none'
+                    : isSelected
+                    ? 'bg-emerald-700 text-white shadow-xs cursor-pointer'
+                    : 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 cursor-pointer'
                 }`}
-                title={`View position as of ${MONTHS[idx]} ${year}`}
+                title={disabled ? `${MONTHS[idx]} ${year} is disabled until ${MONTHS[idx]} 1, ${year}` : `View position as of ${MONTHS[idx]} ${year}`}
               >
                 <span>{mShort}</span>
-                {hasData && (
+                {!disabled && hasData && (
                   <span
                     className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
                       isSelected ? 'bg-amber-300' : 'bg-emerald-500'
@@ -1027,15 +1052,6 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
             </div>
           )}
 
-          {/* Upcoming Month Notice */}
-          {year === 2026 && typeof selectedPeriod === 'number' && selectedPeriod > 10 && (
-            <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-800 dark:text-blue-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>
-                {MONTHS[selectedPeriod]} {year} has not operated yet. Active records currently run from January to November {year}.
-              </span>
-            </div>
-          )}
 
           {/* ============================================================== */}
           {/* PART A: ASSETS */}
@@ -1147,11 +1163,14 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
                     className="px-2.5 py-1 rounded-xl text-xs bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none cursor-pointer"
                   >
                     <option value="all">All Months</option>
-                    {MONTHS.map((m, idx) => (
-                      <option key={m} value={idx}>
-                        {m}
-                      </option>
-                    ))}
+                    {MONTHS.map((m, idx) => {
+                      const disabled = isMonthDisabled(idx);
+                      return (
+                        <option key={m} value={idx} disabled={disabled}>
+                          {m}{disabled ? ` (Disabled until ${m} 1)` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>

@@ -47,7 +47,9 @@ import {
   ShieldAlert,
   Loader2,
   Package,
-  Tag
+  Tag,
+  Building2,
+  Wallet
 } from 'lucide-react';
 
 import type {
@@ -95,13 +97,30 @@ const CASHIER_OPTIONS: SelectOption[] = [
 ];
 
 const PAYMENT_METHOD_OPTIONS: SelectOption[] = [
-  { value: 'Cash', label: 'Cash' },
-  { value: 'Salary Deduction', label: 'Salary Deduction' },
-  { value: 'GCash', label: 'GCash' },
-  { value: 'Bank Transfer', label: 'Bank Transfer' },
-  { value: 'Cheque', label: 'Cheque' },
-  { value: 'Cash in Vault', label: 'Cash in Vault' },
+  { value: 'Hand in', label: 'Hand in' },
+  { value: 'salary deduction', label: 'salary deduction' },
+  { value: 'Gcash', label: 'Gcash' },
+  { value: 'Bank transfer', label: 'Bank transfer' },
+  { value: 'cheque', label: 'cheque' },
 ];
+
+const STATUS_OPTIONS: SelectOption[] = [
+  { value: 'Cash in vault', label: 'Cash in vault' },
+  { value: 'Cash in MBTC', label: 'Cash in MBTC' },
+  { value: 'Cash in BDO', label: 'Cash in BDO' },
+];
+
+const REMARKS_OPTIONS: SelectOption[] = [
+  { value: 'edit', label: 'edit' },
+  { value: 'sealed', label: 'sealed' },
+];
+
+const isCollectionSealed = (item?: { remarks?: string; status?: string } | null): boolean => {
+  if (!item) return false;
+  const rem = (item.remarks || '').trim().toLowerCase();
+  const stat = (item.status || '').trim().toLowerCase();
+  return rem === 'sealed' || rem === 'filed' || stat === 'filed';
+};
 
 const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
   { value: 'Loans Payable - Salary', label: 'Loans Payable - Salary' },
@@ -345,6 +364,7 @@ export default function CollectionPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMethod, setSelectedMethod] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedRemarks, setSelectedRemarks] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'or_no' | 'date'>('or_no');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -363,7 +383,7 @@ export default function CollectionPage() {
   const [editFormData, setEditFormData] = useState<any>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isEditOverride, setIsEditOverride] = useState(false);
-  const isEditLocked = editingItem?.status === 'filed' && !isEditOverride;
+  const isEditLocked = isCollectionSealed(editingItem) && !isEditOverride;
   const [isEditCustomBank, setIsEditCustomBank] = useState(false);
   const [isEditMemberDropdownOpen, setIsEditMemberDropdownOpen] = useState(false);
   const editMemberComboboxRef = useRef<HTMLDivElement>(null);
@@ -546,11 +566,11 @@ export default function CollectionPage() {
     service_rate: '',
     // Common
     amount: '',
-    payment_method: 'Cash' as PaymentMethod,
+    payment_method: 'Hand in' as PaymentMethod,
     reference_no: '',
     bank_name: '',
-    status: 'completed' as 'completed' | 'on process',
-    remarks: '',
+    status: 'Cash in vault' as any,
+    remarks: 'edit',
     collected_by: 'CHINNETTE A. LAMOSTE'
   });
 
@@ -974,11 +994,11 @@ export default function CollectionPage() {
       service_copies: item.service_copies ? String(item.service_copies) : '1',
       service_rate: item.service_rate ? String(item.service_rate) : '',
       amount: item.amount ? String(item.amount) : '',
-      payment_method: item.payment_method || 'Cash',
+      payment_method: item.payment_method || 'Hand in',
       reference_no: item.reference_no || '',
       bank_name: item.bank_name || '',
-      status: item.status || 'completed',
-      remarks: item.remarks || '',
+      status: item.status || 'Cash in vault',
+      remarks: item.remarks || (isCollectionSealed(item) ? 'sealed' : 'edit'),
       collected_by: item.collected_by || 'CHINNETTE A. LAMOSTE',
     });
 
@@ -1214,14 +1234,15 @@ export default function CollectionPage() {
   const handleUpdateCollection = async (markAsFiled: boolean = false, unsealToCompleted: boolean = false) => {
     if (!editFormData || !editingItem) return;
 
-    if (editingItem.status === 'filed' && !isEditOverride) {
-      setActionFeedback({ type: 'error', message: 'Filed collection entries are locked. Click "Override Lock" to edit.' });
+    if (isCollectionSealed(editingItem) && !isEditOverride) {
+      setActionFeedback({ type: 'error', message: 'Sealed collection entries are locked. Click "Override Lock" to edit.' });
       setTimeout(() => setActionFeedback(null), 4000);
       return;
     }
 
     // Validate Cheque fields
-    if (editFormData.payment_method === 'Cheque') {
+    const isCheque = String(editFormData.payment_method || '').toLowerCase().includes('cheque') || String(editFormData.payment_method || '').toLowerCase().includes('check');
+    if (isCheque) {
       if (!editFormData.reference_no?.trim()) {
         setActionFeedback({ type: 'error', message: 'Cheque number is required for Cheque payments.' });
         setTimeout(() => setActionFeedback(null), 4000);
@@ -1374,8 +1395,8 @@ export default function CollectionPage() {
         ? editFormData.reference_no?.trim() || undefined
         : undefined,
       bank_name: editFormData.payment_method === 'Cheque' ? editFormData.bank_name?.trim() || undefined : undefined,
-      status: unsealToCompleted ? 'completed' : markAsFiled ? 'filed' : (editFormData.status || 'completed'),
-      remarks: editFormData.remarks?.trim() || undefined,
+      status: editFormData.status || 'Cash in vault',
+      remarks: unsealToCompleted ? 'edit' : markAsFiled ? 'sealed' : (editFormData.remarks || 'edit'),
       collected_by: editFormData.collected_by?.trim() || 'CHINNETTE A. LAMOSTE',
     };
 
@@ -1394,11 +1415,11 @@ export default function CollectionPage() {
       setActionFeedback({
         type: 'success',
         message: unsealToCompleted
-          ? `Collection receipt #${updated.or_no} unsealed and reverted to Completed via Admin Override.`
+          ? `Collection receipt #${updated.or_no} unsealed and reverted to Edit via Admin Override.`
           : markAsFiled
           ? `Collection receipt #${updated.or_no} is now sealed & filed (locked).`
-          : editingItem.status === 'filed'
-          ? `Filed collection receipt #${updated.or_no} updated via Admin Override.`
+          : isCollectionSealed(editingItem)
+          ? `Sealed collection receipt #${updated.or_no} updated via Admin Override.`
           : `Collection receipt #${updated.or_no} updated successfully.`
       });
       setTimeout(() => setActionFeedback(null), 4000);
@@ -1426,13 +1447,45 @@ export default function CollectionPage() {
         }
       }
 
-      // Method filter
-      if (selectedMethod !== 'all' && item.payment_method !== selectedMethod) return false;
+      // Method / Payment Mode filter
+      if (selectedMethod !== 'all') {
+        const itemPm = (item.payment_method || '').toLowerCase();
+        const sel = selectedMethod.toLowerCase();
+        if (sel === 'hand in') {
+          if (!itemPm.includes('hand in') && !itemPm.includes('cash')) return false;
+        } else if (sel === 'salary deduction') {
+          if (!itemPm.includes('salary') && !itemPm.includes('payroll')) return false;
+        } else if (sel === 'gcash') {
+          if (!itemPm.includes('gcash')) return false;
+        } else if (sel === 'bank transfer') {
+          if (!itemPm.includes('bank transfer')) return false;
+        } else if (sel === 'cheque') {
+          if (!itemPm.includes('cheque') && !itemPm.includes('check')) return false;
+        } else if (item.payment_method !== selectedMethod) {
+          return false;
+        }
+      }
 
-      // Status filter
+      // Status filter (Cash in vault, Cash in MBTC, Cash in BDO)
       if (selectedStatus !== 'all') {
-        const itemStat = item.status || 'completed';
-        if (itemStat !== selectedStatus) return false;
+        const itemStat = (item.status || 'Cash in vault').toLowerCase();
+        const sel = selectedStatus.toLowerCase();
+        if (sel.includes('mbtc') || sel.includes('metrobank')) {
+          if (!itemStat.includes('mbtc') && !itemStat.includes('metrobank')) return false;
+        } else if (sel.includes('bdo')) {
+          if (!itemStat.includes('bdo')) return false;
+        } else if (sel.includes('vault')) {
+          if (!itemStat.includes('vault') && itemStat !== 'completed') return false;
+        } else if (itemStat !== sel) {
+          return false;
+        }
+      }
+
+      // Remarks filter (edit, sealed)
+      if (selectedRemarks !== 'all') {
+        const isSealed = isCollectionSealed(item);
+        if (selectedRemarks === 'sealed' && !isSealed) return false;
+        if (selectedRemarks === 'edit' && isSealed) return false;
       }
 
       // Search filter
@@ -1483,7 +1536,7 @@ export default function CollectionPage() {
     });
 
     return result;
-  }, [collections, activeTab, selectedMethod, selectedStatus, searchQuery, sortBy, sortOrder]);
+  }, [collections, activeTab, selectedMethod, selectedStatus, selectedRemarks, searchQuery, sortBy, sortOrder]);
 
   // Tab Stats for 4 KPI Cards (Calculated over current tab's scope or all)
   const tabStats = useMemo(() => {
@@ -1505,6 +1558,25 @@ export default function CollectionPage() {
     };
   }, [collections, activeTab]);
 
+  // Monthly Deposit Custody Breakdown (Cash in vault, Cash in MBTC, Cash in BDO)
+  const monthlyDepositStats = useMemo(() => {
+    let vaultTotal = 0;
+    let mbtcTotal = 0;
+    let bdoTotal = 0;
+    filteredCollections.forEach(c => {
+      const amt = parseFloat(String(c.amount || 0)) || 0;
+      const s = (c.status || 'Cash in vault').toLowerCase();
+      if (s.includes('mbtc') || s.includes('metrobank')) {
+        mbtcTotal += amt;
+      } else if (s.includes('bdo')) {
+        bdoTotal += amt;
+      } else {
+        vaultTotal += amt;
+      }
+    });
+    return { vaultTotal, mbtcTotal, bdoTotal };
+  }, [filteredCollections]);
+
   // Sales Registry Catalog Stats for top 4 KPI cards when on Sales Registry tab
   const salesRegistryStats = useMemo(() => {
     const totalItems = salesCatalogItems.length;
@@ -1523,7 +1595,7 @@ export default function CollectionPage() {
   // Reset pagination on filter or search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, searchQuery, selectedMethod, selectedStatus, sortBy, sortOrder, itemsPerPage]);
+  }, [activeTab, searchQuery, selectedMethod, selectedStatus, selectedRemarks, sortBy, sortOrder, itemsPerPage]);
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filteredCollections.length / itemsPerPage));
@@ -1554,7 +1626,7 @@ export default function CollectionPage() {
 
   // Selection handlers: Filed items cannot be selected for deletion
   const toggleSelectAll = () => {
-    const pageItems = (isExpandedAll ? filteredCollections : paginatedCollections).filter(c => c.status !== 'filed');
+    const pageItems = (isExpandedAll ? filteredCollections : paginatedCollections).filter(c => !isCollectionSealed(c));
     const pageIds = pageItems.map(c => c.id);
     if (pageIds.length === 0) return;
     const allPageSelected = pageIds.every(id => selectedIds.includes(id));
@@ -1567,7 +1639,7 @@ export default function CollectionPage() {
 
   const toggleSelectRow = (id: string) => {
     const item = collections.find(c => c.id === id);
-    if (item?.status === 'filed') return;
+    if (isCollectionSealed(item)) return;
     setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
 
@@ -1633,11 +1705,11 @@ export default function CollectionPage() {
       service_copies: '1',
       service_rate: '',
       amount: '',
-      payment_method: 'Cash',
+      payment_method: 'Hand in',
       reference_no: '',
       bank_name: '',
-      status: 'completed',
-      remarks: '',
+      status: 'Cash in vault',
+      remarks: 'edit',
       collected_by: 'CHINNETTE A. LAMOSTE'
     });
     setIsCustomBank(false);
@@ -1797,12 +1869,13 @@ export default function CollectionPage() {
         ? formData.reference_no.trim() || undefined
         : undefined,
       bank_name: formData.payment_method === 'Cheque' ? formData.bank_name.trim() || undefined : undefined,
-      status: 'completed',
-      remarks: formData.remarks.trim() || undefined,
+      status: formData.status || 'Cash in vault',
+      remarks: formData.remarks || 'edit',
       collected_by: formData.collected_by.trim() || 'CHINNETTE A. LAMOSTE'
     };
 
-    if (formData.payment_method === 'Cheque') {
+    const isCheque = String(formData.payment_method || '').toLowerCase().includes('cheque') || String(formData.payment_method || '').toLowerCase().includes('check');
+    if (isCheque) {
       if (!formData.reference_no.trim()) {
         setActionFeedback({ type: 'error', message: 'Cheque number is required for Cheque payments.' });
         setTimeout(() => setActionFeedback(null), 4000);
@@ -1834,8 +1907,8 @@ export default function CollectionPage() {
     if (e) e.stopPropagation();
     const target = typeof idOrItem === 'string' ? collections.find(c => c.id === idOrItem) : idOrItem;
     if (!target) return;
-    if (target.status === 'filed' && !isAdmin && !allowOverride) {
-      setActionFeedback({ type: 'error', message: 'Filed collection receipts are permanently locked and cannot be deleted.' });
+    if (isCollectionSealed(target) && !isAdmin && !allowOverride) {
+      setActionFeedback({ type: 'error', message: 'Sealed collection receipts are permanently locked and cannot be deleted.' });
       setTimeout(() => setActionFeedback(null), 4000);
       return;
     }
@@ -1845,8 +1918,8 @@ export default function CollectionPage() {
   // Perform single collection deletion after modal confirmation
   const confirmDeleteSingleItem = async () => {
     if (!itemToDelete) return;
-    if (itemToDelete.status === 'filed' && !isAdmin) {
-      setActionFeedback({ type: 'error', message: 'Filed collection receipts are permanently locked and cannot be deleted.' });
+    if (isCollectionSealed(itemToDelete) && !isAdmin) {
+      setActionFeedback({ type: 'error', message: 'Sealed collection receipts are permanently locked and cannot be deleted.' });
       setTimeout(() => setActionFeedback(null), 4000);
       setItemToDelete(null);
       return;
@@ -1854,7 +1927,7 @@ export default function CollectionPage() {
 
     setIsDeletingItem(true);
     try {
-      const url = itemToDelete.status === 'filed'
+      const url = isCollectionSealed(itemToDelete)
         ? `/collections/${itemToDelete.id}?override=true`
         : `/collections/${itemToDelete.id}`;
       await api.delete(url);
@@ -1868,8 +1941,8 @@ export default function CollectionPage() {
       setSelectedIds(prev => prev.filter(x => x !== itemToDelete.id));
       setActionFeedback({
         type: 'success',
-        message: itemToDelete.status === 'filed'
-          ? `Filed collection receipt #${itemToDelete.or_no} removed via Admin Override.`
+        message: isCollectionSealed(itemToDelete)
+          ? `Sealed collection receipt #${itemToDelete.or_no} removed via Admin Override.`
           : `Collection receipt #${itemToDelete.or_no} removed successfully.`
       });
       setTimeout(() => setActionFeedback(null), 4000);
@@ -1889,7 +1962,7 @@ export default function CollectionPage() {
       ? selectedIds
       : selectedIds.filter(id => {
           const c = collections.find(item => item.id === id);
-          return c && c.status !== 'filed';
+          return c && !isCollectionSealed(c);
         });
     if (deletableIds.length === 0) {
       setIsBulkDeleteModalOpen(false);
@@ -1913,7 +1986,7 @@ export default function CollectionPage() {
 
   // Export CSV
   const handleExportCsv = () => {
-    const headers = ['Date', 'Receipt #', 'Payor / Member', 'Category', 'Particulars / Description', 'Amount', 'Payment Method', 'Reference #', 'Status', 'Collected By', 'Remarks'];
+    const headers = ['Date', 'Receipt #', 'Payor / Member', 'Category', 'Particulars / Description', 'Amount', 'Payment Mode', 'Reference #', 'Status', 'Remarks', 'Collected By'];
     const rows = filteredCollections.map(item => {
       let desc = (item.remarks || '').trim();
       if (!desc) {
@@ -1962,13 +2035,13 @@ export default function CollectionPage() {
         catLabel,
         desc,
         item.amount.toFixed(2),
-        item.payment_method,
-        item.payment_method === 'Cheque'
+        item.payment_method || 'Hand in',
+        String(item.payment_method || '').toLowerCase().includes('cheque')
           ? `${item.bank_name ? `${item.bank_name} ` : ''}Chk #${item.reference_no || ''}`
           : (item.reference_no || ''),
-        item.status || 'completed',
-        item.collected_by,
-        item.remarks || ''
+        item.status || 'Cash in vault',
+        isCollectionSealed(item) ? 'sealed' : 'edit',
+        item.collected_by || 'CHINNETTE A. LAMOSTE'
       ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
     });
 
@@ -2033,33 +2106,50 @@ export default function CollectionPage() {
     }
   };
 
-  // Status Badge Renderer matching Disbursement
+  // Status Badge Renderer: Cash in vault, Cash in MBTC, Cash in BDO
   const renderStatusBadge = (status?: string) => {
-    const s = (status || 'completed').toLowerCase();
-    switch (s) {
-      case 'filed':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-600/15 text-emerald-800 dark:text-emerald-200 border border-emerald-600/30">
-            <Lock className="w-3 h-3 text-emerald-700 dark:text-emerald-300" />
-            <span>Filed</span>
-          </span>
-        );
-      case 'on process':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/25">
-            <Clock className="w-3 h-3" />
-            <span>On Process</span>
-          </span>
-        );
-      case 'completed':
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-neutral-500/10 text-neutral-700 dark:text-neutral-300 border border-neutral-500/25">
-            <CheckCircle2 className="w-3 h-3 text-neutral-500" />
-            <span>Completed</span>
-          </span>
-        );
+    const s = (status || 'Cash in vault').toLowerCase();
+    if (s.includes('mbtc') || s.includes('metrobank')) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/25">
+          <Building2 className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+          <span>Cash in MBTC</span>
+        </span>
+      );
     }
+    if (s.includes('bdo')) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
+          <Building2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+          <span>Cash in BDO</span>
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+        <Wallet className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+        <span>Cash in vault</span>
+      </span>
+    );
+  };
+
+  // Remarks Badge Renderer: edit vs sealed
+  const renderRemarksBadge = (remarks?: string, status?: string) => {
+    const isSealed = isCollectionSealed({ remarks, status });
+    if (isSealed) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider bg-emerald-600/15 text-emerald-800 dark:text-emerald-200 border border-emerald-600/30" title="Sealed & Filed receipt (locked)">
+          <Lock className="w-3 h-3 text-emerald-700 dark:text-emerald-300" />
+          <span>sealed</span>
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/25" title="Editable receipt">
+        <Edit3 className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+        <span>edit</span>
+      </span>
+    );
   };
 
   if (authLoading) return null;
@@ -2310,20 +2400,19 @@ export default function CollectionPage() {
 
             {/* Filters & Actions */}
             <div className="flex items-center gap-2.5 flex-wrap">
-              {/* Payment Method Filter */}
+              {/* Payment Mode Filter */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">Method:</span>
+                <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">Payment Mode:</span>
                 <AnimatedSelect
                   value={selectedMethod}
                   onChange={setSelectedMethod}
                   options={[
-                    { value: 'all', label: 'All Methods' },
-                    { value: 'Cash', label: 'Cash' },
-                    { value: 'Salary Deduction', label: 'Salary Deduction' },
-                    { value: 'GCash', label: 'GCash' },
-                    { value: 'Bank Transfer', label: 'Bank Transfer' },
-                    { value: 'Cheque', label: 'Cheque' },
-                    { value: 'Cash in Vault', label: 'Cash in Vault' },
+                    { value: 'all', label: 'All Modes' },
+                    { value: 'Hand in', label: 'Hand in' },
+                    { value: 'salary deduction', label: 'salary deduction' },
+                    { value: 'Gcash', label: 'Gcash' },
+                    { value: 'Bank transfer', label: 'Bank transfer' },
+                    { value: 'cheque', label: 'cheque' },
                   ]}
                   className="w-40"
                   buttonClassName="font-medium text-xs py-1.5"
@@ -2338,11 +2427,27 @@ export default function CollectionPage() {
                   onChange={setSelectedStatus}
                   options={[
                     { value: 'all', label: 'All Statuses' },
-                    { value: 'filed', label: 'Filed' },
-                    { value: 'completed', label: 'Completed' },
-                    { value: 'on process', label: 'On Process' },
+                    { value: 'Cash in vault', label: 'Cash in vault' },
+                    { value: 'Cash in MBTC', label: 'Cash in MBTC' },
+                    { value: 'Cash in BDO', label: 'Cash in BDO' },
                   ]}
                   className="w-36"
+                  buttonClassName="font-medium text-xs py-1.5"
+                />
+              </div>
+
+              {/* Remarks Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">Remarks:</span>
+                <AnimatedSelect
+                  value={selectedRemarks}
+                  onChange={setSelectedRemarks}
+                  options={[
+                    { value: 'all', label: 'All Remarks' },
+                    { value: 'edit', label: 'edit' },
+                    { value: 'sealed', label: 'sealed' },
+                  ]}
+                  className="w-32"
                   buttonClassName="font-medium text-xs py-1.5"
                 />
               </div>
@@ -2374,6 +2479,7 @@ export default function CollectionPage() {
                   setSearchQuery('');
                   setSelectedMethod('all');
                   setSelectedStatus('all');
+                  setSelectedRemarks('all');
                 }}
                 className="p-2.5 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
                 title="Reset filters"
@@ -2395,6 +2501,48 @@ export default function CollectionPage() {
           </div>
         </div>
 
+        {/* Monthly Deposit Distribution Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs">
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
+              <Wallet className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">Cash in Vault</span>
+              <div className="text-base font-black text-neutral-900 dark:text-white">
+                ₱{monthlyDepositStats.vaultTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <p className="text-[9.5px] text-neutral-500">Physical cash currently held on hand</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+            <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-700 dark:text-blue-300 shrink-0">
+              <Building2 className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 dark:text-blue-300">Cash in MBTC</span>
+              <div className="text-base font-black text-neutral-900 dark:text-white">
+                ₱{monthlyDepositStats.mbtcTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <p className="text-[9.5px] text-neutral-500">Deposited into Metrobank account</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+            <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0">
+              <Building2 className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Cash in BDO</span>
+              <div className="text-base font-black text-neutral-900 dark:text-white">
+                ₱{monthlyDepositStats.bdoTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <p className="text-[9.5px] text-neutral-500">Deposited into BDO account</p>
+            </div>
+          </div>
+        </div>
+
         {/* Master Registry Table Container */}
         <div className="rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
@@ -2405,8 +2553,8 @@ export default function CollectionPage() {
                     <input
                       type="checkbox"
                       checked={
-                        (isExpandedAll ? filteredCollections : paginatedCollections).filter(c => c.status !== 'filed').length > 0 &&
-                        (isExpandedAll ? filteredCollections : paginatedCollections).filter(c => c.status !== 'filed').every(c => selectedIds.includes(c.id))
+                        (isExpandedAll ? filteredCollections : paginatedCollections).filter(c => !isCollectionSealed(c)).length > 0 &&
+                        (isExpandedAll ? filteredCollections : paginatedCollections).filter(c => !isCollectionSealed(c)).every(c => selectedIds.includes(c.id))
                       }
                       onChange={toggleSelectAll}
                       className="rounded border-neutral-300 text-primary focus:ring-primary cursor-pointer"
@@ -2449,17 +2597,18 @@ export default function CollectionPage() {
                   <th className="py-3 px-3 font-bold whitespace-nowrap">
                     {activeTab === 'sales_services' ? 'Customer Name' : 'Member Name'}
                   </th>
-                  <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Payment Method</th>
+                  <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Payment Mode</th>
                   <th className="py-3 px-3 font-bold">Description / Details</th>
                   <th className="py-3 px-3 font-bold text-right whitespace-nowrap">Collected Amount</th>
                   <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Status</th>
+                  <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Remarks</th>
                   <th className="py-3 px-3 font-bold text-center whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/40">
                 {loadingCollections && collections.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-neutral-500">
+                    <td colSpan={10} className="py-12 text-center text-neutral-500">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <RefreshCw className="w-8 h-8 text-primary dark:text-secondary animate-spin" />
                         <p className="font-semibold text-neutral-700 dark:text-neutral-300">
@@ -2473,7 +2622,7 @@ export default function CollectionPage() {
                   </tr>
                 ) : filteredCollections.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-neutral-500">
+                    <td colSpan={10} className="py-12 text-center text-neutral-500">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <FolderOpen className="w-8 h-8 text-neutral-400" />
                         <p className="font-semibold text-neutral-700 dark:text-neutral-300">
@@ -2547,10 +2696,10 @@ export default function CollectionPage() {
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            disabled={item.status === 'filed'}
+                            disabled={isCollectionSealed(item)}
                             onChange={() => toggleSelectRow(item.id)}
                             className="rounded border-neutral-300 text-primary focus:ring-primary cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={item.status === 'filed' ? 'Filed collections cannot be deleted' : undefined}
+                            title={isCollectionSealed(item) ? 'Sealed collections cannot be deleted' : undefined}
                           />
                         </td>
                         <td className="py-3 px-3 font-bold text-neutral-900 dark:text-white whitespace-nowrap">
@@ -2615,6 +2764,9 @@ export default function CollectionPage() {
                           {renderStatusBadge(item.status)}
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                          {renderRemarksBadge(item.remarks, item.status)}
+                        </td>
+                        <td className="py-3 px-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1.5">
                             {isAdmin ? (
                               <>
@@ -2623,17 +2775,17 @@ export default function CollectionPage() {
                                   type="button"
                                   onClick={e => handleOpenEditModal(item, e)}
                                   className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                                    item.status === 'filed'
+                                    isCollectionSealed(item)
                                       ? 'border-emerald-300/80 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
                                       : 'border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-primary dark:text-secondary'
                                   }`}
-                                  title={item.status === 'filed' ? 'View or Override Sealed & Filed Collection' : 'Edit Collection & Seal/File'}
+                                  title={isCollectionSealed(item) ? 'View or Override Sealed & Filed Collection' : 'Edit Collection & Seal/File'}
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
 
                                 {/* Delete or Override Delete Button */}
-                                {item.status === 'filed' ? (
+                                {isCollectionSealed(item) ? (
                                   <button
                                     type="button"
                                     onClick={e => handleDeleteItem(item.id, e, true)}
@@ -2682,7 +2834,7 @@ export default function CollectionPage() {
                                 </button>
 
                                 {/* Delete or Locked Indicator */}
-                                {item.status === 'filed' ? (
+                                {isCollectionSealed(item) ? (
                                   <span
                                     className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/60 text-neutral-400 cursor-not-allowed inline-flex items-center justify-center"
                                     title="Collection receipt is Sealed & Filed (Locked - cannot be deleted)"
@@ -3562,13 +3714,37 @@ export default function CollectionPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
-                      Payment Method
+                      Payment Mode
                     </label>
                     <AnimatedSelect
                       value={formData.payment_method}
                       onChange={val => setFormData({ ...formData, payment_method: val as any, reference_no: '' })}
                       options={PAYMENT_METHOD_OPTIONS}
-                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2.5"
+                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2.5 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                      Status (Cash Custody / Deposit)
+                    </label>
+                    <AnimatedSelect
+                      value={formData.status || 'Cash in vault'}
+                      onChange={val => setFormData({ ...formData, status: val as any })}
+                      options={STATUS_OPTIONS}
+                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2.5 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                      Remarks (Status of Receipt)
+                    </label>
+                    <AnimatedSelect
+                      value={formData.remarks || 'edit'}
+                      onChange={val => setFormData({ ...formData, remarks: val as any })}
+                      options={REMARKS_OPTIONS}
+                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2.5 text-xs"
                     />
                   </div>
 
@@ -3586,7 +3762,7 @@ export default function CollectionPage() {
                 </div>
 
                 {/* Conditional Reference No for GCash, Bank Transfer, or Cheque */}
-                {formData.payment_method === 'GCash' && (
+                {String(formData.payment_method).toLowerCase().includes('gcash') && (
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
                       GCash Reference (Last 4 Digits) <span className="text-rose-500">*</span>
@@ -3605,7 +3781,7 @@ export default function CollectionPage() {
                   </div>
                 )}
 
-                {formData.payment_method === 'Bank Transfer' && (
+                {String(formData.payment_method).toLowerCase().includes('bank transfer') && (
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
                       Bank Transfer Reference (Full) <span className="text-rose-500">*</span>
@@ -3620,7 +3796,7 @@ export default function CollectionPage() {
                   </div>
                 )}
 
-                {formData.payment_method === 'Cheque' && (
+                {(String(formData.payment_method).toLowerCase().includes('cheque') || String(formData.payment_method).toLowerCase().includes('check')) && (
                   <div className="p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
                       <div>
@@ -3689,20 +3865,6 @@ export default function CollectionPage() {
                     </p>
                   </div>
                 )}
-
-                {/* Remarks Field (Bigger Textarea) */}
-                <div>
-                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
-                    Remarks
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={formData.remarks}
-                    onChange={e => setFormData({ ...formData, remarks: e.target.value })}
-                    className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs text-neutral-900 dark:text-white resize-y min-h-[72px]"
-                    placeholder="Enter remarks or additional details..."
-                  />
-                </div>
               </div>
 
               {/* Modal Actions */}
@@ -3735,13 +3897,13 @@ export default function CollectionPage() {
             <div className="p-5 border-b border-outline-variant/60 flex items-center justify-between bg-surface-container-lowest dark:bg-neutral-900">
               <div className="flex items-center gap-2.5">
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                  editingItem.status === 'filed'
+                  isCollectionSealed(editingItem)
                     ? isEditOverride
                       ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                       : 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300'
                     : 'bg-primary/10 text-primary dark:text-secondary'
                 }`}>
-                  {editingItem.status === 'filed' ? (
+                  {isCollectionSealed(editingItem) ? (
                     isEditOverride ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />
                   ) : (
                     <Edit3 className="w-5 h-5" />
@@ -3750,21 +3912,21 @@ export default function CollectionPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-black text-neutral-900 dark:text-white">
-                      {editingItem.status === 'filed'
+                      {isCollectionSealed(editingItem)
                         ? (isEditOverride ? 'Override Sealed Collection' : 'Sealed & Filed Collection')
                         : 'Edit Collection Receipt'}
                     </h3>
                     <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 font-bold text-primary dark:text-secondary">
                       {editFormData.or_no}
                     </span>
-                    {editingItem.status === 'filed' && isEditOverride && (
+                    {isCollectionSealed(editingItem) && isEditOverride && (
                       <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
                         Override Active
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-neutral-500">
-                    {editingItem.status === 'filed'
+                    {isCollectionSealed(editingItem)
                       ? (isEditOverride
                           ? 'Admin Override is enabled. You can now modify or delete this filed collection entry.'
                           : 'This collection entry is filed and locked in the official registry. Use Override to edit or delete.')
@@ -3794,7 +3956,7 @@ export default function CollectionPage() {
               className="p-5 overflow-y-auto space-y-4 text-xs"
             >
               {/* Permanent Lock Banner & Admin Override Controls if already filed */}
-              {editingItem.status === 'filed' && (
+              {isCollectionSealed(editingItem) && (
                 isEditOverride ? (
                   <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-start gap-3">
@@ -4546,15 +4708,41 @@ export default function CollectionPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
-                      Payment Method
+                      Payment Mode
                     </label>
                     <AnimatedSelect
                       value={editFormData.payment_method}
                       onChange={val => setEditFormData({ ...editFormData, payment_method: val as PaymentMethod })}
                       options={PAYMENT_METHOD_OPTIONS}
-                      placeholder="Select Payment Method..."
+                      placeholder="Select Payment Mode..."
                       disabled={isEditLocked}
-                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2"
+                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                      Status (Cash Custody / Deposit)
+                    </label>
+                    <AnimatedSelect
+                      value={editFormData.status || 'Cash in vault'}
+                      onChange={val => setEditFormData({ ...editFormData, status: val as any })}
+                      options={STATUS_OPTIONS}
+                      placeholder="Select Status..."
+                      disabled={isEditLocked}
+                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
+                      Remarks (Status of Receipt)
+                    </label>
+                    <AnimatedSelect
+                      value={editFormData.remarks || 'edit'}
+                      onChange={val => setEditFormData({ ...editFormData, remarks: val as any })}
+                      options={REMARKS_OPTIONS}
+                      placeholder="Select Remarks..."
+                      disabled={isEditLocked}
+                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2 text-xs"
                     />
                   </div>
                   <div>
@@ -4567,12 +4755,12 @@ export default function CollectionPage() {
                       options={CASHIER_OPTIONS}
                       placeholder="Select Cashier..."
                       disabled={isEditLocked}
-                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2"
+                      buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2 text-xs"
                     />
                   </div>
                 </div>
 
-                {editFormData.payment_method === 'GCash' && (
+                {String(editFormData.payment_method).toLowerCase().includes('gcash') && (
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
                       GCash Reference (Last 4 Digits) <span className="text-rose-500">*</span>
@@ -4589,7 +4777,7 @@ export default function CollectionPage() {
                   </div>
                 )}
 
-                {editFormData.payment_method === 'Bank Transfer' && (
+                {String(editFormData.payment_method).toLowerCase().includes('bank transfer') && (
                   <div>
                     <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
                       Bank Transfer Reference (Full) <span className="text-rose-500">*</span>
@@ -4605,7 +4793,7 @@ export default function CollectionPage() {
                   </div>
                 )}
 
-                {editFormData.payment_method === 'Cheque' && (
+                {(String(editFormData.payment_method).toLowerCase().includes('cheque') || String(editFormData.payment_method).toLowerCase().includes('check')) && (
                   <div className="p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
                       <div>
@@ -4673,21 +4861,6 @@ export default function CollectionPage() {
                     )}
                   </div>
                 )}
-
-                {/* Remarks Field */}
-                <div>
-                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1 text-xs">
-                    Remarks
-                  </label>
-                  <textarea
-                    rows={3}
-                    disabled={isEditLocked}
-                    value={editFormData.remarks}
-                    onChange={e => setEditFormData({ ...editFormData, remarks: e.target.value })}
-                    className="w-full px-3 py-2.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs text-neutral-900 dark:text-white resize-y min-h-[72px] disabled:opacity-60 disabled:cursor-not-allowed"
-                    placeholder="Enter remarks or additional details..."
-                  />
-                </div>
               </div>
 
               {/* Modal Actions */}
@@ -4708,10 +4881,10 @@ export default function CollectionPage() {
                       type="button"
                       onClick={() => handleDeleteItem(editingItem, undefined, true)}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition-all cursor-pointer"
-                      title={editingItem.status === 'filed' ? 'Delete filed collection entry via Admin Override' : 'Delete collection entry'}
+                      title={isCollectionSealed(editingItem) ? 'Delete filed collection entry via Admin Override' : 'Delete collection entry'}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>{editingItem.status === 'filed' ? 'Override Delete' : 'Delete'}</span>
+                      <span>{isCollectionSealed(editingItem) ? 'Override Delete' : 'Delete'}</span>
                     </button>
                   )}
                 </div>
@@ -4739,7 +4912,7 @@ export default function CollectionPage() {
                         Close
                       </button>
                     </>
-                  ) : editingItem.status === 'filed' ? (
+                  ) : isCollectionSealed(editingItem) ? (
                     <>
                       <button
                         type="button"
@@ -4758,7 +4931,7 @@ export default function CollectionPage() {
                         disabled={isSavingEdit}
                         onClick={() => handleUpdateCollection(false, true)}
                         className="px-3.5 py-2 rounded-xl text-xs font-bold border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 transition-all cursor-pointer flex items-center gap-1.5"
-                        title="Save changes and unseal status back to Completed"
+                        title="Save changes and unseal status back to Edit"
                       >
                         {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
                         <span>Unseal &amp; Save</span>
@@ -4768,10 +4941,10 @@ export default function CollectionPage() {
                         type="submit"
                         disabled={isSavingEdit}
                         className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all shadow-md cursor-pointer flex items-center gap-1.5"
-                        title="Save override changes and keep status as Filed"
+                        title="Save override changes and keep status as Sealed"
                       >
                         {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        <span>Save Override (Keep Filed)</span>
+                        <span>Save Override (Keep Sealed)</span>
                       </button>
                     </>
                   ) : (
@@ -5054,13 +5227,13 @@ export default function CollectionPage() {
 
               {/* Actions inside Detail Modal */}
               <div className="pt-3 border-t border-outline-variant/60 flex items-center justify-between">
-                {selectedItemForModal.status === 'filed' ? (
+                {isCollectionSealed(selectedItemForModal) ? (
                   isAdmin ? (
                     <button
                       type="button"
                       onClick={() => handleDeleteItem(selectedItemForModal, undefined, true)}
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 transition-all cursor-pointer"
-                      title="Delete filed collection entry via Admin Override"
+                      title="Delete sealed collection entry via Admin Override"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Override Delete</span>
@@ -5068,10 +5241,10 @@ export default function CollectionPage() {
                   ) : (
                     <span
                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-neutral-400 bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed border border-neutral-200 dark:border-neutral-700"
-                      title="Filed collections cannot be deleted"
+                      title="Sealed collections cannot be deleted"
                     >
                       <Lock className="w-3.5 h-3.5" />
-                      <span>Locked / Filed</span>
+                      <span>Locked / Sealed</span>
                     </span>
                   )
                 ) : (
@@ -5089,19 +5262,19 @@ export default function CollectionPage() {
                       type="button"
                       onClick={() => {
                         const itemToEdit = selectedItemForModal;
-                        const wasFiled = itemToEdit.status === 'filed';
+                        const wasFiled = isCollectionSealed(itemToEdit);
                         setSelectedItemForModal(null);
                         handleOpenEditModal(itemToEdit);
                         if (wasFiled) setIsEditOverride(true);
                       }}
                       className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        selectedItemForModal.status === 'filed'
+                        isCollectionSealed(selectedItemForModal)
                           ? 'bg-amber-500 hover:bg-amber-600 text-white'
                           : 'bg-primary text-white dark:bg-secondary dark:text-neutral-950 hover:brightness-110'
                       }`}
                     >
-                      {selectedItemForModal.status === 'filed' ? <Unlock className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
-                      <span>{selectedItemForModal.status === 'filed' ? 'Override & Edit' : 'Edit & Seal'}</span>
+                      {isCollectionSealed(selectedItemForModal) ? <Unlock className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
+                      <span>{isCollectionSealed(selectedItemForModal) ? 'Override & Edit' : 'Edit & Seal'}</span>
                     </button>
                   )}
                   <button
@@ -5137,13 +5310,13 @@ export default function CollectionPage() {
               </div>
               <div>
                 <h3 className="font-bold text-base text-neutral-900 dark:text-white">
-                  {itemToDelete.status === 'filed' ? 'Override Delete Filed Collection' : 'Delete Collection Entry'}
+                  {isCollectionSealed(itemToDelete) ? 'Override Delete Sealed Collection' : 'Delete Collection Entry'}
                 </h3>
                 <p className="text-xs text-neutral-500 font-mono">Receipt #{itemToDelete.or_no}</p>
               </div>
             </div>
 
-            {itemToDelete.status === 'filed' && (
+            {isCollectionSealed(itemToDelete) && (
               <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs">
                 <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
@@ -5198,7 +5371,7 @@ export default function CollectionPage() {
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
               >
                 {isDeletingItem ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                <span>{itemToDelete.status === 'filed' ? 'Override & Delete' : 'Confirm Delete'}</span>
+                <span>{isCollectionSealed(itemToDelete) ? 'Override & Delete' : 'Confirm Delete'}</span>
               </button>
             </div>
           </div>
