@@ -3480,7 +3480,18 @@ export const getFinancialStatementReport = async (req, res, next) => {
         amount: amt
       };
 
-      const colStatus = (col.status || '').toLowerCase();
+      let colStatus = (col.status || '').toLowerCase();
+      // For January to October 2026:
+      // All Sales & Services -> Cash in MBTC; All Credit -> Cash in BDO
+      if (d.getFullYear() === 2026 && d.getMonth() <= 9) {
+        const tLower = (col.tab || '').toLowerCase().trim();
+        if (tLower === 'sales' || tLower === 'services' || tLower === 'sales_services') {
+          colStatus = 'mbtc';
+        } else if (tLower === 'credit' || tLower === 'billing') {
+          colStatus = 'bdo';
+        }
+      }
+
       if (colStatus.includes('mbtc') || colStatus.includes('metrobank')) {
         stores.cib_metrobank.transactions.push(tx);
       } else if (colStatus.includes('bdo')) {

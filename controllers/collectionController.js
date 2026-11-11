@@ -27,8 +27,58 @@ async function ensureParticularsColumn(db) {
         OR LOWER(COALESCE(loan_account, '')) LIKE '%fixed deposit%'
         OR LOWER(COALESCE(loan_account, '')) LIKE '%common share%'
       );
+
+    -- All Sales & Services from January to October 2026 -> Cash in MBTC
+    UPDATE collections
+    SET status = 'Cash in MBTC'
+    WHERE LOWER(TRIM(COALESCE(tab, ''))) IN ('sales', 'services', 'sales_services')
+      AND (
+        (date::DATE >= '2026-01-01'::DATE AND date::DATE < '2026-11-01'::DATE)
+        OR (EXTRACT(YEAR FROM date) = 2026 AND EXTRACT(MONTH FROM date) <= 10)
+      );
+
+    -- All Credit from January to October 2026 -> Cash in BDO
+    UPDATE collections
+    SET status = 'Cash in BDO'
+    WHERE LOWER(TRIM(COALESCE(tab, ''))) IN ('credit', 'billing')
+      AND (
+        (date::DATE >= '2026-01-01'::DATE AND date::DATE < '2026-11-01'::DATE)
+        OR (EXTRACT(YEAR FROM date) = 2026 AND EXTRACT(MONTH FROM date) <= 10)
+      );
   `);
   particularsColEnsured = true;
+}
+
+/**
+ * Determine default custody status based on date and category
+ * January - October 2026: Sales & Services -> Cash in MBTC, Credit -> Cash in BDO
+ * November 2026 (active): Cash in vault
+ */
+function getDefaultCustodyStatus(date, tab, requestedStatus) {
+  if (requestedStatus && (requestedStatus.toLowerCase().includes('mbtc') || requestedStatus.toLowerCase().includes('bdo'))) {
+    return requestedStatus.toLowerCase().includes('mbtc') ? 'Cash in MBTC' : 'Cash in BDO';
+  }
+  let isJanToOct = false;
+  if (date) {
+    const d = date instanceof Date ? date : new Date(date);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = d.getMonth(); // 0 = Jan, 9 = Oct, 10 = Nov
+      if (y === 2026 && m <= 9) {
+        isJanToOct = true;
+      }
+    }
+  }
+  if (isJanToOct) {
+    const tLower = String(tab || '').toLowerCase().trim();
+    if (tLower === 'sales' || tLower === 'services' || tLower === 'sales_services') {
+      return 'Cash in MBTC';
+    }
+    if (tLower === 'credit' || tLower === 'billing') {
+      return 'Cash in BDO';
+    }
+  }
+  return 'Cash in vault';
 }
 
 /**
@@ -87,6 +137,29 @@ function formatCollectionRow(row) {
     reference_no: row.reference_no || undefined,
     bank_name: row.bank_name || undefined,
     status: (() => {
+      // Check if row date is in January to October 2026
+      let isJanToOct = false;
+      if (row.date) {
+        let d = row.date instanceof Date ? row.date : new Date(row.date);
+        if (!isNaN(d.getTime())) {
+          const y = d.getFullYear();
+          const m = d.getMonth(); // 0 = Jan, 9 = Oct, 10 = Nov
+          if (y === 2026 && m <= 9) {
+            isJanToOct = true;
+          }
+        }
+      }
+
+      if (isJanToOct) {
+        const tLower = String(row.tab || '').toLowerCase().trim();
+        if (tLower === 'sales' || tLower === 'services' || tLower === 'sales_services') {
+          return 'Cash in MBTC';
+        }
+        if (tLower === 'credit' || tLower === 'billing') {
+          return 'Cash in BDO';
+        }
+      }
+
       const sLower = String(row.status || '').toLowerCase();
       if (sLower.includes('mbtc') || sLower.includes('metrobank')) return 'Cash in MBTC';
       if (sLower.includes('bdo')) return 'Cash in BDO';
@@ -293,7 +366,9 @@ export async function createCollection(req, res) {
     const payment_method = item.payment_method || 'Hand in';
     const reference_no = item.reference_no || null;
     const bank_name = item.bank_name || null;
-    const status = item.status || 'Cash in vault';
+    const status = (item.status && item.status !== 'Cash in vault')
+      ? item.status
+      : getDefaultCustodyStatus(date, tab, item.status);
     const remarks = item.remarks || 'edit';
     const collected_by = item.collected_by || 'CHINNETTE A. LAMOSTE';
 
@@ -501,7 +576,9 @@ export async function bulkImportCollections(req, res) {
       const payment_method = item.payment_method || 'Hand in';
       const reference_no = item.reference_no || null;
       const bank_name = item.bank_name || null;
-      const status = item.status || 'Cash in vault';
+      const status = (item.status && item.status !== 'Cash in vault')
+      ? item.status
+      : getDefaultCustodyStatus(date, tab, item.status);
       const remarks = item.remarks || 'edit';
       const collected_by = item.collected_by || 'CHINNETTE A. LAMOSTE';
 

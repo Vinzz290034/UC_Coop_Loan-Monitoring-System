@@ -366,7 +366,21 @@ export default function CollectionPage() {
     try {
       setLoadingCollections(true);
       const res = await api.get('/collections');
-      const serverItems: CollectionItem[] = res.data?.data || [];
+      const serverItems: CollectionItem[] = (res.data?.data || []).map((col: CollectionItem) => {
+        let stat = col.status;
+        if (col.date) {
+          const parsed = parseCollectionDate(col.date);
+          if (parsed.year === '2026' && parsed.month !== null && parsed.month <= 9) {
+            const tab = (col.tab || '').toLowerCase().trim();
+            if (tab === 'sales' || tab === 'services' || tab === 'sales_services') {
+              stat = 'Cash in MBTC';
+            } else if (tab === 'credit' || tab === 'billing') {
+              stat = 'Cash in BDO';
+            }
+          }
+        }
+        return { ...col, status: stat };
+      });
       setCollections(serverItems);
     } catch (err: any) {
       console.error('Failed to load collections from database:', err);
