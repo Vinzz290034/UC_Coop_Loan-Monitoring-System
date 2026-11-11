@@ -338,7 +338,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     try {
       setLoading(true);
       setError(null);
-      const res = await api.get('/reports/statement-of-operations', { params: { year } });
+      const res = await api.get('/reports/statement-of-operations', { params: { year, _t: Date.now() } });
       setData(res.data);
     } catch (err: any) {
       console.error('Failed to load Statement of Operations:', err);

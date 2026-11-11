@@ -283,7 +283,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
     try {
       setLoading(true);
       setError(null);
-      const res = await api.get('/reports/financial-statement', { params: { year } });
+      const res = await api.get('/reports/financial-statement', { params: { year, _t: Date.now() } });
       setData(res.data);
     } catch (err: any) {
       console.error('Failed to load Balance Sheet:', err);

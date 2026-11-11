@@ -3190,6 +3190,8 @@ export const getBooksOfAccountsReport = async (req, res, next) => {
 const runReportInternally = (handler, queryParams) => new Promise((resolve, reject) => {
   const fakeRes = {
     status() { return this; },
+    set() { return this; },
+    setHeader() { return this; },
     json(payload) { resolve(payload); return this; }
   };
   Promise.resolve(handler({ query: queryParams }, fakeRes, reject)).catch(reject);
@@ -3831,6 +3833,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
       .filter(k => ['common_shares', 'undivided_surplus', 'donations_grants', 'reserve_fund', 'cetf_fund', 'optional_fund', 'community_dev_fund'].includes(k))
       .reduce((sum, k) => sum + (stores[k]?.current[11] || 0), 0) + (stores.net_surplus_period?.current[11] || 0);
 
+    if (typeof res?.set === 'function') res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     return res.status(200).json({
       success: true,
       year: targetYear,
@@ -4120,14 +4123,14 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const isDirectServiceCost = (acc) => /^cos\b|commission|freight|porterage|wifi|water|^service$/i.test(acc);
 
     const classifyNonExpense = (acc) => {
-      if (/loan\s*repayment/i.test(acc)) return 'loan_repayment';
-      if (/office\s*equipment|plants?,?\s*property|\bppe\b|^dp\s+for\b|down\s*payment/i.test(acc)) return 'capex_office_equipment';
+      if (/loan\s*repay|payment\s*of\s*loan|repayment\s*of\s*loan|loan\s*payable/i.test(acc)) return 'loan_repayment';
+      if (/office\s*equipment|plants?,?\s*property|\bppe\b|^dp\s+for\b|down\s*payment|financial\s*management\s*system/i.test(acc)) return 'capex_office_equipment';
       if (/fixture|furniture/i.test(acc)) return 'capex_furniture';
-      if (/\bEE\s*share\b/i.test(acc)) return 'ee_remittances';
-      if (/^withdrawal$/i.test(acc) || /^share\s*(capital\s*)?withdrawal/i.test(acc)) return 'withdrawals';
-      if (/cetf\s*remittance/i.test(acc)) return 'cetf_remittance';
-      if (/locker\s*refund|deposit\s*refund/i.test(acc)) return 'deposit_refunds';
-      if (/^rf\s*-?\s*\d+$/i.test(acc) || /^petty\s*cash$/i.test(acc)) return 'transfer';
+      if (/\bEE\s*share\b|payable\s*premium|insurance\s*payable/i.test(acc)) return 'ee_remittances';
+      if (/withdrawal/i.test(acc)) return 'withdrawals';
+      if (/cetf/i.test(acc)) return 'cetf_remittance';
+      if (/refund/i.test(acc)) return 'deposit_refunds';
+      if (/^rf\s*-?\s*\d+$/i.test(acc) || /^petty\s*cash$/i.test(acc) || /loans?\s*receivable|disbursed\s*item/i.test(acc)) return 'transfer';
       return null;
     };
 
@@ -4365,6 +4368,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       ]
     };
 
+    if (typeof res?.set === 'function') res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     return res.status(200).json({
       success: true,
       year: targetYear,
