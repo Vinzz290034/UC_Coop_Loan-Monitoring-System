@@ -60,7 +60,13 @@ function getDefaultCustodyStatus(date, tab, requestedStatus) {
   }
   let isJanToOct = false;
   if (date) {
-    const d = date instanceof Date ? date : new Date(date);
+    let d = date instanceof Date ? date : new Date(date);
+    if (isNaN(d.getTime()) && typeof date === 'string' && date.includes('/')) {
+      const parts = date.split('/');
+      if (parts.length === 3 && parts[2].length === 4) {
+        d = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+      }
+    }
     if (!isNaN(d.getTime())) {
       const y = d.getFullYear();
       const m = d.getMonth(); // 0 = Jan, 9 = Oct, 10 = Nov
@@ -141,6 +147,12 @@ function formatCollectionRow(row) {
       let isJanToOct = false;
       if (row.date) {
         let d = row.date instanceof Date ? row.date : new Date(row.date);
+        if (isNaN(d.getTime()) && typeof row.date === 'string' && row.date.includes('/')) {
+          const parts = row.date.split('/');
+          if (parts.length === 3 && parts[2].length === 4) {
+            d = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+          }
+        }
         if (!isNaN(d.getTime())) {
           const y = d.getFullYear();
           const m = d.getMonth(); // 0 = Jan, 9 = Oct, 10 = Nov

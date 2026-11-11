@@ -1041,27 +1041,28 @@ export const getMerchandiseSalesReport = async (req, res, next) => {
 export function isOperatingExpenseAccount(accName, folderName, particulars) {
   const acc = (accName || "").toLowerCase().trim();
   const folder = (folderName || "").toLowerCase().trim();
+  const part = (particulars || "").toLowerCase().trim();
 
   // 1. Exclude Loans Receivable & Loan Disbursements (Assets)
-  if (/loans?\s*receivable/i.test(acc)) return false;
-  if (/^regular\s*loan/i.test(acc) || /^special\s*loan/i.test(acc) || /^emergency\s*loan/i.test(acc) || /^cash\s*express/i.test(acc) || /^calamity\s*loan/i.test(acc) || /^utility\s*loan/i.test(acc)) return false;
+  if (/loans?\s*receivable/i.test(acc) || /loans?\s*receivable/i.test(part)) return false;
+  if (/^regular\s*loan/i.test(acc) || /^special\s*loan/i.test(acc) || /^emergency\s*loan/i.test(acc) || /^cash\s*express/i.test(acc) || /^calamity\s*loan/i.test(acc) || /^utility\s*loan/i.test(acc) || /^short\s*term\s*loan/i.test(acc)) return false;
+  if (/disbursed\s*item|loan\s*release|loan\s*disburse/i.test(acc) || /disbursed\s*item|loan\s*release|loan\s*disburse/i.test(part)) return false;
   if (folder.includes("regular loan") || (folder.includes("loan") && !folder.includes("product"))) return false;
-  if (/disbursed\s*item/i.test(acc)) return false;
 
-  // 2. Exclude Liabilities & Payables
-  if (/loan\s*payable/i.test(acc)) return false;
+  // 2. Exclude Liabilities & Payables & Loan Repayments
+  if (/loan\s*payable|loan\s*repay|payment\s*of\s*loan|repayment\s*of\s*loan/i.test(acc) || /loan\s*repay|payment\s*of\s*loan|repayment\s*of\s*loan/i.test(part)) return false;
   if (/accounts?\s*payable/i.test(acc)) return false;
   if (folder.includes("liability")) return false;
 
   // 3. Exclude Bank & Cash movements / Digital wallets
   if (/^cib\b/i.test(acc) || /cash\s*in\s*bank/i.test(acc) || /cash\s*on\s*hand/i.test(acc) || /cash\s*in\s*coop/i.test(acc) || /cash\s*in\s*goodapps/i.test(acc)) return false;
 
-  // 4. Exclude Equity / Share Capital / Dividends
-  if (/share\s*capital/i.test(acc) || /^capital\b/i.test(acc) || /dividend/i.test(acc)) return false;
+  // 4. Exclude Equity / Share Capital / Dividends / Withdrawals
+  if (/share\s*capital/i.test(acc) || /^capital\b/i.test(acc) || /dividend/i.test(acc) || /withdrawal/i.test(acc)) return false;
 
   // 5. Exclude umbrella replenishment transfers (actual itemized expenses are reported from rf_liquidation_items)
-  if (/revolving\s*fund\s*replenish/i.test(acc) || /stl\s*(fund)?\s*replenish/i.test(acc)) return false;
-  if (/^revolving\s*fund\s*-/i.test(acc)) return false;
+  if (/replenish|fund\s*transfer/i.test(acc) || /replenish|fund\s*transfer/i.test(part)) return false;
+  if (/^revolving\s*fund\s*-/i.test(acc) || /^rf\s*-?\s*\d+$/i.test(acc) || /^petty\s*cash$/i.test(acc)) return false;
 
   return true;
 }
@@ -4130,7 +4131,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       if (/withdrawal/i.test(acc)) return 'withdrawals';
       if (/cetf/i.test(acc)) return 'cetf_remittance';
       if (/refund/i.test(acc)) return 'deposit_refunds';
-      if (/^rf\s*-?\s*\d+$/i.test(acc) || /^petty\s*cash$/i.test(acc) || /loans?\s*receivable|disbursed\s*item/i.test(acc)) return 'transfer';
+      if (/^rf\s*-?\s*\d+$/i.test(acc) || /^petty\s*cash$/i.test(acc) || /loans?\s*receivable|disbursed\s*item|loan\s*release|loan\s*disburse|^regular\s*loan|^special\s*loan|^emergency\s*loan|^cash\s*express|^calamity\s*loan|^utility\s*loan|^short\s*term\s*loan|dividend/i.test(acc)) return 'transfer';
       return null;
     };
 
