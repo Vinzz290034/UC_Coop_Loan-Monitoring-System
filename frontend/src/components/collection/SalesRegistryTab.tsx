@@ -188,6 +188,7 @@ export default function SalesRegistryTab({ isAdmin = false, onCatalogLoaded, hid
   const [editingItem, setEditingItem] = useState<MerchandiseCatalogItem | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<MerchandiseCatalogItem | null>(null);
   const [sortBy, setSortBy] = useState<'item_name' | 'selling_price' | 'cost_price' | 'profit'>('item_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -293,15 +294,16 @@ export default function SalesRegistryTab({ isAdmin = false, onCatalogLoaded, hid
     }
   };
 
-  const handleDeleteItem = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to remove "${name}" from the sales registry?`)) return;
-
+  const confirmDeleteItem = async () => {
+    if (!itemToDelete) return;
+    const { id, item_name: name } = itemToDelete;
     setIsDeletingId(id);
     try {
       await api.delete(`/collections/catalog/${id}`);
       setCatalog(prev => prev.filter(c => c.id !== id));
       setActionFeedback({ type: 'success', message: `Item "${name}" removed from catalog.` });
       setTimeout(() => setActionFeedback(null), 4000);
+      setItemToDelete(null);
     } catch (err: any) {
       console.error('Error deleting catalog item:', err);
       setActionFeedback({
@@ -670,7 +672,7 @@ export default function SalesRegistryTab({ isAdmin = false, onCatalogLoaded, hid
                             <button
                               type="button"
                               disabled={isDeletingId === item.id}
-                              onClick={() => handleDeleteItem(item.id, item.item_name)}
+                              onClick={() => setItemToDelete(item)}
                               className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 transition-all cursor-pointer"
                               title="Delete Item"
                             >
@@ -857,6 +859,80 @@ export default function SalesRegistryTab({ isAdmin = false, onCatalogLoaded, hid
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Item Confirmation Modal */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-modal-pop">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-3 bg-rose-100 dark:bg-rose-950/50 rounded-2xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-neutral-900 dark:text-white">
+                  Remove from Sales Registry
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Confirm catalog item deletion
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-surface-container-low/60 dark:bg-neutral-800/60 border border-outline-variant/60 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500">Item Name:</span>
+                <span className="font-semibold text-neutral-900 dark:text-white text-right max-w-[200px] truncate">{itemToDelete.item_name}</span>
+              </div>
+              {itemToDelete.description && (
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500">Description / Dept:</span>
+                  <span className="text-neutral-700 dark:text-neutral-300 text-right max-w-[200px] truncate">{itemToDelete.description}</span>
+                </div>
+              )}
+              {itemToDelete.size && itemToDelete.size !== '—' && (
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500">Size:</span>
+                  <span className="font-semibold text-neutral-800 dark:text-neutral-200">{itemToDelete.size}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500">2026 Selling Price:</span>
+                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                  ₱{Number(itemToDelete.selling_price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-neutral-500">Category:</span>
+                <span className="font-semibold text-neutral-800 dark:text-neutral-200">{itemToDelete.category || 'General'}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-neutral-600 dark:text-neutral-400">
+              Are you sure you want to remove <span className="font-bold text-neutral-900 dark:text-white">"{itemToDelete.item_name}"</span> from the sales registry? This action will permanently remove it from the master catalog.
+            </p>
+
+            <div className="pt-2 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeletingId === itemToDelete.id}
+                onClick={() => setItemToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingId === itemToDelete.id}
+                onClick={confirmDeleteItem}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                {isDeletingId === itemToDelete.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>Confirm Remove</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
