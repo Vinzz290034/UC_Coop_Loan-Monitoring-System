@@ -3277,6 +3277,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
       inv_hardbound: { cur: 1750.00, prev: 0.00 },
       inv_plotting: { cur: 5500.00, prev: 0.00 },
       inv_bsname: { cur: 133300.00, prev: 0.00 },
+      inv_net_movement: { cur: 0.00, prev: 0.00 },
       unused_supplies: { cur: 20754.84, prev: 27500.00 },
       prepaid_expenses: { cur: 0.00, prev: 437933.40 },
       office_equipment: { cur: 61669.60, prev: 42979.00 },
@@ -3349,6 +3350,11 @@ export const getFinancialStatementReport = async (req, res, next) => {
         (sooCur.statement.expenses || []).forEach(sec => sec.groups.forEach(g => expLines.push(...g.lines)));
 
         let cumNetCur = 0;
+        // Cumulative non-expense disbursements (see `reclass` in the Statement of Operations).
+        // They leave the P&L but still move cash, so each one is mirrored on the matching Balance Sheet line.
+        const rc = sooCur.reclass || {};
+        const rcAt = (key, m) => (rc[key] || [])[m] || 0;
+        const cum = { purchases: 0, cogs: 0, capexOE: 0, capexFF: 0, repay: 0, withdraw: 0, ee: 0, cetf: 0, refund: 0 };
         // The cooperative's active operations for 2026 run from January to November (months 0 to 10).
         for (let m = 0; m <= 10; m++) {
           const mRev = revLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
@@ -3356,22 +3362,46 @@ export const getFinancialStatementReport = async (req, res, next) => {
           cumNetCur += (mRev - mExp);
           stores.net_surplus_period.current[m] = cumNetCur;
 
+          cum.purchases += rcAt('inventory_purchases', m);
+          cum.cogs += rcAt('cogs', m);
+          cum.capexOE += rcAt('capex_office_equipment', m);
+          cum.capexFF += rcAt('capex_furniture', m);
+          cum.repay += rcAt('loan_repayment', m);
+          cum.withdraw += rcAt('withdrawals', m);
+          cum.ee += rcAt('ee_remittances', m);
+          cum.cetf += rcAt('cetf_remittance', m);
+          cum.refund += rcAt('deposit_refunds', m);
+
+          // Net cash effect = P&L result + COGS (non-cash, inventory release) - every non-expense cash outflow
+          const cashAdj = cum.cogs - cum.purchases - cum.capexOE - cum.capexFF - cum.repay - cum.withdraw - cum.ee - cum.cetf - cum.refund;
+          const cashNet = cumNetCur + cashAdj;
+
+          stores.inv_net_movement.current[m] += cum.purchases - cum.cogs;
+          stores.office_equipment.current[m] += cum.capexOE;
+          stores.furnitures_fixtures.current[m] += cum.capexFF;
+          stores.loans_payable.current[m] -= cum.repay;
+          stores.common_shares.current[m] -= cum.withdraw;
+          stores.ap_others.current[m] -= (cum.ee + cum.refund);
+          stores.due_cetf_apex.current[m] -= cum.cetf;
+
           if (m < 10) {
             // Months 0 to 9 (January to October):
             // Manager deposits collected cash into the bank, so Cash in Vault is 0.00 for past months
             // and the deposited funds are in CIB (Metrobank).
             stores.cash_in_vault.current[m] = 0;
-            stores.cib_metrobank.current[m] += (BASELINE.cash_in_vault.cur + cumNetCur);
+            stores.cib_metrobank.current[m] += (BASELINE.cash_in_vault.cur + cashNet);
           } else {
             // Month 10 (November):
             // Active current month: the manager still holds physical cash in the vault.
-            stores.cash_in_vault.current[m] += cumNetCur;
+            stores.cash_in_vault.current[m] += cashNet;
           }
         }
         // Month 11 (December) has not operated yet; carry forward November's position
         stores.net_surplus_period.current[11] = stores.net_surplus_period.current[10];
         stores.cash_in_vault.current[11] = stores.cash_in_vault.current[10];
         stores.cib_metrobank.current[11] = stores.cib_metrobank.current[10];
+        ['inv_net_movement', 'office_equipment', 'furnitures_fixtures', 'loans_payable', 'common_shares', 'ap_others', 'due_cetf_apex']
+          .forEach(k => { stores[k].current[11] = stores[k].current[10]; });
       }
 
       if (sooPrev?.statement) {
@@ -3634,7 +3664,8 @@ export const getFinancialStatementReport = async (req, res, next) => {
                 line('Merchandise Inventory - GALA', 'Gala uniform inventory stock on hand.', stores.inv_gala),
                 line('Merchandise Inventory - Hardbound', 'Hardbound thesis book and bindery inventory.', stores.inv_hardbound),
                 line('Merchandise Inventory - Plotting Sheet', 'Plotting sheets and nautical supplies.', stores.inv_plotting),
-                line('Merchandise Inventory - BSNAME', 'BSNAME specialized department uniform inventory.', stores.inv_bsname)
+                line('Merchandise Inventory - BSNAME', 'BSNAME specialized department uniform inventory.', stores.inv_bsname),
+                line('Inventory Purchases less Cost of Sales (Current Year)', 'Stock bought during the year minus the cost of merchandise already sold (units sold x Sales Registry cost price).', stores.inv_net_movement, false)
               ]
             },
             {
@@ -3789,7 +3820,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
     };
 
     const totalAssets = Object.keys(BASELINE)
-      .filter(k => ['cash_in_vault', 'cib_bdo', 'cib_metrobank', 'victo', 'climbs_federation', 'other_funds', 'nafe', 'rf_stl', 'rf_haw', 'rf_operation', 'rf_rice', 'petty_cash', 'petty_cash_loan', 'reg_loans', 'cash_express', 'special_loans', 'emergency_loans', 'calamity_loans', 'unearned_interest', 'ar_insurance', 'ar_uc', 'rec_members', 'inv_type_c', 'inv_rice', 'inv_pe', 'inv_ppe', 'inv_accessories', 'inv_soap', 'inv_type_ab', 'inv_rotc', 'inv_gala', 'inv_hardbound', 'inv_plotting', 'inv_bsname', 'unused_supplies', 'prepaid_expenses', 'office_equipment', 'depr_office_equipment', 'furnitures_fixtures', 'depr_furnitures_fixtures', 'deposit_container'].includes(k))
+      .filter(k => ['cash_in_vault', 'cib_bdo', 'cib_metrobank', 'victo', 'climbs_federation', 'other_funds', 'nafe', 'rf_stl', 'rf_haw', 'rf_operation', 'rf_rice', 'petty_cash', 'petty_cash_loan', 'reg_loans', 'cash_express', 'special_loans', 'emergency_loans', 'calamity_loans', 'unearned_interest', 'ar_insurance', 'ar_uc', 'rec_members', 'inv_type_c', 'inv_rice', 'inv_pe', 'inv_ppe', 'inv_accessories', 'inv_soap', 'inv_type_ab', 'inv_rotc', 'inv_gala', 'inv_hardbound', 'inv_plotting', 'inv_bsname', 'inv_net_movement', 'unused_supplies', 'prepaid_expenses', 'office_equipment', 'depr_office_equipment', 'furnitures_fixtures', 'depr_furnitures_fixtures', 'deposit_container'].includes(k))
       .reduce((sum, k) => sum + (stores[k]?.current[11] || 0), 0);
 
     const totalLiabilities = Object.keys(BASELINE)
@@ -3838,11 +3869,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const prevYear = targetYear - 1;
     const zeros = () => Array(12).fill(0);
 
-    const [loanCur, loanPrev, expCur, expPrev, colResult, cvResult] = await Promise.all([
+    const [loanCur, loanPrev, expCur, expPrev, merchCur, merchPrev, colResult, cvResult] = await Promise.all([
       runReportInternally(getLoanProductsReport, { period: 'annual', year: String(targetYear) }),
       runReportInternally(getLoanProductsReport, { period: 'annual', year: String(prevYear) }),
       runReportInternally(getExpensesBreakdownReport, { period: 'annual', year: String(targetYear) }),
       runReportInternally(getExpensesBreakdownReport, { period: 'annual', year: String(prevYear) }),
+      runReportInternally(getMerchandiseSalesReport, { period: 'annual', year: String(targetYear) }),
+      runReportInternally(getMerchandiseSalesReport, { period: 'annual', year: String(prevYear) }),
       pool.query(`
         SELECT id, or_no, payor_name, date, created_at, tab, items, item_name, service_type, particulars, other_category, remarks, amount
         FROM collections
@@ -4063,6 +4096,48 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const otherAdmin = {};   // dynamically discovered admin accounts
     const costOfSales = {};  // service / merchandise direct costs
 
+    // Cash disbursements that are NOT expenses of the period. They are removed from the
+    // Statement of Operations and mirrored on the Balance Sheet (see `reclass` in the response).
+    //  - inventory_purchases : stock bought for resale (asset until sold; expensed through COGS)
+    //  - capex               : office equipment / furniture / PPE / down payments on systems
+    //  - loan_repayment      : principal paid on loans payable (liability)
+    //  - withdrawals         : member share-capital withdrawals (equity)
+    //  - remittances         : employee-share premiums, CETF remittance, deposit refunds (liabilities)
+    //  - transfers           : revolving fund / petty cash funding (already expensed via liquidations)
+    const reclass = {
+      inventory_purchases: zeros(),
+      cogs: zeros(),
+      capex_office_equipment: zeros(),
+      capex_furniture: zeros(),
+      loan_repayment: zeros(),
+      withdrawals: zeros(),
+      ee_remittances: zeros(),
+      cetf_remittance: zeros(),
+      deposit_refunds: zeros()
+    };
+
+    // Direct costs of running store services stay in Cost of Sales & Services
+    const isDirectServiceCost = (acc) => /^cos\b|commission|freight|porterage|wifi|water|^service$/i.test(acc);
+
+    const classifyNonExpense = (acc) => {
+      if (/loan\s*repayment/i.test(acc)) return 'loan_repayment';
+      if (/office\s*equipment|plants?,?\s*property|\bppe\b|^dp\s+for\b|down\s*payment/i.test(acc)) return 'capex_office_equipment';
+      if (/fixture|furniture/i.test(acc)) return 'capex_furniture';
+      if (/\bEE\s*share\b/i.test(acc)) return 'ee_remittances';
+      if (/^withdrawal$/i.test(acc) || /^share\s*(capital\s*)?withdrawal/i.test(acc)) return 'withdrawals';
+      if (/cetf\s*remittance/i.test(acc)) return 'cetf_remittance';
+      if (/locker\s*refund|deposit\s*refund/i.test(acc)) return 'deposit_refunds';
+      if (/^rf\s*-?\s*\d+$/i.test(acc) || /^petty\s*cash$/i.test(acc)) return 'transfer';
+      return null;
+    };
+
+    // Stock bought for resale (uniforms, shoes, manuals, columbary, "payment for ..." supplier vouchers, etc.)
+    const isInventoryPurchase = (acc, cat) => {
+      if (isDirectServiceCost(acc)) return false;
+      if (cat === 'Merchandise Expense') return true;
+      return /inventory|merchandise|uniform|shirt|short|trunks|gala|shoes|gloves|id\s*case|manual|lanyard|type\s*[abc]\b|columbary|coverall|handbag|pershing|hardhat|goggles|(full|partial)\s*payment|payment\s*(for|of|or)\s/i.test(acc);
+    };
+
     const addExpenses = (data, which) => {
       (data?.itemized_records || []).forEach(rec => {
         const amt = parseFloat(rec.amount) || 0;
@@ -4074,6 +4149,19 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
 
         // Liabilities / fund transfers are not expenses of the period
         if (/payable|replenish|fund\s*transfer|advances\s*to/i.test(acc)) return;
+
+        // Balance-sheet movements are not expenses
+        const nonExpense = classifyNonExpense(acc);
+        if (nonExpense) {
+          if (nonExpense !== 'transfer' && which === 'current') reclass[nonExpense][mIdx] += amt;
+          return;
+        }
+
+        // Inventory purchases are assets; their cost reaches the P&L through Cost of Merchandise Sold
+        if (isInventoryPurchase(acc, cat)) {
+          if (which === 'current') reclass.inventory_purchases[mIdx] += amt;
+          return;
+        }
 
         const tx = which === 'current' ? {
           date: String(rec.date).slice(0, 10),
@@ -4096,8 +4184,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           return;
         }
 
-        if (cat === 'Merchandise Expense' || cat === 'Service Expense' ||
-            /inventory|merchandise|uniform|shirt|short|gloves|id\s*case|cos\s*-|cogs/i.test(acc)) {
+        if (cat === 'Service Expense' || isDirectServiceCost(acc)) {
           if (!costOfSales[acc]) costOfSales[acc] = newStore();
           costOfSales[acc][which][mIdx] += amt;
           if (tx) costOfSales[acc].transactions.push(tx);
@@ -4111,6 +4198,33 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     };
     addExpenses(expCur, 'current');
     addExpenses(expPrev, 'previous');
+
+    // ---------- Cost of Merchandise Sold = units sold x Sales Registry cost price ----------
+    const cogsStore = newStore();
+    const addCogs = (data, which) => {
+      (data?.itemized_records || []).forEach(rec => {
+        const cost = (parseFloat(rec.quantity) || 0) * (parseFloat(rec.cost_price) || 0);
+        if (cost <= 0 || !rec.date || rec.date === 'N/A') return;
+        const mIdx = Number(String(rec.date).slice(5, 7)) - 1;
+        if (mIdx < 0 || mIdx > 11) return;
+        cogsStore[which][mIdx] += cost;
+        if (which === 'current') {
+          reclass.cogs[mIdx] += cost;
+          cogsStore.transactions.push({
+            date: String(rec.date).slice(0, 10),
+            month: mIdx + 1,
+            year: targetYear,
+            payee: rec.payor_name || 'Customer',
+            particulars: `${rec.item_name || 'Merchandise'}${rec.size && rec.size !== '—' ? ` (${rec.size})` : ''} x ${rec.quantity} @ cost ${Number(rec.cost_price).toFixed(2)}`,
+            or_no: rec.or_no || null,
+            source: 'collection',
+            amount: cost
+          });
+        }
+      });
+    };
+    addCogs(merchCur, 'current');
+    addCogs(merchPrev, 'previous');
 
     // ---------- Assemble the statement ----------
     const line = (code, title, description, store, alwaysShow = true, customTransactions = null) => {
@@ -4239,9 +4353,12 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
             {
               title: 'Cost of Sales & Services',
               total_label: null,
-              lines: Object.entries(costOfSales)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
+              lines: [
+                line('', 'Cost of Merchandise Sold', 'Units sold multiplied by the Sales Registry cost price (inventory purchases are not expensed until sold).', cogsStore),
+                ...Object.entries(costOfSales)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
+              ]
             }
           ]
         }
@@ -4253,7 +4370,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       year: targetYear,
       previous_year: prevYear,
       month_labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
-      statement
+      statement,
+      reclass
     });
   } catch (error) {
     next(error);
