@@ -4096,6 +4096,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const withdrawalFees = newStore();
     const riceSales = newStore();
     const soapSales = newStore();
+    const donationsGrants = newStore();
 
     colResult.rows.forEach(col => {
       const cDate = col.date || col.created_at;
@@ -4144,6 +4145,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         bucket(soapSales, cDate, amt, meta);
         return;
       }
+      if (/donation|grant/i.test(text) || /alyson|allyson|antojado|cda|bering/i.test(col.payor_name || '')) {
+        bucket(donationsGrants, cDate, amt, {
+          ...meta,
+          particulars: col.particulars || col.other_category || 'Donation & Grants'
+        });
+        return;
+      }
       if (!['sales', 'sales_services', 'services'].includes(col.tab)) return;
       if (/donation|grant|share\s*capital/.test(text)) return;
 
@@ -4163,6 +4171,16 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       const sumPrev = climbsIncome.previous[m] + cispIncome.previous[m] + ctplIncome.previous[m];
       if (trackerIns.previous[m] > sumPrev) {
         climbsIncome.previous[m] += (trackerIns.previous[m] - sumPrev);
+      }
+    }
+
+    const trackerDonations = fromTracker(otherFor, 'Donation & Grants');
+    for (let m = 0; m < 12; m++) {
+      if (trackerDonations.current[m] > donationsGrants.current[m]) {
+        donationsGrants.current[m] = trackerDonations.current[m];
+      }
+      if (trackerDonations.previous[m] > donationsGrants.previous[m]) {
+        donationsGrants.previous[m] = trackerDonations.previous[m];
       }
     }
 
@@ -4381,6 +4399,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               total_label: 'TOTAL: Miscellaneous Income',
               lines: [
                 line('', 'Membership Fees', 'One-time fees paid by new members when they join.', fromTracker(otherFor, 'Membership fee'), true, membershipFees.transactions),
+                line('', 'Donations & Grants', 'Subsidies, grants, and institutional donations received by the cooperative.', donationsGrants),
                 line('', 'Insurance Income - CLIMBS', 'Insurance payments collected for CLIMBS.', climbsIncome),
                 line('', 'Insurance Income - CISP', 'Insurance payments collected for CISP.', cispIncome),
                 line('', 'Insurance Income - CTPL', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome),
