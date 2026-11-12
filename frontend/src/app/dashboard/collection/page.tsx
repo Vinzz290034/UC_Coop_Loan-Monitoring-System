@@ -366,7 +366,7 @@ export default function CollectionPage() {
       const searchParam = params.get('search') || params.get('q') || params.get('or_no');
       if (searchParam) {
         setSearchQuery(searchParam);
-        setActiveTab('all');
+        if (!tabParam) setActiveTab('all');
       }
     }
   }, []);

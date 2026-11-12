@@ -287,7 +287,8 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     // Default: Cashier Collection OR Loan Repayment
     if (t.or_no || t.source === 'collection') {
       const searchVal = t.or_no || t.payee;
-      router.push(`/dashboard/collection?search=${encodeURIComponent(searchVal)}`);
+      const isCredit = (selectedLineModal?.title || '').includes('Principal') || (selectedLineModal?.title || '').includes('Interest') || (selectedLineModal?.title || '').includes('Fines');
+      router.push(`/dashboard/collection?tab=${isCredit ? 'credit' : 'all'}&search=${encodeURIComponent(searchVal)}`);
       return;
     }
 
@@ -295,7 +296,13 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     if (t.payee) {
       router.push(`/dashboard/loans?tab=loans&search=${encodeURIComponent(t.payee)}`);
     }
-  }, [router, year]);
+  }, [router, year, selectedLineModal]);
+
+  const handleOpenLoan = useCallback((t: SooTransaction) => {
+    if (t.payee) {
+      router.push(`/dashboard/loans?tab=loans&search=${encodeURIComponent(t.payee)}`);
+    }
+  }, [router]);
 
   const isYtd = selectedPeriod === 'ytd';
   const q = searchQuery.toLowerCase().trim();
@@ -617,7 +624,9 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                             No amounts recorded yet.
                           </td>
                         </tr>
-                      ) : visible.map((l, li) => (
+                      ) : visible.map((l, li) => {
+                        const hasRecords = Array.isArray(l.transactions) && l.transactions.length > 0;
+                        return (
                         <tr
                           key={`${s.key}-${gi}-${li}`}
                           onClick={() => {
@@ -625,18 +634,40 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                             setLineModalSearch('');
                             setLineModalMonthFilter(isYtd ? 'all' : (selectedPeriod as number));
                           }}
-                          className={`${isRepayment ? 'hover:bg-blue-50/80 dark:hover:bg-blue-950/40' : isExpense ? 'hover:bg-amber-50/80 dark:hover:bg-amber-950/40' : 'hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40'} text-neutral-800 dark:text-neutral-200 cursor-pointer group transition-colors`}
+                          className={`${
+                            isRepayment
+                              ? 'hover:bg-blue-50/80 dark:hover:bg-blue-950/40'
+                              : isExpense
+                              ? 'hover:bg-amber-50/80 dark:hover:bg-amber-950/40'
+                              : 'hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40'
+                          } text-neutral-800 dark:text-neutral-200 cursor-pointer group transition-colors`}
                           title={`Click to view itemized records and vouchers for ${l.title}`}
                         >
                           <td className="p-2.5">
-                            <div className="flex items-center gap-1.5 font-semibold text-neutral-900 dark:text-white">
-                              <span className={`group-hover:${isRepayment ? 'text-blue-700 dark:group-hover:text-blue-300' : isExpense ? 'text-amber-700 dark:group-hover:text-amber-300' : 'text-emerald-700 dark:group-hover:text-emerald-300'} transition-colors`}>
+                            <div className="flex items-center gap-1.5 font-semibold">
+                              <span className={`${
+                                hasRecords
+                                  ? isRepayment
+                                    ? 'text-blue-600 dark:text-blue-400 group-hover:text-blue-500'
+                                    : isExpense
+                                    ? 'text-amber-600 dark:text-amber-400 group-hover:text-amber-500'
+                                    : 'text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-500'
+                                  : 'text-neutral-900 dark:text-white'
+                              } transition-colors`}>
                                 <HighlightText text={l.title} query={q} />
                               </span>
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${isRepayment ? 'text-blue-700 dark:text-blue-400' : isExpense ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'} opacity-0 group-hover:opacity-100 transition-opacity ml-1`}>
-                                <ExternalLink className="w-3 h-3 shrink-0" />
-                                <span className="hidden sm:inline">View Records</span>
-                              </span>
+                              {hasRecords && (
+                                <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${
+                                  isRepayment
+                                    ? 'text-blue-700 dark:text-blue-400'
+                                    : isExpense
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-emerald-700 dark:text-emerald-400'
+                                } ml-1`}>
+                                  <ExternalLink className="w-3 h-3 shrink-0" />
+                                  <span className="hidden sm:inline">View Records</span>
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 print:hidden">
                               <HighlightText text={l.description} query={q} />
@@ -644,7 +675,8 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                           </td>
                           <FigureCells f={lineFigures(l)} isExpense={isExpense} />
                         </tr>
-                      ))}
+                        );
+                      })}
                       {g.total_label && visible.length > 0 && (
                         <tr className="bg-neutral-50 dark:bg-neutral-800/40 text-neutral-900 dark:text-white border-t border-neutral-300 dark:border-neutral-700">
                           <td className="p-2.5 text-[11px] font-bold uppercase tracking-wide">{g.total_label}</td>
@@ -1315,22 +1347,38 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                                 {t.date}
                               </td>
                               <td className="p-2 font-mono font-bold text-neutral-800 dark:text-neutral-200 border-r border-neutral-200 dark:border-neutral-800 whitespace-nowrap">
-                                <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold ${
-                                  hasVoucher
-                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                    : isLf
-                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                    : hasOr
-                                    ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
-                                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
-                                }`}>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenTransaction(t);
+                                  }}
+                                  className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold cursor-pointer hover:underline transition-all ${
+                                    hasVoucher
+                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                      : isLf
+                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                      : hasOr
+                                      ? 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'
+                                      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+                                  }`}
+                                  title={`Click to open ${displayRef} in ${hasVoucher || isLf ? 'Disbursement' : 'Collections'}`}
+                                >
                                   {displayRef}
-                                </span>
+                                </button>
                               </td>
                               <td className="p-2 font-semibold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800">
-                                <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenLoan(t);
+                                  }}
+                                  className="text-left font-semibold text-neutral-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer transition-colors"
+                                  title={`Click to view ${t.payee}'s loans in Loan Monitoring`}
+                                >
                                   {t.payee || '—'}
-                                </span>
+                                </button>
                               </td>
                               <td className="p-2 text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-800">
                                 {t.particulars || '—'}
@@ -1339,17 +1387,35 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                                 {peso(t.amount)}
                               </td>
                               <td className="p-2 text-center whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenTransaction(t);
-                                  }}
-                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:text-emerald-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
-                                >
-                                  <span>{hasVoucher ? 'Open Voucher' : isLf ? 'Open RF' : hasOr ? 'Open Receipt' : 'Open'}</span>
-                                  <ExternalLink className="w-3 h-3" />
-                                </button>
+                                <div className="inline-flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenTransaction(t);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:text-emerald-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                    title={hasVoucher ? 'Open Check Voucher in Disbursement' : isLf ? 'Open RF in Disbursement' : 'Open Collection Receipt in Cashier Collection'}
+                                  >
+                                    <span>{hasVoucher ? 'Open Voucher' : isLf ? 'Open RF' : hasOr ? 'Open Receipt' : 'Open'}</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </button>
+
+                                  {(selectedLineModal?.title || '').includes('Principal') && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenLoan(t);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-100 hover:bg-blue-200 text-blue-800 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 dark:text-blue-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                      title={`View ${t.payee}'s Loan Ledger in Loan Monitoring`}
+                                    >
+                                      <CreditCard className="w-3 h-3" />
+                                      <span>View Loan</span>
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
