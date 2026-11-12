@@ -4345,14 +4345,12 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     };
 
     // Stock bought for resale (uniforms, shoes, manuals, columbary, "payment for ..." supplier vouchers, etc.)
+    // Capitalized as Merchandise Inventory (Asset) on the Balance Sheet; not expensed in the period
     const isInventoryPurchase = (acc, cat) => {
       if (isDirectServiceCost(acc)) return false;
       if (cat === 'Merchandise Expense') return true;
       return /inventory|merchandise|uniform|shirt|short|trunks|gala|shoes|gloves|id\s*case|manual|lanyard|type\s*[abc]\b|columbary|coverall|handbag|pershing|hardhat|goggles|(full|partial)\s*payment|payment\s*(for|of|or)\s/i.test(acc);
     };
-
-    // ---------- Cost of Merchandise Sold = direct inventory/merchandise disbursements to suppliers ----------
-    const cogsStore = newStore();
 
     const addExpenses = (data, which) => {
       (data?.itemized_records || []).forEach(rec => {
@@ -4373,6 +4371,12 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           return;
         }
 
+        // Store inventory purchases are assets (Merchandise Inventory); mirrored to Balance Sheet
+        if (isInventoryPurchase(acc, cat)) {
+          if (which === 'current') reclass.inventory_purchases[mIdx] += amt;
+          return;
+        }
+
         const tx = which === 'current' ? {
           date: String(rec.date).slice(0, 10),
           month: mIdx + 1,
@@ -4385,13 +4389,6 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           source: (rec.voucher_no && !String(rec.voucher_no).startsWith('LF')) ? 'check_voucher' : (rec.lf_no ? 'revolving_fund' : 'disbursement'),
           amount: amt
         } : null;
-
-        // Inventory & merchandise purchases are sourced directly from Disbursements
-        if (isInventoryPurchase(acc, cat)) {
-          cogsStore[which][mIdx] += amt;
-          if (tx) cogsStore.transactions.push(tx);
-          return;
-        }
 
         // Check standard administrative expense accounts first
         const line = EXPENSE_LINES.find(l => l.match.test(acc));
@@ -4548,12 +4545,9 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
             {
               title: 'Cost of Sales & Services',
               total_label: null,
-              lines: [
-                line('502.01', 'Cost of Merchandise Sold', 'Direct inventory and merchandise disbursements paid to suppliers for items sold in the cooperative store.', cogsStore),
-                ...Object.entries(costOfSales)
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
-              ]
+              lines: Object.entries(costOfSales)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
             }
           ]
         }
