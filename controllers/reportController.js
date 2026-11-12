@@ -1751,8 +1751,18 @@ export const getLoanProductsReport = async (req, res, next) => {
       }
 
       const lower = String(name || '').toLowerCase();
+
+      // Check specific loan products first (skipping Salary Loan) so specific loans
+      // like Calamity, Cash Express, Special Occasion, Emergency, Utility, Project, etc.
+      // are never eclipsed by generic 'salary' keywords or form defaults
       for (const p of LOAN_PRODUCT_DEFINITIONS) {
+        if (p.name === 'Salary Loan') continue;
         if (p.match.some(m => lower.includes(m))) return p.name;
+      }
+
+      // Explicit match for Salary Loan
+      if (lower.includes('salary loan') || (lower.includes('salary') && !lower.includes('interest received') && !lower.includes('fines'))) {
+        return 'Salary Loan';
       }
 
       const principalHint = parseFloat(extraContext.principalAmount || 0);
@@ -2491,10 +2501,8 @@ export const getLoanProductsReport = async (req, res, next) => {
       let accountedFinesInEntries = 0;
 
       loanEntries.forEach(entry => {
-        const entryAcctText = `${entry.loan_account || ''} ${entry.interest_account || ''} ${entry.fines_account || ''}`.trim();
-        const fallbackAcctText = !hasLoansArray
-          ? `${entryAcctText} ${col.particulars || ''} ${col.remarks || ''}`.trim()
-          : entryAcctText;
+        const cleanLoanAcct = String(entry.loan_account || (!hasLoansArray ? col.loan_account : '') || '').trim();
+        const fallbackAcctText = cleanLoanAcct || String(col.particulars || col.remarks || '').trim();
 
         const pAmt = parseFloat(String(entry.principal_amount || 0)) || 0;
         const iAmt = parseFloat(String(entry.interest_amount || 0)) || 0;
@@ -2502,7 +2510,7 @@ export const getLoanProductsReport = async (req, res, next) => {
         accountedFinesInEntries += fAmt;
 
         // Skip non-loan collection accounts (e.g., Shared Capital, Donation, Membership Fee, General Collection fallback)
-        const hasExplicitLoanAccount = entry.loan_account && /loans payable|loan|salary|project|calamity|express|occasion|emergency|utility|rice|soap|mortuary|petty|product/i.test(entry.loan_account);
+        const hasExplicitLoanAccount = cleanLoanAcct && /loans payable|loan|salary|project|calamity|express|occasion|emergency|utility|rice|soap|mortuary|petty|product/i.test(cleanLoanAcct);
         if (!hasExplicitLoanAccount && isNonLoanCollectionAccount(fallbackAcctText, !hasLoansArray ? col.other_category : '')) {
           if (fAmt > 0) {
             recordLoanInflow(identifyProduct('', col.payor_name), cDate, 0, 0, fAmt, {
@@ -2516,10 +2524,10 @@ export const getLoanProductsReport = async (req, res, next) => {
 
         if (pAmt + iAmt + fAmt <= 0) return;
 
-        let pName = identifyProduct(fallbackAcctText, col.payor_name);
+        let pName = identifyProduct(fallbackAcctText, col.payor_name, { principalAmount: pAmt });
 
         // If collection entry says generic 'Regular Loan' (resolved to Salary Loan), check if ledger has an exact match for this invoice/member/amount
-        const isGenericRegularText = !/project|calamity|express|occasion|emergenc|utility|rice|soap|mortuary|petty|product/i.test(fallbackAcctText);
+        const isGenericRegularText = /regular\s*loan|^loan$/i.test(fallbackAcctText) || !/project|calamity|express|occasion|emergenc|utility|rice|soap|mortuary|petty|product/i.test(fallbackAcctText);
         if (isGenericRegularText) {
           if (invToken && ledgerProductByInvoice.has(`${invToken}::${pAmt.toFixed(2)}`)) {
             pName = ledgerProductByInvoice.get(`${invToken}::${pAmt.toFixed(2)}`);
