@@ -2415,24 +2415,44 @@ export const getLoanProductsReport = async (req, res, next) => {
         addOtherTrackerAmount('laundry_soap_sales', cDate, colAmount || topPrincipal);
         return;
       }
-      if (/merchandise|uniform/i.test(combinedDesc) && !/rice|soap|donation/i.test(combinedDesc) && col.tab === 'sales') {
+      // Store Merchandise & Sales receipts (including sales_services, multi-item batches like OR #2665, uniform sales, etc.)
+      const hasCollectionItems = Array.isArray(col.items) && col.items.length > 0;
+      const isStoreSalesReceipt =
+        (col.tab === 'sales' || col.tab === 'sales_services' || hasCollectionItems || /merchandise|uniform|store\s*sales/i.test(combinedDesc)) &&
+        !/rice|soap|donation|grant|share\s*capital|fixed\s*deposit/i.test(combinedDesc) &&
+        (!col.loan_account || !/loan/i.test(col.loan_account)) &&
+        (!Array.isArray(col.loans) || col.loans.length === 0);
+
+      if (isStoreSalesReceipt) {
         addOtherTrackerAmount('merchandise_income', cDate, colAmount || topPrincipal);
         return;
       }
+
       if (particularsAmt === 0 && (/withdrawal\s*fee/i.test(combinedDesc))) {
         const effectiveWithdrawal = commonShareAmt > 0 ? unallocatedAfterShare : (colAmount || topPrincipal);
         addOtherTrackerAmount('withdrawal_fee', cDate, effectiveWithdrawal);
+        return;
       }
 
       // Check for standalone Fines & Penalties in services tab
-      const isStandaloneFineService =
-        /fine|penalty|late\s*charge/i.test(`${col.service_type || ''} ${col.fines_account || ''} ${col.particulars || ''}`) &&
+      // Note: Do NOT test col.fines_account with /fine/ because forms default fines_account to 'Fines - Salary'
+      // even when fines_amount is 0. Only genuine fine amounts or explicit fine service types should match.
+      const isExplicitFineService =
+        col.tab === 'services' &&
+        /fine|penalty|late\s*charge/i.test(`${col.service_type || ''} ${col.particulars || ''}`) &&
+        !/print|photo|vendo|wifi|rotc|rental|water|merchandise|uniform|sale/i.test(`${col.service_type || ''} ${col.particulars || ''} ${col.remarks || ''}`) &&
         topPrincipal === 0 &&
         topInterest === 0 &&
         (!Array.isArray(col.loans) || col.loans.length === 0);
 
-      if (isStandaloneFineService) {
-        const fineVal = topFines > 0 ? topFines : colAmount;
+      const isStandaloneFineWithAmount =
+        topFines > 0 &&
+        topPrincipal === 0 &&
+        topInterest === 0 &&
+        (!Array.isArray(col.loans) || col.loans.length === 0);
+
+      if (isExplicitFineService || isStandaloneFineWithAmount) {
+        const fineVal = topFines > 0 ? topFines : (isExplicitFineService ? colAmount : 0);
         if (fineVal > 0) {
           const fineProd = identifyProduct(`${col.loan_account || ''} ${col.particulars || ''} ${col.remarks || ''}`, col.payor_name);
           recordLoanInflow(fineProd, cDate, 0, 0, fineVal, {
@@ -2441,6 +2461,17 @@ export const getLoanProductsReport = async (req, res, next) => {
             source: 'Collection (Fines)'
           });
         }
+        return;
+      }
+
+      // If non-credit collection row (e.g. sales, services) has no loan payments or fines, do not process as loan entries
+      if (
+        (col.tab === 'services' || col.tab === 'sales' || col.tab === 'sales_services') &&
+        topPrincipal === 0 &&
+        topInterest === 0 &&
+        topFines === 0 &&
+        (!Array.isArray(col.loans) || col.loans.length === 0)
+      ) {
         return;
       }
 
@@ -4062,9 +4093,10 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       const cDate = col.date || col.created_at;
       const amt = parseFloat(col.amount) || 0;
       const text = `${col.item_name || ''} ${col.service_type || ''} ${col.particulars || ''} ${col.other_category || ''} ${col.remarks || ''}`.toLowerCase();
+      const hasItemsArray = Array.isArray(col.items) && col.items.length > 0;
       const meta = {
         payee: col.payor_name || 'Member',
-        particulars: col.particulars || col.item_name || col.service_type || col.other_category || 'Cashier Collection',
+        particulars: col.particulars || (hasItemsArray ? `${col.items.length} items (Store Merchandise / Sales)` : (col.item_name || col.service_type || col.other_category || 'Store Merchandise / Sales')),
         or_no: col.or_no || null,
         source: 'collection'
       };
@@ -4107,10 +4139,10 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       if (!['sales', 'sales_services', 'services'].includes(col.tab)) return;
       if (/donation|grant|share\s*capital/.test(text)) return;
 
-      if (col.service_type) {
-        bucket(serviceIncome, cDate, amt, meta);
-      } else {
+      if (hasItemsArray || !col.service_type) {
         bucket(merchSales, cDate, amt, meta);
+      } else {
+        bucket(serviceIncome, cDate, amt, meta);
       }
     });
 
