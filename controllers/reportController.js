@@ -4351,6 +4351,9 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       return /inventory|merchandise|uniform|shirt|short|trunks|gala|shoes|gloves|id\s*case|manual|lanyard|type\s*[abc]\b|columbary|coverall|handbag|pershing|hardhat|goggles|(full|partial)\s*payment|payment\s*(for|of|or)\s/i.test(acc);
     };
 
+    // ---------- Cost of Merchandise Sold = direct inventory/merchandise disbursements to suppliers ----------
+    const cogsStore = newStore();
+
     const addExpenses = (data, which) => {
       (data?.itemized_records || []).forEach(rec => {
         const amt = parseFloat(rec.amount) || 0;
@@ -4370,17 +4373,11 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           return;
         }
 
-        // Inventory purchases are assets; their cost reaches the P&L through Cost of Merchandise Sold
-        if (isInventoryPurchase(acc, cat)) {
-          if (which === 'current') reclass.inventory_purchases[mIdx] += amt;
-          return;
-        }
-
         const tx = which === 'current' ? {
           date: String(rec.date).slice(0, 10),
           month: mIdx + 1,
           year: targetYear,
-          payee: rec.payee || rec.remarks || 'Payee',
+          payee: rec.payee || rec.remarks || 'Supplier',
           particulars: rec.particulars || acc,
           voucher_no: rec.voucher_no || (rec.lf_no ? `LF #${rec.lf_no}` : null),
           voucher_id: rec.voucher_id || null,
@@ -4388,6 +4385,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           source: (rec.voucher_no && !String(rec.voucher_no).startsWith('LF')) ? 'check_voucher' : (rec.lf_no ? 'revolving_fund' : 'disbursement'),
           amount: amt
         } : null;
+
+        // Inventory & merchandise purchases are sourced directly from Disbursements
+        if (isInventoryPurchase(acc, cat)) {
+          cogsStore[which][mIdx] += amt;
+          if (tx) cogsStore.transactions.push(tx);
+          return;
+        }
 
         // Check standard administrative expense accounts first
         const line = EXPENSE_LINES.find(l => l.match.test(acc));
@@ -4411,33 +4415,6 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     };
     addExpenses(expCur, 'current');
     addExpenses(expPrev, 'previous');
-
-    // ---------- Cost of Merchandise Sold = units sold x Sales Registry cost price ----------
-    const cogsStore = newStore();
-    const addCogs = (data, which) => {
-      (data?.itemized_records || []).forEach(rec => {
-        const cost = (parseFloat(rec.quantity) || 0) * (parseFloat(rec.cost_price) || 0);
-        if (cost <= 0 || !rec.date || rec.date === 'N/A') return;
-        const mIdx = Number(String(rec.date).slice(5, 7)) - 1;
-        if (mIdx < 0 || mIdx > 11) return;
-        cogsStore[which][mIdx] += cost;
-        if (which === 'current') {
-          reclass.cogs[mIdx] += cost;
-          cogsStore.transactions.push({
-            date: String(rec.date).slice(0, 10),
-            month: mIdx + 1,
-            year: targetYear,
-            payee: rec.payor_name || 'Customer',
-            particulars: `${rec.item_name || 'Merchandise'}${rec.size && rec.size !== '—' ? ` (${rec.size})` : ''} x ${rec.quantity} @ cost ${Number(rec.cost_price).toFixed(2)}`,
-            or_no: rec.or_no || null,
-            source: 'collection',
-            amount: cost
-          });
-        }
-      });
-    };
-    addCogs(merchCur, 'current');
-    addCogs(merchPrev, 'previous');
 
     // ---------- Assemble the statement ----------
     const line = (code, title, description, store, alwaysShow = true, customTransactions = null) => {
@@ -4572,7 +4549,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               title: 'Cost of Sales & Services',
               total_label: null,
               lines: [
-                line('', 'Cost of Merchandise Sold', 'Units sold multiplied by the Sales Registry cost price (inventory purchases are not expensed until sold).', cogsStore),
+                line('502.01', 'Cost of Merchandise Sold', 'Direct inventory and merchandise disbursements paid to suppliers for items sold in the cooperative store.', cogsStore),
                 ...Object.entries(costOfSales)
                   .sort(([a], [b]) => a.localeCompare(b))
                   .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
