@@ -3934,6 +3934,15 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     };
     const interestFor = (data, products) =>
       trackerRow(data, r => r.particulars === 'Interest' && products.includes(r.product_name));
+    const repaymentFor = (data, pNames) =>
+      trackerRow(data, r => {
+        if (r.particulars !== 'Repayment' && r.particulars !== 'Principal' && r.particulars !== 'Loans Receivable') return false;
+        const rName = String(r.product_name || '').toLowerCase();
+        return pNames.some(p => {
+          const target = String(p).toLowerCase();
+          return rName === target || rName === target.replace(/\s*loan$/i, '') || target === rName.replace(/\s*loan$/i, '');
+        });
+      });
     const finesFor = (data, products) => {
       const out = zeros();
       (data?.monthly_tracker?.fines_by_product || [])
@@ -3963,6 +3972,29 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           or_no: r.or_no && r.or_no !== '—' ? r.or_no : null,
           source: 'collection',
           amount: parseFloat(r.interest) || 0
+        }));
+    };
+
+    const getRepaymentTransactions = (pName) => {
+      const target = String(pName).toLowerCase();
+      const p = (loanCur?.products || []).find(prod => {
+        const pn = String(prod.product_name || '').toLowerCase();
+        return pn === target || pn === target.replace(/\s*loan$/i, '') || target === pn.replace(/\s*loan$/i, '');
+      });
+      if (!p || !Array.isArray(p.repayments)) return [];
+      return p.repayments
+        .filter(r => (parseFloat(r.principal) || 0) > 0)
+        .map(r => ({
+          date: r.date,
+          month: r.date && r.date !== 'N/A' ? Number(r.date.slice(5, 7)) : null,
+          year: targetYear,
+          payee: r.member_name || 'Member',
+          particulars: `Principal repayment on ${p.product_name || pName}`,
+          voucher_no: r.voucher_no || null,
+          voucher_id: r.voucher_id || null,
+          or_no: r.or_no && r.or_no !== '—' ? r.or_no : null,
+          source: 'collection',
+          amount: parseFloat(r.principal) || 0
         }));
     };
 
@@ -4268,6 +4300,10 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       line('', `Fines - ${p.name}`, `Late-payment penalties on ${p.name}.`, fromTracker(finesFor, [p.name]), p.isCore, getFinesTransactions(p.name))
     );
 
+    const repaymentLines = ALL_LOAN_PRODUCTS.map(p =>
+      line('', `Principal Repayment - ${p.name}`, `Principal collected from borrowers on ${p.name}.`, fromTracker(repaymentFor, [p.name]), p.isCore, getRepaymentTransactions(p.name))
+    );
+
     const statement = {
       revenues: [
         {
@@ -4363,6 +4399,22 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                   .sort(([a], [b]) => a.localeCompare(b))
                   .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
               ]
+            }
+          ]
+        }
+      ],
+      loan_repayments: [
+        {
+          key: 'principal_repayments',
+          title: 'Loan Principal Repayments',
+          plain_title: 'Money returned by loan borrowers',
+          description: 'Principal payments collected from borrowers. Reduces Loans Receivable asset on the Balance Sheet; not counted as operating revenue or income.',
+          total_label: 'TOTAL: Loan Principal Repayments',
+          groups: [
+            {
+              title: 'Principal Repayments by Loan Type',
+              total_label: 'TOTAL: Principal Repayments',
+              lines: repaymentLines
             }
           ]
         }

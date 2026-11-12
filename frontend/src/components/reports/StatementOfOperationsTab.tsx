@@ -76,6 +76,7 @@ interface SooResponse {
   statement: {
     revenues: SooSection[];
     expenses: SooSection[];
+    loan_repayments?: SooSection[];
   };
 }
 
@@ -310,13 +311,13 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const monthHasActivity = useCallback((mIdx: number) => {
     if (!data) return false;
     if (year === 2026 && mIdx > 10) return false;
-    const inSections = (sections: SooSection[]) =>
-      sections.some(s =>
+    const inSections = (sections?: SooSection[]) =>
+      (sections || []).some(s =>
         s.groups.some(g =>
           g.lines.some(l => Math.abs((l.current || [])[mIdx] || 0) > 0.004)
         )
       );
-    return inSections(data.statement.revenues) || inSections(data.statement.expenses);
+    return inSections(data.statement.revenues) || inSections(data.statement.expenses) || inSections(data.statement.loan_repayments);
   }, [data, year]);
 
   // Close dropdown on click outside
@@ -380,6 +381,11 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     return { revenue, expenses, net: subFigures(revenue, expenses) };
   }, [data, sectionFigures]);
 
+  const repaymentTotals = useMemo(() => {
+    if (!data || !data.statement.loan_repayments) return emptyFigures();
+    return data.statement.loan_repayments.reduce((acc, s) => addFigures(acc, sectionFigures(s)), emptyFigures());
+  }, [data, sectionFigures]);
+
   const isLineVisible = useCallback((l: SooLine, ignoreSearch = false) => {
     if (!ignoreSearch && q && !doesLineMatch(l)) return false;
     const f = lineFigures(l);
@@ -393,8 +399,8 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const matchCount = useMemo(() => {
     if (!q || !data) return 0;
     let count = 0;
-    const countInSections = (sections: SooSection[]) => {
-      sections.forEach(s => {
+    const countInSections = (sections?: SooSection[]) => {
+      (sections || []).forEach(s => {
         s.groups.forEach(g => {
           g.lines.forEach(l => {
             if (isLineVisible(l)) count++;
@@ -404,6 +410,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     };
     countInSections(data.statement.revenues);
     countInSections(data.statement.expenses);
+    countInSections(data.statement.loan_repayments);
     return count;
   }, [q, data, isLineVisible]);
 
@@ -415,6 +422,12 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const hasExpenseMatches = useMemo(() => {
     if (!q || !data) return true;
     return data.statement.expenses.some(s => s.groups.some(g => g.lines.some(l => isLineVisible(l))));
+  }, [q, data, isLineVisible]);
+
+  const hasRepaymentMatches = useMemo(() => {
+    if (!data || !data.statement.loan_repayments) return false;
+    if (!q) return true;
+    return data.statement.loan_repayments.some(s => s.groups.some(g => g.lines.some(l => isLineVisible(l))));
   }, [q, data, isLineVisible]);
 
   const periodEndLabel = useMemo(() => {
@@ -471,6 +484,13 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     push('NET SURPLUS BEFORE OTHER ITEMS', totals.net);
     push('TOTAL NET SURPLUS', totals.net);
 
+    if (data.statement.loan_repayments && data.statement.loan_repayments.length > 0) {
+      rows.push([]);
+      rows.push(['LOAN PRINCIPAL REPAYMENTS (NON-REVENUE CASH INFLOWS)']);
+      exportSections(data.statement.loan_repayments);
+      push('TOTAL: LOAN PRINCIPAL REPAYMENTS', repaymentTotals);
+    }
+
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [{ wch: 50 }, { wch: 18 }, { wch: 18 }, { wch: 26 }, { wch: 18 }];
     const wb = XLSX.utils.book_new();
@@ -518,7 +538,9 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     </thead>
   );
 
-  const renderSection = (s: SooSection, isExpense: boolean, number: number) => {
+  const renderSection = (s: SooSection, isExpenseOrMode: boolean | 'revenue' | 'expense' | 'repayment', number: number) => {
+    const isExpense = isExpenseOrMode === true || isExpenseOrMode === 'expense';
+    const isRepayment = isExpenseOrMode === 'repayment';
     const isCollapsed = q ? false : !!collapsed[s.key];
     const sf = sectionFigures(s);
 
@@ -527,9 +549,13 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
 
     const accent = isExpense
       ? 'border-amber-300 dark:border-amber-800/70'
+      : isRepayment
+      ? 'border-blue-300 dark:border-blue-800/70'
       : 'border-emerald-300 dark:border-emerald-800/80';
     const badge = isExpense
       ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300'
+      : isRepayment
+      ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/70 dark:text-blue-300'
       : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300';
 
     return (
@@ -557,7 +583,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
           <div className="flex items-center gap-4 self-end sm:self-auto">
             <div className="text-right">
               <div className="text-[10px] uppercase tracking-wider font-bold text-neutral-400">Year to date</div>
-              <div className={`text-lg font-black font-mono ${isExpense ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+              <div className={`text-lg font-black font-mono ${isExpense ? 'text-amber-700 dark:text-amber-400' : isRepayment ? 'text-blue-700 dark:text-blue-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
                 {peso(sf.ytd)}
               </div>
               <div className="text-[10px] text-neutral-400 font-mono">
@@ -599,15 +625,15 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                             setLineModalSearch('');
                             setLineModalMonthFilter(isYtd ? 'all' : (selectedPeriod as number));
                           }}
-                          className="hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 text-neutral-800 dark:text-neutral-200 cursor-pointer group transition-colors"
+                          className={`${isRepayment ? 'hover:bg-blue-50/80 dark:hover:bg-blue-950/40' : isExpense ? 'hover:bg-amber-50/80 dark:hover:bg-amber-950/40' : 'hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40'} text-neutral-800 dark:text-neutral-200 cursor-pointer group transition-colors`}
                           title={`Click to view itemized records and vouchers for ${l.title}`}
                         >
                           <td className="p-2.5">
                             <div className="flex items-center gap-1.5 font-semibold text-neutral-900 dark:text-white">
-                              <span className="group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
+                              <span className={`group-hover:${isRepayment ? 'text-blue-700 dark:group-hover:text-blue-300' : isExpense ? 'text-amber-700 dark:group-hover:text-amber-300' : 'text-emerald-700 dark:group-hover:text-emerald-300'} transition-colors`}>
                                 <HighlightText text={l.title} query={q} />
                               </span>
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${isRepayment ? 'text-blue-700 dark:text-blue-400' : isExpense ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'} opacity-0 group-hover:opacity-100 transition-opacity ml-1`}>
                                 <ExternalLink className="w-3 h-3 shrink-0" />
                                 <span className="hidden sm:inline">View Records</span>
                               </span>
@@ -630,7 +656,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                 })}
               </tbody>
               <tfoot>
-                <tr className={`${isExpense ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-emerald-50 dark:bg-emerald-950/40'} text-neutral-900 dark:text-white border-t-2 ${isExpense ? 'border-amber-500' : 'border-emerald-600'}`}>
+                <tr className={`${isExpense ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-500' : isRepayment ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-500' : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-600'} text-neutral-900 dark:text-white border-t-2`}>
                   <td className="p-2.5 text-[11px] font-black uppercase tracking-wide">{s.total_label}</td>
                   <FigureCells f={sf} isExpense={isExpense} bold />
                 </tr>
@@ -642,12 +668,14 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     );
   };
 
-  const TotalRow = ({ label, f, tone, isExpense }: { label: string; f: Figures; tone: 'green' | 'amber' | 'dark'; isExpense?: boolean }) => {
+  const TotalRow = ({ label, f, tone, isExpense }: { label: string; f: Figures; tone: 'green' | 'amber' | 'blue' | 'dark'; isExpense?: boolean }) => {
     const toneClass =
       tone === 'green'
         ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800'
         : tone === 'amber'
         ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800'
+        : tone === 'blue'
+        ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800'
         : 'bg-[#064e3b] text-white border-emerald-900';
     const isDark = tone === 'dark';
     return (
@@ -1018,6 +1046,25 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
             </div>
           )}
 
+          {/* ================= LOAN PRINCIPAL REPAYMENTS ================= */}
+          {hasRepaymentMatches && data.statement.loan_repayments && data.statement.loan_repayments.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider">Part D</span>
+                <h3 className="text-sm font-black text-neutral-900 dark:text-white uppercase tracking-wider">Loan Principal Repayments — Non-Revenue Cash Inflows</h3>
+              </div>
+              {data.statement.loan_repayments.map((s, i) => renderSection(s, 'repayment', i + 1))}
+              {!q && (
+                <>
+                  <TotalRow label="TOTAL: LOAN PRINCIPAL REPAYMENTS" f={repaymentTotals} tone="blue" />
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                    * Note: Principal collections recover lent cooperative funds and reduce Loans Receivable on the Balance Sheet. Under standard cooperative accounting, they are balance sheet asset transactions and are kept separate from operating revenue (Part A) and net surplus (Part C).
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
           {/* ================= No matches state ================= */}
           {q && matchCount === 0 && (
             <div className="p-8 text-center rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800">
@@ -1042,8 +1089,8 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
 
       {/* ================= Transaction Breakdown Modal ================= */}
       {selectedLineModal && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-neutral-900 border border-emerald-400/90 dark:border-emerald-800 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-emerald-400/90 dark:border-emerald-800 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-modal-pop">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-neutral-200 dark:border-neutral-800 flex items-start justify-between gap-3 bg-emerald-50/70 dark:bg-emerald-950/40 shrink-0">
               <div className="flex items-start gap-3">
@@ -1086,9 +1133,9 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                 <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-800">
                   <div className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Source Module</div>
                   <div className="font-bold text-neutral-900 dark:text-white mt-1 flex items-center gap-1.5">
-                    {selectedLineModal.title.includes('Interest') || selectedLineModal.title.includes('Fines') ? (
+                    {selectedLineModal.title.includes('Interest') || selectedLineModal.title.includes('Fines') || selectedLineModal.title.includes('Principal') ? (
                       <>
-                        <CreditCard className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <CreditCard className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
                         <span>Loan Credit Operations</span>
                       </>
                     ) : selectedLineModal.transactions?.some(t => t.source === 'check_voucher' || t.voucher_no) ? (
