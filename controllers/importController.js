@@ -390,7 +390,7 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
           amountPaid: findIdx(c => c === 'AMOUNT PAID' || c.includes('AMT PAID'), 15),
           balance: findIdx(c => c === 'BALANCE', 16),
           principalBalance: findIdx(c => c.includes('PRINCIPAL') && c.includes('BALANCE'), 17),
-          invoiceNo: findIdx(c => c.includes('INVOICE'), 18),
+          invoiceNo: findIdx((c, idx) => c.includes('INVOICE') && idx >= 12, 18),
           datePaid: findIdx(c => c.includes('DATE PAID'), 19)
         };
         break;
@@ -583,15 +583,13 @@ export const parseExcelWorkbook = async (bufferOrPath) => {
 
     // Determine final status for each loan
     for (const l of memberData.loans) {
-      if (
-        l.remainingBalance === 0 ||
-        l.lastBalance === 0 ||
-        l.lastPrincipalBalance === 0 ||
-        (l.totalPaid >= l.principalAmount && l.totalPaid > 0)
-      ) {
+      const hasUnpaidInstallments = l.installments.some(inst => !inst.isPaid && inst.totalDue > 0);
+      const isBalanceZero = (l.remainingBalance <= 0.01 && (l.lastBalance === 0 || l.lastPrincipalBalance === 0));
+
+      if (isBalanceZero && !hasUnpaidInstallments) {
         l.status = 'fully_paid';
         l.remainingBalance = 0;
-        // When loan is fully paid, ensure all installments are marked fully paid
+        // When loan is genuinely fully paid, ensure all installments are marked paid
         for (const inst of l.installments) {
           inst.principalPaid = inst.principalDue;
           inst.interestPaid = inst.interestDue;
