@@ -872,7 +872,31 @@ export const getMerchandiseSalesReport = async (req, res, next) => {
     const itemized = [];
 
     result.rows.forEach(row => {
-      const rowDate = row.date || row.created_at;
+      const text = `${row.item_name || ''} ${row.particulars || ''} ${row.remarks || ''} ${row.payor_name || ''}`.toLowerCase();
+      // Strictly exclude non-merchandise collections from merchandise sales & COGS
+      if (/billing|cheque|check|tuition|salary\s*deduction|remittance|university\s*of\s*cebu/i.test(text)) return;
+      if (/pmes|membership|onboarding/i.test(text)) return;
+      if (/loan|calamity|emergency|special|credit/i.test(text)) return;
+      if (/penalty|fine/i.test(text)) return;
+      if (/fund\s*transfer|replenish/i.test(text)) return;
+      if (/donation|grant/i.test(text)) return;
+      if (/wifi|photo|print|photocopy|xerox|hardbound|vendo|alteration/i.test(text)) return;
+      if (row.tab === 'services') return;
+
+      let rowDate = row.date || row.created_at;
+      // Align batch deposit remarks with their actual operating month (e.g. Sales- Aug-18 belongs to August)
+      if (/aug\s*-?\s*(\d+)/i.test(row.remarks || '')) {
+        const match = (row.remarks || '').match(/aug\s*-?\s*(\d+)/i);
+        const day = match ? Number(match[1]) : 15;
+        const yearNum = (rowDate ? new Date(rowDate).getFullYear() : 2026) || 2026;
+        rowDate = new Date(yearNum, 7, Math.min(Math.max(day, 1), 31));
+      } else if (/sept?\s*-?\s*(\d+)/i.test(row.remarks || '')) {
+        const match = (row.remarks || '').match(/sept?\s*-?\s*(\d+)/i);
+        const day = match ? Number(match[1]) : 15;
+        const yearNum = (rowDate ? new Date(rowDate).getFullYear() : 2026) || 2026;
+        rowDate = new Date(yearNum, 8, Math.min(Math.max(day, 1), 30));
+      }
+
       if (!matchesPeriod(rowDate, period, year, month, date)) return;
 
       const hasItems = Array.isArray(row.items) && row.items.length > 0;
