@@ -938,9 +938,76 @@ export const getRevolvingFundAccounts = async (req, res, next) => {
       }
     }
 
+    // 3. Query check vouchers count grouped by book of accounts
+    const cvCountsRes = await query(`
+      WITH all_cv_accounts AS (
+        SELECT 
+          cv.id AS cv_id,
+          TRIM(COALESCE(NULLIF(d->>'book_of_account', ''), d->>'description', '')) AS acct_name
+        FROM check_vouchers cv,
+        LATERAL jsonb_array_elements(
+          CASE 
+            WHEN jsonb_typeof(cv.details) = 'array' THEN cv.details
+            ELSE '[]'::jsonb
+          END
+        ) d
+        WHERE COALESCE(cv.status, 'edit') != 'cancelled'
+          AND TRIM(COALESCE(d->>'book_of_account', d->>'description', '')) != ''
+        
+        UNION
+        
+        SELECT
+          cv.id AS cv_id,
+          TRIM(cv.particulars) AS acct_name
+        FROM check_vouchers cv
+        WHERE COALESCE(cv.status, 'edit') != 'cancelled'
+          AND (cv.details IS NULL OR cv.details = '[]'::jsonb OR jsonb_array_length(CASE WHEN jsonb_typeof(cv.details) = 'array' THEN cv.details ELSE '[]'::jsonb END) = 0)
+          AND cv.particulars IS NOT NULL AND TRIM(cv.particulars) != ''
+      )
+      SELECT 
+        acct_name,
+        COUNT(DISTINCT cv_id)::int AS voucher_count
+      FROM all_cv_accounts
+      WHERE acct_name IS NOT NULL AND acct_name != ''
+      GROUP BY acct_name
+    `).catch((err) => {
+      console.warn('Failed to query cv account counts:', err.message);
+      return { rows: [] };
+    });
+
+    const voucherCounts = {};
+    for (const r of cvCountsRes.rows) {
+      if (r.acct_name) {
+        voucherCounts[r.acct_name] = parseInt(r.voucher_count, 10) || 0;
+      }
+    }
+
+    // Attach voucher_count to existing accounts
+    for (const [key, item] of accountMap.entries()) {
+      item.voucher_count = voucherCounts[item.name] || voucherCounts[item.name.trim()] || 0;
+    }
+
+    // Also include any accounts that already exist in check vouchers if not deleted
+    for (const r of cvCountsRes.rows) {
+      if (r.acct_name && r.acct_name.trim()) {
+        const clean = r.acct_name.trim();
+        if (/^(cib\b|cash\s*in\s*bank)/i.test(clean)) continue;
+        if (!deletedSet.has(clean.toLowerCase()) && !knownRecipients.has(clean.toLowerCase())) {
+          if (!accountMap.has(clean.toLowerCase())) {
+            accountMap.set(clean.toLowerCase(), {
+              name: clean,
+              category: 'Operation',
+              voucher_count: parseInt(r.voucher_count, 10) || 0
+            });
+          }
+        }
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: Array.from(accountMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      voucher_counts: voucherCounts,
       deleted: Array.from(deletedSet)
     });
   } catch (error) {

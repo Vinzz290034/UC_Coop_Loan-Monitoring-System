@@ -819,6 +819,7 @@ function ReplenishmentAccountDropdown({
   onChange,
   options = REPLENISHMENT_ACCOUNT_OPTIONS,
   categoryMap = {},
+  voucherCounts = {},
   disbursementCategory,
   onAddAccount,
   onDeleteAccount,
@@ -829,6 +830,7 @@ function ReplenishmentAccountDropdown({
   onChange: (val: string) => void;
   options?: string[];
   categoryMap?: Record<string, string>;
+  voucherCounts?: Record<string, number>;
   disbursementCategory?: string;
   onAddAccount?: (name: string, category: string) => void;
   onDeleteAccount?: (name: string) => void;
@@ -1093,6 +1095,7 @@ function ReplenishmentAccountDropdown({
                   filtered.map(acct => {
                     const cat = getCategoryForAccount(acct, categoryMap);
                     const isSelected = value.trim().toLowerCase() === acct.trim().toLowerCase();
+                    const count = voucherCounts[acct] ?? voucherCounts[acct.trim()] ?? 0;
                     return (
                       <div
                         key={acct}
@@ -1106,8 +1109,18 @@ function ReplenishmentAccountDropdown({
                           setOpen(false);
                         }}
                       >
-                        <span className="truncate flex-1">{acct}</span>
+                        <span className="truncate flex-1 font-medium">{acct}</span>
                         <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md border transition-colors ${
+                              count > 0
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold'
+                                : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500 border-neutral-200/80 dark:border-neutral-700/80 font-medium'
+                            }`}
+                            title={`${count} check voucher${count === 1 ? '' : 's'} recorded under "${acct}"`}
+                          >
+                            {count} {count === 1 ? 'voucher' : 'vouchers'}
+                          </span>
                           <span
                             className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
                               cat === 'Petty Cash'
@@ -1659,6 +1672,45 @@ function DisbursementPageContent() {
     return [];
   });
 
+  // Check voucher counts per book of account title
+  const [accountVoucherCounts, setAccountVoucherCounts] = useState<Record<string, number>>({});
+
+  // Merge server-provided all-time DB counts with live state checkVouchers
+  const effectiveVoucherCounts = useMemo(() => {
+    const counts: Record<string, number> = { ...accountVoucherCounts };
+    checkVouchers.forEach(cv => {
+      if (cv.status === 'cancelled') return;
+      let detailsArr: any[] = [];
+      if (Array.isArray(cv.details)) detailsArr = cv.details;
+      else if (typeof cv.details === 'string') {
+        try {
+          const p = JSON.parse(cv.details);
+          if (Array.isArray(p)) detailsArr = p;
+        } catch {}
+      }
+      const seenInCv = new Set<string>();
+      detailsArr.forEach(d => {
+        const name = (d.book_of_account || d.description || '').trim();
+        if (name && !seenInCv.has(name)) {
+          seenInCv.add(name);
+          if (counts[name] === undefined) {
+            counts[name] = 1;
+          }
+        }
+      });
+      if (detailsArr.length === 0 && cv.particulars) {
+        const pName = cv.particulars.trim();
+        if (pName && !seenInCv.has(pName)) {
+          seenInCv.add(pName);
+          if (counts[pName] === undefined) {
+            counts[pName] = 1;
+          }
+        }
+      }
+    });
+    return counts;
+  }, [accountVoucherCounts, checkVouchers]);
+
   // Fetch accounts from server to sync custom accounts and categories
   const fetchCustomAccounts = useCallback(async () => {
     try {
@@ -1666,14 +1718,25 @@ function DisbursementPageContent() {
       if (res.data?.success && Array.isArray(res.data.data)) {
         const serverNames: string[] = [];
         const serverCatMap: Record<string, string> = {};
+        const serverCounts: Record<string, number> = {};
+
+        if (res.data?.voucher_counts && typeof res.data.voucher_counts === 'object') {
+          Object.assign(serverCounts, res.data.voucher_counts);
+        }
+
         for (const item of res.data.data) {
           const name = typeof item === 'string' ? item : item.name;
           const cat = typeof item === 'string' ? '' : item.category;
           if (name) {
             serverNames.push(name);
             if (cat) serverCatMap[name.toLowerCase()] = cat;
+            if (typeof item.voucher_count === 'number') {
+              serverCounts[name] = item.voucher_count;
+            }
           }
         }
+
+        setAccountVoucherCounts(prev => ({ ...prev, ...serverCounts }));
 
         // Also sync server-side deleted accounts if provided
         if (Array.isArray(res.data.deleted) && typeof window !== 'undefined') {
@@ -5278,6 +5341,7 @@ function DisbursementPageContent() {
                                           options={customAccountOptions}
                                           excludeOptions={recipientOptions}
                                           categoryMap={accountCategoryMap}
+                                          voucherCounts={effectiveVoucherCounts}
                                           disbursementCategory={newCvCategory}
                                           onAddAccount={handleAddCustomAccount}
                                           onDeleteAccount={handleDeleteCustomAccount}
@@ -5429,6 +5493,7 @@ function DisbursementPageContent() {
                                         onChange={val => updateCvRowField(false, row.id!, 'description', val, null)}
                                         options={customAccountOptions}
                                         categoryMap={accountCategoryMap}
+                                        voucherCounts={effectiveVoucherCounts}
                                         disbursementCategory={newCvCategory}
                                         onAddAccount={handleAddCustomAccount}
                                         onDeleteAccount={handleDeleteCustomAccount}
@@ -6574,6 +6639,7 @@ function DisbursementPageContent() {
                                         onChange={val => updateCvRowField(true, row.id!, 'description', val, replenishType)}
                                         options={customAccountOptions}
                                         categoryMap={accountCategoryMap}
+                                        voucherCounts={effectiveVoucherCounts}
                                         disbursementCategory={editCvFormData.folder_name}
                                         excludeOptions={recipientOptions}
                                         onAddAccount={handleAddCustomAccount}
@@ -6796,6 +6862,7 @@ function DisbursementPageContent() {
                                       onChange={val => updateCvRowField(true, row.id!, 'description', val, null)}
                                       options={customAccountOptions}
                                       categoryMap={accountCategoryMap}
+                                      voucherCounts={effectiveVoucherCounts}
                                       disbursementCategory={editCvFormData.folder_name}
                                       onAddAccount={handleAddCustomAccount}
                                       onDeleteAccount={handleDeleteCustomAccount}
