@@ -294,10 +294,15 @@ export const getBillingByLoanId = async (req, res, next) => {
           });
         });
       } else {
+        const pPaid = parseFloat(s.principal_paid || '0');
+        const iPaid = parseFloat(s.interest_paid || '0');
+        const totalPaid = pPaid + iPaid;
+        const isPaid = s.installment_status === 'paid' || remainingBal <= 0.01;
+
         const d = s.due_date ? new Date(s.due_date) : null;
         let isOverdue = false;
         let dOverdue = 0;
-        if (d && now > d) {
+        if (!isPaid && remainingBal > 0 && d && now > d) {
           isOverdue = true;
           dOverdue = Math.max(1, Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)));
         }
@@ -310,13 +315,13 @@ export const getBillingByLoanId = async (req, res, next) => {
           principal_due: s.principal_due,
           interest_due: s.interest_due,
           total_due: s.total_due,
-          amount_paid: '0.00',
-          principal_paid: '0.00',
-          interest_paid: '0.00',
-          installment_status: isOverdue ? 'unpaid' : 'pending',
-          outstanding_remaining: s.outstanding_remaining,
-          date_paid: null,
-          days_overdue: dOverdue
+          amount_paid: totalPaid > 0 ? totalPaid.toFixed(2) : '0.00',
+          principal_paid: pPaid.toFixed(2),
+          interest_paid: iPaid.toFixed(2),
+          installment_status: isPaid ? 'paid' : (isOverdue ? 'unpaid' : (totalPaid > 0 ? 'partially_paid' : 'pending')),
+          outstanding_remaining: isPaid ? '0.00' : parseFloat(s.outstanding_remaining).toFixed(2),
+          date_paid: isPaid ? s.due_date : null,
+          days_overdue: isPaid ? 0 : dOverdue
         });
       }
     });

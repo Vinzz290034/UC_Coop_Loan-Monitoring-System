@@ -43,28 +43,48 @@ export async function migrateFixPonterosLoans() {
          WHERE id = $1`,
         [loan185Id]
       );
+      await client.query(`
+        DELETE FROM loan_payment_allocations 
+        WHERE repayment_schedule_id IN (SELECT id FROM repayment_schedules WHERE loan_id = $1)
+           OR loan_payment_id IN (SELECT id FROM loan_payments WHERE loan_id = $1)
+      `, [loan185Id]);
+      await client.query(`DELETE FROM loan_payments WHERE loan_id = $1`, [loan185Id]);
       await client.query(`DELETE FROM repayment_schedules WHERE loan_id = $1`, [loan185Id]);
 
       const scheds185 = [
-        { num: 1, date: '2026-05-22', pDue: 1666.67, iDue: 400.00, tDue: 2066.67, pPaid: 1666.67, iPaid: 400.00, status: 'paid' },
-        { num: 2, date: '2026-06-22', pDue: 1666.67, iDue: 366.67, tDue: 2033.34, pPaid: 1666.67, iPaid: 366.67, status: 'paid' },
-        { num: 3, date: '2026-07-22', pDue: 1666.67, iDue: 333.33, tDue: 2000.00, pPaid: 1666.67, iPaid: 333.33, status: 'paid' },
-        { num: 4, date: '2026-08-22', pDue: 1666.67, iDue: 300.00, tDue: 1966.67, pPaid: 1666.67, iPaid: 300.00, status: 'paid' },
-        { num: 5, date: '2026-09-22', pDue: 1666.67, iDue: 266.67, tDue: 1933.34, pPaid: 1666.67, iPaid: 266.67, status: 'paid' },
-        { num: 6, date: '2026-10-22', pDue: 1666.67, iDue: 233.33, tDue: 1900.00, pPaid: 1666.67, iPaid: 233.33, status: 'paid' },
-        { num: 7, date: '2026-11-22', pDue: 1666.67, iDue: 200.00, tDue: 1866.67, pPaid: 1666.67, iPaid: 200.00, status: 'paid' },
-        { num: 8, date: '2026-12-22', pDue: 1666.67, iDue: 166.67, tDue: 1833.34, pPaid: 0.00, iPaid: 0.00, status: 'unpaid' },
-        { num: 9, date: '2027-01-22', pDue: 1666.67, iDue: 133.33, tDue: 1800.00, pPaid: 0.00, iPaid: 0.00, status: 'unpaid' },
-        { num: 10, date: '2027-02-22', pDue: 1666.67, iDue: 100.00, tDue: 1766.67, pPaid: 0.00, iPaid: 0.00, status: 'unpaid' },
-        { num: 11, date: '2027-03-22', pDue: 1666.67, iDue: 66.67, tDue: 1733.34, pPaid: 0.00, iPaid: 0.00, status: 'unpaid' },
-        { num: 12, date: '2027-04-22', pDue: 1666.63, iDue: 33.33, tDue: 1699.96, pPaid: 0.00, iPaid: 0.00, status: 'unpaid' },
+        { num: 1, date: '2026-05-22', pDue: 1666.67, iDue: 400.00, tDue: 2066.67, pPaid: 1666.67, iPaid: 400.00, status: 'paid', datePaid: '2026-05-15' },
+        { num: 2, date: '2026-06-22', pDue: 1666.67, iDue: 366.67, tDue: 2033.34, pPaid: 1666.67, iPaid: 366.67, status: 'paid', datePaid: '2026-06-15' },
+        { num: 3, date: '2026-07-22', pDue: 1666.67, iDue: 333.33, tDue: 2000.00, pPaid: 1666.67, iPaid: 333.33, status: 'paid', datePaid: '2026-07-15' },
+        { num: 4, date: '2026-08-22', pDue: 1666.67, iDue: 300.00, tDue: 1966.67, pPaid: 1666.67, iPaid: 300.00, status: 'paid', datePaid: '2026-08-15' },
+        { num: 5, date: '2026-09-22', pDue: 1666.67, iDue: 266.67, tDue: 1933.34, pPaid: 1666.67, iPaid: 266.67, status: 'paid', datePaid: '2026-09-15' },
+        { num: 6, date: '2026-10-22', pDue: 1666.67, iDue: 233.33, tDue: 1900.00, pPaid: 1666.67, iPaid: 233.33, status: 'paid', datePaid: '2026-10-15' },
+        { num: 7, date: '2026-11-22', pDue: 1666.67, iDue: 200.00, tDue: 1866.67, pPaid: 1666.67, iPaid: 200.00, status: 'paid', datePaid: '2026-11-15' },
+        { num: 8, date: '2026-12-22', pDue: 1666.67, iDue: 166.67, tDue: 1833.34, pPaid: 0.00, iPaid: 0.00, status: 'unpaid', datePaid: null },
+        { num: 9, date: '2027-01-22', pDue: 1666.67, iDue: 133.33, tDue: 1800.00, pPaid: 0.00, iPaid: 0.00, status: 'unpaid', datePaid: null },
+        { num: 10, date: '2027-02-22', pDue: 1666.67, iDue: 100.00, tDue: 1766.67, pPaid: 0.00, iPaid: 0.00, status: 'unpaid', datePaid: null },
+        { num: 11, date: '2027-03-22', pDue: 1666.67, iDue: 66.67, tDue: 1733.34, pPaid: 0.00, iPaid: 0.00, status: 'unpaid', datePaid: null },
+        { num: 12, date: '2027-04-22', pDue: 1666.63, iDue: 33.33, tDue: 1699.96, pPaid: 0.00, iPaid: 0.00, status: 'unpaid', datePaid: null },
       ];
 
       for (const s of scheds185) {
-        await client.query(`
+        const schedRes = await client.query(`
           INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, fines_due, principal_paid, interest_paid, status)
           VALUES ($1, $2, $3, $4, $5, $6, 0.00, $7, $8, $9)
+          RETURNING id
         `, [loan185Id, s.num, s.date, s.pDue, s.iDue, s.tDue, s.pPaid, s.iPaid, s.status]);
+
+        if (s.status === 'paid' && s.datePaid) {
+          const payRes = await client.query(`
+            INSERT INTO loan_payments (loan_id, amount, payment_date, payment_method, reference_no)
+            VALUES ($1, $2, $3, 'SD', 'SD')
+            RETURNING id
+          `, [loan185Id, s.tDue, s.datePaid]);
+
+          await client.query(`
+            INSERT INTO loan_payment_allocations (loan_payment_id, repayment_schedule_id, principal_allocated, interest_allocated)
+            VALUES ($1, $2, $3, $4)
+          `, [payRes.rows[0].id, schedRes.rows[0].id, s.pPaid, s.iPaid]);
+        }
       }
     }
 
@@ -83,13 +103,35 @@ export async function migrateFixPonterosLoans() {
     } else {
       loan393Id = loan393Res.rows[0].id;
       await client.query(`UPDATE loans SET status = 'disbursed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [loan393Id]);
-      await client.query(`DELETE FROM repayment_schedules WHERE loan_id = $1`, [loan393Id]);
     }
     await client.query(`
+      DELETE FROM loan_payment_allocations 
+      WHERE repayment_schedule_id IN (SELECT id FROM repayment_schedules WHERE loan_id = $1)
+         OR loan_payment_id IN (SELECT id FROM loan_payments WHERE loan_id = $1)
+    `, [loan393Id]);
+    await client.query(`DELETE FROM loan_payments WHERE loan_id = $1`, [loan393Id]);
+    await client.query(`DELETE FROM repayment_schedules WHERE loan_id = $1`, [loan393Id]);
+
+    const sched393_1 = await client.query(`
       INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, fines_due, principal_paid, interest_paid, status)
-      VALUES 
-        ($1, 1, '2026-10-01', 3500.00, 140.00, 3640.00, 0.00, 3500.00, 140.00, 'paid'),
-        ($1, 2, '2026-11-01', 3500.00, 70.00, 3570.00, 0.00, 0.00, 0.00, 'unpaid')
+      VALUES ($1, 1, '2026-10-01', 3500.00, 140.00, 3640.00, 0.00, 3500.00, 140.00, 'paid')
+      RETURNING id
+    `, [loan393Id]);
+
+    const pay393 = await client.query(`
+      INSERT INTO loan_payments (loan_id, amount, payment_date, payment_method, reference_no)
+      VALUES ($1, 3640.00, '2026-09-30', 'HAND-IN', '2503')
+      RETURNING id
+    `, [loan393Id]);
+
+    await client.query(`
+      INSERT INTO loan_payment_allocations (loan_payment_id, repayment_schedule_id, principal_allocated, interest_allocated)
+      VALUES ($1, $2, 3500.00, 140.00)
+    `, [pay393.rows[0].id, sched393_1.rows[0].id]);
+
+    await client.query(`
+      INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, fines_due, principal_paid, interest_paid, status)
+      VALUES ($1, 2, '2026-11-01', 3500.00, 70.00, 3570.00, 0.00, 0.00, 0.00, 'unpaid')
     `, [loan393Id]);
 
     // -------------------------------------------------------------
@@ -107,12 +149,31 @@ export async function migrateFixPonterosLoans() {
     } else {
       loan442Id = loan442Res.rows[0].id;
       await client.query(`UPDATE loans SET status = 'fully_paid', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [loan442Id]);
-      await client.query(`DELETE FROM repayment_schedules WHERE loan_id = $1`, [loan442Id]);
     }
     await client.query(`
+      DELETE FROM loan_payment_allocations 
+      WHERE repayment_schedule_id IN (SELECT id FROM repayment_schedules WHERE loan_id = $1)
+         OR loan_payment_id IN (SELECT id FROM loan_payments WHERE loan_id = $1)
+    `, [loan442Id]);
+    await client.query(`DELETE FROM loan_payments WHERE loan_id = $1`, [loan442Id]);
+    await client.query(`DELETE FROM repayment_schedules WHERE loan_id = $1`, [loan442Id]);
+
+    const sched442_1 = await client.query(`
       INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, fines_due, principal_paid, interest_paid, status)
       VALUES ($1, 1, '2026-10-29', 5000.00, 100.00, 5100.00, 0.00, 5000.00, 100.00, 'paid')
+      RETURNING id
     `, [loan442Id]);
+
+    const pay442 = await client.query(`
+      INSERT INTO loan_payments (loan_id, amount, payment_date, payment_method, reference_no)
+      VALUES ($1, 5100.00, '2026-10-30', 'HAND-IN', '2608')
+      RETURNING id
+    `, [loan442Id]);
+
+    await client.query(`
+      INSERT INTO loan_payment_allocations (loan_payment_id, repayment_schedule_id, principal_allocated, interest_allocated)
+      VALUES ($1, $2, 5000.00, 100.00)
+    `, [pay442.rows[0].id, sched442_1.rows[0].id]);
 
     // -------------------------------------------------------------
     // 4. LAF #26-498 (Special Occasion: ₱10,000.00, 3 mos, Disbursed 2026-10-30) -> ACTIVE (Bal ₱10,401.00)
@@ -129,8 +190,15 @@ export async function migrateFixPonterosLoans() {
     } else {
       loan498Id = loan498Res.rows[0].id;
       await client.query(`UPDATE loans SET status = 'disbursed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [loan498Id]);
-      await client.query(`DELETE FROM repayment_schedules WHERE loan_id = $1`, [loan498Id]);
     }
+    await client.query(`
+      DELETE FROM loan_payment_allocations 
+      WHERE repayment_schedule_id IN (SELECT id FROM repayment_schedules WHERE loan_id = $1)
+         OR loan_payment_id IN (SELECT id FROM loan_payments WHERE loan_id = $1)
+    `, [loan498Id]);
+    await client.query(`DELETE FROM loan_payments WHERE loan_id = $1`, [loan498Id]);
+    await client.query(`DELETE FROM repayment_schedules WHERE loan_id = $1`, [loan498Id]);
+
     await client.query(`
       INSERT INTO repayment_schedules (loan_id, installment_number, due_date, principal_due, interest_due, total_due, fines_due, principal_paid, interest_paid, status)
       VALUES 
