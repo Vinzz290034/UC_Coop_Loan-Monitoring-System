@@ -5,6 +5,11 @@ async function ensureParticularsColumn(db) {
   if (particularsColEnsured) return;
   await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS particulars_amount NUMERIC(15, 2) DEFAULT 0;`);
   await db.query(`
+    -- Automatically correct all collection receipts with year < 2026 to 2026 (preserving month and day)
+    UPDATE collections
+    SET date = (date::DATE + ((2026 - EXTRACT(YEAR FROM date::DATE))::INT || ' years')::INTERVAL)::DATE
+    WHERE EXTRACT(YEAR FROM date::DATE) < 2026;
+
     UPDATE collections
     SET
       common_share_amount = CASE
@@ -68,7 +73,8 @@ function getDefaultCustodyStatus(date, tab, requestedStatus) {
       }
     }
     if (!isNaN(d.getTime())) {
-      const y = d.getFullYear();
+      let y = d.getFullYear();
+      if (y < 2026) y = 2026;
       const m = d.getMonth(); // 0 = Jan, 9 = Oct, 10 = Nov
       if (y === 2026 && m <= 9) {
         isJanToOct = true;
@@ -94,12 +100,19 @@ function formatCollectionRow(row) {
   // Format date to YYYY-MM-DD
   let dateStr = row.date;
   if (dateStr instanceof Date) {
-    const y = dateStr.getFullYear();
+    let y = dateStr.getFullYear();
+    if (y < 2026) y = 2026;
     const m = String(dateStr.getMonth() + 1).padStart(2, '0');
     const d = String(dateStr.getDate()).padStart(2, '0');
     dateStr = `${y}-${m}-${d}`;
-  } else if (typeof dateStr === 'string' && dateStr.includes('T')) {
-    dateStr = dateStr.split('T')[0];
+  } else if (typeof dateStr === 'string') {
+    if (dateStr.includes('T')) {
+      dateStr = dateStr.split('T')[0];
+    }
+    const match = dateStr.match(/^(\d{4})-(.*)$/);
+    if (match && Number(match[1]) < 2026) {
+      dateStr = `2026-${match[2]}`;
+    }
   }
   return {
     id: row.id,
@@ -145,16 +158,18 @@ function formatCollectionRow(row) {
     status: (() => {
       // Check if row date is in January to October 2026
       let isJanToOct = false;
-      if (row.date) {
-        let d = row.date instanceof Date ? row.date : new Date(row.date);
-        if (isNaN(d.getTime()) && typeof row.date === 'string' && row.date.includes('/')) {
-          const parts = row.date.split('/');
+      const chkDate = dateStr || row.date;
+      if (chkDate) {
+        let d = chkDate instanceof Date ? chkDate : new Date(chkDate);
+        if (isNaN(d.getTime()) && typeof chkDate === 'string' && chkDate.includes('/')) {
+          const parts = chkDate.split('/');
           if (parts.length === 3 && parts[2].length === 4) {
             d = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
           }
         }
         if (!isNaN(d.getTime())) {
-          const y = d.getFullYear();
+          let y = d.getFullYear();
+          if (y < 2026) y = 2026;
           const m = d.getMonth(); // 0 = Jan, 9 = Oct, 10 = Nov
           if (y === 2026 && m <= 9) {
             isJanToOct = true;
@@ -350,7 +365,14 @@ export async function createCollection(req, res) {
 
     const id = item.id || `col-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const tab = item.tab || 'credit';
-    const date = item.date || new Date().toISOString().split('T')[0];
+    let rawDate = item.date || new Date().toISOString().split('T')[0];
+    if (typeof rawDate === 'string') {
+      const match = rawDate.match(/^(\d{4})-(.*)$/);
+      if (match && Number(match[1]) < 2026) {
+        rawDate = `2026-${match[2]}`;
+      }
+    }
+    const date = rawDate;
     const payor_name = item.payor_name ? item.payor_name.trim() : '';
     const member_id = item.member_id ? item.member_id.trim() : null;
     const loans = item.loans ? JSON.stringify(item.loans) : '[]';
@@ -560,7 +582,14 @@ export async function bulkImportCollections(req, res) {
       }
 
       const tab = item.tab === 'others' ? 'credit' : (item.tab || 'credit');
-      const date = item.date || new Date().toISOString().split('T')[0];
+      let rawDate = item.date || new Date().toISOString().split('T')[0];
+      if (typeof rawDate === 'string') {
+        const match = rawDate.match(/^(\d{4})-(.*)$/);
+        if (match && Number(match[1]) < 2026) {
+          rawDate = `2026-${match[2]}`;
+        }
+      }
+      const date = rawDate;
       const payor_name = item.payor_name ? item.payor_name.trim() : '';
       const member_id = item.member_id ? item.member_id.trim() : null;
       const loans = item.loans ? JSON.stringify(item.loans) : '[]';
@@ -659,7 +688,18 @@ export async function updateCollection(req, res) {
     const existing = existingRes.rows[0];
 
     const tab = item.tab || existing.tab;
-    const date = item.date || existing.date;
+    let rawDate = item.date || existing.date;
+    if (typeof rawDate === 'string') {
+      const match = rawDate.match(/^(\d{4})-(.*)$/);
+      if (match && Number(match[1]) < 2026) {
+        rawDate = `2026-${match[2]}`;
+      }
+    } else if (rawDate instanceof Date && rawDate.getFullYear() < 2026) {
+      const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+      const d = String(rawDate.getDate()).padStart(2, '0');
+      rawDate = `2026-${m}-${d}`;
+    }
+    const date = rawDate;
     const or_no = item.or_no ? item.or_no.trim() : existing.or_no;
     const payor_name = item.payor_name ? item.payor_name.trim() : existing.payor_name;
     const member_id = item.member_id !== undefined ? (item.member_id ? item.member_id.trim() : null) : existing.member_id;

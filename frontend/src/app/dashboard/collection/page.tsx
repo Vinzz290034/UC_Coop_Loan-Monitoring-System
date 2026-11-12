@@ -135,7 +135,8 @@ const parseCollectionDate = (rawDate?: string) => {
   if (str.includes('-')) {
     const p = str.split('T')[0].split('-');
     if (p.length >= 3 && p[0].length === 4) {
-      const y = p[0];
+      let y = p[0];
+      if (Number(y) < 2026) y = '2026';
       const m = parseInt(p[1], 10) - 1;
       return { year: y, month: isNaN(m) ? null : m };
     }
@@ -144,13 +145,15 @@ const parseCollectionDate = (rawDate?: string) => {
     const p = str.split('/');
     if (p.length === 3) {
       if (p[2].length === 4) {
-        // DD/MM/YYYY
-        const y = p[2];
+        // DD/MM/YYYY or MM/DD/YYYY
+        let y = p[2];
+        if (Number(y) < 2026) y = '2026';
         const m = parseInt(p[1], 10) - 1;
         return { year: y, month: isNaN(m) ? null : m };
       } else if (p[0].length === 4) {
         // YYYY/MM/DD
-        const y = p[0];
+        let y = p[0];
+        if (Number(y) < 2026) y = '2026';
         const m = parseInt(p[1], 10) - 1;
         return { year: y, month: isNaN(m) ? null : m };
       }
@@ -158,7 +161,9 @@ const parseCollectionDate = (rawDate?: string) => {
   }
   const d = new Date(str);
   if (!isNaN(d.getTime())) {
-    return { year: String(d.getFullYear()), month: d.getMonth() };
+    let yr = d.getFullYear();
+    if (yr < 2026) yr = 2026;
+    return { year: String(yr), month: d.getMonth() };
   }
   return { year: null, month: null };
 };
@@ -383,9 +388,27 @@ export default function CollectionPage() {
       setLoadingCollections(true);
       const res = await api.get('/collections', { params: { _t: Date.now() } });
       const serverItems: CollectionItem[] = (res.data?.data || []).map((col: CollectionItem) => {
+        let cleanDate = col.date;
+        if (cleanDate) {
+          if (cleanDate.includes('-')) {
+            const parts = cleanDate.split('T')[0].split('-');
+            if (parts.length >= 3 && parts[0].length === 4 && Number(parts[0]) < 2026) {
+              cleanDate = `2026-${parts[1]}-${parts[2]}`;
+            }
+          } else if (cleanDate.includes('/')) {
+            const parts = cleanDate.split('/');
+            if (parts.length === 3) {
+              if (parts[2].length === 4 && Number(parts[2]) < 2026) {
+                cleanDate = `${parts[0]}/${parts[1]}/2026`;
+              } else if (parts[0].length === 4 && Number(parts[0]) < 2026) {
+                cleanDate = `2026/${parts[1]}/${parts[2]}`;
+              }
+            }
+          }
+        }
         let stat = col.status;
-        if (col.date) {
-          const parsed = parseCollectionDate(col.date);
+        if (cleanDate) {
+          const parsed = parseCollectionDate(cleanDate);
           if (parsed.year === '2026' && parsed.month !== null && parsed.month <= 9) {
             const tab = (col.tab || '').toLowerCase().trim();
             if (tab === 'sales' || tab === 'services' || tab === 'sales_services') {
@@ -395,7 +418,7 @@ export default function CollectionPage() {
             }
           }
         }
-        return { ...col, status: stat };
+        return { ...col, date: cleanDate, status: stat };
       });
       setCollections(serverItems);
     } catch (err: any) {

@@ -81,6 +81,29 @@ export async function migrateCollections() {
           OR LOWER(COALESCE(loan_account, '')) LIKE '%fixed deposit%'
           OR LOWER(COALESCE(loan_account, '')) LIKE '%common share%'
         );
+
+      -- Automatically correct all collection receipts with year < 2026 to 2026 (preserving month and day)
+      UPDATE collections
+      SET date = (date::DATE + ((2026 - EXTRACT(YEAR FROM date::DATE))::INT || ' years')::INTERVAL)::DATE
+      WHERE EXTRACT(YEAR FROM date::DATE) < 2026;
+
+      -- All Sales & Services from January to October 2026 -> Cash in MBTC
+      UPDATE collections
+      SET status = 'Cash in MBTC'
+      WHERE LOWER(TRIM(COALESCE(tab, ''))) IN ('sales', 'services', 'sales_services')
+        AND (
+          (date::DATE >= '2026-01-01'::DATE AND date::DATE < '2026-11-01'::DATE)
+          OR (EXTRACT(YEAR FROM date) = 2026 AND EXTRACT(MONTH FROM date) <= 10)
+        );
+
+      -- All Credit from January to October 2026 -> Cash in BDO
+      UPDATE collections
+      SET status = 'Cash in BDO'
+      WHERE LOWER(TRIM(COALESCE(tab, ''))) IN ('credit', 'billing')
+        AND (
+          (date::DATE >= '2026-01-01'::DATE AND date::DATE < '2026-11-01'::DATE)
+          OR (EXTRACT(YEAR FROM date) = 2026 AND EXTRACT(MONTH FROM date) <= 10)
+        );
     `);
 
     await client.query(`
