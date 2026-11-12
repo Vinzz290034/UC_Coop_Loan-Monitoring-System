@@ -624,9 +624,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                             No amounts recorded yet.
                           </td>
                         </tr>
-                      ) : visible.map((l, li) => {
-                        const hasRecords = Array.isArray(l.transactions) && l.transactions.length > 0;
-                        return (
+                      ) : visible.map((l, li) => (
                         <tr
                           key={`${s.key}-${gi}-${li}`}
                           onClick={() => {
@@ -644,30 +642,26 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                           title={`Click to view itemized records and vouchers for ${l.title}`}
                         >
                           <td className="p-2.5">
-                            <div className="flex items-center gap-1.5 font-semibold">
-                              <span className={`${
-                                hasRecords
-                                  ? isRepayment
-                                    ? 'text-blue-600 dark:text-blue-400 group-hover:text-blue-500'
-                                    : isExpense
-                                    ? 'text-amber-600 dark:text-amber-400 group-hover:text-amber-500'
-                                    : 'text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-500'
-                                  : 'text-neutral-900 dark:text-white'
+                            <div className="flex items-center gap-1.5 font-semibold text-neutral-900 dark:text-white">
+                              <span className={`group-hover:${
+                                isRepayment
+                                  ? 'text-blue-700 dark:group-hover:text-blue-300'
+                                  : isExpense
+                                  ? 'text-amber-700 dark:group-hover:text-amber-300'
+                                  : 'text-emerald-700 dark:group-hover:text-emerald-300'
                               } transition-colors`}>
                                 <HighlightText text={l.title} query={q} />
                               </span>
-                              {hasRecords && (
-                                <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${
-                                  isRepayment
-                                    ? 'text-blue-700 dark:text-blue-400'
-                                    : isExpense
-                                    ? 'text-amber-700 dark:text-amber-400'
-                                    : 'text-emerald-700 dark:text-emerald-400'
-                                } ml-1`}>
-                                  <ExternalLink className="w-3 h-3 shrink-0" />
-                                  <span className="hidden sm:inline">View Records</span>
-                                </span>
-                              )}
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${
+                                isRepayment
+                                  ? 'text-blue-700 dark:text-blue-400'
+                                  : isExpense
+                                  ? 'text-amber-700 dark:text-amber-400'
+                                  : 'text-emerald-700 dark:text-emerald-400'
+                              } opacity-0 group-hover:opacity-100 transition-opacity ml-1`}>
+                                <ExternalLink className="w-3 h-3 shrink-0" />
+                                <span className="hidden sm:inline">View Records</span>
+                              </span>
                             </div>
                             <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 print:hidden">
                               <HighlightText text={l.description} query={q} />
@@ -675,8 +669,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                           </td>
                           <FigureCells f={lineFigures(l)} isExpense={isExpense} />
                         </tr>
-                        );
-                      })}
+                      ))}
                       {g.total_label && visible.length > 0 && (
                         <tr className="bg-neutral-50 dark:bg-neutral-800/40 text-neutral-900 dark:text-white border-t border-neutral-300 dark:border-neutral-700">
                           <td className="p-2.5 text-[11px] font-bold uppercase tracking-wide">{g.total_label}</td>
