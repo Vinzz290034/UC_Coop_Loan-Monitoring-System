@@ -758,9 +758,10 @@ function matchesPeriod(dateVal, period, year, month, targetDate) {
   const d = new Date(dateVal);
   if (isNaN(d.getTime())) return false;
 
-  const y = d.getFullYear();
+  let y = d.getFullYear();
+  if (y < 2026) y = 2026;
   const m = d.getMonth() + 1;
-  const dateStr = d.toISOString().split('T')[0];
+  const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
   if (period === 'daily') {
     return dateStr === targetDate;
@@ -776,9 +777,10 @@ function isAsOfPeriod(dateVal, period, year, month, targetDate) {
   if (!dateVal) return true;
   const d = new Date(dateVal);
   if (isNaN(d.getTime())) return true;
-  const dateStr = d.toISOString().split('T')[0];
-  const y = d.getFullYear();
+  let y = d.getFullYear();
+  if (y < 2026) y = 2026;
   const m = d.getMonth() + 1;
+  const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
   if (period === 'daily') {
     return dateStr <= targetDate;
@@ -2176,7 +2178,8 @@ export const getLoanProductsReport = async (req, res, next) => {
       if (!rawDate) return null;
       const d = new Date(rawDate);
       if (isNaN(d.getTime())) return null;
-      const y = d.getFullYear();
+      let y = d.getFullYear();
+      if (y < 2026) y = 2026;
       if (y >= 2024 && y <= 2035) {
         availableYearsSet.add(y);
       }
@@ -2224,7 +2227,13 @@ export const getLoanProductsReport = async (req, res, next) => {
         stat.total_collected += total;
 
         stat.repayments.push({
-          date: rawDate ? new Date(rawDate).toISOString().split('T')[0] : 'N/A',
+          date: rawDate ? (() => {
+            const rd = new Date(rawDate);
+            if (isNaN(rd.getTime())) return 'N/A';
+            let ry = rd.getFullYear();
+            if (ry < 2026) ry = 2026;
+            return `${ry}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`;
+          })() : 'N/A',
           or_no: meta.or_no || '—',
           member_name: meta.member_name || 'Coop Member',
           principal: p,
@@ -3904,11 +3913,12 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       if (!rawDate || val === 0) return;
       const d = new Date(rawDate);
       if (isNaN(d.getTime())) return;
-      const y = d.getFullYear();
+      let y = d.getFullYear();
+      if (y < 2026) y = 2026;
       if (y === targetYear) {
         store.current[d.getMonth()] += val;
         store.transactions.push({
-          date: d.toISOString().split('T')[0],
+          date: `${y}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
           month: d.getMonth() + 1,
           year: y,
           payee: meta.payee || meta.member_name || 'Member',
