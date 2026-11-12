@@ -224,6 +224,15 @@ export function normalizeAccountName(rawName: string): string {
 
   const lower = str.toLowerCase();
 
+  // Consolidation of minor titles according to CDA accounts
+  if (/key\s*locker|locker\s*duplicate/i.test(lower)) return 'Office Supplies Expenses';
+  if (/hygiene/i.test(lower)) return 'Office Supplies Expenses';
+  if (/medical/i.test(lower)) return 'Office Supplies Expenses';
+  if (/management\s*system|financial\s*management\s*system/i.test(lower)) return 'Management System';
+  if (/food\s*budget\s*for\s*ga|general\s*assembly\s*food/i.test(lower)) return 'Meetings and Conferences';
+  if (/raffle\s*ticket\s*rebate|raffle\s*draw\s*prize|raffle\s*prize/i.test(lower)) return 'Members Benefit Expense';
+  if (/cdf\s*-\s*subsidy/i.test(lower)) return 'Donation Expense';
+
   if (/^cos\s*-\s*/i.test(str)) {
     const suffix = str.replace(/^cos\s*-\s*/i, '').trim();
     const formattedSuffix = suffix
@@ -334,7 +343,9 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
     lower.includes('hardbound') ||
     lower.includes('photocopy') ||
     lower.includes('service supplies') ||
-    lower.includes('service')
+    lower.includes('service') ||
+    lower.includes('delivery fee') ||
+    lower.includes('freight')
   ) {
     return 'Service';
   }

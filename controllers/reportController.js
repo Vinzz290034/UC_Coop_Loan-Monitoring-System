@@ -1106,7 +1106,9 @@ export function categorizeExpenseAccount(accName, categoryRaw) {
     acc.includes("photocopy") ||
     acc.includes("professional fee") ||
     acc.includes("repair") ||
-    acc.includes("maintenance")
+    acc.includes("maintenance") ||
+    acc.includes("delivery") ||
+    acc.includes("freight")
   ) {
     return "Service Expense";
   }
@@ -1128,6 +1130,16 @@ export function normalizeAccountName(rawName) {
   str = str.replace(/\s*-\s*/g, ' - ');
 
   const lower = str.toLowerCase();
+
+  // Consolidation of minor titles according to CDA accounts
+  if (/key\s*locker|locker\s*duplicate/i.test(lower)) return 'Office Supplies Expenses';
+  if (/hygiene/i.test(lower)) return 'Office Supplies Expenses';
+  if (/medical/i.test(lower)) return 'Office Supplies Expenses';
+  if (/management\s*system|financial\s*management\s*system/i.test(lower)) return 'Management System';
+  if (/food\s*budget\s*for\s*ga|general\s*assembly\s*food/i.test(lower)) return 'Meetings and Conferences';
+  if (/raffle\s*ticket\s*rebate|raffle\s*draw\s*prize|raffle\s*prize/i.test(lower)) return 'Members Benefit Expense';
+  if (/cdf\s*-\s*subsidy/i.test(lower)) return 'Donation Expense';
+  if (/^operation$/i.test(lower)) return 'Miscellaneous Expense';
 
   if (/^cos\s*-\s*/i.test(str)) {
     const suffix = str.replace(/^cos\s*-\s*/i, '').trim();
@@ -4251,12 +4263,22 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const EXPENSE_LINES = [
       { code: '503.01', title: 'Salaries and Wages', match: /salar|wage|payroll|labor/i, description: 'Pay given to cooperative staff and workers.' },
       { code: '503.05', title: 'Honorarium and Allowances', match: /honorari|allowance/i, description: 'Honoraria and allowances of officers and committee members.' },
-      { code: '503.08', title: 'Office Supplies Expenses', match: /office\s*suppl|office\s*use|supplies/i, description: 'Paper, ink, and other things used in the office.' },
-      { code: '503.10', title: 'Meetings and Conferences', match: /meeting|conference|assembly|meal|snack|representation|seminar|training/i, description: 'Meetings, assemblies, seminars, and meals during them.' },
+      { code: '503.08', title: 'Office Supplies Expenses', match: /office\s*suppl|office\s*use|supplies|hygiene|medical|key\s*locker|locker\s*duplicate/i, description: 'Paper, ink, office supplies, sanitation and minor office upkeep.' },
+      { code: '503.09', title: 'Communication', match: /communication|telephone|internet|cell\s*load|mobile\s*load/i, description: 'Telephone, mobile load, internet, and postage for office operations.' },
+      { code: '503.10', title: 'Meetings and Conferences', match: /meeting|conference|assembly|meal|snack|representation|seminar|training|ga\s*20|food\s*budget/i, description: 'Meetings, assemblies, seminars, and meals during them.' },
+      { code: '503.13', title: 'Audit Professional Expense', match: /audit|professional\s*fee|consultan/i, description: 'Professional fees paid to external auditors and consultants.' },
       { code: '503.15', title: 'Repairs & Maintenance', match: /repair|maintenance/i, description: 'Fixing and maintaining equipment and the office.' },
-      { code: '503.43', title: 'Licenses Expense', match: /^(?!.*tax).*(license|permit|cedula|clearance)/i, description: 'Business permits, licenses, and clearances.' },
       { code: '503.17', title: 'Taxes, Fees and Charges', match: /tax|dst|stamp|bank\s*charge|convenience\s*fee|notarial|penalty/i, description: 'Government taxes, bank charges, and other fees.' },
-      { code: '503.26', title: 'Miscellaneous Expense', match: /miscellaneous|misc\b/i, description: 'Small expenses that do not fit other accounts.' }
+      { code: '503.19', title: 'Insurance Expense', match: /^insurance\s*expense$|property\s*insurance|fire\s*insurance/i, description: 'Insurance on cooperative properties, assets, and facilities.' },
+      { code: '503.20', title: 'Donation Expense', match: /donation|cdf\s*-\s*subsidy|community\s*dev/i, description: 'Donations, community development outreach, and subsidies.' },
+      { code: '503.21', title: 'Members Benefit Expense', match: /member.*benefit|raffle/i, description: 'Benefits, rebates, prizes, and welfare assistance for members.' },
+      { code: '503.22a', title: 'SSS Premium - ER Share', match: /sss.*er\s*share|er\s*share.*sss/i, description: 'Employer counterpart share of SSS contributions.' },
+      { code: '503.22b', title: 'Pag-ibig Premium - ER Share', match: /pag\s*-\s*ibig.*er\s*share|er\s*share.*pag\s*-\s*ibig/i, description: 'Employer counterpart share of Pag-IBIG contributions.' },
+      { code: '503.22c', title: 'PhilHealth - ER Share', match: /philhealth.*er\s*share|er\s*share.*philhealth/i, description: 'Employer counterpart share of PhilHealth contributions.' },
+      { code: '503.23', title: 'Transportation', match: /transportation|travel|fare\b|gasoline|fuel/i, description: 'Travel and transportation for official cooperative business.' },
+      { code: '503.24', title: 'Management System', match: /management\s*system|software|it\s*expense/i, description: 'Computer software, financial management system, and IT operations.' },
+      { code: '503.26', title: 'Miscellaneous Expense', match: /miscellaneous|misc\b/i, description: 'Small expenses that do not fit other accounts.' },
+      { code: '503.43', title: 'Licenses Expense', match: /^(?!.*tax).*(license|permit|cedula|clearance)/i, description: 'Business permits, licenses, and clearances.' }
     ];
     const expenseStores = {};
     EXPENSE_LINES.forEach(l => { expenseStores[l.title] = newStore(); });
@@ -4284,13 +4306,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     };
 
     // Direct costs of running store services stay in Cost of Sales & Services
-    const isDirectServiceCost = (acc) => /^cos\b|commission|freight|porterage|wifi|water|^service$/i.test(acc);
+    const isDirectServiceCost = (acc) => /^cos\b|commission|freight|delivery\s*fee|delivery|porterage|wifi|water|^service$/i.test(acc);
 
     const classifyNonExpense = (acc) => {
       if (/loan\s*repay|payment\s*of\s*loan|repayment\s*of\s*loan|loan\s*payable/i.test(acc)) return 'loan_repayment';
-      if (/office\s*equipment|plants?,?\s*property|\bppe\b|^dp\s+for\b|down\s*payment|financial\s*management\s*system/i.test(acc)) return 'capex_office_equipment';
+      if (/office\s*equipment|plants?,?\s*property|\bppe\b/i.test(acc) && !/management\s*system|software/i.test(acc)) return 'capex_office_equipment';
       if (/fixture|furniture/i.test(acc)) return 'capex_furniture';
-      if (/\bEE\s*share\b|payable\s*premium|insurance\s*payable/i.test(acc)) return 'ee_remittances';
+      if (/\bEE\s*share\b|payable\s*premium|insurance\s*payable|payment\s*to\s*climbs|climbs.*remittance/i.test(acc)) return 'ee_remittances';
       if (/withdrawal/i.test(acc)) return 'withdrawals';
       if (/cetf/i.test(acc)) return 'cetf_remittance';
       if (/refund/i.test(acc)) return 'deposit_refunds';
