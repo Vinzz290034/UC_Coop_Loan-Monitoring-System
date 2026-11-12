@@ -573,11 +573,12 @@ const REPLENISHMENT_ACCOUNT_OPTIONS = Array.from(new Set([
 
 const normalizeDisbursementCategoryKey = (cat?: string): 'Petty Cash' | 'Merchandise' | 'Operation' | 'Service' | 'All' => {
   const lower = (cat || '').toLowerCase().trim();
+  // Revolving Fund (e.g. "Revolving Fund - Operation", "revolving_fund") retains the full, unrestricted list of Book of Accounts
+  if (lower.includes('revolving')) return 'All';
   if (lower.includes('petty')) return 'Petty Cash';
   if (lower.includes('merchandise')) return 'Merchandise';
   if (lower.includes('service')) return 'Service';
   if (lower.includes('operation')) return 'Operation';
-  // Revolving Fund retains the full, unrestricted list of Book of Accounts
   return 'All';
 };
 
@@ -883,30 +884,59 @@ function ReplenishmentAccountDropdown({
     }
   }, [open, isCreating]);
 
-  // Get options for active category
-  const categorySpecificOptions = useMemo(() => {
-    if (targetCategoryKey === 'All') return options;
-    return getCategorySpecificAccounts(targetCategoryKey, options, categoryMap);
-  }, [targetCategoryKey, options, categoryMap]);
-
-  // Make sure current value is preserved in options list so it never appears unselected (unless it was deleted)
-  const availableOptions = useMemo(() => {
+  // Base list of all active non-deleted options
+  const allActiveOptions = useMemo(() => {
     const deleted = getRfDeletedAccountsSet();
     const excludeSet = new Set((excludeOptions || []).map(x => x.trim().toLowerCase()));
-    const cleanVal = (value || '').trim();
-    if (cleanVal && !deleted.has(cleanVal.toLowerCase()) && !excludeSet.has(cleanVal.toLowerCase()) && !categorySpecificOptions.some(a => a.toLowerCase() === cleanVal.toLowerCase())) {
-      return [cleanVal, ...categorySpecificOptions.filter(a => !excludeSet.has(a.trim().toLowerCase()))];
-    }
-    return categorySpecificOptions.filter(a => !deleted.has(a.trim().toLowerCase()) && !excludeSet.has(a.trim().toLowerCase()));
-  }, [categorySpecificOptions, value, excludeOptions]);
+    return options.filter(a => !deleted.has(a.trim().toLowerCase()) && !excludeSet.has(a.trim().toLowerCase()));
+  }, [options, excludeOptions]);
 
+  // When browsing without typing: show category-relevant accounts first, followed by all remaining accounts
+  // so NO valid account is ever hidden from the user!
+  const availableOptions = useMemo(() => {
+    const cleanVal = (value || '').trim();
+    const deleted = getRfDeletedAccountsSet();
+    const excludeSet = new Set((excludeOptions || []).map(x => x.trim().toLowerCase()));
+
+    let list: string[] = [];
+    if (targetCategoryKey === 'All') {
+      list = allActiveOptions;
+    } else {
+      const catMatches: string[] = [];
+      const others: string[] = [];
+      const targetCatLower = targetCategoryKey.toLowerCase();
+
+      allActiveOptions.forEach(acct => {
+        const cat = getCategoryForAccount(acct, categoryMap);
+        if (
+          cat.toLowerCase() === targetCatLower ||
+          (targetCatLower === 'petty cash' && PETTY_CASH_ACCOUNT_OPTIONS.some(p => p.toLowerCase() === acct.toLowerCase())) ||
+          (targetCatLower === 'operation' && OPERATION_EXPENSE_ACCOUNT_OPTIONS.some(o => o.toLowerCase() === acct.toLowerCase())) ||
+          (targetCatLower === 'merchandise' && MERCHANDISE_ACCOUNT_OPTIONS.some(m => m.toLowerCase() === acct.toLowerCase())) ||
+          (targetCatLower === 'service' && SERVICES_EXPENSE_ACCOUNT_OPTIONS.some(s => s.toLowerCase() === acct.toLowerCase()))
+        ) {
+          catMatches.push(acct);
+        } else {
+          others.push(acct);
+        }
+      });
+      list = [...catMatches, ...others];
+    }
+
+    if (cleanVal && !deleted.has(cleanVal.toLowerCase()) && !excludeSet.has(cleanVal.toLowerCase()) && !list.some(a => a.toLowerCase() === cleanVal.toLowerCase())) {
+      return [cleanVal, ...list];
+    }
+    return list;
+  }, [allActiveOptions, targetCategoryKey, categoryMap, value, excludeOptions]);
+
+  // When searching, search across ALL active accounts in the chart of accounts!
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return availableOptions;
-    return availableOptions.filter(acct =>
+    return allActiveOptions.filter(acct =>
       acct.toLowerCase().includes(term)
     );
-  }, [availableOptions, search]);
+  }, [availableOptions, allActiveOptions, search]);
 
   const exactMatchExists = useMemo(() => {
     const term = search.trim().toLowerCase();
