@@ -3940,6 +3940,9 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           CAST(details AS TEXT) ILIKE '%service fee%'
           OR CAST(details AS TEXT) ILIKE '%service charge%'
           OR CAST(details AS TEXT) ILIKE '%service fee revenue%'
+          OR CAST(details AS TEXT) ILIKE '%climbs%'
+          OR CAST(details AS TEXT) ILIKE '%cisp%'
+          OR CAST(details AS TEXT) ILIKE '%insurance%'
         )
       `)
     ]);
@@ -4066,20 +4069,80 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         }));
     };
 
-    // ---------- Service Fees (deducted from loan releases in Check Vouchers & Collections) ----------
+    // ---------- Service Fees & Loan Insurance (deducted from loan releases in Check Vouchers & Collections) ----------
     const serviceFees = newStore();
+    const climbsIncome = newStore();
+    const cispIncome = newStore();
+
     cvResult.rows.forEach(cv => {
       if (!Array.isArray(cv.details)) return;
+      const isClimbsRemittancePayee = /climbs\s*life|climbs\s*general|climbs\s*insurance/i.test(cv.payee || '') || /premium.*climbs/i.test(cv.particulars || '');
+      const isCispRemittancePayee = /1\s*cisp|cisp\s*insurance/i.test(cv.payee || '') || /premium.*cisp/i.test(cv.particulars || '');
+
       cv.details.forEach(d => {
-        if (/service\s*(fee|charge)/i.test(String(d.book_of_account || ''))) {
-          const amt = Math.abs(parseFloat(d.amount) || 0);
-          bucket(serviceFees, cv.voucher_date, amt, {
+        const boa = String(d.book_of_account || '');
+        const rawAmt = parseFloat(d.amount) || 0;
+        const absAmt = Math.abs(rawAmt);
+        if (absAmt === 0) return;
+        const lineDate = d.date || cv.voucher_date;
+
+        // 1. Service Fees
+        if (/service\s*(fee|charge)/i.test(boa)) {
+          bucket(serviceFees, cv.voucher_date, absAmt, {
             voucher_id: cv.id,
             voucher_no: cv.voucher_no || 'CV',
             payee: cv.payee || '',
             particulars: d.remarks || cv.particulars || 'Service Fee / Charge',
             source: 'check_voucher'
           });
+        }
+
+        // 2. CLIMBS Insurance (Regular Loans: Salary & Project Loans) - Option A: Net Commission
+        if (/climbs/i.test(boa)) {
+          const isRemittance = isClimbsRemittancePayee || (rawAmt > 0 && !d.is_credit) || /remittance|premium.*clpp|clpp.*premium/i.test(String(d.remarks || ''));
+          if (isRemittance) {
+            // Less: Premium remitted to CLIMBS
+            bucket(climbsIncome, lineDate, -absAmt, {
+              voucher_id: cv.id,
+              voucher_no: d.voucher_no || cv.voucher_no || 'CV',
+              payee: cv.payee || 'CLIMBS Life & General Insurance',
+              particulars: d.remarks ? `Less: Remittance to CLIMBS (${d.remarks})` : `Less: Remittance to CLIMBS (${cv.particulars || 'Premium payment'})`,
+              source: 'check_voucher'
+            });
+          } else {
+            // Member loan insurance deduction
+            bucket(climbsIncome, lineDate, absAmt, {
+              voucher_id: cv.id,
+              voucher_no: d.voucher_no || cv.voucher_no || 'CV',
+              payee: cv.payee || 'Member',
+              particulars: d.remarks || 'CLIMBS loan insurance deduction (Regular Loan)',
+              source: 'check_voucher'
+            });
+          }
+        }
+
+        // 3. CISP Insurance (Short Term Loans: STL) - Option A: Net Commission
+        if (/cisp/i.test(boa) && !/cash in coop federation/i.test(boa)) {
+          const isRemittance = isCispRemittancePayee || (rawAmt > 0 && !d.is_credit) || /remittance|payable to 1cisp|insurance payable/i.test(String(d.remarks || ''));
+          if (isRemittance) {
+            // Less: Premium remitted to CISP
+            bucket(cispIncome, lineDate, -absAmt, {
+              voucher_id: cv.id,
+              voucher_no: d.voucher_no || cv.voucher_no || 'CV',
+              payee: cv.payee || '1CISP',
+              particulars: d.remarks ? `Less: Remittance to CISP (${d.remarks})` : `Less: Remittance to CISP (${cv.particulars || 'Premium payment'})`,
+              source: 'check_voucher'
+            });
+          } else {
+            // Member loan insurance deduction from STL
+            bucket(cispIncome, lineDate, absAmt, {
+              voucher_id: cv.id,
+              voucher_no: d.voucher_no || cv.voucher_no || 'CV',
+              payee: cv.payee || 'Member',
+              particulars: d.remarks || 'CISP loan insurance deduction (STL)',
+              source: 'check_voucher'
+            });
+          }
         }
       });
     });
@@ -4089,8 +4152,6 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const serviceIncome = newStore();
     const depositInterest = newStore();
     const ctplIncome = newStore();
-    const cispIncome = newStore();
-    const climbsIncome = newStore();
     const membershipFees = newStore();
     const raffleIncome = newStore();
     const withdrawalFees = newStore();
@@ -4172,6 +4233,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       if (trackerIns.previous[m] > sumPrev) {
         climbsIncome.previous[m] += (trackerIns.previous[m] - sumPrev);
       }
+      climbsIncome.current[m] = Math.round(Math.max(0, climbsIncome.current[m]) * 100) / 100;
+      cispIncome.current[m] = Math.round(Math.max(0, cispIncome.current[m]) * 100) / 100;
     }
 
     const trackerDonations = fromTracker(otherFor, 'Donation & Grants');
@@ -4400,8 +4463,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               lines: [
                 line('', 'Membership Fees', 'One-time fees paid by new members when they join.', fromTracker(otherFor, 'Membership fee'), true, membershipFees.transactions),
                 line('', 'Donations & Grants', 'Subsidies, grants, and institutional donations received by the cooperative.', donationsGrants),
-                line('', 'Insurance Income - CLIMBS', 'Insurance payments collected for CLIMBS.', climbsIncome),
-                line('', 'Insurance Income - CISP', 'Insurance payments collected for CISP.', cispIncome),
+                line('', 'Insurance Income - CLIMBS', 'Net insurance commission on Regular Loans (Salary & Project Loans), net of remittances to CLIMBS.', climbsIncome),
+                line('', 'Insurance Income - CISP', 'Insurance deductions on Short Term Loans (STL), net of remittances to CISP.', cispIncome),
                 line('', 'Insurance Income - CTPL', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome),
                 line('', 'Raffle Ticket Income', 'Money collected from raffle ticket sales.', fromTracker(otherFor, 'Raffle Ticket payment'), false, raffleIncome.transactions),
                 line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', fromTracker(otherFor, 'Withdrawal Fee'), false, withdrawalFees.transactions)
