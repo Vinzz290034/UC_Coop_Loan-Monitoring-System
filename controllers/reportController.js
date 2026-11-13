@@ -4389,6 +4389,12 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       return null;
     };
 
+    // Made-to-order uniforms (Type A & B, Gala) are treated as Services (no unit cost on receipt), so their supplier CVs stay in Cost of Sales & Services
+    const isMadeToOrderServiceCost = (acc, particulars = '') => {
+      const combined = `${acc} ${particulars}`;
+      return /type\s*a\s*(?:&|and)?\s*b|type\s*a\b|type\s*b\b|\bgala\b|bsname/i.test(combined);
+    };
+
     // Stock bought for resale (uniforms, shoes, manuals, columbary, "payment for ..." supplier vouchers, etc.)
     const isInventoryPurchase = (acc, cat) => {
       if (isDirectServiceCost(acc)) return false;
@@ -4430,6 +4436,15 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           source: (rec.voucher_no && !String(rec.voucher_no).startsWith('LF')) ? 'check_voucher' : (rec.lf_no ? 'revolving_fund' : 'disbursement'),
           amount: amt
         } : null;
+
+        // Made-to-order uniforms (Type A & B, Gala, BSNAME) stay in Cost of Sales & Services since their revenue is in Services
+        if (isMadeToOrderServiceCost(acc, rec.particulars)) {
+          const svcCostAcc = 'COS - Type A & B, Gala & BSNAME';
+          if (!costOfSales[svcCostAcc]) costOfSales[svcCostAcc] = newStore();
+          costOfSales[svcCostAcc][which][mIdx] += amt;
+          if (tx) costOfSales[svcCostAcc].transactions.push(tx);
+          return;
+        }
 
         // Inventory & merchandise purchases are sourced directly from Disbursements
         if (isInventoryPurchase(acc, cat)) {
