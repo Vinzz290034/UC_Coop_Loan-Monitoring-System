@@ -904,8 +904,15 @@ export const getMerchandiseSalesReport = async (req, res, next) => {
       if (hasItems) {
         row.items.forEach((it, idx) => {
           const itName = String(it.item || it.item_name || 'Merchandise Item').trim();
+          const hasExplicitZeroCost =
+            !it.item_type &&
+            it.cost_price !== undefined &&
+            it.cost_price !== null &&
+            it.cost_price !== '' &&
+            (parseFloat(String(it.cost_price)) || 0) <= 0;
           const isSvcItem =
             String(it.item_type || '').toLowerCase() === 'service' ||
+            hasExplicitZeroCost ||
             /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName);
           if (isSvcItem) return;
 
@@ -4262,8 +4269,15 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         let svcAmt = 0;
         col.items.forEach((it) => {
           const itName = String(it.item || it.item_name || '').trim();
+          const hasExplicitZeroCost =
+            !it.item_type &&
+            it.cost_price !== undefined &&
+            it.cost_price !== null &&
+            it.cost_price !== '' &&
+            (parseFloat(String(it.cost_price)) || 0) <= 0;
           const isSvc =
             String(it.item_type || '').toLowerCase() === 'service' ||
+            hasExplicitZeroCost ||
             /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName);
           const q = parseFloat(String(it.quantity)) || 1;
           const sp = parseFloat(String(it.selling_price || it.unit_price || 0)) || 0;

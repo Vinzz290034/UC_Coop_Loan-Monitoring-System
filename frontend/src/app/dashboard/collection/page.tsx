@@ -128,6 +128,12 @@ const isServiceCollectionItem = (it: any): boolean => {
   if (!it) return false;
   if (it.item_type === 'service') return true;
   if (it.item_type === 'merchandise') return false;
+  const hasExplicitZeroCost =
+    it.cost_price !== undefined &&
+    it.cost_price !== null &&
+    it.cost_price !== '' &&
+    (parseFloat(String(it.cost_price)) || 0) <= 0;
+  if (hasExplicitZeroCost) return true;
   const name = String(it.item || it.item_name || '').trim().toLowerCase();
   return /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(name);
 };
@@ -1544,6 +1550,61 @@ export default function CollectionPage() {
       return {
         ...prev,
         service_items: list.filter((_: any, i: number) => i !== index)
+      };
+    });
+  };
+
+  const handleEditTransferZeroCostToServices = () => {
+    setEditFormData((prev: any) => {
+      const currentMerch = prev.items || [];
+      const toMove = currentMerch.filter(
+        (it: any) =>
+          (parseFloat(String(it.cost_price)) || 0) <= 0 &&
+          (String(it.item || '').trim() !== '' || (parseFloat(String(it.selling_price)) || 0) > 0)
+      );
+      if (toMove.length === 0) return prev;
+
+      const remainingMerch = currentMerch.filter((it: any) => !toMove.includes(it));
+      const existingSvc = (prev.service_items || []).filter(
+        (s: any) => String(s.item || '').trim() !== '' || (parseFloat(String(s.selling_price)) || 0) > 0
+      );
+
+      const movedAsServices = toMove.map((it: any) => {
+        const descParts = [String(it.description || '').trim(), String(it.size || '').trim()].filter(Boolean);
+        const q = parseFloat(String(it.quantity)) || 1;
+        const sp = parseFloat(String(it.selling_price)) || 0;
+        return {
+          ...it,
+          id: it.id || `edit-svc-xfer-${++rowCounterRef.current}`,
+          item_type: 'service',
+          description: descParts.join(' • '),
+          size: '',
+          cost_price: '0',
+          revenue: q * sp,
+          gross_profit: 0,
+        };
+      });
+
+      const nextMerch =
+        remainingMerch.length > 0
+          ? remainingMerch
+          : [{
+              id: `edit-item-${++rowCounterRef.current}`,
+              item_type: 'merchandise',
+              item: '',
+              description: '',
+              size: '',
+              quantity: '1',
+              cost_price: '',
+              selling_price: '',
+              revenue: 0,
+              gross_profit: 0,
+            }];
+
+      return {
+        ...prev,
+        items: nextMerch,
+        service_items: [...existingSvc, ...movedAsServices],
       };
     });
   };
@@ -5150,7 +5211,25 @@ export default function CollectionPage() {
                           </span>
                         </div>
                         {!isEditLocked && (
-                          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                          <div className="flex flex-wrap items-center gap-1.5 self-end sm:self-auto">
+                            {(() => {
+                              const zeroCostCount = (editFormData.items || []).filter(
+                                (it: any) =>
+                                  (parseFloat(String(it.cost_price)) || 0) <= 0 &&
+                                  (String(it.item || '').trim() !== '' || (parseFloat(String(it.selling_price)) || 0) > 0)
+                              ).length;
+                              if (zeroCostCount === 0) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={handleEditTransferZeroCostToServices}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-400/80 bg-amber-50 dark:bg-amber-950/40 text-[10.5px] font-bold text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition-colors cursor-pointer"
+                                  title="Move all merchandise rows with Cost = ₱0 into Coop Services / Fees"
+                                >
+                                  <span>Move Cost=₱0 to Services ({zeroCostCount})</span>
+                                </button>
+                              );
+                            })()}
                             <button
                               type="button"
                               onClick={() => handleEditAddMultipleItems(5)}
