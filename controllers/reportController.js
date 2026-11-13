@@ -4281,9 +4281,14 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
             /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName);
           const q = parseFloat(String(it.quantity)) || 1;
           const sp = parseFloat(String(it.selling_price || it.unit_price || 0)) || 0;
+          const cp = parseFloat(String(it.cost_price || 0)) || 0;
           const rev = parseFloat(String(it.revenue)) || (q * sp) || 0;
+          const profit =
+            it.gross_profit !== undefined && it.gross_profit !== null && it.gross_profit !== ''
+              ? (parseFloat(String(it.gross_profit)) || 0)
+              : (rev - (q * cp));
           if (isSvc) svcAmt += rev;
-          else merchAmt += rev;
+          else merchAmt += profit;
         });
         if (merchAmt > 0 || svcAmt > 0) {
           if (merchAmt > 0) bucket(merchSales, cDate, merchAmt, meta);
@@ -4546,7 +4551,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               title: 'Store Sales',
               total_label: null,
               lines: [
-                line('', 'Store Merchandise / Uniform Sales', 'Uniforms and other items sold in the cooperative store.', merchSales),
+                line('', 'Store Merchandise / Uniform Sales', 'Net profit (selling price minus receipt cost) from uniforms and store merchandise.', merchSales),
                 line('', 'Rice Sales', 'Rice sold to members.', fromTracker(otherFor, 'Rice sales payment'), true, riceSales.transactions),
                 line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', fromTracker(otherFor, 'Laundry soap sales'), true, soapSales.transactions)
               ]
@@ -4604,7 +4609,6 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               title: 'Cost of Sales & Services',
               total_label: null,
               lines: [
-                line('502.01', 'Cost of Merchandise Sold', 'Direct inventory and merchandise disbursements paid to suppliers for items sold in the cooperative store.', cogsStore),
                 ...Object.entries(costOfSales)
                   .sort(([a], [b]) => a.localeCompare(b))
                   .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
