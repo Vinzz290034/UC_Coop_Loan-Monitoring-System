@@ -4619,8 +4619,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 line('', 'Income from Water Vendo', 'Water vendo machine collections.', serviceWater, false),
                 line('', 'Income from Printing & Photocopy', 'Printing, photocopying, lamination, hardbound and ID photo services.', servicePrinting, false),
                 line('', 'Income from Locker & Key Duplicate', 'Locker rentals, deposits and key duplicate fees.', serviceLocker, false),
-                line('', 'Income from Type A & B, Gala & BSNAME', 'Made-to-order Type A & B, Gala, BSNAME and cap collections.', serviceMadeToOrder, false),
-                line('', 'Other Store Services', 'Other cooperative service fees and miscellaneous receipts.', serviceOther, false)
+                line('', 'Income from Type A & B, Gala & BSNAME', 'Made-to-order Type A & B, Gala, BSNAME and cap collections.', serviceMadeToOrder, false)
               ]
             }
           ]
