@@ -82,6 +82,7 @@ export default function FinancialSummaryGraphs({
   fmt
 }: FinancialSummaryGraphsProps) {
   const [activeView, setActiveView] = useState<'all' | 'operations' | 'balance_sheet'>('all');
+  const [flowMode, setFlowMode] = useState<'ytd' | 'monthly'>('ytd');
   const [entered, setEntered] = useState(false);
 
   useEffect(() => {
@@ -216,13 +217,21 @@ export default function FinancialSummaryGraphs({
         0
       );
 
+    let ytdRev = 0;
+    let ytdExp = 0;
+
     return MONTHS_SHORT.slice(0, endIdx + 1).map((label, mIdx) => {
-      const revenue = Math.round(sumMonth(revSections, mIdx) * 100) / 100;
-      const expenses = Math.round(sumMonth(expSections, mIdx) * 100) / 100;
+      const mRev = sumMonth(revSections, mIdx);
+      const mExp = sumMonth(expSections, mIdx);
+      ytdRev += mRev;
+      ytdExp += mExp;
+
+      const revenue = Math.round((flowMode === 'ytd' ? ytdRev : mRev) * 100) / 100;
+      const expenses = Math.round((flowMode === 'ytd' ? ytdExp : mExp) * 100) / 100;
       const surplus = Math.round((revenue - expenses) * 100) / 100;
       return { month: label, revenue, expenses, surplus };
     });
-  }, [soo, year]);
+  }, [soo, year, flowMode]);
 
   // 2. Merchandise Sales Breakdown (By Category)
   const merchandiseCategoryData = useMemo(() => {
@@ -541,26 +550,54 @@ export default function FinancialSummaryGraphs({
 
       {/* STATEMENT OF OPERATIONS FLOW BY MONTH */}
       <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 p-5 shadow-2xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-neutral-100 dark:border-neutral-800 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-neutral-100 dark:border-neutral-800 pb-3">
           <div>
             <h3 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-emerald-600" />
               Statement of Operations Flow by Month
             </h3>
             <p className="text-xs text-neutral-500">
-              Monthly progression of total revenue, expenses, and net surplus across the fiscal year.
+              {flowMode === 'ytd'
+                ? 'Cumulative Year-to-Date progression of revenue, expenses, and net surplus (matches Statement of Operations YTD).'
+                : 'Isolated single-month revenue, expenses, and net surplus for each month.'}
             </p>
           </div>
-          <div className="flex items-center gap-3 text-xs font-semibold flex-wrap">
-            <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Revenue
-            </span>
-            <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Expenses
-            </span>
-            <span className="flex items-center gap-1.5 text-sky-700 dark:text-sky-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block" /> Net Surplus
-            </span>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="inline-flex items-center rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 p-0.5 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setFlowMode('ytd')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  flowMode === 'ytd'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white'
+                }`}
+              >
+                YTD Cumulative
+              </button>
+              <button
+                type="button"
+                onClick={() => setFlowMode('monthly')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  flowMode === 'monthly'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white'
+                }`}
+              >
+                Monthly Only
+              </button>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-semibold flex-wrap">
+              <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Revenue
+              </span>
+              <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Expenses
+              </span>
+              <span className="flex items-center gap-1.5 text-sky-700 dark:text-sky-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block" /> Net Surplus
+              </span>
+            </div>
           </div>
         </div>
 
