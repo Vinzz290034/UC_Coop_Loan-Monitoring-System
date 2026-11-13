@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -82,23 +82,110 @@ export default function FinancialSummaryGraphs({
   fmt
 }: FinancialSummaryGraphsProps) {
   const [activeView, setActiveView] = useState<'all' | 'operations' | 'balance_sheet'>('all');
+  const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const fs = reportData?.statement_of_operations;
   const bs = reportData?.balance_sheet;
+  const soo = reportData?.soo?.statement;
+
+  // Compute live Statement of Operations figures (YTD & This Month) when available
+  const sooMetrics = useMemo(() => {
+    if (!soo) return null;
+    const endMonthIdx = period === 'monthly'
+      ? Math.max(0, Math.min(11, (month || 1) - 1))
+      : (year === 2026 ? 10 : 11);
+
+    const sumSection = (sec: any, idxEnd: number) =>
+      (sec?.groups || []).reduce(
+        (gAcc: number, g: any) =>
+          gAcc +
+          (g.lines || []).reduce(
+            (lAcc: number, l: any) =>
+              lAcc + (l.current || []).slice(0, idxEnd + 1).reduce((a: number, b: number) => a + (b || 0), 0),
+            0
+          ),
+        0
+      );
+
+    const monthSection = (sec: any, mIdx: number) =>
+      (sec?.groups || []).reduce(
+        (gAcc: number, g: any) =>
+          gAcc +
+          (g.lines || []).reduce(
+            (lAcc: number, l: any) => lAcc + ((l.current || [])[mIdx] || 0),
+            0
+          ),
+        0
+      );
+
+    const activeMonthIdx = period === 'monthly'
+      ? Math.max(0, Math.min(11, (month || 1) - 1))
+      : new Date().getMonth();
+
+    const revSections = soo.revenues || [];
+    const expSections = soo.expenses || [];
+
+    const totalRevYtd = revSections.reduce((acc: number, s: any) => acc + sumSection(s, endMonthIdx), 0);
+    const totalRevMonth = revSections.reduce((acc: number, s: any) => acc + monthSection(s, activeMonthIdx), 0);
+
+    const totalExpYtd = expSections.reduce((acc: number, s: any) => acc + sumSection(s, endMonthIdx), 0);
+    const totalExpMonth = expSections.reduce((acc: number, s: any) => acc + monthSection(s, activeMonthIdx), 0);
+
+    const merchSec = revSections.find((s: any) => s.key === 'merchandise');
+    const svcSec = revSections.find((s: any) => s.key === 'services');
+    const loanSec = revSections.find((s: any) => s.key === 'credit_operations' || s.key === 'loan_interest' || s.key === 'loans');
+
+    const merchYtd = sumSection(merchSec, endMonthIdx);
+    const merchMonth = monthSection(merchSec, activeMonthIdx);
+
+    const svcYtd = sumSection(svcSec, endMonthIdx);
+    const svcMonth = monthSection(svcSec, activeMonthIdx);
+
+    const loanYtd = sumSection(loanSec, endMonthIdx);
+    const loanMonth = monthSection(loanSec, activeMonthIdx);
+
+    const costOfSalesSec = expSections.find((s: any) => s.key === 'cost_of_sales');
+    const cosYtd = sumSection(costOfSalesSec, endMonthIdx);
+
+    return {
+      totalRevYtd,
+      totalRevMonth,
+      totalExpYtd,
+      totalExpMonth,
+      netSurplusYtd: totalRevYtd - totalExpYtd,
+      netSurplusMonth: totalRevMonth - totalExpMonth,
+      merchYtd,
+      merchMonth,
+      svcYtd,
+      svcMonth,
+      loanYtd,
+      loanMonth,
+      cosYtd,
+      activeMonthIdx,
+    };
+  }, [soo, period, month, year]);
 
   // Key Totals
   const totalAssets = Number(bs?.total_assets ?? 0);
   const totalLiabilities = Number(bs?.total_liabilities ?? 0);
   const totalEquity = Number(bs?.total_equity ?? 0);
 
-  const merchandiseSales = Number(fs?.merchandise_sales ?? 0);
-  const operatingRevenue = Number(fs?.operating_revenue ?? fs?.total_revenue ?? 0);
-  const grossReceipts = merchandiseSales + operatingRevenue;
-  const costOfSales = Number(fs?.cost_of_sales ?? 0);
-  const grossProfit = Number(fs?.gross_profit ?? (grossReceipts - costOfSales));
-  const operatingExpenses = Number(fs?.operating_expenses ?? 0);
+  const merchandiseSales = sooMetrics ? sooMetrics.merchYtd : Number(fs?.merchandise_sales ?? 0);
+  const serviceIncome = sooMetrics ? sooMetrics.svcYtd : 0;
+  const loanIncome = sooMetrics ? sooMetrics.loanYtd : Number(fs?.operating_revenue ?? fs?.total_revenue ?? 0);
+  const operatingRevenue = sooMetrics ? sooMetrics.totalRevYtd : Number(fs?.operating_revenue ?? fs?.total_revenue ?? 0);
+  const grossReceipts = sooMetrics ? sooMetrics.totalRevYtd : (merchandiseSales + operatingRevenue);
+  const costOfSales = sooMetrics ? sooMetrics.cosYtd : Number(fs?.cost_of_sales ?? 0);
+  const grossProfit = sooMetrics ? (sooMetrics.totalRevYtd - sooMetrics.cosYtd) : Number(fs?.gross_profit ?? (grossReceipts - costOfSales));
+  const operatingExpenses = sooMetrics ? (sooMetrics.totalExpYtd - sooMetrics.cosYtd) : Number(fs?.operating_expenses ?? 0);
+  const totalExpensesAll = sooMetrics ? sooMetrics.totalExpYtd : (costOfSales + operatingExpenses);
   const incomeSubsidy = Number(fs?.income_subsidy ?? 0);
-  const netSurplus = Number(fs?.net_surplus ?? (grossProfit - operatingExpenses + incomeSubsidy));
+  const netSurplus = sooMetrics ? sooMetrics.netSurplusYtd : Number(fs?.net_surplus ?? (grossProfit - operatingExpenses + incomeSubsidy));
 
   // Financial Health Ratios
   const grossMarginPct = grossReceipts > 0 ? (grossProfit / grossReceipts) * 100 : 0;
@@ -106,18 +193,36 @@ export default function FinancialSummaryGraphs({
   const returnOnEquityPct = totalEquity > 0 ? (netSurplus / totalEquity) * 100 : 0;
   const solvencyRatioPct = totalEquity > 0 ? (totalAssets / totalEquity) * 100 : 0;
 
-  // 1. Operations Flow (Waterfall-style comparison)
-  const operationsFlowData = useMemo(() => {
-    return [
-      { name: 'Merchandise Sales', amount: merchandiseSales, type: 'revenue', fill: '#059669' },
-      { name: 'Operating Revenue', amount: operatingRevenue, type: 'revenue', fill: '#0d9488' },
-      { name: 'Total Gross Revenue', amount: grossReceipts, type: 'subtotal', fill: '#0284c7' },
-      { name: 'Cost of Sales (COGS)', amount: costOfSales, type: 'cost', fill: '#d97706' },
-      { name: 'Gross Profit', amount: grossProfit, type: 'subtotal', fill: '#10b981' },
-      { name: 'Operating Expenses', amount: operatingExpenses, type: 'cost', fill: '#ea580c' },
-      { name: 'Net Surplus (Profit)', amount: netSurplus, type: 'result', fill: '#047857' },
-    ];
-  }, [merchandiseSales, operatingRevenue, grossReceipts, costOfSales, grossProfit, operatingExpenses, netSurplus]);
+  // Monthly Statement of Operations Flow (Jan -> Nov/Dec)
+  const monthlyFlowData = useMemo(() => {
+    const MONTHS_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const endIdx = year === 2026 ? 10 : 11;
+    const revSections = soo?.revenues || [];
+    const expSections = soo?.expenses || [];
+
+    const sumMonth = (sections: any[], mIdx: number) =>
+      sections.reduce(
+        (sAcc: number, s: any) =>
+          sAcc +
+          (s?.groups || []).reduce(
+            (gAcc: number, g: any) =>
+              gAcc +
+              (g.lines || []).reduce(
+                (lAcc: number, l: any) => lAcc + ((l.current || [])[mIdx] || 0),
+                0
+              ),
+            0
+          ),
+        0
+      );
+
+    return MONTHS_SHORT.slice(0, endIdx + 1).map((label, mIdx) => {
+      const revenue = Math.round(sumMonth(revSections, mIdx) * 100) / 100;
+      const expenses = Math.round(sumMonth(expSections, mIdx) * 100) / 100;
+      const surplus = Math.round((revenue - expenses) * 100) / 100;
+      return { month: label, revenue, expenses, surplus };
+    });
+  }, [soo, year]);
 
   // 2. Merchandise Sales Breakdown (By Category)
   const merchandiseCategoryData = useMemo(() => {
@@ -262,576 +367,254 @@ export default function FinancialSummaryGraphs({
 
   return (
     <div className="space-y-6">
-      {/* View Selector Controls & Header Banner */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#064e3b] via-emerald-800 to-teal-800 text-white shadow-md flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 text-[10px] font-bold uppercase tracking-wider border border-emerald-700/60 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-emerald-300" />
-              Visual Financial Analytics
+      {/* ================= RELICS-STYLE COOPERATIVE PROGRESS HUD ================= */}
+      <div
+        className={`relative overflow-hidden rounded-3xl border border-outline-variant/60 dark:border-emerald-800/50 bg-gradient-to-br from-white via-emerald-50/40 to-amber-50/30 dark:from-neutral-900 dark:via-emerald-950/25 dark:to-neutral-900 text-neutral-900 dark:text-white shadow-sm transition-all duration-500 ease-out ${
+          entered ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-3 scale-[0.99]'
+        }`}
+      >
+        {/* Subtle ambient radial glow */}
+        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-emerald-400/15 dark:bg-emerald-500/15 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -bottom-24 h-72 w-72 rounded-full bg-amber-400/15 dark:bg-amber-500/10 blur-3xl" />
+
+        {/* Top Bar with View Toggle */}
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-3.5 border-b border-outline-variant/50 dark:border-neutral-800 bg-emerald-50/60 dark:bg-neutral-950/40">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-emerald-600 to-teal-600 dark:from-amber-400 dark:to-amber-600 text-white dark:text-neutral-950 font-black text-xs shadow-xs">
+              +
             </span>
-            <span className="text-xs text-emerald-200/90 font-medium">
-              Period: {period.toUpperCase()} ({period === 'daily' ? date : period === 'monthly' ? `Month ${month}, ${year}` : `Year ${year}`})
+            <span className="text-xs sm:text-sm font-black uppercase tracking-[0.18em] text-emerald-950 dark:text-amber-100">
+              Cooperative Daily &amp; YTD Progress
+            </span>
+            <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/90 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-700/50 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
+              <Calendar className="w-3 h-3" />
+              {period === 'daily' ? date : period === 'monthly' ? `Month ${month}, ${year}` : `FY ${year} (YTD)`}
             </span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-            Financial Statement Summary & Visual Analysis
-          </h2>
-          <p className="text-xs text-emerald-100/80 mt-0.5">
-            Graphical breakdown of certified balance sheet, revenues, merchandise collections, cost of sales, and surplus.
-          </p>
+
+          <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-neutral-950/60 px-3 py-1 rounded-xl border border-emerald-200/80 dark:border-emerald-800/50 self-start sm:self-auto">
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Operations &amp; Monthly Flow</span>
+          </div>
         </div>
 
-        {/* View Toggle */}
-        <div className="flex items-center bg-emerald-950/70 p-1 rounded-xl border border-emerald-700/60 text-xs font-bold self-start md:self-auto">
-          <button
-            onClick={() => setActiveView('all')}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-              activeView === 'all'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-emerald-200 hover:text-white'
+        {/* Main 2-Column HUD Body (Emblem Left + 2x3 Progress Grid Right) */}
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 p-5 sm:p-7 items-center">
+          {/* Left Hero Emblem Panel */}
+          <div
+            className={`lg:col-span-4 flex flex-col items-center text-center justify-center p-5 rounded-2xl bg-white/80 dark:bg-neutral-950/50 border border-emerald-200/80 dark:border-emerald-800/50 shadow-xs transition-all duration-500 ease-out delay-75 ${
+              entered ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
             }`}
           >
-            All Charts
-          </button>
-          <button
-            onClick={() => setActiveView('operations')}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-              activeView === 'operations'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-emerald-200 hover:text-white'
-            }`}
-          >
-            Operations & P&L
-          </button>
-          <button
-            onClick={() => setActiveView('balance_sheet')}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-              activeView === 'balance_sheet'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-emerald-200 hover:text-white'
-            }`}
-          >
-            Balance Sheet
-          </button>
+            <div className="relative mb-4 flex items-center justify-center">
+              <div className="p-1 rounded-full ring-2 ring-emerald-500/60 dark:ring-amber-400/60 bg-white dark:bg-neutral-900 shadow-md">
+                <img
+                  src="/Coop.jpeg"
+                  alt="UC-METC Multipurpose Cooperative Logo"
+                  className="h-20 w-20 rounded-full object-cover"
+                />
+              </div>
+            </div>
+
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-800 dark:text-amber-300/90">
+              UC-METC Multipurpose Cooperative
+            </span>
+            <div className={`mt-1 text-2xl sm:text-3xl font-black font-mono tabular-nums ${
+              netSurplus >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+            }`}>
+              {fmt(netSurplus)}
+            </div>
+            <div className="text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+              Certified Net Surplus ({year})
+            </div>
+
+            <div className="mt-4 w-full grid grid-cols-2 gap-2 pt-3 border-t border-outline-variant/50 dark:border-white/10 text-left">
+              <div className="p-2.5 rounded-xl bg-neutral-50/90 dark:bg-black/30 border border-outline-variant/40 dark:border-white/5">
+                <div className="text-[9.5px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Assets</div>
+                <div className="font-mono text-xs sm:text-sm font-black text-neutral-900 dark:text-white mt-0.5 truncate">{fmt(totalAssets)}</div>
+                <div className="text-[9.5px] text-emerald-700 dark:text-emerald-400 font-semibold">Solvency {solvencyRatioPct.toFixed(1)}%</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-neutral-50/90 dark:bg-black/30 border border-outline-variant/40 dark:border-white/5">
+                <div className="text-[9.5px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Equity</div>
+                <div className="font-mono text-xs sm:text-sm font-black text-amber-700 dark:text-amber-300 mt-0.5 truncate">{fmt(totalEquity)}</div>
+                <div className="text-[9.5px] text-amber-700/80 dark:text-amber-200/80 font-semibold">ROE {returnOnEquityPct.toFixed(1)}%</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right 2x3 Relics-Style Stat Grid */}
+          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+            {[
+              {
+                label: 'TOTAL REVENUE (YTD)',
+                value: grossReceipts,
+                delta: sooMetrics?.totalRevMonth ?? 0,
+                deltaLabel: 'this mo',
+                icon: TrendingUp,
+                gemBg: 'border-emerald-400/80 dark:border-emerald-400/60 from-emerald-50 to-emerald-100 dark:from-emerald-500/25 dark:to-emerald-900/70',
+                iconColor: 'text-emerald-700 dark:text-emerald-300',
+              },
+              {
+                label: 'MERCHANDISE PROFIT',
+                value: merchandiseSales,
+                delta: sooMetrics?.merchMonth ?? 0,
+                deltaLabel: 'this mo',
+                icon: ShoppingBag,
+                gemBg: 'border-lime-500/70 dark:border-lime-400/60 from-lime-50 to-emerald-100 dark:from-lime-500/25 dark:to-emerald-900/70',
+                iconColor: 'text-lime-700 dark:text-lime-300',
+              },
+              {
+                label: 'SERVICE INCOME',
+                value: serviceIncome,
+                delta: sooMetrics?.svcMonth ?? 0,
+                deltaLabel: 'this mo',
+                icon: Sparkles,
+                gemBg: 'border-teal-400/80 dark:border-teal-400/60 from-teal-50 to-teal-100 dark:from-teal-500/25 dark:to-teal-900/70',
+                iconColor: 'text-teal-700 dark:text-teal-300',
+              },
+              {
+                label: 'LOAN INTEREST & FINES',
+                value: loanIncome,
+                delta: sooMetrics?.loanMonth ?? 0,
+                deltaLabel: 'this mo',
+                icon: Percent,
+                gemBg: 'border-sky-400/80 dark:border-sky-400/60 from-sky-50 to-sky-100 dark:from-sky-500/25 dark:to-sky-900/70',
+                iconColor: 'text-sky-700 dark:text-sky-300',
+              },
+              {
+                label: 'TOTAL EXPENSES',
+                value: totalExpensesAll,
+                delta: sooMetrics?.totalExpMonth ?? 0,
+                deltaLabel: 'this mo',
+                icon: DollarSign,
+                gemBg: 'border-amber-400/80 dark:border-amber-400/60 from-amber-50 to-amber-100 dark:from-amber-500/25 dark:to-amber-900/70',
+                iconColor: 'text-amber-700 dark:text-amber-300',
+              },
+              {
+                label: 'NET SURPLUS (PROFIT)',
+                value: netSurplus,
+                delta: sooMetrics?.netSurplusMonth ?? 0,
+                deltaLabel: 'this mo',
+                icon: ArrowUpRight,
+                gemBg: 'border-yellow-500/80 dark:border-yellow-400/70 from-yellow-50 to-emerald-100 dark:from-yellow-500/25 dark:to-emerald-900/70',
+                iconColor: 'text-emerald-700 dark:text-yellow-300',
+              },
+            ].map((stat, idx) => {
+              const Icon = stat.icon;
+              return (
+                <div
+                  key={stat.label}
+                  style={{ transitionDelay: `${160 + idx * 110}ms` }}
+                  className={`flex items-center gap-4 group transition-all duration-700 ease-out ${
+                    entered ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'
+                  }`}
+                >
+                  {/* Diamond Relic Badge */}
+                  <div className={`shrink-0 h-11 w-11 rotate-45 rounded-xl border bg-gradient-to-br ${stat.gemBg} shadow-xs flex items-center justify-center transition-transform duration-200 group-hover:scale-105`}>
+                    <Icon className={`-rotate-45 w-5 h-5 ${stat.iconColor}`} />
+                  </div>
+
+                  {/* Value + Delta + Divider + Label */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="font-mono text-lg sm:text-xl font-black tabular-nums text-neutral-900 dark:text-white tracking-tight">
+                        {fmt(stat.value)}
+                      </span>
+                      {stat.delta !== 0 && (
+                        <span className="font-mono text-xs font-bold text-emerald-700 dark:text-amber-300">
+                          {stat.delta > 0 ? `+${formatCurrencyShort(stat.delta)}` : formatCurrencyShort(stat.delta)}{' '}
+                          <span className="text-[10px] font-normal text-neutral-500 dark:text-amber-200/70">{stat.deltaLabel}</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="my-1.5 h-px w-full bg-gradient-to-r from-emerald-500/40 via-amber-400/30 to-transparent dark:from-amber-400/45 dark:via-emerald-400/25" />
+                    <div className="text-[10.5px] font-black uppercase tracking-[0.12em] text-neutral-600 dark:text-neutral-300/90 truncate">
+                      {stat.label}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Top Level Metric KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="p-3.5 bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 shadow-2xs">
-          <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-            Total Assets
+      {/* STATEMENT OF OPERATIONS FLOW BY MONTH */}
+      <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 p-5 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-neutral-100 dark:border-neutral-800 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-emerald-600" />
+              Statement of Operations Flow by Month
+            </h3>
+            <p className="text-xs text-neutral-500">
+              Monthly progression of total revenue, expenses, and net surplus across the fiscal year.
+            </p>
           </div>
-          <div className="font-mono text-base font-black text-neutral-900 dark:text-white">
-            {fmt(totalAssets)}
-          </div>
-          <div className="text-[10px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3" />
-            Solvency {solvencyRatioPct.toFixed(1)}%
-          </div>
-        </div>
-
-        <div className="p-3.5 bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 shadow-2xs">
-          <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-            Total Equity
-          </div>
-          <div className="font-mono text-base font-black text-emerald-700 dark:text-emerald-400">
-            {fmt(totalEquity)}
-          </div>
-          <div className="text-[10px] text-neutral-500 font-medium mt-1">
-            Capital & Reserves
+          <div className="flex items-center gap-3 text-xs font-semibold flex-wrap">
+            <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Revenue
+            </span>
+            <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Expenses
+            </span>
+            <span className="flex items-center gap-1.5 text-sky-700 dark:text-sky-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block" /> Net Surplus
+            </span>
           </div>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 shadow-2xs">
-          <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-            Merchandise Sales
-          </div>
-          <div className="font-mono text-base font-black text-neutral-900 dark:text-white">
-            {fmt(merchandiseSales)}
-          </div>
-          <div className="text-[10px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <ShoppingBag className="w-3 h-3" />
-            Store & Supplies
-          </div>
-        </div>
-
-        <div className="p-3.5 bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 shadow-2xs">
-          <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-            Operating Revenue
-          </div>
-          <div className="font-mono text-base font-black text-blue-700 dark:text-blue-400">
-            {fmt(operatingRevenue)}
-          </div>
-          <div className="text-[10px] text-neutral-500 font-medium mt-1">
-            Interest & Fees
-          </div>
-        </div>
-
-        <div className="p-3.5 bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 shadow-2xs">
-          <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">
-            Gross Profit
-          </div>
-          <div className="font-mono text-base font-black text-teal-700 dark:text-teal-400">
-            {fmt(grossProfit)}
-          </div>
-          <div className="text-[10px] text-teal-600 font-semibold mt-1 flex items-center gap-1">
-            <Percent className="w-3 h-3" />
-            Margin {grossMarginPct.toFixed(1)}%
-          </div>
-        </div>
-
-        <div className="p-3.5 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 rounded-2xl border border-emerald-300 dark:border-emerald-800 shadow-2xs">
-          <div className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider mb-1">
-            Net Surplus (Profit)
-          </div>
-          <div className="font-mono text-base font-black text-emerald-800 dark:text-emerald-300">
-            {fmt(netSurplus)}
-          </div>
-          <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
-            <ArrowUpRight className="w-3 h-3" />
-            ROE {returnOnEquityPct.toFixed(1)}%
-          </div>
+        <div className="h-80 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthlyFlowData} margin={{ top: 15, right: 15, left: 10, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 11, fill: "#64748b", fontWeight: 600 }}
+                tickLine={false}
+                axisLine={{ stroke: "#cbd5e1" }}
+              />
+              <YAxis
+                tick={{ fontSize: 10.5, fill: "#64748b" }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={formatCurrencyShort}
+              />
+              <Tooltip
+                cursor={{ fill: "rgba(5, 150, 105, 0.05)" }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const item = payload[0].payload;
+                  return (
+                    <div className="bg-white dark:bg-neutral-800 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-lg text-xs space-y-1.5 min-w-[180px]">
+                      <div className="font-bold text-neutral-900 dark:text-white border-b border-neutral-100 dark:border-neutral-700 pb-1">
+                        {item.month} {year}
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-neutral-500 dark:text-neutral-400">Revenue:</span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{fmt(item.revenue)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-neutral-500 dark:text-neutral-400">Expenses:</span>
+                        <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{fmt(item.expenses)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4 border-t border-neutral-100 dark:border-neutral-700 pt-1">
+                        <span className="text-neutral-600 dark:text-neutral-300 font-semibold">Net Surplus:</span>
+                        <span className={`font-mono font-bold ${item.surplus >= 0 ? "text-sky-600 dark:text-sky-400" : "text-rose-600 dark:text-rose-400"}`}>
+                          {fmt(item.surplus)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              <Bar dataKey="revenue" name="Revenue" fill="#10b981" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="expenses" name="Expenses" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="surplus" name="Net Surplus" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
-
-      {/* SECTION 1: OPERATIONS & PROFIT FLOW */}
-      {(activeView === 'all' || activeView === 'operations') && (
-        <div className="space-y-6">
-          {/* Executive Flowchart / Bar Chart: Revenue vs Costs vs Surplus */}
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 p-5 shadow-2xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-neutral-100 dark:border-neutral-800 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-emerald-600" />
-                  Statement of Operations Flow (Revenue, Expenses & Surplus)
-                </h3>
-                <p className="text-xs text-neutral-500">
-                  Step-by-step financial ladder from gross sales down to certified net surplus.
-                </p>
-              </div>
-              <div className="flex items-center gap-3 text-xs font-semibold">
-                <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" /> Inflow / Profit
-                </span>
-                <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-600 inline-block" /> Outflow / Cost
-                </span>
-              </div>
-            </div>
-
-            <div className="h-80 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={operationsFlowData} margin={{ top: 15, right: 15, left: 10, bottom: 25 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10.5, fill: '#64748b', fontWeight: 600 }}
-                    interval={0}
-                    angle={-15}
-                    textAnchor="end"
-                    tickLine={false}
-                    axisLine={{ stroke: '#cbd5e1' }}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10.5, fill: '#64748b' }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={formatCurrencyShort}
-                  />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(5, 150, 105, 0.05)' }}
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const item = payload[0].payload;
-                      return (
-                        <div className="bg-white dark:bg-neutral-800 p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-lg text-xs space-y-1">
-                          <div className="font-bold text-neutral-900 dark:text-white">{item.name}</div>
-                          <div className="font-mono text-emerald-700 dark:text-emerald-400 font-bold text-sm">
-                            {fmt(item.amount)}
-                          </div>
-                          <div className="text-[10px] text-neutral-400 capitalize">
-                            Classification: {item.type}
-                          </div>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
-                    {operationsFlowData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Dual Visuals: Sales of Merchandise by Category & Operating Revenue Breakdown */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Sales of Merchandise by Category */}
-            <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 p-5 shadow-2xs space-y-4">
-              <div className="border-b border-neutral-100 dark:border-neutral-800 pb-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                    <ShoppingBag className="w-4 h-4 text-emerald-600" />
-                    Sales of Merchandise by Category
-                  </h3>
-                  <span className="font-mono font-bold text-xs text-emerald-700 dark:text-emerald-400">
-                    {fmt(merchandiseSales)}
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-500">
-                  Distribution of official uniforms, paraphernalia, accessories & retail sales.
-                </p>
-              </div>
-
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={merchandiseCategoryData}
-                    layout="vertical"
-                    margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.5} />
-                    <XAxis type="number" tickFormatter={formatCurrencyShort} tick={{ fontSize: 10 }} />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      tick={{ fontSize: 10.5, fill: '#64748b', fontWeight: 600 }}
-                      width={130}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      formatter={(val: any) => [fmt(val), 'Sales Revenue']}
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        borderRadius: '12px',
-                        border: '1px solid #e2e8f0',
-                        fontSize: '12px',
-                        fontWeight: 600
-                      }}
-                    />
-                    <Bar dataKey="amount" radius={[0, 6, 6, 0]}>
-                      {merchandiseCategoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Category Breakdown Table / Badges */}
-              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-neutral-100 dark:border-neutral-800">
-                {merchandiseCategoryData.map((cat, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 text-xs">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.fill }} />
-                      <span className="truncate font-medium text-neutral-800 dark:text-neutral-200">{cat.name}</span>
-                    </div>
-                    <span className="font-mono font-bold text-neutral-900 dark:text-white shrink-0 ml-2">
-                      {cat.percentage}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Operating Revenue Streams */}
-            <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 p-5 shadow-2xs space-y-4">
-              <div className="border-b border-neutral-100 dark:border-neutral-800 pb-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-blue-600" />
-                    Operating Revenue Streams
-                  </h3>
-                  <span className="font-mono font-bold text-xs text-blue-700 dark:text-blue-400">
-                    {fmt(operatingRevenue)}
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-500">
-                  Loan interest revenues, service fees, fines, commission & locker rentals.
-                </p>
-              </div>
-
-              <div className="h-64 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={operatingRevenueData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={85}
-                      paddingAngle={3}
-                      dataKey="amount"
-                      nameKey="name"
-                      stroke="none"
-                    >
-                      {operatingRevenueData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(val: any) => [fmt(val), 'Revenue']}
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        borderRadius: '12px',
-                        border: '1px solid #e2e8f0',
-                        fontSize: '12px',
-                        fontWeight: 600
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Legend Badges */}
-              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-neutral-100 dark:border-neutral-800">
-                {operatingRevenueData.slice(0, 6).map((rev, i) => (
-                  <div key={i} className="flex items-center justify-between p-2 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 text-xs">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: rev.fill }} />
-                      <span className="truncate font-medium text-neutral-800 dark:text-neutral-200">{rev.name}</span>
-                    </div>
-                    <span className="font-mono font-bold text-neutral-900 dark:text-white shrink-0 ml-2">
-                      {rev.percentage}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Operating Expenses Breakdown Chart */}
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 p-5 shadow-2xs space-y-4">
-            <div className="border-b border-neutral-100 dark:border-neutral-800 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-amber-600" />
-                  Operating Expenses (OPEX) by Department
-                </h3>
-                <p className="text-xs text-neutral-500">
-                  Consolidated distribution across 36 statutory operating expense accounts.
-                </p>
-              </div>
-              <span className="font-mono font-bold text-xs text-amber-700 dark:text-amber-400">
-                Total OPEX: {fmt(operatingExpenses)}
-              </span>
-            </div>
-
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={operatingExpensesData} margin={{ top: 10, right: 15, left: 10, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10.5, fill: '#64748b', fontWeight: 600 }}
-                    tickLine={false}
-                    interval={0}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10.5, fill: '#64748b' }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={formatCurrencyShort}
-                  />
-                  <Tooltip
-                    formatter={(val: any) => [fmt(val), 'Expense']}
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      borderRadius: '12px',
-                      border: '1px solid #e2e8f0',
-                      fontSize: '12px',
-                      fontWeight: 600
-                    }}
-                  />
-                  <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
-                    {operatingExpensesData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SECTION 2: BALANCE SHEET ALLOCATION & EQUITY */}
-      {(activeView === 'all' || activeView === 'balance_sheet') && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Assets Allocation Donut Chart */}
-            <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 p-5 shadow-2xs space-y-4">
-              <div className="border-b border-neutral-100 dark:border-neutral-800 pb-3 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                    <PieIcon className="w-4 h-4 text-emerald-600" />
-                    Asset Composition & Allocation
-                  </h3>
-                  <p className="text-xs text-neutral-500">
-                    Distribution of cooperative resources across cash, loans, and inventory.
-                  </p>
-                </div>
-                <span className="font-mono font-bold text-xs text-emerald-700 dark:text-emerald-400">
-                  {fmt(totalAssets)}
-                </span>
-              </div>
-
-              <div className="h-64 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={assetsAllocationData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={90}
-                      paddingAngle={3}
-                      dataKey="amount"
-                      nameKey="name"
-                      stroke="none"
-                    >
-                      {assetsAllocationData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(val: any) => [fmt(val), 'Asset Value']}
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        borderRadius: '12px',
-                        border: '1px solid #e2e8f0',
-                        fontSize: '12px',
-                        fontWeight: 600
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Assets Legend Breakdown */}
-              <div className="space-y-2 pt-1 border-t border-neutral-100 dark:border-neutral-800">
-                {assetsAllocationData.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 text-xs">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
-                      <span className="font-medium text-neutral-800 dark:text-neutral-200">{item.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono font-bold text-neutral-900 dark:text-white">
-                        {fmt(item.amount)}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-mono text-[10px] font-bold">
-                        {item.percentage}%
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Equity & Liabilities Composition */}
-            <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-outline-variant/60 p-5 shadow-2xs space-y-4">
-              <div className="border-b border-neutral-100 dark:border-neutral-800 pb-3 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-blue-600" />
-                    Capital & Equity Structure
-                  </h3>
-                  <p className="text-xs text-neutral-500">
-                    Breakdown of member share capital, undivided retained earnings & donations.
-                  </p>
-                </div>
-                <span className="font-mono font-bold text-xs text-blue-700 dark:text-blue-400">
-                  {fmt(totalEquity)}
-                </span>
-              </div>
-
-              <div className="h-64 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={equityStructureData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={90}
-                      paddingAngle={3}
-                      dataKey="amount"
-                      nameKey="name"
-                      stroke="none"
-                    >
-                      {equityStructureData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(val: any) => [fmt(val), 'Equity Value']}
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        borderRadius: '12px',
-                        border: '1px solid #e2e8f0',
-                        fontSize: '12px',
-                        fontWeight: 600
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Equity Legend Breakdown */}
-              <div className="space-y-2 pt-1 border-t border-neutral-100 dark:border-neutral-800">
-                {equityStructureData.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 text-xs">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
-                      <span className="font-medium text-neutral-800 dark:text-neutral-200">{item.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono font-bold text-neutral-900 dark:text-white">
-                        {fmt(item.amount)}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-mono text-[10px] font-bold">
-                        {item.percentage}%
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Cooperative Accounting Balance Card */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-emerald-300 dark:border-emerald-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="space-y-1">
-              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                Fundamental Cooperative Accounting Equation
-              </span>
-              <p className="font-mono text-sm font-black text-neutral-800 dark:text-neutral-200">
-                Assets ({fmt(totalAssets)}) = Liabilities ({fmt(totalLiabilities)}) + Equity ({fmt(totalEquity)})
-              </p>
-            </div>
-            <div className="flex items-center gap-4 text-xs font-bold">
-              <div className="text-right">
-                <span className="text-neutral-400 block text-[10px]">Net Solvency Ratio</span>
-                <span className="font-mono text-emerald-700 dark:text-emerald-400 font-black text-sm">
-                  {solvencyRatioPct.toFixed(2)}%
-                </span>
-              </div>
-              <div className="text-right border-l border-neutral-200 dark:border-neutral-700 pl-4">
-                <span className="text-neutral-400 block text-[10px]">Surplus on Capital</span>
-                <span className="font-mono text-emerald-700 dark:text-emerald-400 font-black text-sm">
-                  {returnOnEquityPct.toFixed(2)}%
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

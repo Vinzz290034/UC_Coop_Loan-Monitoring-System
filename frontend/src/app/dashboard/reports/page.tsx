@@ -747,8 +747,19 @@ function ReportsPageContent() {
         date
       };
 
-      const res = await api.get(endpoint, { params });
-      setReportData(res.data);
+      if (activeTab === 'summary') {
+        const [fsRes, sooRes] = await Promise.all([
+          api.get('/reports/financial-statement', { params }),
+          api.get('/reports/statement-of-operations', { params: { year } }).catch(() => ({ data: null }))
+        ]);
+        setReportData({
+          ...fsRes.data,
+          soo: sooRes.data
+        });
+      } else {
+        const res = await api.get(endpoint, { params });
+        setReportData(res.data);
+      }
     } catch (err: any) {
       console.error('Failed to load report:', err);
       setError(err.response?.data?.message || 'Failed to retrieve report data.');
