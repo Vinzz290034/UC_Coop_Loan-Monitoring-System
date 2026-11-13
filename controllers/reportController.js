@@ -4197,7 +4197,26 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
 
     // ---------- Store merchandise, services, deposit interest, CTPL, CISP, CLIMBS (Collections page) ----------
     const merchSales = newStore();
-    const serviceIncome = newStore();
+    const serviceGcash = newStore();
+    const serviceBonggo = newStore();
+    const serviceWifi = newStore();
+    const serviceWater = newStore();
+    const servicePrinting = newStore();
+    const serviceLocker = newStore();
+    const serviceMadeToOrder = newStore();
+    const serviceOther = newStore();
+    const bucketServiceByName = (svcName, rawDate, svcAmt, svcMeta) => {
+      if (!svcAmt || svcAmt <= 0) return;
+      const n = String(svcName || '').toLowerCase();
+      if (/gcash/.test(n)) bucket(serviceGcash, rawDate, svcAmt, svcMeta);
+      else if (/bonggo/.test(n)) bucket(serviceBonggo, rawDate, svcAmt, svcMeta);
+      else if (/wifi/.test(n)) bucket(serviceWifi, rawDate, svcAmt, svcMeta);
+      else if (/water/.test(n)) bucket(serviceWater, rawDate, svcAmt, svcMeta);
+      else if (/print|photocopy|hardbound|lamination|id\s*photo/.test(n)) bucket(servicePrinting, rawDate, svcAmt, svcMeta);
+      else if (/locker|key\s*duplicate/.test(n)) bucket(serviceLocker, rawDate, svcAmt, svcMeta);
+      else if (/type\s*a|type\s*b|gala|bsname|\bcap\b/.test(n)) bucket(serviceMadeToOrder, rawDate, svcAmt, svcMeta);
+      else bucket(serviceOther, rawDate, svcAmt, svcMeta);
+    };
     const depositInterest = newStore();
     const ctplIncome = newStore();
     const membershipFees = newStore();
@@ -4266,7 +4285,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
 
       if (hasItemsArray) {
         let merchAmt = 0;
-        let svcAmt = 0;
+        let hasSvc = false;
         col.items.forEach((it) => {
           const itName = String(it.item || it.item_name || '').trim();
           const hasExplicitZeroCost =
@@ -4278,7 +4297,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           const isSvc =
             String(it.item_type || '').toLowerCase() === 'service' ||
             hasExplicitZeroCost ||
-            /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName);
+            /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName);
           const q = parseFloat(String(it.quantity)) || 1;
           const sp = parseFloat(String(it.selling_price || it.unit_price || 0)) || 0;
           const cp = parseFloat(String(it.cost_price || 0)) || 0;
@@ -4287,12 +4306,21 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
             it.gross_profit !== undefined && it.gross_profit !== null && it.gross_profit !== ''
               ? (parseFloat(String(it.gross_profit)) || 0)
               : (rev - (q * cp));
-          if (isSvc) svcAmt += rev;
-          else merchAmt += profit;
+          if (isSvc) {
+            if (rev > 0) {
+              hasSvc = true;
+              const descPart = it.description ? ` (${it.description})` : '';
+              bucketServiceByName(itName, cDate, rev, {
+                ...meta,
+                particulars: `${itName || 'Service'}${descPart}`
+              });
+            }
+          } else {
+            merchAmt += profit;
+          }
         });
-        if (merchAmt > 0 || svcAmt > 0) {
+        if (merchAmt > 0 || hasSvc) {
           if (merchAmt > 0) bucket(merchSales, cDate, merchAmt, meta);
-          if (svcAmt > 0) bucket(serviceIncome, cDate, svcAmt, meta);
           return;
         }
       }
@@ -4300,7 +4328,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       if (hasItemsArray || !col.service_type) {
         bucket(merchSales, cDate, amt, meta);
       } else {
-        bucket(serviceIncome, cDate, amt, meta);
+        bucketServiceByName(col.service_type || col.particulars || '', cDate, amt, meta);
       }
     });
 
@@ -4578,14 +4606,21 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           key: 'services',
           title: 'Income from Services',
           plain_title: 'Money earned from store services',
-          description: 'Wifi, Water Vendo, Printing & Photocopy, Gcash, Type A & B, GALA, lockers and other cooperative services.',
+          description: 'Gcash, Bonggo, Wifi, Water Vendo, Printing & Photocopy, Locker & Key Duplicate, Type A & B, GALA and other cooperative services.',
           total_label: 'TOTAL: Income from Services',
           groups: [
             {
               title: 'Coop Services & Fees',
               total_label: null,
               lines: [
-                line('', 'Income from Services', 'Wifi, Water Vendo, Printing & Photocopy, Gcash, Type A & B, GALA, lockers and other store services.', serviceIncome, true)
+                line('', 'Income from Gcash', 'GCash cash-in/cash-out and service fees.', serviceGcash, true),
+                line('', 'Income from Bonggo', 'Bonggo 2x2 and related service collections.', serviceBonggo, true),
+                line('', 'Income from Wifi', 'Cooperative WiFi access fees.', serviceWifi, false),
+                line('', 'Income from Water Vendo', 'Water vendo machine collections.', serviceWater, false),
+                line('', 'Income from Printing & Photocopy', 'Printing, photocopying, lamination, hardbound and ID photo services.', servicePrinting, false),
+                line('', 'Income from Locker & Key Duplicate', 'Locker rentals, deposits and key duplicate fees.', serviceLocker, false),
+                line('', 'Income from Type A & B, Gala & BSNAME', 'Made-to-order Type A & B, Gala, BSNAME and cap collections.', serviceMadeToOrder, false),
+                line('', 'Other Store Services', 'Other cooperative service fees and miscellaneous receipts.', serviceOther, false)
               ]
             }
           ]
