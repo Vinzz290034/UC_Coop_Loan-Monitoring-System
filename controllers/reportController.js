@@ -4381,6 +4381,17 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     EXPENSE_LINES.forEach(l => { expenseStores[l.title] = newStore(); });
     const otherAdmin = {};   // dynamically discovered admin accounts
     const costOfSales = {};  // service / merchandise direct costs
+    const marketingCost = {
+      'Freight In': newStore(),
+      'Porterage': newStore(),
+      'Delivery Fee': newStore(),
+    };
+    const matchMarketingCost = (acc) => {
+      if (/^freight(\s*in)?$/i.test(acc)) return 'Freight In';
+      if (/^porterage$/i.test(acc)) return 'Porterage';
+      if (/^delivery(\s*fee)?$/i.test(acc)) return 'Delivery Fee';
+      return null;
+    };
 
     // Cash disbursements that are NOT expenses of the period. They are removed from the
     // Statement of Operations and mirrored on the Balance Sheet (see `reclass` in the response).
@@ -4486,6 +4497,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         if (line) {
           expenseStores[line.title][which][mIdx] += amt;
           if (tx) expenseStores[line.title].transactions.push(tx);
+          return;
+        }
+
+        const marketingAcc = matchMarketingCost(acc);
+        if (marketingAcc) {
+          marketingCost[marketingAcc][which][mIdx] += amt;
+          if (tx) marketingCost[marketingAcc].transactions.push(tx);
           return;
         }
 
@@ -4662,6 +4680,24 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 ...Object.entries(costOfSales)
                   .sort(([a], [b]) => a.localeCompare(b))
                   .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
+              ]
+            }
+          ]
+        },
+        {
+          key: 'marketing_cost',
+          title: 'Marketing Cost',
+          plain_title: 'Money spent on freight, delivery, and handling',
+          description: 'Freight In, Porterage, and Delivery Fee recorded in Disbursements.',
+          total_label: 'TOTAL: Marketing Cost',
+          groups: [
+            {
+              title: 'Marketing Cost',
+              total_label: null,
+              lines: [
+                line('', 'Freight In', 'Inbound freight charges for store goods.', marketingCost['Freight In'], true),
+                line('', 'Porterage', 'Hauling and porterage fees for store deliveries.', marketingCost['Porterage'], true),
+                line('', 'Delivery Fee', 'Delivery fees for orders and store merchandise.', marketingCost['Delivery Fee'], true)
               ]
             }
           ]
