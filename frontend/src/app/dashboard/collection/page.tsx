@@ -11,6 +11,7 @@ import CollectionReceiptPrint from '@/components/collection/CollectionReceiptPri
 import PayrollCollectionTab from '@/components/billing/PayrollCollectionTab';
 import SalesRegistryTab from '@/components/collection/SalesRegistryTab';
 import { SalesRegistryItemCombobox } from '@/components/collection/SalesRegistryItemCombobox';
+import { ServiceSuggestionCombobox } from '@/components/collection/ServiceSuggestionCombobox';
 import { Skeleton } from '@/components/ui/Skeleton';
 import {
   HandCoins,
@@ -122,6 +123,23 @@ const isCollectionSealed = (item?: { remarks?: string; status?: string } | null)
   const stat = (item.status || '').trim().toLowerCase();
   return rem === 'sealed' || rem === 'filed' || stat === 'filed';
 };
+
+const isServiceCollectionItem = (it: any): boolean => {
+  if (!it) return false;
+  if (it.item_type === 'service') return true;
+  if (it.item_type === 'merchandise') return false;
+  const name = String(it.item || it.item_name || '').trim().toLowerCase();
+  return /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(name);
+};
+
+const SERVICE_SUGGESTIONS = [
+  'Wifi',
+  'Water Vendo',
+  'Printing & Photocopy',
+  'Gcash',
+  'Type A & B',
+  'GALA',
+];
 
 const MONTHS_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const MONTH_NAMES = [
@@ -687,7 +705,21 @@ export default function CollectionPage() {
     item_category: 'Uniform',
     quantity: '1',
     unit_price: '',
-    // Services
+    // Services (Multi-row table)
+    service_items: [
+      {
+        id: 'svc-1',
+        item_type: 'service' as const,
+        item: '',
+        description: '',
+        size: '',
+        quantity: '1',
+        cost_price: '0',
+        selling_price: '',
+        revenue: 0,
+        gross_profit: 0
+      }
+    ] as CollectionMerchandiseItem[],
     service_type: 'Photocopying Services',
     service_copies: '1',
     service_rate: '',
@@ -859,6 +891,98 @@ export default function CollectionPage() {
       return {
         ...prev,
         items: currentItems
+      };
+    });
+  };
+
+  // Service Item Handlers for Create Modal
+  const handleAddServiceItem = () => {
+    setFormData(prev => ({
+      ...prev,
+      service_items: [
+        ...(prev.service_items || []),
+        {
+          id: `svc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          item_type: 'service',
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '0',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }
+      ]
+    }));
+  };
+
+  const handleAddMultipleServiceItems = (count: number = 5) => {
+    setFormData(prev => ({
+      ...prev,
+      service_items: [
+        ...(prev.service_items || []),
+        ...Array.from({ length: count }).map((_, idx) => ({
+          id: `svc-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          item_type: 'service' as const,
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '0',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }))
+      ]
+    }));
+  };
+
+  const handleRemoveServiceItem = (index: number) => {
+    setFormData(prev => {
+      const list = prev.service_items || [];
+      if (list.length <= 1) {
+        return {
+          ...prev,
+          service_items: [{
+            id: `svc-${Date.now()}`,
+            item_type: 'service',
+            item: '',
+            description: '',
+            size: '',
+            quantity: '1',
+            cost_price: '0',
+            selling_price: '',
+            revenue: 0,
+            gross_profit: 0
+          }]
+        };
+      }
+      return {
+        ...prev,
+        service_items: list.filter((_, i) => i !== index)
+      };
+    });
+  };
+
+  const handleServiceItemFieldChange = (index: number, field: keyof CollectionMerchandiseItem, value: string) => {
+    setFormData(prev => {
+      const updated = (prev.service_items || []).map((it, i) => {
+        if (i !== index) return it;
+        const updatedItem = { ...it, [field]: value };
+        const q = parseFloat(String(field === 'quantity' ? value : updatedItem.quantity)) || 0;
+        const sp = parseFloat(String(field === 'selling_price' ? value : updatedItem.selling_price)) || 0;
+        return {
+          ...updatedItem,
+          item_type: 'service' as const,
+          cost_price: '0',
+          revenue: q * sp,
+          gross_profit: 0
+        };
+      });
+      return {
+        ...prev,
+        service_items: updated
       };
     });
   };
@@ -1063,32 +1187,88 @@ export default function CollectionPage() {
       : false;
     setIsEditCustomBank(isCustom);
 
-    const isService = item.tab === 'services' || (Boolean(item.service_type) && !item.item_name && !(item.items && item.items.length > 0));
-    const initialItems: CollectionMerchandiseItem[] = (item.items && item.items.length > 0)
-      ? item.items.map((it, idx) => ({
-          id: it.id || `edit-item-${idx}-${Date.now()}`,
-          item: it.item || (it as any).item_name || '',
-          description: it.description || (it as any).item_category || '',
-          size: it.size || '',
-          quantity: String(it.quantity || 1),
-          cost_price: it.cost_price !== undefined ? String(it.cost_price) : '',
-          selling_price: it.selling_price !== undefined ? String(it.selling_price) : String((it as any).unit_price || ''),
-          revenue: it.revenue !== undefined ? it.revenue : ((parseFloat(String(it.quantity || 1)) || 0) * (parseFloat(String(it.selling_price || (it as any).unit_price || 0)) || 0)),
-          gross_profit: it.gross_profit !== undefined ? it.gross_profit : (((parseFloat(String(it.quantity || 1)) || 0) * (parseFloat(String(it.selling_price || (it as any).unit_price || 0)) || 0)) - ((parseFloat(String(it.quantity || 1)) || 0) * (parseFloat(String(it.cost_price || 0)) || 0)))
-        }))
-      : [
-          {
-            id: `edit-item-0-${++rowCounterRef.current}`,
-            item: item.item_name || '',
-            description: item.item_category || '',
-            size: (item as any).size || '',
-            quantity: item.quantity ? String(item.quantity) : '1',
-            cost_price: (item as any).cost_price ? String((item as any).cost_price) : '',
-            selling_price: item.unit_price ? String(item.unit_price) : ((item as any).selling_price ? String((item as any).selling_price) : ''),
-            revenue: (parseFloat(String(item.quantity || 1)) || 1) * (parseFloat(String(item.unit_price || 0)) || 0),
-            gross_profit: ((parseFloat(String(item.quantity || 1)) || 1) * (parseFloat(String(item.unit_price || 0)) || 0)) - ((parseFloat(String(item.quantity || 1)) || 1) * (parseFloat(String((item as any).cost_price || 0)) || 0))
-          }
-        ];
+    const allRawItems = (item.items && item.items.length > 0) ? item.items : [];
+    const merchRaw = allRawItems.filter(it => !isServiceCollectionItem(it));
+    const serviceRaw = allRawItems.filter(it => isServiceCollectionItem(it));
+
+    const mapItem = (it: any, idx: number, prefix: string, forceService: boolean): CollectionMerchandiseItem => {
+      const q = parseFloat(String(it.quantity || 1)) || 1;
+      const cp = forceService ? 0 : (parseFloat(String(it.cost_price || 0)) || 0);
+      const sp = parseFloat(String(it.selling_price ?? it.unit_price ?? 0)) || 0;
+      const rev = it.revenue !== undefined ? Number(it.revenue) : (q * sp);
+      return {
+        id: it.id || `${prefix}-${idx}-${Date.now()}`,
+        item_type: forceService ? 'service' : 'merchandise',
+        item: it.item || it.item_name || '',
+        description: it.description || it.item_category || '',
+        size: it.size || '',
+        quantity: String(it.quantity || 1),
+        cost_price: forceService ? '0' : (it.cost_price !== undefined ? String(it.cost_price) : ''),
+        selling_price: it.selling_price !== undefined ? String(it.selling_price) : String(it.unit_price || ''),
+        revenue: rev,
+        gross_profit: forceService ? 0 : (it.gross_profit !== undefined ? Number(it.gross_profit) : (rev - (q * cp)))
+      };
+    };
+
+    const initialItems: CollectionMerchandiseItem[] = merchRaw.length > 0
+      ? merchRaw.map((it, idx) => mapItem(it, idx, 'edit-item', false))
+      : (!allRawItems.length && item.item_name && !isServiceCollectionItem({ item: item.item_name }))
+      ? [{
+          id: `edit-item-0-${++rowCounterRef.current}`,
+          item_type: 'merchandise',
+          item: item.item_name || '',
+          description: item.item_category || '',
+          size: (item as any).size || '',
+          quantity: item.quantity ? String(item.quantity) : '1',
+          cost_price: (item as any).cost_price ? String((item as any).cost_price) : '',
+          selling_price: item.unit_price ? String(item.unit_price) : ((item as any).selling_price ? String((item as any).selling_price) : ''),
+          revenue: (parseFloat(String(item.quantity || 1)) || 1) * (parseFloat(String(item.unit_price || 0)) || 0),
+          gross_profit: ((parseFloat(String(item.quantity || 1)) || 1) * (parseFloat(String(item.unit_price || 0)) || 0)) - ((parseFloat(String(item.quantity || 1)) || 1) * (parseFloat(String((item as any).cost_price || 0)) || 0))
+        }]
+      : [{
+          id: `edit-item-0-${++rowCounterRef.current}`,
+          item_type: 'merchandise',
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }];
+
+    const initialServiceItems: CollectionMerchandiseItem[] = serviceRaw.length > 0
+      ? serviceRaw.map((it, idx) => mapItem(it, idx, 'edit-svc', true))
+      : (item.service_type || item.tab === 'services')
+      ? [{
+          id: `edit-svc-0-${++rowCounterRef.current}`,
+          item_type: 'service',
+          item: item.service_type || '',
+          description: '',
+          size: '',
+          quantity: item.service_copies ? String(item.service_copies) : '1',
+          cost_price: '0',
+          selling_price: item.service_rate ? String(item.service_rate) : (item.amount ? String(item.amount) : ''),
+          revenue: (parseFloat(String(item.service_copies || 1)) || 1) * (parseFloat(String(item.service_rate || item.amount || 0)) || 0),
+          gross_profit: 0
+        }]
+      : [{
+          id: `edit-svc-0-${++rowCounterRef.current}`,
+          item_type: 'service',
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '0',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }];
+
+    const hasMerchData = initialItems.some(it => it.item.trim().length > 0 || (parseFloat(String(it.selling_price)) || 0) > 0);
+    const hasServiceData = initialServiceItems.some(it => it.item.trim().length > 0 || (parseFloat(String(it.selling_price)) || 0) > 0);
+    const isService = !hasMerchData && (hasServiceData || item.tab === 'services');
 
     setEditFormData({
       id: item.id,
@@ -1113,6 +1293,7 @@ export default function CollectionPage() {
         : 'Insurance Payment',
       particulars_amount: item.particulars_amount ? String(item.particulars_amount) : '',
       items: initialItems,
+      service_items: initialServiceItems,
       item_name: item.item_name || '',
       item_category: item.item_category || 'Uniform',
       quantity: item.quantity ? String(item.quantity) : '1',
@@ -1297,6 +1478,98 @@ export default function CollectionPage() {
     });
   };
 
+  // Service Item Handlers for Edit Modal
+  const handleEditAddServiceItem = () => {
+    setEditFormData((prev: any) => ({
+      ...prev,
+      service_items: [
+        ...(prev.service_items || []),
+        {
+          id: `edit-svc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          item_type: 'service',
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '0',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }
+      ]
+    }));
+  };
+
+  const handleEditAddMultipleServiceItems = (count: number = 5) => {
+    setEditFormData((prev: any) => ({
+      ...prev,
+      service_items: [
+        ...(prev.service_items || []),
+        ...Array.from({ length: count }).map((_, idx) => ({
+          id: `edit-svc-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          item_type: 'service' as const,
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '0',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }))
+      ]
+    }));
+  };
+
+  const handleEditRemoveServiceItem = (index: number) => {
+    setEditFormData((prev: any) => {
+      const list = prev.service_items || [];
+      if (list.length <= 1) {
+        return {
+          ...prev,
+          service_items: [{
+            id: `edit-svc-${Date.now()}`,
+            item_type: 'service',
+            item: '',
+            description: '',
+            size: '',
+            quantity: '1',
+            cost_price: '0',
+            selling_price: '',
+            revenue: 0,
+            gross_profit: 0
+          }]
+        };
+      }
+      return {
+        ...prev,
+        service_items: list.filter((_: any, i: number) => i !== index)
+      };
+    });
+  };
+
+  const handleEditServiceItemFieldChange = (index: number, field: keyof CollectionMerchandiseItem, value: string) => {
+    setEditFormData((prev: any) => {
+      const updated = (prev.service_items || []).map((it: any, i: number) => {
+        if (i !== index) return it;
+        const updatedItem = { ...it, [field]: value };
+        const q = parseFloat(String(field === 'quantity' ? value : updatedItem.quantity)) || 0;
+        const sp = parseFloat(String(field === 'selling_price' ? value : updatedItem.selling_price)) || 0;
+        return {
+          ...updatedItem,
+          item_type: 'service' as const,
+          cost_price: '0',
+          revenue: q * sp,
+          gross_profit: 0
+        };
+      });
+      return {
+        ...prev,
+        service_items: updated
+      };
+    });
+  };
+
   const handleEditLoanFieldChange = (index: number, field: keyof FormLoanEntry, val: string) => {
     setEditFormData((prev: any) => {
       const nextLoans = [...prev.loans];
@@ -1407,34 +1680,30 @@ export default function CollectionPage() {
           fines_amount: parseFloat(l.fines_amount || '0') || undefined,
         }))
         .filter((l: CollectionLoanPayment) => (l.principal_amount || 0) > 0 || (l.interest_amount || 0) > 0 || (l.fines_amount || 0) > 0);
-    } else if (editFormData.tab === 'sales' || editFormData.tab === 'sales_services') {
-      if (editFormData.sales_service_type === 'service' || (!editFormData.item_name && editFormData.service_type)) {
-        const c = parseInt(editFormData.service_copies || '1', 10) || 1;
-        const r = parseFloat(editFormData.service_rate || '0') || 0;
-        if (r > 0) calculatedAmount = c * r;
+    } else if (editFormData.tab === 'sales' || editFormData.tab === 'sales_services' || editFormData.tab === 'services') {
+      const merchRev = (editFormData.items || []).reduce((sum: number, it: any) => {
+        const q = parseFloat(String(it.quantity)) || 0;
+        const sp = parseFloat(String(it.selling_price)) || 0;
+        return sum + (q * sp);
+      }, 0);
+      const svcRev = (editFormData.service_items || []).reduce((sum: number, it: any) => {
+        const q = parseFloat(String(it.quantity)) || 0;
+        const sp = parseFloat(String(it.selling_price)) || 0;
+        return sum + (q * sp);
+      }, 0);
+      if (merchRev + svcRev > 0) {
+        calculatedAmount = merchRev + svcRev;
       } else {
-        const itemsRevenue = (editFormData.items || []).reduce((sum: number, it: any) => {
-          const q = parseFloat(String(it.quantity)) || 0;
-          const sp = parseFloat(String(it.selling_price)) || 0;
-          return sum + (q * sp);
-        }, 0);
-        if (itemsRevenue > 0) {
-          calculatedAmount = itemsRevenue;
-        } else {
-          const q = parseInt(editFormData.quantity || '1', 10) || 1;
-          const u = parseFloat(editFormData.unit_price || '0') || 0;
-          if (u > 0) calculatedAmount = q * u;
-        }
+        const q = parseInt(editFormData.quantity || '1', 10) || 1;
+        const u = parseFloat(editFormData.unit_price || '0') || 0;
+        if (u > 0) calculatedAmount = q * u;
       }
-    } else if (editFormData.tab === 'services') {
-      const c = parseInt(editFormData.service_copies || '1', 10) || 1;
-      const r = parseFloat(editFormData.service_rate || '0') || 0;
-      if (r > 0) calculatedAmount = c * r;
     }
 
     const savedMerchItems: CollectionMerchandiseItem[] = (editFormData.items || [])
       .map((it: any) => ({
         id: it.id,
+        item_type: 'merchandise' as const,
         item: String(it.item || '').trim(),
         description: String(it.description || '').trim(),
         size: String(it.size || '').trim(),
@@ -1446,6 +1715,23 @@ export default function CollectionPage() {
                      ((parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.cost_price || '0')) || 0)),
       }))
       .filter((it: CollectionMerchandiseItem) => it.item.length > 0 || (it.selling_price as number) > 0);
+
+    const savedServiceItems: CollectionMerchandiseItem[] = (editFormData.service_items || [])
+      .map((it: any) => ({
+        id: it.id,
+        item_type: 'service' as const,
+        item: String(it.item || '').trim(),
+        description: String(it.description || '').trim(),
+        size: '',
+        quantity: parseInt(String(it.quantity || '1'), 10) || 1,
+        cost_price: 0,
+        selling_price: parseFloat(String(it.selling_price || '0')) || 0,
+        revenue: (parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.selling_price || '0')) || 0),
+        gross_profit: 0,
+      }))
+      .filter((it: CollectionMerchandiseItem) => it.item.length > 0 || (it.selling_price as number) > 0);
+
+    const combinedItems = [...savedMerchItems, ...savedServiceItems];
 
     const payload: Partial<CollectionItem> = {
       tab: editFormData.tab,
@@ -1469,34 +1755,24 @@ export default function CollectionPage() {
       other_category: editFormData.tab === 'credit'
         ? (parseFloat(editFormData.particulars_amount || '0') > 0 ? (editFormData.other_category || 'Insurance Payment') : '')
         : undefined,
-      items: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems.length > 0 ? savedMerchItems : undefined),
-      item_name: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems[0]?.item || editFormData.item_name?.trim() || undefined),
-      item_category: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems[0]?.description || editFormData.item_category?.trim() || undefined),
-      quantity: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems.length > 0
-            ? savedMerchItems.reduce((sum, it) => sum + Number(it.quantity), 0)
-            : (parseInt(editFormData.quantity || '1', 10) || undefined)),
-      unit_price: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems.length > 0
-            ? Number(savedMerchItems[0].selling_price)
-            : (parseFloat(editFormData.unit_price || '0') || undefined)),
-      service_type: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'merchandise')
-        ? undefined
-        : (editFormData.service_type || undefined),
-      service_copies: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'merchandise')
-        ? undefined
-        : (parseInt(editFormData.service_copies || '1', 10) || undefined),
-      service_rate: (editFormData.tab === 'sales_services' && editFormData.sales_service_type === 'merchandise')
-        ? undefined
-        : (parseFloat(editFormData.service_rate || '0') || undefined),
+      items: combinedItems.length > 0 ? combinedItems : undefined,
+      item_name: savedMerchItems[0]?.item || undefined,
+      item_category: savedMerchItems[0]?.description || undefined,
+      quantity: savedMerchItems.length > 0
+        ? savedMerchItems.reduce((sum, it) => sum + Number(it.quantity), 0)
+        : undefined,
+      unit_price: savedMerchItems.length > 0
+        ? Number(savedMerchItems[0].selling_price)
+        : undefined,
+      service_type: savedServiceItems.length > 0
+        ? savedServiceItems.map(s => s.item).filter(Boolean).slice(0, 3).join(', ')
+        : undefined,
+      service_copies: savedServiceItems.length > 0
+        ? savedServiceItems.reduce((sum, it) => sum + Number(it.quantity), 0)
+        : undefined,
+      service_rate: savedServiceItems.length > 0
+        ? Number(savedServiceItems[0].selling_price)
+        : undefined,
       particulars: editFormData.tab === 'credit'
         ? (() => {
             const parts: string[] = [];
@@ -1511,10 +1787,17 @@ export default function CollectionPage() {
             if (parseFloat(editFormData.particulars_amount || '0') > 0) parts.push(editFormData.other_category || 'Insurance Payment');
             return parts.length > 0 ? parts.join(' + ') : (editFormData.loans?.[0]?.loan_account || 'Credit Collection');
           })()
-        : editFormData.tab === 'sales_services'
-        ? (editFormData.sales_service_type === 'service'
-            ? (editFormData.service_type || 'Services')
-            : (savedMerchItems.length > 0 ? savedMerchItems.map(it => it.item).join(', ') : (editFormData.item_name || 'Store Sales')))
+        : (editFormData.tab === 'sales_services' || editFormData.tab === 'sales' || editFormData.tab === 'services')
+        ? (() => {
+            const parts: string[] = [];
+            if (savedMerchItems.length > 0) {
+              parts.push(savedMerchItems.length > 3 ? `Merchandise (${savedMerchItems.length} items)` : savedMerchItems.map(it => it.item).join(', '));
+            }
+            if (savedServiceItems.length > 0) {
+              parts.push(savedServiceItems.length > 3 ? `Services (${savedServiceItems.length} items)` : savedServiceItems.map(it => it.item).join(', '));
+            }
+            return parts.length > 0 ? parts.join(' + ') : 'Store Sales & Services';
+          })()
         : editFormData.particulars || undefined,
       amount: calculatedAmount,
       payment_method: editFormData.payment_method,
@@ -1840,6 +2123,20 @@ export default function CollectionPage() {
       item_category: 'Uniform',
       quantity: '1',
       unit_price: '',
+      service_items: [
+        {
+          id: `svc-${Date.now()}`,
+          item_type: 'service' as const,
+          item: '',
+          description: '',
+          size: '',
+          quantity: '1',
+          cost_price: '0',
+          selling_price: '',
+          revenue: 0,
+          gross_profit: 0
+        }
+      ],
       service_type: 'Photocopying Services',
       service_copies: '1',
       service_rate: '',
@@ -1881,29 +2178,24 @@ export default function CollectionPage() {
       const billing = parseFloat(formData.billing_amount || '0') || 0;
       const partAmt = parseFloat(formData.particulars_amount || '0') || 0;
       if (loansSum + cs + mf + billing + partAmt > 0) calculatedAmount = loansSum + cs + mf + billing + partAmt;
-    } else if (formData.tab === 'sales_services' || (formData.tab as any) === 'sales') {
-      if (formData.sales_service_type === 'service') {
-        const c = parseInt(formData.service_copies || '1', 10) || 1;
-        const r = parseFloat(formData.service_rate || '0') || 0;
-        if (r > 0) calculatedAmount = c * r;
+    } else if (formData.tab === 'sales_services' || (formData.tab as any) === 'sales' || (formData.tab as any) === 'services') {
+      const merchRev = (formData.items || []).reduce((sum, it) => {
+        const q = parseFloat(String(it.quantity)) || 0;
+        const sp = parseFloat(String(it.selling_price)) || 0;
+        return sum + (q * sp);
+      }, 0);
+      const svcRev = (formData.service_items || []).reduce((sum, it) => {
+        const q = parseFloat(String(it.quantity)) || 0;
+        const sp = parseFloat(String(it.selling_price)) || 0;
+        return sum + (q * sp);
+      }, 0);
+      if (merchRev + svcRev > 0) {
+        calculatedAmount = merchRev + svcRev;
       } else {
-        const itemsRevenue = (formData.items || []).reduce((sum, it) => {
-          const q = parseFloat(String(it.quantity)) || 0;
-          const sp = parseFloat(String(it.selling_price)) || 0;
-          return sum + (q * sp);
-        }, 0);
-        if (itemsRevenue > 0) {
-          calculatedAmount = itemsRevenue;
-        } else {
-          const q = parseInt(formData.quantity || '1', 10) || 1;
-          const u = parseFloat(formData.unit_price || '0') || 0;
-          if (u > 0) calculatedAmount = q * u;
-        }
+        const q = parseInt(formData.quantity || '1', 10) || 1;
+        const u = parseFloat(formData.unit_price || '0') || 0;
+        if (u > 0) calculatedAmount = q * u;
       }
-    } else if ((formData.tab as any) === 'services') {
-      const c = parseInt(formData.service_copies || '1', 10) || 1;
-      const r = parseFloat(formData.service_rate || '0') || 0;
-      if (r > 0) calculatedAmount = c * r;
     }
 
     const savedLoans: CollectionLoanPayment[] = formData.loans
@@ -1920,6 +2212,7 @@ export default function CollectionPage() {
     const savedMerchItems: CollectionMerchandiseItem[] = (formData.items || [])
       .map(it => ({
         id: it.id,
+        item_type: 'merchandise' as const,
         item: it.item.trim(),
         description: it.description.trim(),
         size: it.size.trim(),
@@ -1931,6 +2224,23 @@ export default function CollectionPage() {
                      ((parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.cost_price || '0')) || 0)),
       }))
       .filter(it => it.item.length > 0 || (it.selling_price as number) > 0);
+
+    const savedServiceItems: CollectionMerchandiseItem[] = (formData.service_items || [])
+      .map(it => ({
+        id: it.id,
+        item_type: 'service' as const,
+        item: it.item.trim(),
+        description: it.description.trim(),
+        size: '',
+        quantity: parseInt(String(it.quantity || '1'), 10) || 1,
+        cost_price: 0,
+        selling_price: parseFloat(String(it.selling_price || '0')) || 0,
+        revenue: (parseInt(String(it.quantity || '1'), 10) || 1) * (parseFloat(String(it.selling_price || '0')) || 0),
+        gross_profit: 0,
+      }))
+      .filter(it => it.item.length > 0 || (it.selling_price as number) > 0);
+
+    const combinedItems = [...savedMerchItems, ...savedServiceItems];
 
     const newItem: CollectionItem = {
       id: `rec-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -1952,34 +2262,24 @@ export default function CollectionPage() {
       particulars_amount: formData.tab === 'credit'
         ? (parseFloat(formData.particulars_amount || '0') || undefined)
         : undefined,
-      items: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems.length > 0 ? savedMerchItems : undefined),
-      item_name: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems[0]?.item || formData.item_name.trim() || undefined),
-      item_category: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems[0]?.description || formData.item_category.trim() || undefined),
-      quantity: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems.length > 0
-            ? savedMerchItems.reduce((sum, it) => sum + Number(it.quantity), 0)
-            : (parseInt(formData.quantity || '1', 10) || undefined)),
-      unit_price: (formData.tab === 'sales_services' && formData.sales_service_type === 'service')
-        ? undefined
-        : (savedMerchItems.length > 0
-            ? Number(savedMerchItems[0].selling_price)
-            : (parseFloat(formData.unit_price || '0') || undefined)),
-      service_type: (formData.tab === 'sales_services' && formData.sales_service_type === 'merchandise')
-        ? undefined
-        : (formData.service_type || undefined),
-      service_copies: (formData.tab === 'sales_services' && formData.sales_service_type === 'merchandise')
-        ? undefined
-        : (parseInt(formData.service_copies || '1', 10) || undefined),
-      service_rate: (formData.tab === 'sales_services' && formData.sales_service_type === 'merchandise')
-        ? undefined
-        : (parseFloat(formData.service_rate || '0') || undefined),
+      items: combinedItems.length > 0 ? combinedItems : undefined,
+      item_name: savedMerchItems[0]?.item || undefined,
+      item_category: savedMerchItems[0]?.description || undefined,
+      quantity: savedMerchItems.length > 0
+        ? savedMerchItems.reduce((sum, it) => sum + Number(it.quantity), 0)
+        : undefined,
+      unit_price: savedMerchItems.length > 0
+        ? Number(savedMerchItems[0].selling_price)
+        : undefined,
+      service_type: savedServiceItems.length > 0
+        ? savedServiceItems.map(s => s.item).filter(Boolean).slice(0, 3).join(', ')
+        : undefined,
+      service_copies: savedServiceItems.length > 0
+        ? savedServiceItems.reduce((sum, it) => sum + Number(it.quantity), 0)
+        : undefined,
+      service_rate: savedServiceItems.length > 0
+        ? Number(savedServiceItems[0].selling_price)
+        : undefined,
       particulars: formData.tab === 'credit'
         ? (() => {
             const parts: string[] = [];
@@ -1995,9 +2295,16 @@ export default function CollectionPage() {
             return parts.length > 0 ? parts.join(' + ') : (formData.loans[0]?.loan_account || 'Credit Collection');
           })()
         : formData.tab === 'sales_services'
-        ? (formData.sales_service_type === 'service'
-            ? (formData.service_type || 'Services')
-            : (savedMerchItems.length > 0 ? savedMerchItems.map(it => it.item).join(', ') : (formData.item_name || 'Store Sales')))
+        ? (() => {
+            const parts: string[] = [];
+            if (savedMerchItems.length > 0) {
+              parts.push(savedMerchItems.length > 3 ? `Merchandise (${savedMerchItems.length} items)` : savedMerchItems.map(it => it.item).join(', '));
+            }
+            if (savedServiceItems.length > 0) {
+              parts.push(savedServiceItems.length > 3 ? `Services (${savedServiceItems.length} items)` : savedServiceItems.map(it => it.item).join(', '));
+            }
+            return parts.length > 0 ? parts.join(' + ') : 'Store Sales & Services';
+          })()
         : undefined,
       other_category: formData.tab === 'credit' && parseFloat(formData.particulars_amount || '0') > 0
         ? (formData.other_category || 'Insurance Payment')
@@ -3679,24 +3986,34 @@ export default function CollectionPage() {
                       <button
                         type="button"
                         onClick={() => setFormData(prev => ({ ...prev, sales_service_type: 'merchandise' }))}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                           formData.sales_service_type !== 'service'
                             ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
                             : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
                         }`}
                       >
-                        Store Merchandise / Sales
+                        <span>Store Merchandise / Sales</span>
+                        {formData.items.some(it => it.item.trim() || (parseFloat(String(it.selling_price)) || 0) > 0) && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9.5px] bg-emerald-600 text-white font-mono">
+                            {formData.items.filter(it => it.item.trim() || (parseFloat(String(it.selling_price)) || 0) > 0).length}
+                          </span>
+                        )}
                       </button>
                       <button
                         type="button"
                         onClick={() => setFormData(prev => ({ ...prev, sales_service_type: 'service' }))}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                           formData.sales_service_type === 'service'
                             ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
                             : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
                         }`}
                       >
-                        Coop Services / Fees
+                        <span>Coop Services / Fees</span>
+                        {(formData.service_items || []).some(it => it.item.trim() || (parseFloat(String(it.selling_price)) || 0) > 0) && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9.5px] bg-amber-600 text-white font-mono">
+                            {(formData.service_items || []).filter(it => it.item.trim() || (parseFloat(String(it.selling_price)) || 0) > 0).length}
+                          </span>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -3908,54 +4225,166 @@ export default function CollectionPage() {
                       </div>
                     </div>
                   ) : (
-                    <>
-                      <div>
-                        <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                          Service Type
-                        </label>
-                        <select
-                          value={formData.service_type}
-                          onChange={e => setFormData({ ...formData, service_type: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white"
-                        >
-                          <option value="Photocopying Services">Photocopying Services</option>
-                          <option value="Document Printing & Lamination">Document Printing & Lamination</option>
-                          <option value="2x2 ID Photo Package">2x2 ID Photo Package</option>
-                          <option value="Membership Application Fee">Membership Application Fee</option>
-                          <option value="Passbook Replacement Fee">Passbook Replacement Fee</option>
-                          <option value="Notarial / Processing Fee">Notarial / Processing Fee</option>
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-3 pt-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-emerald-200/60 dark:border-emerald-800/40">
                         <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Copies / Count
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={formData.service_copies}
-                            onChange={e => setFormData({ ...formData, service_copies: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white"
-                            placeholder="1"
-                          />
+                          <span className="text-[11px] font-bold uppercase text-emerald-900 dark:text-emerald-300 block">
+                            Coop Services &amp; Fees Breakdown
+                          </span>
+                          <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400">
+                            Record services (Wifi, Water, Locker, Key Duplicate, Photocopying, etc.). Service revenue is tracked separately and excluded from Merchandise Profit.
+                          </span>
                         </div>
-                        <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Rate per Unit (₱)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={formData.service_rate}
-                            onChange={e => setFormData({ ...formData, service_rate: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white"
-                            placeholder="0.00"
-                          />
+                        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => handleAddMultipleServiceItems(5)}
+                            className="px-2.5 py-1 rounded-lg border border-emerald-400/80 bg-emerald-50 dark:bg-emerald-950/40 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                          >
+                            + 5 Rows
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAddMultipleServiceItems(10)}
+                            className="px-2.5 py-1 rounded-lg border border-emerald-400/80 bg-emerald-50 dark:bg-emerald-950/40 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                          >
+                            + 10 Rows
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddServiceItem}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-[10.5px] font-bold text-white transition-all shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Service</span>
+                          </button>
                         </div>
                       </div>
-                    </>
+
+                      <div className="border border-emerald-300 dark:border-emerald-800/80 rounded-2xl overflow-hidden shadow-2xs">
+                        <div className="overflow-x-auto max-h-[440px] overflow-y-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
+                              <tr>
+                                <th className="p-2 w-9 text-center border-r border-emerald-700/60">#</th>
+                                <th className="p-2 min-w-[210px] border-r border-emerald-700/60">Service Name</th>
+                                <th className="p-2 min-w-[160px] border-r border-emerald-700/60">Description / Location</th>
+                                <th className="p-2 w-20 text-center border-r border-emerald-700/60">Qty</th>
+                                <th className="p-2 w-28 text-right border-r border-emerald-700/60">Rate (₱)</th>
+                                <th className="p-2 w-32 text-right border-r border-emerald-700/60">Revenue (₱)</th>
+                                <th className="p-2 w-10 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-neutral-900 text-xs">
+                              {(formData.service_items || []).map((it, idx) => {
+                                const q = parseFloat(String(it.quantity)) || 0;
+                                const sp = parseFloat(String(it.selling_price)) || 0;
+                                const rev = q * sp;
+                                return (
+                                  <tr key={it.id || idx} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors">
+                                    <td className="p-1.5 text-center font-mono font-bold text-neutral-500 border-r border-neutral-200 dark:border-neutral-800">
+                                      {idx + 1}
+                                    </td>
+                                    <td className="p-1 border-r border-neutral-200 dark:border-neutral-800">
+                                      <ServiceSuggestionCombobox
+                                        value={it.item}
+                                        onChange={val => handleServiceItemFieldChange(idx, 'item', val)}
+                                        suggestions={SERVICE_SUGGESTIONS}
+                                        placeholder="e.g. Wifi, Water, Locker..."
+                                      />
+                                    </td>
+                                    <td className="p-1 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="text"
+                                        value={it.description}
+                                        onChange={e => handleServiceItemFieldChange(idx, 'description', e.target.value)}
+                                        className="w-full px-2 py-1 rounded-md border border-transparent hover:border-emerald-300 focus:border-emerald-500 bg-transparent text-xs text-neutral-700 dark:text-neutral-300 focus:outline-none"
+                                        placeholder="e.g. A bldg, Mashop, SHS..."
+                                      />
+                                    </td>
+                                    <td className="p-1 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={it.quantity}
+                                        onChange={e => handleServiceItemFieldChange(idx, 'quantity', e.target.value)}
+                                        className="w-full px-1.5 py-1 rounded-md border border-transparent hover:border-emerald-300 focus:border-emerald-500 bg-transparent font-mono text-xs font-bold text-center text-neutral-900 dark:text-white focus:outline-none"
+                                        placeholder="1"
+                                      />
+                                    </td>
+                                    <td className="p-1 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={it.selling_price}
+                                        onChange={e => handleServiceItemFieldChange(idx, 'selling_price', e.target.value)}
+                                        className="w-full px-1.5 py-1 rounded-md border border-transparent hover:border-emerald-300 focus:border-emerald-500 bg-transparent font-mono text-xs text-right font-semibold text-neutral-900 dark:text-white focus:outline-none"
+                                        placeholder="0.00"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800 bg-neutral-50/40 dark:bg-neutral-800/30">
+                                      ₱{rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-1 text-center">
+                                      {(formData.service_items || []).length > 1 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveServiceItem(idx)}
+                                          className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                          title="Remove service row"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      ) : (
+                                        <span className="text-neutral-300 dark:text-neutral-700 text-[10px]">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="bg-emerald-950/5 dark:bg-emerald-950/40 border-t border-emerald-200 dark:border-emerald-800/60 p-2.5 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-3 text-[11px] font-semibold text-emerald-900 dark:text-emerald-300">
+                            <span>SERVICE ITEMS: {(formData.service_items || []).filter(i => i.item.trim() || (parseFloat(String(i.selling_price)) || 0) > 0).length}</span>
+                            <span className="text-emerald-400">•</span>
+                            <span>
+                              Total Qty: {(formData.service_items || []).reduce((acc, it) => acc + (parseInt(String(it.quantity)) || 0), 0)}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9.5px] font-bold uppercase text-neutral-500 block">Total Service Revenue</span>
+                            <span className="font-mono font-black text-sm text-neutral-900 dark:text-white">
+                              ₱{(formData.service_items || []).reduce((acc, it) => {
+                                const q = parseFloat(String(it.quantity)) || 0;
+                                const sp = parseFloat(String(it.selling_price)) || 0;
+                                return acc + (q * sp);
+                              }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
+
+                  {/* Combined Grand Total Receipt Summary */}
+                  <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex flex-wrap items-center justify-between gap-3 text-[11px]">
+                    <div className="flex items-center gap-4 text-neutral-600 dark:text-neutral-300">
+                      <span>
+                        Merchandise: <strong className="font-mono text-neutral-900 dark:text-white">₱{formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </span>
+                      <span>
+                        Services: <strong className="font-mono text-neutral-900 dark:text-white">₱{(formData.service_items || []).reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </span>
+                    </div>
+                    <div className="font-bold text-emerald-900 dark:text-emerald-300">
+                      Grand Total Receipt: <span className="font-mono text-sm font-black ml-1">₱{(
+                        formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0) +
+                        (formData.service_items || []).reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0)
+                      ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -4674,15 +5103,38 @@ export default function CollectionPage() {
                       Transaction Type
                     </span>
                     <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-emerald-100/70 dark:bg-emerald-900/40 border border-emerald-300/40 dark:border-emerald-700/40 text-[11px]">
-                      {editFormData.sales_service_type !== 'service' ? (
-                        <span className="px-2.5 py-1 rounded-lg font-bold bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs">
-                          Store Merchandise / Sales
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-lg font-bold bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs">
-                          Coop Services / Fees
-                        </span>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setEditFormData((prev: any) => ({ ...prev, sales_service_type: 'merchandise' }))}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          editFormData.sales_service_type !== 'service'
+                            ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
+                            : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
+                        }`}
+                      >
+                        <span>Store Merchandise / Sales</span>
+                        {(editFormData.items || []).some((it: any) => String(it.item || '').trim() || (parseFloat(String(it.selling_price)) || 0) > 0) && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9.5px] bg-emerald-600 text-white font-mono">
+                            {(editFormData.items || []).filter((it: any) => String(it.item || '').trim() || (parseFloat(String(it.selling_price)) || 0) > 0).length}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditFormData((prev: any) => ({ ...prev, sales_service_type: 'service' }))}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          editFormData.sales_service_type === 'service'
+                            ? 'bg-white dark:bg-neutral-800 text-emerald-950 dark:text-emerald-200 shadow-2xs'
+                            : 'text-emerald-800 dark:text-emerald-300 hover:text-emerald-950'
+                        }`}
+                      >
+                        <span>Coop Services / Fees</span>
+                        {(editFormData.service_items || []).some((it: any) => String(it.item || '').trim() || (parseFloat(String(it.selling_price)) || 0) > 0) && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9.5px] bg-amber-600 text-white font-mono">
+                            {(editFormData.service_items || []).filter((it: any) => String(it.item || '').trim() || (parseFloat(String(it.selling_price)) || 0) > 0).length}
+                          </span>
+                        )}
+                      </button>
                     </div>
                   </div>
 
@@ -4901,57 +5353,172 @@ export default function CollectionPage() {
                       </div>
                     </div>
                   ) : (
-                    <>
-                      <div>
-                        <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                          Service Type
-                        </label>
-                        <select
-                          disabled={isEditLocked}
-                          value={editFormData.service_type}
-                          onChange={e => setEditFormData({ ...editFormData, service_type: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 text-xs font-semibold text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          <option value="Photocopying Services">Photocopying Services</option>
-                          <option value="Document Printing & Lamination">Document Printing & Lamination</option>
-                          <option value="2x2 ID Photo Package">2x2 ID Photo Package</option>
-                          <option value="Membership Application Fee">Membership Application Fee</option>
-                          <option value="Passbook Replacement Fee">Passbook Replacement Fee</option>
-                          <option value="Notarial / Processing Fee">Notarial / Processing Fee</option>
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-3 pt-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-emerald-200/60 dark:border-emerald-800/40">
                         <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Copies / Count
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            disabled={isEditLocked}
-                            value={editFormData.service_copies}
-                            onChange={e => setEditFormData({ ...editFormData, service_copies: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-center text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                            placeholder="1"
-                          />
+                          <span className="text-[11px] font-bold uppercase text-emerald-900 dark:text-emerald-300 block">
+                            Coop Services &amp; Fees Breakdown
+                          </span>
+                          <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400">
+                            Services (Wifi, Water, Locker, Key Duplicate, Photocopying, etc.) are tracked separately and excluded from Merchandise Profit.
+                          </span>
                         </div>
-                        <div>
-                          <label className="block font-bold text-emerald-900 dark:text-emerald-300 mb-1">
-                            Rate per Unit (₱)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            disabled={isEditLocked}
-                            value={editFormData.service_rate}
-                            onChange={e => setEditFormData({ ...editFormData, service_rate: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-neutral-900 font-mono text-xs font-bold text-right text-neutral-900 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                            placeholder="0.00"
-                          />
+                        {!isEditLocked && (
+                          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleEditAddMultipleServiceItems(5)}
+                              className="px-2.5 py-1 rounded-lg border border-emerald-400/80 bg-emerald-50 dark:bg-emerald-950/40 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                            >
+                              + 5 Rows
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEditAddMultipleServiceItems(10)}
+                              className="px-2.5 py-1 rounded-lg border border-emerald-400/80 bg-emerald-50 dark:bg-emerald-950/40 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 transition-colors cursor-pointer"
+                            >
+                              + 10 Rows
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleEditAddServiceItem}
+                              className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-[10.5px] font-bold text-white transition-all shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Service</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="border border-emerald-300 dark:border-emerald-800/80 rounded-2xl overflow-hidden shadow-2xs">
+                        <div className="overflow-x-auto max-h-[440px] overflow-y-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-[#064e3b] text-white font-bold uppercase text-[9px] tracking-wider sticky top-0 z-10 border-b border-emerald-800">
+                              <tr>
+                                <th className="p-2 w-9 text-center border-r border-emerald-700/60">#</th>
+                                <th className="p-2 min-w-[210px] border-r border-emerald-700/60">Service Name</th>
+                                <th className="p-2 min-w-[160px] border-r border-emerald-700/60">Description / Location</th>
+                                <th className="p-2 w-20 text-center border-r border-emerald-700/60">Qty</th>
+                                <th className="p-2 w-28 text-right border-r border-emerald-700/60">Rate (₱)</th>
+                                <th className="p-2 w-32 text-right border-r border-emerald-700/60">Revenue (₱)</th>
+                                <th className="p-2 w-10 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800 bg-white dark:bg-neutral-900 text-xs">
+                              {(editFormData.service_items || []).map((it: any, idx: number) => {
+                                const q = parseFloat(String(it.quantity)) || 0;
+                                const sp = parseFloat(String(it.selling_price)) || 0;
+                                const rev = q * sp;
+                                return (
+                                  <tr key={it.id || idx} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors">
+                                    <td className="p-1.5 text-center font-mono font-bold text-neutral-500 border-r border-neutral-200 dark:border-neutral-800">
+                                      {idx + 1}
+                                    </td>
+                                    <td className="p-1 border-r border-neutral-200 dark:border-neutral-800">
+                                      <ServiceSuggestionCombobox
+                                        value={it.item}
+                                        disabled={isEditLocked}
+                                        onChange={val => handleEditServiceItemFieldChange(idx, 'item', val)}
+                                        suggestions={SERVICE_SUGGESTIONS}
+                                        placeholder="e.g. Wifi, Water, Locker..."
+                                      />
+                                    </td>
+                                    <td className="p-1 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="text"
+                                        disabled={isEditLocked}
+                                        value={it.description}
+                                        onChange={e => handleEditServiceItemFieldChange(idx, 'description', e.target.value)}
+                                        className="w-full px-2 py-1 rounded-md border border-transparent hover:border-emerald-300 focus:border-emerald-500 bg-transparent text-xs text-neutral-700 dark:text-neutral-300 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        placeholder="e.g. A bldg, Mashop, SHS..."
+                                      />
+                                    </td>
+                                    <td className="p-1 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        disabled={isEditLocked}
+                                        value={it.quantity}
+                                        onChange={e => handleEditServiceItemFieldChange(idx, 'quantity', e.target.value)}
+                                        className="w-full px-1.5 py-1 rounded-md border border-transparent hover:border-emerald-300 focus:border-emerald-500 bg-transparent font-mono text-xs font-bold text-center text-neutral-900 dark:text-white focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        placeholder="1"
+                                      />
+                                    </td>
+                                    <td className="p-1 border-r border-neutral-200 dark:border-neutral-800">
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        disabled={isEditLocked}
+                                        value={it.selling_price}
+                                        onChange={e => handleEditServiceItemFieldChange(idx, 'selling_price', e.target.value)}
+                                        className="w-full px-1.5 py-1 rounded-md border border-transparent hover:border-emerald-300 focus:border-emerald-500 bg-transparent font-mono text-xs text-right font-semibold text-neutral-900 dark:text-white focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                        placeholder="0.00"
+                                      />
+                                    </td>
+                                    <td className="p-1.5 text-right font-mono font-bold text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-800 bg-neutral-50/40 dark:bg-neutral-800/30">
+                                      ₱{rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-1 text-center">
+                                      {!isEditLocked && (editFormData.service_items || []).length > 1 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleEditRemoveServiceItem(idx)}
+                                          className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                          title="Remove service row"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      ) : (
+                                        <span className="text-neutral-300 dark:text-neutral-700 text-[10px]">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="bg-emerald-950/5 dark:bg-emerald-950/40 border-t border-emerald-200 dark:border-emerald-800/60 p-2.5 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-3 text-[11px] font-semibold text-emerald-900 dark:text-emerald-300">
+                            <span>SERVICE ITEMS: {(editFormData.service_items || []).filter((i: any) => String(i.item || '').trim() || (parseFloat(String(i.selling_price)) || 0) > 0).length}</span>
+                            <span className="text-emerald-400">•</span>
+                            <span>
+                              Total Qty: {(editFormData.service_items || []).reduce((acc: number, it: any) => acc + (parseInt(String(it.quantity)) || 0), 0)}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9.5px] font-bold uppercase text-neutral-500 block">Total Service Revenue</span>
+                            <span className="font-mono font-black text-sm text-neutral-900 dark:text-white">
+                              ₱{(editFormData.service_items || []).reduce((acc: number, it: any) => {
+                                const q = parseFloat(String(it.quantity)) || 0;
+                                const sp = parseFloat(String(it.selling_price)) || 0;
+                                return acc + (q * sp);
+                              }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </>
+                    </div>
                   )}
+
+                  {/* Combined Grand Total Receipt Summary */}
+                  <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex flex-wrap items-center justify-between gap-3 text-[11px]">
+                    <div className="flex items-center gap-4 text-neutral-600 dark:text-neutral-300">
+                      <span>
+                        Merchandise: <strong className="font-mono text-neutral-900 dark:text-white">₱{(editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </span>
+                      <span>
+                        Services: <strong className="font-mono text-neutral-900 dark:text-white">₱{(editFormData.service_items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </span>
+                    </div>
+                    <div className="font-bold text-emerald-900 dark:text-emerald-300">
+                      Grand Total Receipt: <span className="font-mono text-sm font-black ml-1">₱{(
+                        (editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0) +
+                        (editFormData.service_items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0)
+                      ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -5396,58 +5963,119 @@ export default function CollectionPage() {
                     )}
                   </div>
                 )}
-                {(selectedItemForModal.tab === 'sales' || (selectedItemForModal.tab === 'sales_services' && (selectedItemForModal.item_name || (selectedItemForModal.items && selectedItemForModal.items.length > 0)))) && (
+                {(selectedItemForModal.tab === 'sales' || (selectedItemForModal.tab === 'sales_services' && (selectedItemForModal.item_name || (selectedItemForModal.items && selectedItemForModal.items.some((it) => !isServiceCollectionItem(it)))))) && (
                   <div className="space-y-2">
-                    {selectedItemForModal.items && selectedItemForModal.items.length > 0 ? (
-                      <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">
-                          Merchandise Items Sold
-                        </span>
+                    {(() => {
+                      const merchItems = (selectedItemForModal.items || []).filter((it) => !isServiceCollectionItem(it));
+                      if (merchItems.length > 0) {
+                        const totalMerchProfit = merchItems.reduce((sum, it) => sum + (Number(it.gross_profit) || 0), 0);
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">
+                                Merchandise Items Sold ({merchItems.length})
+                              </span>
+                              <span className="text-[10px] font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                                Merch Profit: ₱{totalMerchProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="overflow-x-auto rounded-xl border border-outline-variant/60">
+                              <table className="w-full text-left text-[11px]">
+                                <thead className="bg-neutral-100 dark:bg-neutral-800 text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400">
+                                  <tr>
+                                    <th className="p-2">Item</th>
+                                    <th className="p-2">Size</th>
+                                    <th className="p-2 text-center">Qty</th>
+                                    <th className="p-2 text-right">Selling</th>
+                                    <th className="p-2 text-right">Revenue</th>
+                                    <th className="p-2 text-right">Profit</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-outline-variant/40">
+                                  {merchItems.map((it, idx) => (
+                                    <tr key={it.id || idx}>
+                                      <td className="p-2 font-semibold">
+                                        {it.item}
+                                        {it.description && <span className="block text-[10px] text-neutral-400 font-normal">{it.description}</span>}
+                                      </td>
+                                      <td className="p-2 font-mono text-[10px] text-neutral-500">{it.size || '—'}</td>
+                                      <td className="p-2 text-center font-mono font-bold">{it.quantity}</td>
+                                      <td className="p-2 text-right font-mono">₱{(Number(it.selling_price) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white">₱{(Number(it.revenue) || (Number(it.quantity) * Number(it.selling_price)) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">₱{(Number(it.gross_profit) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      }
+                      if (selectedItemForModal.item_name) {
+                        return (
+                          <div className="space-y-1">
+                            <p className="font-medium text-neutral-800 dark:text-neutral-200">Item: {selectedItemForModal.item_name || 'Store Item'}</p>
+                            <p className="text-neutral-500">Category: {selectedItemForModal.item_category || 'Uniform'}</p>
+                            <p className="text-neutral-500">Quantity: {selectedItemForModal.quantity || 1} pcs @ ₱{(selectedItemForModal.unit_price || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                )}
+                {(() => {
+                  const serviceItems = (selectedItemForModal.items || []).filter((it) => isServiceCollectionItem(it));
+                  if (serviceItems.length > 0) {
+                    const totalServiceRev = serviceItems.reduce((sum, it) => sum + (Number(it.revenue) || (Number(it.quantity) * Number(it.selling_price)) || 0), 0);
+                    return (
+                      <div className="space-y-1.5 pt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300 block">
+                            Coop Services / Fees ({serviceItems.length})
+                          </span>
+                          <span className="text-[10px] font-bold font-mono text-teal-600 dark:text-teal-400">
+                            Service Revenue: ₱{totalServiceRev.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
                         <div className="overflow-x-auto rounded-xl border border-outline-variant/60">
                           <table className="w-full text-left text-[11px]">
                             <thead className="bg-neutral-100 dark:bg-neutral-800 text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400">
                               <tr>
-                                <th className="p-2">Item</th>
-                                <th className="p-2">Size</th>
+                                <th className="p-2">Service</th>
                                 <th className="p-2 text-center">Qty</th>
-                                <th className="p-2 text-right">Selling</th>
+                                <th className="p-2 text-right">Rate</th>
                                 <th className="p-2 text-right">Revenue</th>
-                                <th className="p-2 text-right">Profit</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-outline-variant/40">
-                              {selectedItemForModal.items.map((it, idx) => (
+                              {serviceItems.map((it, idx) => (
                                 <tr key={it.id || idx}>
                                   <td className="p-2 font-semibold">
                                     {it.item}
                                     {it.description && <span className="block text-[10px] text-neutral-400 font-normal">{it.description}</span>}
                                   </td>
-                                  <td className="p-2 font-mono text-[10px] text-neutral-500">{it.size || '—'}</td>
                                   <td className="p-2 text-center font-mono font-bold">{it.quantity}</td>
                                   <td className="p-2 text-right font-mono">₱{(Number(it.selling_price) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-2 text-right font-mono font-bold text-neutral-900 dark:text-white">₱{(Number(it.revenue) || (Number(it.quantity) * Number(it.selling_price)) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">₱{(Number(it.gross_profit) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                  <td className="p-2 text-right font-mono font-bold text-teal-700 dark:text-teal-300">₱{(Number(it.revenue) || (Number(it.quantity) * Number(it.selling_price)) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
                       </div>
-                    ) : (
+                    );
+                  }
+                  if (selectedItemForModal.tab === 'services' || (selectedItemForModal.tab === 'sales_services' && selectedItemForModal.service_type)) {
+                    return (
                       <div className="space-y-1">
-                        <p className="font-medium text-neutral-800 dark:text-neutral-200">Item: {selectedItemForModal.item_name || 'Store Item'}</p>
-                        <p className="text-neutral-500">Category: {selectedItemForModal.item_category || 'Uniform'}</p>
-                        <p className="text-neutral-500">Quantity: {selectedItemForModal.quantity || 1} pcs @ ₱{(selectedItemForModal.unit_price || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                        <p className="font-medium text-neutral-800 dark:text-neutral-200">Service: {selectedItemForModal.service_type || 'Services'}</p>
+                        <p className="text-neutral-500">Count / Units: {selectedItemForModal.service_copies || 1} @ ₱{(selectedItemForModal.service_rate || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                       </div>
-                    )}
-                  </div>
-                )}
-                {(selectedItemForModal.tab === 'services' || (selectedItemForModal.tab === 'sales_services' && selectedItemForModal.service_type)) && (
-                  <div className="space-y-1">
-                    <p className="font-medium text-neutral-800 dark:text-neutral-200">Service: {selectedItemForModal.service_type || 'Services'}</p>
-                    <p className="text-neutral-500">Count / Units: {selectedItemForModal.service_copies || 1} @ ₱{(selectedItemForModal.service_rate || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-                  </div>
-                )}
+                    );
+                  }
+                  return null;
+                })()}
                 {selectedItemForModal.tab === 'others' && (
                   <div className="space-y-1">
                     <p className="font-medium text-neutral-800 dark:text-neutral-200">{selectedItemForModal.particulars || 'General Miscellaneous'}</p>

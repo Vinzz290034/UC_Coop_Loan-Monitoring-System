@@ -1426,7 +1426,14 @@ function DisbursementPageContent() {
   const returnMonth = searchParams.get('month');
   const returnDate = searchParams.get('date');
 
-  const reportTabName = fromReport === 'categories' ? 'Book of Accounts' : 'Expense Breakdown';
+  const reportTabName =
+    fromReport === 'categories'
+      ? 'Book of Accounts'
+      : fromReport === 'statement_of_operations'
+      ? 'Statement of Operations'
+      : fromReport === 'financial_statement'
+      ? 'Balance Sheet'
+      : 'Expense Breakdown';
 
   const handleBackToReport = useCallback(() => {
     const p = new URLSearchParams();
@@ -5831,7 +5838,7 @@ function DisbursementPageContent() {
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Back to</span>
-                    <span className="max-w-[150px] truncate">{returnAccount || returnRecipient || reportTabName}</span>
+                    <span className="max-w-[200px] truncate">{returnAccount || returnRecipient || reportTabName}</span>
                   </button>
                 )}
                 <button

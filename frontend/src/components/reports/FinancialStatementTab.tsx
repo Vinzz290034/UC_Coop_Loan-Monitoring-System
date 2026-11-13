@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import {
@@ -186,9 +186,58 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
   }, [selectedPeriod, isMonthDisabled]);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const consumedDeepLinkRef = useRef<string | null>(null);
   const [selectedLineModal, setSelectedLineModal] = useState<FsLine | null>(null);
   const [lineModalSearch, setLineModalSearch] = useState('');
   const [lineModalMonthFilter, setLineModalMonthFilter] = useState<number | 'all'>('all');
+
+  // Re-open Balance Sheet breakdown modal when returning from Disbursement/Check Voucher
+  useEffect(() => {
+    if (!data || !searchParams) return;
+    const tabParam = searchParams.get('tab');
+    const accountParam = searchParams.get('account');
+    const subViewParam = searchParams.get('subview');
+    if (tabParam !== 'financial_statement' || !accountParam) return;
+
+    const deepLinkKey = `${tabParam}::${accountParam}::${subViewParam || 'all'}::${data.year}`;
+    if (consumedDeepLinkRef.current === deepLinkKey) return;
+
+    const targetLower = accountParam.trim().toLowerCase();
+    const allSections = [
+      ...(data.statement.assets || []),
+      ...(data.statement.liabilities || []),
+      ...(data.statement.equity || []),
+    ];
+    let matchedLine: FsLine | null = null;
+    for (const sec of allSections) {
+      for (const grp of sec.groups || []) {
+        const found = (grp.lines || []).find(
+          (l) => l.title.trim().toLowerCase() === targetLower
+        );
+        if (found) {
+          matchedLine = found;
+          break;
+        }
+      }
+      if (matchedLine) break;
+    }
+
+    if (matchedLine) {
+      consumedDeepLinkRef.current = deepLinkKey;
+      setSelectedLineModal(matchedLine);
+      if (subViewParam && subViewParam !== 'all') {
+        const parsedMonth = parseInt(subViewParam, 10);
+        if (!isNaN(parsedMonth) && parsedMonth >= 0 && parsedMonth <= 11) {
+          setLineModalMonthFilter(parsedMonth);
+        } else {
+          setLineModalMonthFilter('all');
+        }
+      } else {
+        setLineModalMonthFilter('all');
+      }
+    }
+  }, [data, searchParams]);
 
   const closeLineModal = useCallback(() => {
     setSelectedLineModal(null);
@@ -210,14 +259,27 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
   // Navigate to transaction source
   const handleNavigateToSource = useCallback((t: FsTransaction) => {
     if (t.source === 'check_voucher' || t.voucher_no || t.voucher_id) {
-      const vNum = t.voucher_no ? encodeURIComponent(t.voucher_no) : '';
-      const vId = t.voucher_id ? encodeURIComponent(t.voucher_id) : '';
-      router.push(`/dashboard/disbursement?tab=summary&voucher=${vNum || vId}`);
+      const params = new URLSearchParams();
+      params.set('tab', 'summary');
+      const vRef = t.voucher_no || t.voucher_id || '';
+      if (vRef) params.set('voucher', vRef);
+      if (t.voucher_id) params.set('id', t.voucher_id);
+      params.set('fromReport', 'financial_statement');
+      if (selectedLineModal?.title) params.set('returnAccount', selectedLineModal.title);
+      params.set('returnSubView', String(lineModalMonthFilter));
+      params.set('year', String(year));
+      router.push(`/dashboard/disbursement?${params.toString()}`);
       return;
     }
 
     if (t.source === 'revolving_fund') {
-      router.push(`/dashboard/disbursement?tab=revolving`);
+      const params = new URLSearchParams();
+      params.set('tab', 'revolving');
+      params.set('fromReport', 'financial_statement');
+      if (selectedLineModal?.title) params.set('returnAccount', selectedLineModal.title);
+      params.set('returnSubView', String(lineModalMonthFilter));
+      params.set('year', String(year));
+      router.push(`/dashboard/disbursement?${params.toString()}`);
       return;
     }
 
@@ -235,7 +297,7 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
     if (t.payee) {
       router.push(`/dashboard/loans?tab=loans&search=${encodeURIComponent(t.payee)}`);
     }
-  }, [router]);
+  }, [router, year, selectedLineModal, lineModalMonthFilter]);
 
   const isYtd = selectedPeriod === 'ytd';
   const q = searchQuery.toLowerCase().trim();

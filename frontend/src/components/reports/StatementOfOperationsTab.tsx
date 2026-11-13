@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import {
@@ -187,9 +187,58 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   }, [selectedPeriod, isMonthDisabled]);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const consumedDeepLinkRef = useRef<string | null>(null);
   const [selectedLineModal, setSelectedLineModal] = useState<SooLine | null>(null);
   const [lineModalSearch, setLineModalSearch] = useState('');
   const [lineModalMonthFilter, setLineModalMonthFilter] = useState<number | 'all'>('all');
+
+  // Re-open Account Ledger Breakdown modal when returning from Disbursement/Check Voucher
+  useEffect(() => {
+    if (!data || !searchParams) return;
+    const tabParam = searchParams.get('tab');
+    const accountParam = searchParams.get('account');
+    const subViewParam = searchParams.get('subview');
+    if (tabParam !== 'statement_of_operations' || !accountParam) return;
+
+    const deepLinkKey = `${tabParam}::${accountParam}::${subViewParam || 'all'}::${data.year}`;
+    if (consumedDeepLinkRef.current === deepLinkKey) return;
+
+    const targetLower = accountParam.trim().toLowerCase();
+    const allSections = [
+      ...(data.statement.revenues || []),
+      ...(data.statement.expenses || []),
+      ...(data.statement.loan_repayments || []),
+    ];
+    let matchedLine: SooLine | null = null;
+    for (const sec of allSections) {
+      for (const grp of sec.groups || []) {
+        const found = (grp.lines || []).find(
+          (l) => l.title.trim().toLowerCase() === targetLower
+        );
+        if (found) {
+          matchedLine = found;
+          break;
+        }
+      }
+      if (matchedLine) break;
+    }
+
+    if (matchedLine) {
+      consumedDeepLinkRef.current = deepLinkKey;
+      setSelectedLineModal(matchedLine);
+      if (subViewParam && subViewParam !== 'all') {
+        const parsedMonth = parseInt(subViewParam, 10);
+        if (!isNaN(parsedMonth) && parsedMonth >= 0 && parsedMonth <= 11) {
+          setLineModalMonthFilter(parsedMonth);
+        } else {
+          setLineModalMonthFilter('all');
+        }
+      } else {
+        setLineModalMonthFilter('all');
+      }
+    }
+  }, [data, searchParams]);
 
   const closeLineModal = useCallback(() => {
     setSelectedLineModal(null);
@@ -269,6 +318,8 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
       }
       if (t.voucher_id) params.set('id', t.voucher_id);
       params.set('fromReport', 'statement_of_operations');
+      if (selectedLineModal?.title) params.set('returnAccount', selectedLineModal.title);
+      params.set('returnSubView', String(lineModalMonthFilter));
       params.set('year', String(year));
       router.push(`/dashboard/disbursement?${params.toString()}`);
       return;
@@ -279,6 +330,8 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
       params.set('tab', 'revolving_fund_replenishment');
       if (t.lf_no) params.set('search', t.lf_no);
       params.set('fromReport', 'statement_of_operations');
+      if (selectedLineModal?.title) params.set('returnAccount', selectedLineModal.title);
+      params.set('returnSubView', String(lineModalMonthFilter));
       params.set('year', String(year));
       router.push(`/dashboard/disbursement?${params.toString()}`);
       return;
@@ -296,7 +349,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     if (t.payee) {
       router.push(`/dashboard/loans?tab=loans&search=${encodeURIComponent(t.payee)}`);
     }
-  }, [router, year, selectedLineModal]);
+  }, [router, year, selectedLineModal, lineModalMonthFilter]);
 
   const handleOpenLoan = useCallback((t: SooTransaction) => {
     if (t.payee) {

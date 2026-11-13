@@ -27,6 +27,7 @@ export interface FormLoanEntry {
 
 export interface CollectionMerchandiseItem {
   id: string;
+  item_type?: 'merchandise' | 'service';
   item: string;
   description: string;
   size: string;

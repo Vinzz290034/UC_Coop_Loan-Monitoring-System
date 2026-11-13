@@ -904,6 +904,11 @@ export const getMerchandiseSalesReport = async (req, res, next) => {
       if (hasItems) {
         row.items.forEach((it, idx) => {
           const itName = String(it.item || it.item_name || 'Merchandise Item').trim();
+          const isSvcItem =
+            String(it.item_type || '').toLowerCase() === 'service' ||
+            /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName);
+          if (isSvcItem) return;
+
           const itSize = String(it.size || '—').trim();
           const keyExact = `${itName.toLowerCase()}:::${itSize.toLowerCase()}`;
           const matchedCat = catalogLookup.get(keyExact) || catalogLookup.get(itName.toLowerCase());
@@ -4251,6 +4256,27 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       }
       if (!['sales', 'sales_services', 'services'].includes(col.tab)) return;
       if (/donation|grant|share\s*capital/.test(text)) return;
+
+      if (hasItemsArray) {
+        let merchAmt = 0;
+        let svcAmt = 0;
+        col.items.forEach((it) => {
+          const itName = String(it.item || it.item_name || '').trim();
+          const isSvc =
+            String(it.item_type || '').toLowerCase() === 'service' ||
+            /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName);
+          const q = parseFloat(String(it.quantity)) || 1;
+          const sp = parseFloat(String(it.selling_price || it.unit_price || 0)) || 0;
+          const rev = parseFloat(String(it.revenue)) || (q * sp) || 0;
+          if (isSvc) svcAmt += rev;
+          else merchAmt += rev;
+        });
+        if (merchAmt > 0 || svcAmt > 0) {
+          if (merchAmt > 0) bucket(merchSales, cDate, merchAmt, meta);
+          if (svcAmt > 0) bucket(serviceIncome, cDate, svcAmt, meta);
+          return;
+        }
+      }
 
       if (hasItemsArray || !col.service_type) {
         bucket(merchSales, cDate, amt, meta);
