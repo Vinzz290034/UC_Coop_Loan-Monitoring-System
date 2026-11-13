@@ -4462,9 +4462,10 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         }
 
         if (cat === 'Service Expense' || isDirectServiceCost(acc)) {
-          if (!costOfSales[acc]) costOfSales[acc] = newStore();
-          costOfSales[acc][which][mIdx] += amt;
-          if (tx) costOfSales[acc].transactions.push(tx);
+          const normalizedSvcAcc = /^cos\s*-\s*locker$/i.test(acc) ? 'COS - Key Duplicate' : acc;
+          if (!costOfSales[normalizedSvcAcc]) costOfSales[normalizedSvcAcc] = newStore();
+          costOfSales[normalizedSvcAcc][which][mIdx] += amt;
+          if (tx) costOfSales[normalizedSvcAcc].transactions.push(tx);
           return;
         }
 
