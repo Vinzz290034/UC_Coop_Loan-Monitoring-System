@@ -4525,17 +4525,32 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           key: 'merchandise',
           title: 'Income from Merchandise',
           plain_title: 'Money earned from the store',
-          description: 'Sales of uniforms, rice, laundry soap and other store items, plus store services.',
+          description: 'Sales of uniforms, rice, laundry soap and other store items.',
           total_label: 'TOTAL: Income from Merchandise',
           groups: [
             {
-              title: 'Store Sales & Services',
+              title: 'Store Sales',
               total_label: null,
               lines: [
                 line('', 'Store Merchandise / Uniform Sales', 'Uniforms and other items sold in the cooperative store.', merchSales),
                 line('', 'Rice Sales', 'Rice sold to members.', fromTracker(otherFor, 'Rice sales payment'), true, riceSales.transactions),
-                line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', fromTracker(otherFor, 'Laundry soap sales'), true, soapSales.transactions),
-                line('', 'Income from Services', 'Printing, photocopy, rentals and other store services.', serviceIncome, false)
+                line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', fromTracker(otherFor, 'Laundry soap sales'), true, soapSales.transactions)
+              ]
+            }
+          ]
+        },
+        {
+          key: 'services',
+          title: 'Income from Services',
+          plain_title: 'Money earned from store services',
+          description: 'Wifi, Water Vendo, Printing & Photocopy, Gcash, Type A & B, GALA, lockers and other cooperative services.',
+          total_label: 'TOTAL: Income from Services',
+          groups: [
+            {
+              title: 'Coop Services & Fees',
+              total_label: null,
+              lines: [
+                line('', 'Income from Services', 'Wifi, Water Vendo, Printing & Photocopy, Gcash, Type A & B, GALA, lockers and other store services.', serviceIncome, true)
               ]
             }
           ]
