@@ -3248,10 +3248,10 @@ function DisbursementPageContent() {
   useEffect(() => {
     const voucherParam = searchParams.get('voucher') || searchParams.get('voucher_no') || searchParams.get('cv');
     const idParam = searchParams.get('id');
-    const targetParam = voucherParam || idParam;
+    const targetParam = idParam || voucherParam;
     if (targetParam && mounted) {
       setActiveTab('summary');
-      if (voucherParam) setCvSearch(voucherParam);
+      if (voucherParam && !idParam) setCvSearch(voucherParam);
       openCheckVoucherModalByIdOrNo(targetParam, voucherParam || undefined, 'detailed');
     }
   }, [searchParams, mounted]);
