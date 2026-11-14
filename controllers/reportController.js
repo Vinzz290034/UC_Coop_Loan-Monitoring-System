@@ -4148,22 +4148,23 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         // 2. CLIMBS Insurance (Regular Loans: Salary & Project Loans) - Option A: Net Commission
         if (/climbs/i.test(boa)) {
           const isRemittance = isClimbsRemittancePayee || (rawAmt > 0 && !d.is_credit) || /remittance|premium.*clpp|clpp.*premium/i.test(String(d.remarks || ''));
+          const lineRefSuffix = d.voucher_no && String(d.voucher_no) !== String(cv.voucher_no || '') ? ` [Ref/LAF #${d.voucher_no}]` : '';
           if (isRemittance) {
             // Less: Premium remitted to CLIMBS
             bucket(climbsIncome, lineDate, -absAmt, {
               voucher_id: cv.id,
-              voucher_no: d.voucher_no || cv.voucher_no || 'CV',
+              voucher_no: cv.voucher_no || d.voucher_no || 'CV',
               payee: cv.payee || 'CLIMBS Life & General Insurance',
-              particulars: d.remarks ? `Less: Remittance to CLIMBS (${d.remarks})` : `Less: Remittance to CLIMBS (${cv.particulars || 'Premium payment'})`,
+              particulars: (d.remarks ? `Less: Remittance to CLIMBS (${d.remarks})` : `Less: Remittance to CLIMBS (${cv.particulars || 'Premium payment'})`) + lineRefSuffix,
               source: 'check_voucher'
             });
           } else {
             // Member loan insurance deduction
             bucket(climbsIncome, lineDate, absAmt, {
               voucher_id: cv.id,
-              voucher_no: d.voucher_no || cv.voucher_no || 'CV',
+              voucher_no: cv.voucher_no || d.voucher_no || 'CV',
               payee: cv.payee || 'Member',
-              particulars: d.remarks || 'CLIMBS loan insurance deduction (Regular Loan)',
+              particulars: (d.remarks || 'CLIMBS loan insurance deduction (Regular Loan)') + lineRefSuffix,
               source: 'check_voucher'
             });
           }
@@ -4172,22 +4173,23 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         // 3. CISP Insurance (Short Term Loans: STL) - Option A: Net Commission
         if (/cisp/i.test(boa) && !/cash in coop federation/i.test(boa)) {
           const isRemittance = isCispRemittancePayee || (rawAmt > 0 && !d.is_credit) || /remittance|payable to 1cisp|insurance payable/i.test(String(d.remarks || ''));
+          const lineRefSuffix = d.voucher_no && String(d.voucher_no) !== String(cv.voucher_no || '') ? ` [Ref/LAF #${d.voucher_no}]` : '';
           if (isRemittance) {
             // Less: Premium remitted to CISP
             bucket(cispIncome, lineDate, -absAmt, {
               voucher_id: cv.id,
-              voucher_no: d.voucher_no || cv.voucher_no || 'CV',
+              voucher_no: cv.voucher_no || d.voucher_no || 'CV',
               payee: cv.payee || '1CISP',
-              particulars: d.remarks ? `Less: Remittance to CISP (${d.remarks})` : `Less: Remittance to CISP (${cv.particulars || 'Premium payment'})`,
+              particulars: (d.remarks ? `Less: Remittance to CISP (${d.remarks})` : `Less: Remittance to CISP (${cv.particulars || 'Premium payment'})`) + lineRefSuffix,
               source: 'check_voucher'
             });
           } else {
             // Member loan insurance deduction from STL
             bucket(cispIncome, lineDate, absAmt, {
               voucher_id: cv.id,
-              voucher_no: d.voucher_no || cv.voucher_no || 'CV',
+              voucher_no: cv.voucher_no || d.voucher_no || 'CV',
               payee: cv.payee || 'Member',
-              particulars: d.remarks || 'CISP loan insurance deduction (STL)',
+              particulars: (d.remarks || 'CISP loan insurance deduction (STL)') + lineRefSuffix,
               source: 'check_voucher'
             });
           }
