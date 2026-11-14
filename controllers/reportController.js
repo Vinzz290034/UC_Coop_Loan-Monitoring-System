@@ -1101,6 +1101,7 @@ export function isOperatingExpenseAccount(accName, folderName, particulars) {
   // 5. Exclude umbrella replenishment transfers (actual itemized expenses are reported from rf_liquidation_items)
   if (/replenish|fund\s*transfer/i.test(acc) || /replenish|fund\s*transfer/i.test(part)) return false;
   if (/^revolving\s*fund\s*-/i.test(acc) || /^rf\s*-?\s*\d+$/i.test(acc) || /^petty\s*cash$/i.test(acc)) return false;
+  if (folder.includes("revolving fund") && /^(service|merchandise)$/i.test(acc)) return false;
 
   return true;
 }
@@ -1269,7 +1270,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
     `);
 
     const cvResult = await pool.query(`
-      SELECT id, voucher_no, voucher_date, payee, particulars, amount, details
+      SELECT id, voucher_no, voucher_date, folder_name, payee, particulars, amount, details
       FROM check_vouchers
       WHERE status != 'cancelled'
       ORDER BY voucher_date DESC
@@ -4415,11 +4416,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       deposit_refunds: zeros()
     };
 
-    // Direct costs of running store services stay in Cost of Sales & Services
-    const isDirectServiceCost = (acc) => /^cos\b|commission|freight|delivery\s*fee|delivery|porterage|wifi|water|^service$/i.test(acc);
+    // Direct costs of running store services stay in Cost of Sales & Services (excluding store manuals)
+    const isDirectServiceCost = (acc) => !/manual/i.test(acc) && /^cos\b|commission|freight|delivery\s*fee|delivery|porterage|wifi|water|^service$/i.test(acc);
 
-    const classifyNonExpense = (acc) => {
+    const classifyNonExpense = (acc, particulars = '') => {
+      const combined = `${acc} ${particulars || ''}`;
       if (/loan\s*repay|payment\s*of\s*loan|repayment\s*of\s*loan|loan\s*payable/i.test(acc)) return 'loan_repayment';
+      if (/\bdp\s*for\b.*system|down\s*payment.*system/i.test(combined)) return 'capex_office_equipment';
       if (/office\s*equipment|plants?,?\s*property|\bppe\b/i.test(acc) && !/management\s*system|software/i.test(acc)) return 'capex_office_equipment';
       if (/fixture|furniture/i.test(acc)) return 'capex_furniture';
       if (/\bEE\s*share\b|payable\s*premium|insurance\s*payable|payment\s*to\s*climbs|climbs.*remittance/i.test(acc)) return 'ee_remittances';
@@ -4430,9 +4433,11 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       return null;
     };
 
-    // Made-to-order uniforms (Type A & B, Gala) are treated as Services (no unit cost on receipt), so their supplier CVs stay in Cost of Sales & Services
-    const isMadeToOrderServiceCost = (acc, particulars = '') => {
-      const combined = `${acc} ${particulars}`;
+    // Made-to-order uniforms (Type A & B, Gala) are treated as Services when not store merchandise accessories/shoes or bulk Merchandise Inventory restocking
+    const isMadeToOrderServiceCost = (acc, particulars = '', cat = '', mIdx = 0) => {
+      const combined = `${acc} ${particulars || ''}`;
+      if (/shoe|accessor|accesor|pe\s*short|pe\s*shirt|pe\s*pant|trunk|lanyard|id\s*case|glove/i.test(combined)) return false;
+      if (mIdx >= 2 && (cat === 'Merchandise Expense' || /merchandise\s*inventory|\bpayment\s*(for|of|or)\b/i.test(acc))) return false;
       return /type\s*a\s*(?:&|and)?\s*b|type\s*a\b|type\s*b\b|\bgala\b|bsname/i.test(combined);
     };
 
@@ -4459,7 +4464,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         if (/payable|replenish|fund\s*transfer|advances\s*to/i.test(acc)) return;
 
         // Balance-sheet movements are not expenses
-        const nonExpense = classifyNonExpense(acc);
+        const nonExpense = classifyNonExpense(acc, rec.particulars);
         if (nonExpense) {
           if (nonExpense !== 'transfer' && which === 'current') reclass[nonExpense][mIdx] += amt;
           return;
@@ -4479,7 +4484,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         } : null;
 
         // Made-to-order uniforms (Type A & B, Gala, BSNAME) stay in Cost of Sales & Services since their revenue is in Services
-        if (isMadeToOrderServiceCost(acc, rec.particulars)) {
+        if (isMadeToOrderServiceCost(acc, rec.particulars, cat, mIdx)) {
           const svcCostAcc = 'COS - Type A & B, Gala & BSNAME';
           if (!costOfSales[svcCostAcc]) costOfSales[svcCostAcc] = newStore();
           costOfSales[svcCostAcc][which][mIdx] += amt;
