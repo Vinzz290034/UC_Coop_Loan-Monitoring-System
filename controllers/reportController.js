@@ -3396,6 +3396,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
       due_cetf_apex: { cur: 0.00, prev: 20699.35 },
       clpp_premium: { cur: 581.40, prev: 0.00 },
       insurance_payable: { cur: 2423.35, prev: 0.00 },
+      locker_deposit_payable: { cur: 0.00, prev: 0.00 },
       other_payables: { cur: 0.00, prev: 991.40 },
       dividend_payable: { cur: 0.00, prev: 289790.90 },
       other_noncurrent_liabs: { cur: 0.00, prev: 188225.63 },
@@ -3458,7 +3459,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
         // They leave the P&L but still move cash, so each one is mirrored on the matching Balance Sheet line.
         const rc = sooCur.reclass || {};
         const rcAt = (key, m) => (rc[key] || [])[m] || 0;
-        const cum = { purchases: 0, cogs: 0, capexOE: 0, capexFF: 0, repay: 0, withdraw: 0, ee: 0, cetf: 0, refund: 0 };
+        const cum = { purchases: 0, cogs: 0, capexOE: 0, capexFF: 0, repay: 0, withdraw: 0, ee: 0, cetf: 0, refund: 0, lockerDep: 0 };
         // The cooperative's active operations for 2026 run from January to November (months 0 to 10).
         for (let m = 0; m <= 10; m++) {
           const mRev = revLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
@@ -3475,9 +3476,10 @@ export const getFinancialStatementReport = async (req, res, next) => {
           cum.ee += rcAt('ee_remittances', m);
           cum.cetf += rcAt('cetf_remittance', m);
           cum.refund += rcAt('deposit_refunds', m);
+          cum.lockerDep += rcAt('locker_deposits', m);
 
-          // Net cash effect = P&L result + COGS (non-cash, inventory release) - every non-expense cash outflow
-          const cashAdj = cum.cogs - cum.purchases - cum.capexOE - cum.capexFF - cum.repay - cum.withdraw - cum.ee - cum.cetf - cum.refund;
+          // Net cash effect = P&L result + COGS (non-cash, inventory release) + locker deposits (liability) - every non-expense cash outflow
+          const cashAdj = cum.cogs + cum.lockerDep - cum.purchases - cum.capexOE - cum.capexFF - cum.repay - cum.withdraw - cum.ee - cum.cetf - cum.refund;
           const cashNet = cumNetCur + cashAdj;
 
           stores.inv_net_movement.current[m] += cum.purchases - cum.cogs;
@@ -3485,8 +3487,9 @@ export const getFinancialStatementReport = async (req, res, next) => {
           stores.furnitures_fixtures.current[m] += cum.capexFF;
           stores.loans_payable.current[m] -= cum.repay;
           stores.common_shares.current[m] -= cum.withdraw;
-          stores.ap_others.current[m] -= (cum.ee + cum.refund);
-          stores.due_cetf_apex.current[m] -= cum.cetf;
+          stores.ap_others.current[m] -= cum.ee;
+          stores.cetf_fund.current[m] -= cum.cetf;
+          stores.locker_deposit_payable.current[m] += (cum.lockerDep - cum.refund);
 
           if (m < 10) {
             // Months 0 to 9 (January to October):
@@ -3496,16 +3499,25 @@ export const getFinancialStatementReport = async (req, res, next) => {
             stores.cib_metrobank.current[m] += (BASELINE.cash_in_vault.cur + cashNet);
           } else {
             // Month 10 (November):
-            // Active current month: the manager still holds physical cash in the vault.
-            stores.cash_in_vault.current[m] += cashNet;
+            // Keep Jan-Oct's deposited funds in CIB (Metrobank) and hold only November's incremental cash flow in Vault.
+            const octCashNet = stores.cib_metrobank.current[9] - BASELINE.cib_metrobank.cur - BASELINE.cash_in_vault.cur;
+            const novCashFlow = cashNet - octCashNet;
+            stores.cib_metrobank.current[m] = stores.cib_metrobank.current[9];
+            stores.cash_in_vault.current[m] = Math.max(0, novCashFlow);
+            if (novCashFlow < 0) {
+              stores.cib_metrobank.current[m] += novCashFlow;
+            }
           }
         }
         // Month 11 (December) has not operated yet; carry forward November's position
         stores.net_surplus_period.current[11] = stores.net_surplus_period.current[10];
         stores.cash_in_vault.current[11] = stores.cash_in_vault.current[10];
         stores.cib_metrobank.current[11] = stores.cib_metrobank.current[10];
-        ['inv_net_movement', 'office_equipment', 'furnitures_fixtures', 'loans_payable', 'common_shares', 'ap_others', 'due_cetf_apex']
+        ['inv_net_movement', 'office_equipment', 'furnitures_fixtures', 'loans_payable', 'common_shares', 'ap_others', 'cetf_fund', 'locker_deposit_payable']
           .forEach(k => { stores[k].current[11] = stores[k].current[10]; });
+        if (Array.isArray(rc.locker_deposit_transactions)) {
+          stores.locker_deposit_payable.transactions.push(...rc.locker_deposit_transactions);
+        }
       }
 
       if (sooPrev?.statement) {
@@ -3821,7 +3833,8 @@ export const getFinancialStatementReport = async (req, res, next) => {
                 line('Accrued Expenses', 'Accrued utilities and operating obligations awaiting billing.', stores.accrued_expenses),
                 line('Due to CETF - Apex Organization', 'Statutory 50% allocation of CETF due to apex federation.', stores.due_cetf_apex, false),
                 line('CLPP Premium Payable', 'Credit life protection program premiums awaiting remittance.', stores.clpp_premium),
-                line('Insurance Payable', 'Member life and property insurance premiums collected awaiting remittance.', stores.insurance_payable)
+                line('Insurance Payable', 'Member life and property insurance premiums collected awaiting remittance.', stores.insurance_payable),
+                line('Locker Deposit Payable', 'Refundable ₱200 locker security deposits collected from students (held against locker damage/cleaning until end of semester).', stores.locker_deposit_payable, false)
               ]
             },
             {
@@ -3928,7 +3941,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
       .reduce((sum, k) => sum + (stores[k]?.current[11] || 0), 0);
 
     const totalLiabilities = Object.keys(BASELINE)
-      .filter(k => ['ap_trade', 'ap_others', 'loans_payable', 'accrued_expenses', 'due_cetf_apex', 'clpp_premium', 'insurance_payable', 'other_payables', 'dividend_payable', 'other_noncurrent_liabs'].includes(k))
+      .filter(k => ['ap_trade', 'ap_others', 'loans_payable', 'accrued_expenses', 'due_cetf_apex', 'clpp_premium', 'insurance_payable', 'locker_deposit_payable', 'other_payables', 'dividend_payable', 'other_noncurrent_liabs'].includes(k))
       .reduce((sum, k) => sum + (stores[k]?.current[11] || 0), 0);
 
     const totalEquity = Object.keys(BASELINE)
@@ -4210,6 +4223,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const serviceWater = newStore();
     const servicePrinting = newStore();
     const serviceLocker = newStore();
+    const lockerDeposits = newStore();
     const serviceMadeToOrder = newStore();
     const serviceOther = newStore();
     const bucketServiceByName = (svcName, rawDate, svcAmt, svcMeta) => {
@@ -4220,6 +4234,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       else if (/wifi/.test(n)) bucket(serviceWifi, rawDate, svcAmt, svcMeta);
       else if (/water/.test(n)) bucket(serviceWater, rawDate, svcAmt, svcMeta);
       else if (/print|photocopy|hardbound|lamination|id\s*photo/.test(n)) bucket(servicePrinting, rawDate, svcAmt, svcMeta);
+      else if (/locker\s*deposit/.test(n)) bucket(lockerDeposits, rawDate, svcAmt, svcMeta);
       else if (/locker|key\s*duplicate/.test(n)) bucket(serviceLocker, rawDate, svcAmt, svcMeta);
       else if (/type\s*a|type\s*b|gala|bsname|\bcap\b/.test(n)) bucket(serviceMadeToOrder, rawDate, svcAmt, svcMeta);
       else bucket(serviceOther, rawDate, svcAmt, svcMeta);
@@ -4421,7 +4436,9 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       withdrawals: zeros(),
       ee_remittances: zeros(),
       cetf_remittance: zeros(),
-      deposit_refunds: zeros()
+      deposit_refunds: zeros(),
+      locker_deposits: lockerDeposits.current,
+      locker_deposit_transactions: lockerDeposits.transactions
     };
 
     // Direct costs of running store services stay in Cost of Sales & Services
@@ -4651,7 +4668,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 line('', 'Income from Wifi', 'Cooperative WiFi access fees.', serviceWifi, false),
                 line('', 'Income from Water Vendo', 'Water vendo machine collections.', serviceWater, false),
                 line('', 'Income from Printing & Photocopy', 'Printing, photocopying, lamination, hardbound and ID photo services.', servicePrinting, false),
-                line('', 'Income from Locker & Key Duplicate', 'Locker rentals, deposits and key duplicate fees.', serviceLocker, false),
+                line('', 'Income from Locker & Key Duplicate', 'Locker rentals (₱250) and key duplicate fees.', serviceLocker, false),
                 line('', 'Income from Type A & B, Gala & BSNAME', 'Made-to-order Type A & B, Gala, BSNAME and cap collections.', serviceMadeToOrder, false)
               ]
             }
