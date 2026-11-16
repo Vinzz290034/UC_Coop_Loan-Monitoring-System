@@ -38,11 +38,13 @@ import {
   Plus,
   Trash2,
   Check,
-  Scale
+  Scale,
+  Landmark
 } from 'lucide-react';
 import FinancialSummaryGraphs from '@/components/reports/FinancialSummaryGraphs';
 import StatementOfOperationsTab from '@/components/reports/StatementOfOperationsTab';
 import FinancialStatementTab from '@/components/reports/FinancialStatementTab';
+import BankReconTab from '@/components/reports/BankReconTab';
 import {
   ACCOUNT_CATEGORIES,
   CATEGORY_THEMES,
@@ -62,6 +64,7 @@ type ReportTab =
   | 'membership'
   | 'statement_of_operations'
   | 'financial_statement'
+  | 'bank_recon'
   | 'summary';
 
 type ReportPeriod = 'daily' | 'monthly' | 'annual';
@@ -124,7 +127,7 @@ function ReportsPageContent() {
   // Active Report Tab - supports deep-linking via ?tab=expenses
   const [activeTab, setActiveTab] = useState<ReportTab>(() => {
     const t = searchParams?.get('tab') as ReportTab | null;
-    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement'].includes(t)) {
+    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement', 'bank_recon'].includes(t)) {
       return t;
     }
     return 'summary';
@@ -133,7 +136,7 @@ function ReportsPageContent() {
   // Keep activeTab synchronized when ?tab= query parameter changes
   useEffect(() => {
     const t = searchParams?.get('tab') as ReportTab | null;
-    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement'].includes(t)) {
+    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement', 'bank_recon'].includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
@@ -720,7 +723,7 @@ function ReportsPageContent() {
   // Fetch report data based on active tab and period
   const fetchReport = useCallback(async () => {
     // Statement of Operations & Financial Statement load their own data inside their tab components
-    if (activeTab === 'statement_of_operations' || activeTab === 'financial_statement') {
+    if (activeTab === 'statement_of_operations' || activeTab === 'financial_statement' || activeTab === 'bank_recon') {
       setLoading(false);
       return;
     }
@@ -736,6 +739,7 @@ function ReportsPageContent() {
         membership: '/reports/membership-update',
         statement_of_operations: '/reports/statement-of-operations',
         financial_statement: '/reports/financial-statement',
+        bank_recon: '/reports/bank-recon',
         summary: '/reports/financial-statement'
       };
 
@@ -1136,8 +1140,8 @@ function ReportsPageContent() {
           </div>
         </div>
 
-        {/* Global Period & Date Filter Control Bar (hidden on Loan Products, Statement of Operations & Financial Statement tabs) */}
-        {activeTab !== 'loans' && activeTab !== 'statement_of_operations' && activeTab !== 'financial_statement' && (
+        {/* Global Period & Date Filter Control Bar (hidden on Loan Products, Statement of Operations, Balance Sheet & Bank Recon tabs) */}
+        {activeTab !== 'loans' && activeTab !== 'statement_of_operations' && activeTab !== 'financial_statement' && activeTab !== 'bank_recon' && (
           <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-neutral-900 p-1.5 rounded-2xl border border-emerald-300 dark:border-emerald-800/80 shadow-xs">
             {/* Period Toggle */}
             <div className="flex items-center bg-emerald-50 dark:bg-emerald-950/60 p-0.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 text-xs font-bold">
@@ -1256,6 +1260,7 @@ function ReportsPageContent() {
           { id: 'membership', label: 'Membership Updates', icon: Users },
           { id: 'statement_of_operations', label: 'Statement of Operations', icon: FileText },
           { id: 'financial_statement', label: 'Balance Sheet', icon: Scale },
+          { id: 'bank_recon', label: 'Bank Recon', icon: Landmark },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1306,6 +1311,8 @@ function ReportsPageContent() {
         <StatementOfOperationsTab initialYear={year} initialMonth={month} />
       ) : activeTab === 'financial_statement' ? (
         <FinancialStatementTab initialYear={year} initialMonth={month} />
+      ) : activeTab === 'bank_recon' ? (
+        <BankReconTab initialYear={year} />
       ) : loading ? (
         <div className="p-12 text-center">
           <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
@@ -1331,7 +1338,7 @@ function ReportsPageContent() {
           {/* 2. MERCHANDISE SALES & PROFIT TAB */}
           {/* ============================================================== */}
           {activeTab === 'merchandise' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-micro-elevate">
               {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <div className="p-3.5 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
@@ -1643,7 +1650,7 @@ function ReportsPageContent() {
           {/* 2. EXPENSE BREAKDOWN TAB */}
           {/* ============================================================== */}
           {activeTab === 'expenses' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-micro-elevate">
               {/* Overall Expense Summary Cards - Interactive Category Filter */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {/* 1. Total Operating Expenses Card */}
@@ -2180,7 +2187,7 @@ function ReportsPageContent() {
           {/* 2.5 BOOK OF ACCOUNTS BY CATEGORY TAB */}
           {/* ============================================================== */}
           {activeTab === 'categories' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-micro-elevate">
               {/* Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
@@ -2479,7 +2486,7 @@ function ReportsPageContent() {
           {/* 3. LOAN PRODUCTS TAB */}
           {/* ============================================================== */}
           {activeTab === 'loans' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-micro-elevate">
               {/* System-Styled Monthly & Annual Inflow Breakdown */}
               {reportData.monthly_tracker && (() => {
                 const mt = reportData.monthly_tracker;
@@ -3341,7 +3348,7 @@ function ReportsPageContent() {
           {/* 4. MEMBERSHIP UPDATES TAB */}
           {/* ============================================================== */}
           {activeTab === 'membership' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-micro-elevate">
               {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">

@@ -12,7 +12,11 @@ import {
   getMembershipUpdateReport,
   getBooksOfAccountsReport,
   getFinancialStatementReport,
-  getStatementOfOperationsReport
+  getStatementOfOperationsReport,
+  getBankReconReport,
+  upsertBankReconEntry,
+  importBankReconEntries,
+  deleteBankReconEntry
 } from '../controllers/reportController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -58,5 +62,9 @@ router.get('/membership-update', getMembershipUpdateReport);
 router.get('/books-of-accounts', getBooksOfAccountsReport);
 router.get('/financial-statement', getFinancialStatementReport);
 router.get('/statement-of-operations', getStatementOfOperationsReport);
+router.get('/bank-recon', getBankReconReport);
+router.post('/bank-recon/entry', upsertBankReconEntry);
+router.post('/bank-recon/import', importBankReconEntries);
+router.delete('/bank-recon/:id', deleteBankReconEntry);
 
 export default router;

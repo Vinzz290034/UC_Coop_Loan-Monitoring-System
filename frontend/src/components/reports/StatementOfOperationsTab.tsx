@@ -788,7 +788,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
 
   // ---- Render -------------------------------------------------------------
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-micro-elevate">
       {/* ================= Header & period picker ================= */}
       <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs space-y-4 print:border-0 print:shadow-none">
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">

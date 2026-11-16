@@ -377,6 +377,8 @@ function CollectionPageContent() {
       ? 'Statement of Operations'
       : fromReport === 'financial_statement'
       ? 'Balance Sheet'
+      : fromReport === 'bank_recon'
+      ? 'Bank Recon'
       : fromReport === 'merchandise'
       ? 'Merchandise Sales & Profit'
       : 'Reports';

@@ -4769,3 +4769,367 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     next(error);
   }
 };
+
+// ==========================================
+// 12. BANK RECONCILIATION (BDO & MBTC LEDGERS)
+// ==========================================
+const ensureBankReconTable = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bank_recon_entries (
+      id SERIAL PRIMARY KEY,
+      bank VARCHAR(20) NOT NULL,
+      year INTEGER NOT NULL,
+      tx_date DATE,
+      voucher_no VARCHAR(100),
+      depositor_payee VARCHAR(255),
+      particulars TEXT,
+      withdrawal NUMERIC(14, 2) DEFAULT 0,
+      deposit NUMERIC(14, 2) DEFAULT 0,
+      entry_type VARCHAR(30) DEFAULT 'manual',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+};
+
+const BANK_DEFAULT_BEGINNING_BALANCE = {
+  2026: { BDO: 2031307.38, MBTC: 632451.36 },
+  2025: { BDO: 35526.34, MBTC: 50015.68 }
+};
+
+const normalizeBankCode = (raw) => {
+  const s = String(raw || '').trim().toUpperCase();
+  if (s.includes('MBTC') || s.includes('METRO')) return 'MBTC';
+  if (s.includes('BDO')) return 'BDO';
+  return null;
+};
+
+// @desc    Get Bank Recon ledger for BDO and MBTC (Withdrawals from Check Vouchers + Deposits from Collections + Imported/Manual entries)
+// @route   GET /api/reports/bank-recon?year=2026
+// @access  Protected (Admin, Staff)
+export const getBankReconReport = async (req, res, next) => {
+  try {
+    const targetYear = Number(req.query.year) || new Date().getFullYear();
+    await ensureBankReconTable();
+
+    const [reconRes, cvRes, colRes] = await Promise.all([
+      pool.query(
+        `SELECT id, bank, year, tx_date, voucher_no, depositor_payee, particulars, withdrawal, deposit, entry_type
+         FROM bank_recon_entries
+         WHERE year = $1
+         ORDER BY tx_date ASC NULLS FIRST, id ASC`,
+        [targetYear]
+      ),
+      pool.query(
+        `SELECT id, voucher_no, voucher_date, date_released, bank, check_no, payee, particulars, amount, folder_name, status
+         FROM check_vouchers
+         WHERE COALESCE(status, '') != 'cancelled'
+           AND EXTRACT(YEAR FROM voucher_date) = $1
+         ORDER BY voucher_date ASC, voucher_no ASC`,
+        [targetYear]
+      ),
+      pool.query(
+        `SELECT id, or_no, date, created_at, tab, status, payor_name, particulars, item_name, service_type, amount
+         FROM collections
+         WHERE COALESCE(status, 'completed') != 'cancelled'
+           AND EXTRACT(YEAR FROM COALESCE(date, created_at)) = $1
+         ORDER BY COALESCE(date, created_at) ASC, id ASC`,
+        [targetYear]
+      )
+    ]);
+
+    const buildBankLedger = (bankCode) => {
+      const bankManualRows = reconRes.rows.filter(r => normalizeBankCode(r.bank) === bankCode);
+      const begRow = bankManualRows.find(r => r.entry_type === 'beginning_balance');
+      const beginningBalance = begRow
+        ? (parseFloat(begRow.deposit) || 0) - (parseFloat(begRow.withdrawal) || 0)
+        : (BANK_DEFAULT_BEGINNING_BALANCE[targetYear]?.[bankCode] || 0);
+
+      const importedVoucherTokens = new Set(
+        bankManualRows
+          .filter(r => r.entry_type !== 'beginning_balance' && r.voucher_no)
+          .map(r => String(r.voucher_no).trim().toLowerCase())
+      );
+
+      const entries = [];
+
+      // 1. Imported / Manual entries (excluding beginning_balance)
+      bankManualRows
+        .filter(r => r.entry_type !== 'beginning_balance')
+        .forEach(r => {
+          const dStr = r.tx_date ? new Date(r.tx_date).toISOString().split('T')[0] : `${targetYear}-01-01`;
+          entries.push({
+            id: `recon-${r.id}`,
+            db_id: r.id,
+            date: dStr,
+            month: Number(dStr.slice(5, 7)) - 1,
+            voucher_no: r.voucher_no || '',
+            depositor_payee: r.depositor_payee || '',
+            particulars: r.particulars || (r.entry_type === 'import' ? 'Imported Bank Recon Entry' : 'Manual Entry'),
+            withdrawal: Math.round((parseFloat(r.withdrawal) || 0) * 100) / 100,
+            deposit: Math.round((parseFloat(r.deposit) || 0) * 100) / 100,
+            source: r.entry_type === 'import' ? 'imported' : 'manual',
+            voucher_id: null,
+            or_no: null
+          });
+        });
+
+      // 2. Check Vouchers drawn on this bank (Withdrawals: Loans -> BDO, Merchandise/Service -> MBTC if bank unset)
+      cvRes.rows.forEach(cv => {
+        let cvBank = normalizeBankCode(cv.bank);
+        if (!cvBank) {
+          const folder = String(cv.folder_name || '').toLowerCase();
+          if (folder.includes('merchandise') || folder.includes('service')) cvBank = 'MBTC';
+          else if (folder.includes('loan') || folder.includes('stl')) cvBank = 'BDO';
+        }
+        if (cvBank !== bankCode) return;
+        const vNo = String(cv.voucher_no || '').trim();
+        const vToken = vNo.toLowerCase();
+        const altToken = vToken.replace(/^26-/, 'v');
+        if (vToken && (importedVoucherTokens.has(vToken) || importedVoucherTokens.has(altToken))) return;
+
+        const amt = parseFloat(cv.amount) || 0;
+        if (amt <= 0 || !cv.voucher_date) return;
+        const dStr = new Date(cv.voucher_date).toISOString().split('T')[0];
+        entries.push({
+          id: `cv-${cv.id}`,
+          db_id: null,
+          date: dStr,
+          month: Number(dStr.slice(5, 7)) - 1,
+          voucher_no: vNo ? `CV ${vNo}` : 'CV',
+          raw_voucher_no: vNo,
+          check_no: cv.check_no || null,
+          depositor_payee: cv.payee || 'Payee',
+          particulars: cv.particulars || cv.folder_name || 'Check Voucher Disbursement',
+          withdrawal: Math.round(amt * 100) / 100,
+          deposit: 0,
+          source: 'check_voucher',
+          voucher_id: cv.id,
+          or_no: null
+        });
+      });
+
+      // 3. Cashier Collections deposited to this bank (Deposits)
+      colRes.rows.forEach(col => {
+        const rawDate = col.date || col.created_at;
+        if (!rawDate) return;
+        const d = new Date(rawDate);
+        if (isNaN(d.getTime())) return;
+        const dStr = d.toISOString().split('T')[0];
+
+        let colBank = normalizeBankCode(col.status);
+        if (!colBank) {
+          const tLower = String(col.tab || '').toLowerCase().trim();
+          if (tLower === 'sales' || tLower === 'services' || tLower === 'sales_services') {
+            colBank = 'MBTC';
+          } else if (tLower === 'credit' || tLower === 'billing') {
+            colBank = 'BDO';
+          }
+        }
+        if (colBank !== bankCode) return;
+
+        const orNo = String(col.or_no || '').trim();
+        if (orNo && (importedVoucherTokens.has(`si-${orNo.toLowerCase()}`) || importedVoucherTokens.has(orNo.toLowerCase()))) return;
+
+        const amt = parseFloat(col.amount) || 0;
+        if (amt <= 0) return;
+
+        entries.push({
+          id: `col-${col.id}`,
+          db_id: null,
+          date: dStr,
+          month: Number(dStr.slice(5, 7)) - 1,
+          voucher_no: orNo ? `SI-${orNo}` : 'Collection',
+          depositor_payee: col.payor_name || 'Member',
+          particulars: col.particulars || col.item_name || col.service_type || 'Cashier Collection Deposit',
+          withdrawal: 0,
+          deposit: Math.round(amt * 100) / 100,
+          source: 'collection',
+          voucher_id: null,
+          or_no: orNo || null
+        });
+      });
+
+      // Sort chronologically and compute running balance
+      entries.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : String(a.voucher_no).localeCompare(String(b.voucher_no))));
+
+      let running = Math.round(beginningBalance * 100) / 100;
+      let totalDeposits = 0;
+      let totalWithdrawals = 0;
+      const monthly = Array.from({ length: 12 }, () => ({
+        deposits: 0,
+        withdrawals: 0,
+        ending_balance: running
+      }));
+
+      for (const e of entries) {
+        running = Math.round((running + e.deposit - e.withdrawal) * 100) / 100;
+        e.balance = running;
+        totalDeposits += e.deposit;
+        totalWithdrawals += e.withdrawal;
+        if (e.month >= 0 && e.month <= 11) {
+          monthly[e.month].deposits = Math.round((monthly[e.month].deposits + e.deposit) * 100) / 100;
+          monthly[e.month].withdrawals = Math.round((monthly[e.month].withdrawals + e.withdrawal) * 100) / 100;
+        }
+      }
+
+      // Compute monthly cumulative ending balances
+      let mRunning = Math.round(beginningBalance * 100) / 100;
+      for (let m = 0; m < 12; m++) {
+        mRunning = Math.round((mRunning + monthly[m].deposits - monthly[m].withdrawals) * 100) / 100;
+        monthly[m].ending_balance = mRunning;
+      }
+
+      return {
+        bank: bankCode,
+        beginning_balance: Math.round(beginningBalance * 100) / 100,
+        beginning_balance_id: begRow?.id || null,
+        total_deposits: Math.round(totalDeposits * 100) / 100,
+        total_withdrawals: Math.round(totalWithdrawals * 100) / 100,
+        ending_balance: running,
+        monthly,
+        entries
+      };
+    };
+
+    const banks = {
+      BDO: buildBankLedger('BDO'),
+      MBTC: buildBankLedger('MBTC')
+    };
+
+    if (typeof res?.set === 'function') res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    return res.status(200).json({
+      success: true,
+      year: targetYear,
+      banks
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Add or update a Bank Recon entry (including Beginning Balance)
+// @route   POST /api/reports/bank-recon/entry
+// @access  Protected (Admin, Staff)
+export const upsertBankReconEntry = async (req, res, next) => {
+  try {
+    await ensureBankReconTable();
+    const bank = normalizeBankCode(req.body.bank);
+    const year = Number(req.body.year) || new Date().getFullYear();
+    const entryType = String(req.body.entry_type || 'manual').trim();
+    if (!bank) {
+      return res.status(400).json({ success: false, message: 'Valid bank (BDO or MBTC) is required.' });
+    }
+
+    if (entryType === 'beginning_balance') {
+      const amount = parseFloat(req.body.amount ?? req.body.deposit ?? 0) || 0;
+      await pool.query(
+        `DELETE FROM bank_recon_entries WHERE bank = $1 AND year = $2 AND entry_type = 'beginning_balance'`,
+        [bank, year]
+      );
+      const ins = await pool.query(
+        `INSERT INTO bank_recon_entries (bank, year, tx_date, voucher_no, depositor_payee, particulars, withdrawal, deposit, entry_type)
+         VALUES ($1, $2, $3, 'BEG-BAL', 'Beginning Balance', $4, 0, $5, 'beginning_balance')
+         RETURNING *`,
+        [bank, year, `${year}-01-01`, `${bank} Beginning Balance (${year})`, amount]
+      );
+      return res.status(200).json({ success: true, data: ins.rows[0] });
+    }
+
+    const txDate = req.body.tx_date || `${year}-01-01`;
+    const voucherNo = String(req.body.voucher_no || '').trim();
+    const depositorPayee = String(req.body.depositor_payee || '').trim();
+    const particulars = String(req.body.particulars || '').trim();
+    const withdrawal = parseFloat(req.body.withdrawal || 0) || 0;
+    const deposit = parseFloat(req.body.deposit || 0) || 0;
+
+    const ins = await pool.query(
+      `INSERT INTO bank_recon_entries (bank, year, tx_date, voucher_no, depositor_payee, particulars, withdrawal, deposit, entry_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [bank, year, txDate, voucherNo, depositorPayee, particulars, withdrawal, deposit, entryType]
+    );
+
+    return res.status(201).json({ success: true, data: ins.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Bulk import Bank Recon rows from Excel/CSV
+// @route   POST /api/reports/bank-recon/import
+// @access  Protected (Admin, Staff)
+export const importBankReconEntries = async (req, res, next) => {
+  try {
+    await ensureBankReconTable();
+    const bank = normalizeBankCode(req.body.bank);
+    const year = Number(req.body.year) || new Date().getFullYear();
+    const replaceExisting = Boolean(req.body.replace_existing);
+    const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+
+    if (!bank) {
+      return res.status(400).json({ success: false, message: 'Valid bank (BDO or MBTC) is required.' });
+    }
+    if (rows.length === 0 && req.body.beginning_balance === undefined) {
+      return res.status(400).json({ success: false, message: 'No rows provided for import.' });
+    }
+
+    if (replaceExisting) {
+      await pool.query(
+        `DELETE FROM bank_recon_entries WHERE bank = $1 AND year = $2 AND entry_type = 'import'`,
+        [bank, year]
+      );
+    }
+
+    if (req.body.beginning_balance !== undefined && req.body.beginning_balance !== null && req.body.beginning_balance !== '') {
+      const begAmt = parseFloat(req.body.beginning_balance) || 0;
+      await pool.query(
+        `DELETE FROM bank_recon_entries WHERE bank = $1 AND year = $2 AND entry_type = 'beginning_balance'`,
+        [bank, year]
+      );
+      await pool.query(
+        `INSERT INTO bank_recon_entries (bank, year, tx_date, voucher_no, depositor_payee, particulars, withdrawal, deposit, entry_type)
+         VALUES ($1, $2, $3, 'BEG-BAL', 'Beginning Balance', $4, 0, $5, 'beginning_balance')`,
+        [bank, year, `${year}-01-01`, `${bank} Beginning Balance (${year})`, begAmt]
+      );
+    }
+
+    let inserted = 0;
+    for (const r of rows) {
+      const withdrawal = parseFloat(r.withdrawal || 0) || 0;
+      const deposit = parseFloat(r.deposit || 0) || 0;
+      if (withdrawal === 0 && deposit === 0) continue;
+      const txDate = r.tx_date || `${year}-01-01`;
+      const voucherNo = String(r.voucher_no || '').trim();
+      const depositorPayee = String(r.depositor_payee || '').trim();
+      const particulars = String(r.particulars || '').trim();
+      await pool.query(
+        `INSERT INTO bank_recon_entries (bank, year, tx_date, voucher_no, depositor_payee, particulars, withdrawal, deposit, entry_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'import')`,
+        [bank, year, txDate, voucherNo, depositorPayee, particulars, withdrawal, deposit]
+      );
+      inserted++;
+    }
+
+    return res.status(200).json({
+      success: true,
+      inserted,
+      message: `Imported ${inserted} ${bank} Bank Recon entries for ${year}.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete a single Bank Recon entry (or clear imported entries)
+// @route   DELETE /api/reports/bank-recon/:id
+// @access  Protected (Admin, Staff)
+export const deleteBankReconEntry = async (req, res, next) => {
+  try {
+    await ensureBankReconTable();
+    const { id } = req.params;
+    await pool.query(`DELETE FROM bank_recon_entries WHERE id = $1`, [Number(id)]);
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
