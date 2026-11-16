@@ -1061,7 +1061,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
             {[
               { label: 'Total Income (Revenues)', hint: 'All money earned', f: totals.revenue, icon: Wallet, color: 'text-emerald-700 dark:text-emerald-400', isExpense: false },
               { label: 'Total Expenses', hint: 'All money spent', f: totals.expenses, icon: Receipt, color: 'text-amber-700 dark:text-amber-400', isExpense: true },
-              { label: 'Total Net Surplus', hint: 'Income minus expenses', f: totals.net, icon: Scale, color: totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400', isExpense: false }
+              { label: 'Total Net Surplus', hint: 'Income minus expenses', f: totals.net, icon: Scale, color: (isYtd ? totals.net.ytd : totals.net.thisMonth) >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400', isExpense: false }
             ].map(c => {
               const Icon = c.icon;
               return (
@@ -1073,14 +1073,20 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                     </div>
                     <Icon className={`w-5 h-5 ${c.color}`} />
                   </div>
-                  <div className={`text-2xl font-black font-mono mt-2 ${c.color}`}>{peso(c.f.ytd)}</div>
+                  <div className={`text-2xl font-black font-mono mt-2 ${c.color}`}>
+                    {peso(isYtd ? c.f.ytd : c.f.thisMonth)}
+                  </div>
                   <div className="text-[10.5px] text-neutral-500">
-                    {isYtd ? `Full Year ${year} (YTD)` : `Year to date (Jan – ${MONTHS_SHORT[selectedPeriod as number]} ${year})`}
+                    {isYtd ? `Full Year ${year} (YTD)` : `${MONTHS[selectedPeriod as number]} ${year}`}
                   </div>
                   <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800 grid grid-cols-2 gap-2 text-[11px]">
                     <div>
-                      <div className="text-neutral-400">{isYtd ? 'Annual' : 'This month'}</div>
-                      <div className="font-mono font-bold text-neutral-800 dark:text-neutral-200">{peso(c.f.thisMonth)}</div>
+                      <div className="text-neutral-400">
+                        {isYtd ? 'Annual' : `YTD (Jan – ${MONTHS_SHORT[selectedPeriod as number]})`}
+                      </div>
+                      <div className="font-mono font-bold text-neutral-800 dark:text-neutral-200">
+                        {peso(isYtd ? c.f.thisMonth : c.f.ytd)}
+                      </div>
                     </div>
                     <div>
                       <div className="text-neutral-400">vs. last year</div>
