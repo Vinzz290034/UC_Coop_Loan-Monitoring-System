@@ -5,7 +5,6 @@
 
 export const PETTY_CASH_ACCOUNT_OPTIONS = [
   'Communication',
-  'COS -water',
   'COS - Water Vendo',
   'Freight in',
   'Hygiene expense',
@@ -86,7 +85,6 @@ export const SERVICES_EXPENSE_ACCOUNT_OPTIONS = [
   'COS - Insurance',
   'COS - Printing',
   'COS - Scoresheet',
-  'COS - Water',
   'COS - Water Vendo',
   'COS - WiFi',
   'Labor',
@@ -232,6 +230,7 @@ export function normalizeAccountName(rawName: string): string {
   if (/food\s*budget\s*for\s*ga|general\s*assembly\s*food/i.test(lower)) return 'Meetings and Conferences';
   if (/raffle\s*ticket\s*rebate|raffle\s*draw\s*prize|raffle\s*prize/i.test(lower)) return 'Members Benefit Expense';
   if (/cdf\s*-\s*subsidy/i.test(lower)) return 'Donation Expense';
+  if (/^cos\s*-\s*water(\s*vendo)?$/i.test(lower)) return 'COS - Water Vendo';
 
   if (/^cos\s*-\s*/i.test(str)) {
     const suffix = str.replace(/^cos\s*-\s*/i, '').trim();
@@ -285,6 +284,10 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
   if (!trimmed) return 'Operation';
   const lower = trimmed.toLowerCase();
 
+  if (/^cos\s*-\s*water(\s*vendo)?$/i.test(lower)) {
+    return 'Service';
+  }
+
   // 1. Check explicitly passed category map
   if (categoryMap && categoryMap[lower]) {
     return categoryMap[lower];
@@ -336,6 +339,7 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
   // 6. Service accounts
   if (
     lower.includes('wifi') ||
+    lower.includes('water') ||
     lower.includes('scoresheet') ||
     lower.includes('score sheet') ||
     lower.includes('toga rental') ||
