@@ -385,6 +385,12 @@ function CollectionPageContent() {
 
   const handleBackToReport = useCallback(() => {
     const p = new URLSearchParams();
+    if (fromReport === 'bank_recon') {
+      if (returnYear) p.set('year', returnYear);
+      const qs = p.toString();
+      router.push(`/dashboard/bank-recon${qs ? `?${qs}` : ''}`);
+      return;
+    }
     p.set('tab', fromReport || 'statement_of_operations');
     if (returnSubView) p.set('subview', returnSubView);
     if (returnAccount) p.set('account', returnAccount);
