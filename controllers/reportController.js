@@ -1182,6 +1182,7 @@ export function normalizeAccountName(rawName) {
   if (/cdf\s*-\s*subsidy/i.test(lower)) return 'Donation Expense';
   if (/^operation$/i.test(lower)) return 'Miscellaneous Expense';
   if (/^cos\s*-\s*water(\s*vendo)?$/i.test(lower)) return 'COS - Water Vendo';
+  if (/^(merchandise\s*)?inventory\s*-\s*pershing\s*cap$/i.test(lower)) return 'Merchandise Inventory - Pershing Cap';
 
   if (/^cos\s*-\s*/i.test(str)) {
     const suffix = str.replace(/^cos\s*-\s*/i, '').trim();

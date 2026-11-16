@@ -486,7 +486,6 @@ const MERCHANDISE_ACCOUNT_OPTIONS = [
   'Freight in',
   'Inventory-handbag',
   'Inventory-hardhat',
-  'Inventory-Pershing cap',
   'Inventory-safety goggles',
   'Merchandise Inventory - Gala',
   'Merchandise Inventory - Lanyard',

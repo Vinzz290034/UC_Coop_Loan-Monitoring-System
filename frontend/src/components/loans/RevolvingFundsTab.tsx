@@ -159,7 +159,7 @@ export const ACCOUNT_OPTIONS = [
   'Service charge',
   'Philhealth -EE share',
   'Philhealth-ER share',
-  'Inventory-Pershing cap',
+  'Merchandise Inventory - Pershing Cap',
   'Refund Payable',
   'Meeting meals',
   'Incentive',

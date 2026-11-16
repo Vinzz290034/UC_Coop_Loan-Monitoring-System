@@ -31,7 +31,6 @@ export const MERCHANDISE_ACCOUNT_OPTIONS = [
   'Freight in',
   'Inventory-handbag',
   'Inventory-hardhat',
-  'Inventory-Pershing cap',
   'Inventory-safety goggles',
   'Merchandise Inventory - Gala',
   'Merchandise Inventory - Lanyard',
@@ -229,6 +228,7 @@ export function normalizeAccountName(rawName: string): string {
   if (/raffle\s*ticket\s*rebate|raffle\s*draw\s*prize|raffle\s*prize/i.test(lower)) return 'Members Benefit Expense';
   if (/cdf\s*-\s*subsidy/i.test(lower)) return 'Donation Expense';
   if (/^cos\s*-\s*water(\s*vendo)?$/i.test(lower)) return 'COS - Water Vendo';
+  if (/^(merchandise\s*)?inventory\s*-\s*pershing\s*cap$/i.test(lower)) return 'Merchandise Inventory - Pershing Cap';
 
   if (/^cos\s*-\s*/i.test(str)) {
     const suffix = str.replace(/^cos\s*-\s*/i, '').trim();
@@ -284,6 +284,9 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
 
   if (/^cos\s*-\s*water(\s*vendo)?$/i.test(lower)) {
     return 'Service';
+  }
+  if (/^(merchandise\s*)?inventory\s*-\s*pershing\s*cap$/i.test(lower)) {
+    return 'Merchandise';
   }
 
   // 1. Check explicitly passed category map
