@@ -904,16 +904,20 @@ export const getMerchandiseSalesReport = async (req, res, next) => {
       if (hasItems) {
         row.items.forEach((it, idx) => {
           const itName = String(it.item || it.item_name || 'Merchandise Item').trim();
+          const parsedCost = parseFloat(String(it.cost_price));
+          const hasPositiveCost = !Number.isNaN(parsedCost) && parsedCost > 0;
           const hasExplicitZeroCost =
             !it.item_type &&
             it.cost_price !== undefined &&
             it.cost_price !== null &&
             it.cost_price !== '' &&
-            (parseFloat(String(it.cost_price)) || 0) <= 0;
+            (parsedCost || 0) <= 0;
           const isSvcItem =
             String(it.item_type || '').toLowerCase() === 'service' ||
-            hasExplicitZeroCost ||
-            /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName);
+            (!hasPositiveCost && (
+              hasExplicitZeroCost ||
+              /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName)
+            ));
           if (isSvcItem) return;
 
           const itSize = String(it.size || '—').trim();
@@ -4291,16 +4295,20 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         let hasSvc = false;
         col.items.forEach((it) => {
           const itName = String(it.item || it.item_name || '').trim();
+          const parsedCost = parseFloat(String(it.cost_price));
+          const hasPositiveCost = !Number.isNaN(parsedCost) && parsedCost > 0;
           const hasExplicitZeroCost =
             !it.item_type &&
             it.cost_price !== undefined &&
             it.cost_price !== null &&
             it.cost_price !== '' &&
-            (parseFloat(String(it.cost_price)) || 0) <= 0;
+            (parsedCost || 0) <= 0;
           const isSvc =
             String(it.item_type || '').toLowerCase() === 'service' ||
-            hasExplicitZeroCost ||
-            /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName);
+            (!hasPositiveCost && (
+              hasExplicitZeroCost ||
+              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName)
+            ));
           const q = parseFloat(String(it.quantity)) || 1;
           const sp = parseFloat(String(it.selling_price || it.unit_price || 0)) || 0;
           const cp = parseFloat(String(it.cost_price || 0)) || 0;
@@ -4416,8 +4424,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       deposit_refunds: zeros()
     };
 
-    // Direct costs of running store services stay in Cost of Sales & Services (excluding store manuals)
-    const isDirectServiceCost = (acc) => !/manual/i.test(acc) && /^cos\b|commission|freight|delivery\s*fee|delivery|porterage|wifi|water|^service$/i.test(acc);
+    // Direct costs of running store services stay in Cost of Sales & Services
+    const isDirectServiceCost = (acc) => /^cos\b|commission|freight|delivery\s*fee|delivery|porterage|wifi|water|^service$/i.test(acc);
 
     const classifyNonExpense = (acc, particulars = '') => {
       const combined = `${acc} ${particulars || ''}`;

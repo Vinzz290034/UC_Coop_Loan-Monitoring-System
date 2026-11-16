@@ -128,11 +128,13 @@ const isServiceCollectionItem = (it: any): boolean => {
   if (!it) return false;
   if (it.item_type === 'service') return true;
   if (it.item_type === 'merchandise') return false;
+  const parsedCost = parseFloat(String(it.cost_price));
+  if (!Number.isNaN(parsedCost) && parsedCost > 0) return false;
   const hasExplicitZeroCost =
     it.cost_price !== undefined &&
     it.cost_price !== null &&
     it.cost_price !== '' &&
-    (parseFloat(String(it.cost_price)) || 0) <= 0;
+    (parsedCost || 0) <= 0;
   if (hasExplicitZeroCost) return true;
   const name = String(it.item || it.item_name || '').trim().toLowerCase();
   return /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(name);
