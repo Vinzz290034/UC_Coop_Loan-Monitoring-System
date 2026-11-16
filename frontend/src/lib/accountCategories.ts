@@ -420,3 +420,30 @@ export const restoreRfDeletedAccount = (name: string) => {
   } catch {}
 };
 
+/**
+ * Case-insensitively deduplicate account options, preferring variants with higher voucher counts
+ * (or the first/canonical casing when counts tie).
+ */
+export function dedupeAccountOptions(
+  names: string[],
+  voucherCounts?: Record<string, number>
+): string[] {
+  const byLower = new Map<string, string>();
+  for (const raw of names) {
+    const clean = String(raw || '').trim();
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    const existing = byLower.get(key);
+    if (!existing) {
+      byLower.set(key, clean);
+    } else if (voucherCounts) {
+      const prevCount = voucherCounts[existing] || 0;
+      const nextCount = voucherCounts[clean] || 0;
+      if (nextCount > prevCount) {
+        byLower.set(key, clean);
+      }
+    }
+  }
+  return Array.from(byLower.values());
+}
+

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import api from '@/lib/api';
 import UnifiedCvLfPrintModal from '@/components/loans/UnifiedCvLfPrintModal';
+import { dedupeAccountOptions } from '@/lib/accountCategories';
 import {
   FileSpreadsheet,
   Search,
@@ -307,7 +308,7 @@ export default function RevolvingFundsTab({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            base = Array.from(new Set([...ACCOUNT_OPTIONS, ...parsed]));
+            base = dedupeAccountOptions([...ACCOUNT_OPTIONS, ...parsed]);
           }
         }
       } catch {
@@ -359,7 +360,7 @@ export default function RevolvingFundsTab({
         const deleted = getRfDeletedAccountsSet();
 
         setAccountOptions(prev => {
-          const merged = Array.from(new Set([...ACCOUNT_OPTIONS, ...prev, ...serverNames]))
+          const merged = dedupeAccountOptions([...ACCOUNT_OPTIONS, ...prev, ...serverNames])
             .filter(a => !deleted.has(a.trim().toLowerCase()))
             .sort((a, b) => a.localeCompare(b));
           try {

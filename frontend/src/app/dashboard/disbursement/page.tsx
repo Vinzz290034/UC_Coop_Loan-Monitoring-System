@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
+import { dedupeAccountOptions } from '@/lib/accountCategories';
 import { Skeleton } from '@/components/ui/Skeleton';
 import UnifiedCvLfPrintModal, { getSignatoryTitle } from '@/components/loans/UnifiedCvLfPrintModal';
 import {
@@ -1673,7 +1674,7 @@ function DisbursementPageContent() {
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            base = Array.from(new Set([...REPLENISHMENT_ACCOUNT_OPTIONS, ...parsed]));
+            base = dedupeAccountOptions([...REPLENISHMENT_ACCOUNT_OPTIONS, ...parsed]);
           }
         }
       } catch {
@@ -1790,7 +1791,7 @@ function DisbursementPageContent() {
         const recLowerSet = new Set((recipientOptions || []).map(r => r.trim().toLowerCase()));
 
         setCustomAccountOptions(prev => {
-          const merged = Array.from(new Set([...REPLENISHMENT_ACCOUNT_OPTIONS, ...prev, ...serverNames]))
+          const merged = dedupeAccountOptions([...REPLENISHMENT_ACCOUNT_OPTIONS, ...prev, ...serverNames], serverCounts)
             .filter(a => !deleted.has(a.trim().toLowerCase()) && !recLowerSet.has(a.trim().toLowerCase()))
             .sort((a, b) => a.localeCompare(b));
           try {
