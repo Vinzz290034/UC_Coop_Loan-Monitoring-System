@@ -1035,16 +1035,17 @@ function getSummaryCvRows(
     }
   }
 
-  // Balancing Credit row: CIB-MBTC
+  // Balancing Credit row: CIB-MBTC (only needed when deductions don't already cover debitTotal)
   if (debitTotal > 0) {
     const balancingCib = Math.max(0, debitTotal - deductionCreditTotal);
-    const cibCreditAmt = balancingCib > 0 ? balancingCib : debitTotal;
-    rows.push({
-      description: cibName,
-      debit: null,
-      credit: cibCreditAmt
-    });
-    creditTotal += cibCreditAmt;
+    if (balancingCib > 0) {
+      rows.push({
+        description: cibName,
+        debit: null,
+        credit: balancingCib
+      });
+      creditTotal += balancingCib;
+    }
   }
 
   return { rows, debitTotal, creditTotal };

@@ -2569,17 +2569,18 @@ function DisbursementPageContent() {
 
     if (debitTotal > 0) {
       const balancingCib = Math.max(0, debitTotal - deductionCreditTotal);
-      const cibCreditAmt = balancingCib > 0 ? balancingCib : debitTotal;
-      rows.push({
-        id: 'credit-cib',
-        date: dateStr,
-        voucher_no: vNo,
-        description: cibName,
-        remarks: '',
-        debit: null,
-        credit: cibCreditAmt
-      });
-      creditTotal += cibCreditAmt;
+      if (balancingCib > 0) {
+        rows.push({
+          id: 'credit-cib',
+          date: dateStr,
+          voucher_no: vNo,
+          description: cibName,
+          remarks: '',
+          debit: null,
+          credit: balancingCib
+        });
+        creditTotal += balancingCib;
+      }
     }
 
     return { rows, debitTotal, creditTotal };
