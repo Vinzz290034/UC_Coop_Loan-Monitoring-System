@@ -502,7 +502,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
 
   const isBroadCategoryDesc = (desc: string) => {
     const d = (desc || '').trim().toLowerCase();
-    return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'short term loan replenishment', 'stl replenishment', 'stl fund replenishment', 'revolving fund', 'revolving fund replenishment', 'loan', 'loans receivable', 'petty cash', 'petty cash replenishment'].includes(d) ||
+    return ['operation', 'operations', 'service', 'services', 'merchandise', 'cdf', 'cetf', 'stl', 'short term loan', 'short term loan replenishment', 'stl replenishment', 'stl fund replenishment', 'revolving fund', 'revolving fund replenishment', 'loan', 'loans receivable', 'petty cash', 'petty cash loan', 'petty cash replenishment'].includes(d) ||
            /^(revolving\s*fund|stl|short\s*term\s*loan)\s*-\s*(operation|operations|service|services|stl|cdf|cetf|merchandise)$/i.test(d);
   };
 

@@ -127,7 +127,7 @@ export const ACCOUNT_CATEGORIES: readonly AccountCategoryOption[] = [
   { value: 'Operation', label: 'Operation', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border-blue-300 dark:border-blue-700', description: 'General operations, utilities, rent, licenses & office expenses' },
   { value: 'Merchandise', label: 'Merchandise', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700', description: 'Inventory stock, COGS, uniform items, pershing caps & resale merchandise' },
   { value: 'Service', label: 'Service', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 border-purple-300 dark:border-purple-700', description: 'Printing, WiFi, photocopier toner, ID supplies, service maintenance' },
-  { value: 'Petty Cash', label: 'Petty Cash', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700', description: 'Small daily office expenses, meeting meals, hygiene & local travel' },
+  { value: 'Petty Cash Loan', label: 'Petty Cash Loan', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700', description: 'Petty cash loan advances, small daily office expenses, meeting meals, hygiene & local travel' },
   { value: 'Revolving Fund', label: 'Revolving Fund', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border-teal-300 dark:border-teal-700', description: 'Branch and custodial revolving funds, manager funds & cash replenishment' },
   { value: 'CETF', label: 'CETF', color: 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-300 dark:border-rose-700', description: 'Cooperative Education & Training Fund allocations & seminars' },
   { value: 'CDF', label: 'CDF', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700', description: 'Community Development Fund initiatives & outreach programs' },
@@ -157,6 +157,13 @@ export const CATEGORY_THEMES: Record<string, { bg: string; text: string; border:
     border: 'border-purple-200 dark:border-purple-800/60',
     badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-300 border border-purple-200 dark:border-purple-700',
     iconBg: 'bg-purple-600 text-white'
+  },
+  'Petty Cash Loan': {
+    bg: 'bg-emerald-50/70 dark:bg-emerald-950/20',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-200 dark:border-emerald-800/60',
+    badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700',
+    iconBg: 'bg-emerald-600 text-white'
   },
   'Petty Cash': {
     bg: 'bg-emerald-50/70 dark:bg-emerald-950/20',
@@ -289,9 +296,14 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
     return 'Merchandise';
   }
 
+  // 0. Explicit Petty Cash Loan accounts (always categorize as Petty Cash Loan)
+  if (lower.includes('petty cash loan')) {
+    return 'Petty Cash Loan';
+  }
+
   // 1. Check explicitly passed category map
   if (categoryMap && categoryMap[lower]) {
-    return categoryMap[lower];
+    return categoryMap[lower] === 'Petty Cash' ? 'Petty Cash Loan' : categoryMap[lower];
   }
 
   // 2. Check localStorage cache
@@ -300,7 +312,7 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
       const saved = localStorage.getItem('rf_account_categories');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed[lower]) return parsed[lower];
+        if (parsed[lower]) return parsed[lower] === 'Petty Cash' ? 'Petty Cash Loan' : parsed[lower];
       }
     } catch {
       // ignore
@@ -315,7 +327,7 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
     lower === 'meeting meals' ||
     (lower.includes('petty') && !lower.includes('revolving'))
   ) {
-    return 'Petty Cash';
+    return 'Petty Cash Loan';
   }
 
   // 4. Honorarium & Wages accounts
@@ -374,10 +386,10 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
   }
 
   if (lower.includes('water')) {
-    return 'Petty Cash';
+    return 'Petty Cash Loan';
   }
   if (lower.includes('transportation') || lower.includes('travel')) {
-    return 'Petty Cash';
+    return 'Petty Cash Loan';
   }
   if (lower.includes('freight') || lower.includes('porterage')) {
     return 'Merchandise';
