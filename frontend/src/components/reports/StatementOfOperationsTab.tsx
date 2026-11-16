@@ -1024,38 +1024,6 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
         </div>
       ) : data && totals ? (
         <div className={`space-y-5 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
-          {/* ================= Quick answer ================= */}
-          <div className={`p-4 rounded-2xl border flex items-start gap-3 ${
-            totals.net.ytd >= 0
-              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800'
-              : 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800'
-          }`}>
-            <Scale className={`w-6 h-6 shrink-0 ${totals.net.ytd >= 0 ? 'text-emerald-700' : 'text-rose-700'}`} />
-            <div className="text-sm text-neutral-800 dark:text-neutral-200">
-              <div className="font-black">In short:</div>
-              {isYtd ? (
-                <>
-                  From January to {MONTHS[ytdEndMonthIdx]} <b>{year}</b> (YTD), the cooperative earned <b>{peso(totals.revenue.ytd)}</b> and spent{' '}
-                  <b>{peso(totals.expenses.ytd)}</b>. That leaves a{' '}
-                  <b className={totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
-                    {totals.net.ytd >= 0 ? 'surplus (extra money)' : 'deficit (shortage)'} of {peso(Math.abs(totals.net.ytd))}
-                  </b>.
-                </>
-              ) : (
-                <>
-                  From January to {MONTHS[selectedPeriod as number]} {year}, the cooperative earned <b>{peso(totals.revenue.ytd)}</b> and spent{' '}
-                  <b>{peso(totals.expenses.ytd)}</b>. That leaves a{' '}
-                  <b className={totals.net.ytd >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
-                    {totals.net.ytd >= 0 ? 'surplus (extra money)' : 'deficit (shortage)'} of {peso(Math.abs(totals.net.ytd))}
-                  </b>.
-                  {' '}For {MONTHS[selectedPeriod as number]} alone, the result is{' '}
-                  <b>{totals.net.thisMonth >= 0 ? '' : '−'}{peso(Math.abs(totals.net.thisMonth))}</b>.
-                </>
-              )}
-            </div>
-          </div>
-
-
           {/* ================= Big summary cards ================= */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {[
