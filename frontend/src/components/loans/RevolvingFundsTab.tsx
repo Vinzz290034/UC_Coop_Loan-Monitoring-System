@@ -147,7 +147,7 @@ export const ACCOUNT_OPTIONS = [
   'Miscellaneous',
   'Freight in',
   'Porterage',
-  'Meeting & conferences',
+  'Meeting & Conferences',
   'loan receivable',
   'COGS-Pershing cap',
   'COGS-handbag',

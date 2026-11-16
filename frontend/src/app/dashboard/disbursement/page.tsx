@@ -511,7 +511,7 @@ const OPERATION_EXPENSE_ACCOUNT_OPTIONS = [
   'Insurance Payable- 1CISP',
   'Insurance payable- Climbs',
   'Licenses & Taxes',
-  'Meeting & conferences',
+  'Meeting & Conferences',
   'Miscellaneous',
   'Office supplies',
   'Office Supplies Expenses',
