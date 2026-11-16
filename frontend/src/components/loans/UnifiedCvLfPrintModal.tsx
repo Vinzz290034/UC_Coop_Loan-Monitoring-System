@@ -1610,8 +1610,8 @@ export default function UnifiedCvLfPrintModal({
       if (totalCredit > 0) return totalCredit;
       if (detailedCvData.debitTotal > 0) return detailedCvData.debitTotal;
     } else {
-      if (summaryCvData.creditTotal > 0) return summaryCvData.creditTotal;
       if (summaryCvData.debitTotal > 0) return summaryCvData.debitTotal;
+      if (summaryCvData.creditTotal > 0) return summaryCvData.creditTotal;
     }
     if (currentCv?.amount && Number(currentCv.amount) > 0) return Number(currentCv.amount);
     if (totalExpenseAmount > 0) return totalExpenseAmount;
