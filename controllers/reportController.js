@@ -906,18 +906,10 @@ export const getMerchandiseSalesReport = async (req, res, next) => {
           const itName = String(it.item || it.item_name || 'Merchandise Item').trim();
           const parsedCost = parseFloat(String(it.cost_price));
           const hasPositiveCost = !Number.isNaN(parsedCost) && parsedCost > 0;
-          const hasExplicitZeroCost =
-            !it.item_type &&
-            it.cost_price !== undefined &&
-            it.cost_price !== null &&
-            it.cost_price !== '' &&
-            (parsedCost || 0) <= 0;
           const isSvcItem =
             String(it.item_type || '').toLowerCase() === 'service' ||
-            (!hasPositiveCost && (
-              hasExplicitZeroCost ||
-              /^(wifi|water|gcash|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName)
-            ));
+            (!hasPositiveCost &&
+              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|scoresheet|toga|alteration|service)/i.test(itName));
           if (isSvcItem) return;
 
           const itSize = String(it.size || '—').trim();
@@ -4331,18 +4323,10 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           const itName = String(it.item || it.item_name || '').trim();
           const parsedCost = parseFloat(String(it.cost_price));
           const hasPositiveCost = !Number.isNaN(parsedCost) && parsedCost > 0;
-          const hasExplicitZeroCost =
-            !it.item_type &&
-            it.cost_price !== undefined &&
-            it.cost_price !== null &&
-            it.cost_price !== '' &&
-            (parsedCost || 0) <= 0;
           const isSvc =
             String(it.item_type || '').toLowerCase() === 'service' ||
-            (!hasPositiveCost && (
-              hasExplicitZeroCost ||
-              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|service)/i.test(itName)
-            ));
+            (!hasPositiveCost &&
+              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|scoresheet|toga|alteration|service)/i.test(itName));
           const q = parseFloat(String(it.quantity)) || 1;
           const sp = parseFloat(String(it.selling_price || it.unit_price || 0)) || 0;
           const cp = parseFloat(String(it.cost_price || 0)) || 0;
