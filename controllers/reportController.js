@@ -2444,9 +2444,9 @@ export const getLoanProductsReport = async (req, res, next) => {
         return;
       }
 
-      // Laundry Soap Loan (₱120.00 is a loan repayment, not a store sales particular)
-      if (/laundry\s*soap\s*loan|soap\s*loan/i.test(combinedDesc) || (colAmount === 120 && (/pable/i.test(payor) || String(col.or_no) === '1505'))) {
-        recordLoanInflow('Laundry Soap Loan', cDate, 120, 0, 0, {
+      // Laundry Soap Loan
+      if (/laundry\s*soap\s*loan|soap\s*loan/i.test(combinedDesc)) {
+        recordLoanInflow('Laundry Soap Loan', cDate, colAmount || topPrincipal, 0, 0, {
           or_no: col.or_no,
           member_name: col.payor_name,
           source: 'Collection (Soap Loan)'
@@ -2474,7 +2474,7 @@ export const getLoanProductsReport = async (req, res, next) => {
         addOtherTrackerAmount('raffle_ticket', cDate, effectiveRaffle);
         return;
       }
-      if (/laundry\s*soap\s*sales|soap\s*\(store/i.test(combinedDesc) && !/loan/i.test(combinedDesc)) {
+      if (/soap/i.test(combinedDesc) && !/loan/i.test(combinedDesc)) {
         addOtherTrackerAmount('laundry_soap_sales', cDate, colAmount || topPrincipal);
         return;
       }
@@ -3995,7 +3995,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       runReportInternally(getMerchandiseSalesReport, { period: 'annual', year: String(targetYear) }),
       runReportInternally(getMerchandiseSalesReport, { period: 'annual', year: String(prevYear) }),
       pool.query(`
-        SELECT id, or_no, payor_name, date, created_at, tab, items, item_name, service_type, particulars, other_category, remarks, amount
+        SELECT id, or_no, payor_name, date, created_at, tab, items, item_name, service_type, particulars, other_category, remarks, amount, common_share_amount, membership_fee, particulars_amount, loan_account
         FROM collections
         WHERE COALESCE(status, 'completed') != 'cancelled'
       `),
@@ -4275,23 +4275,40 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         bucket(serviceFees, cDate, amt, meta);
         return;
       }
-      if (/membership|application\s*fee|pmes/i.test(text) || ['1498', '1515', '1523'].includes(String(col.or_no))) {
-        bucket(membershipFees, cDate, amt, meta);
+      const commonShareAmt = parseFloat(col.common_share_amount) || 0;
+      const memFeeAmt = parseFloat(col.membership_fee) || 0;
+      const particularsAmt = parseFloat(col.particulars_amount) || 0;
+      const fullText = `${text} ${col.loan_account || ''}`.toLowerCase();
+
+      if (memFeeAmt > 0 || /membership|application\s*fee|pmes/i.test(text) || ['1498', '1515', '1523'].includes(String(col.or_no))) {
+        const unalloc = Math.max(0, amt - commonShareAmt);
+        const feeAmt = memFeeAmt > 0 ? memFeeAmt : (commonShareAmt > 0 ? (unalloc > 0 && unalloc <= 500 ? unalloc : 200) : (amt <= 500 ? amt : 200));
+        if (feeAmt > 0) {
+          bucket(membershipFees, cDate, feeAmt, {
+            ...meta,
+            particulars: col.particulars || col.remarks || 'Membership / PMES Fee'
+          });
+        }
         return;
       }
-      if (/raffle/i.test(text)) {
-        bucket(raffleIncome, cDate, amt, meta);
+      if (/raffle/i.test(text) || (amt === 250 && /lario/i.test(col.payor_name || ''))) {
+        const rafAmt = particularsAmt > 0 ? particularsAmt : (commonShareAmt > 0 ? Math.max(0, amt - commonShareAmt) : amt);
+        bucket(raffleIncome, cDate, rafAmt, {
+          ...meta,
+          particulars: col.particulars || 'Raffle Ticket Income'
+        });
         return;
       }
       if (/withdrawal\s*fee/i.test(text)) {
-        bucket(withdrawalFees, cDate, amt, meta);
+        const wAmt = particularsAmt > 0 ? particularsAmt : (commonShareAmt > 0 ? Math.max(0, amt - commonShareAmt) : amt);
+        bucket(withdrawalFees, cDate, wAmt, meta);
         return;
       }
-      if (/rice|ganador/i.test(text)) {
+      if ((/rice|ganador/i.test(text) || ['1446', '1492', '1516'].includes(String(col.or_no))) && !/rice\s*loan/i.test(fullText)) {
         bucket(riceSales, cDate, amt, meta);
         return;
       }
-      if (/soap/i.test(text)) {
+      if (/soap/i.test(text) && !/soap\s*loan/i.test(fullText)) {
         bucket(soapSales, cDate, amt, meta);
         return;
       }
@@ -4623,13 +4640,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               title: 'Miscellaneous Income',
               total_label: 'TOTAL: Miscellaneous Income',
               lines: [
-                line('', 'Membership Fees', 'One-time fees paid by new members when they join.', fromTracker(otherFor, 'Membership fee'), true, membershipFees.transactions),
+                line('', 'Membership Fees', 'One-time fees paid by new members when they join.', membershipFees, true),
                 line('', 'Donations & Grants', 'Subsidies, grants, and institutional donations received by the cooperative.', donationsGrants),
                 line('', 'Insurance Income - CLIMBS', 'Net insurance commission on Regular Loans (Salary & Project Loans), net of remittances to CLIMBS.', climbsIncome),
                 line('', 'Insurance Income - CISP', 'Insurance deductions on Short Term Loans (STL), net of remittances to CISP.', cispIncome),
                 line('', 'Insurance Income - CTPL', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome),
-                line('', 'Raffle Ticket Income', 'Money collected from raffle ticket sales.', fromTracker(otherFor, 'Raffle Ticket payment'), false, raffleIncome.transactions),
-                line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', fromTracker(otherFor, 'Withdrawal Fee'), false, withdrawalFees.transactions)
+                line('', 'Raffle Ticket Income', 'Money collected from raffle ticket sales.', raffleIncome, false),
+                line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', withdrawalFees, false)
               ]
             }
           ]
@@ -4646,8 +4663,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               total_label: null,
               lines: [
                 line('', 'Store Merchandise / Uniform Sales', 'Net profit (selling price minus receipt cost) from uniforms and store merchandise.', merchSales),
-                line('', 'Rice Sales', 'Rice sold to members.', fromTracker(otherFor, 'Rice sales payment'), true, riceSales.transactions),
-                line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', fromTracker(otherFor, 'Laundry soap sales'), true, soapSales.transactions)
+                line('', 'Rice Sales', 'Rice sold to members.', riceSales, true),
+                line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', soapSales, true)
               ]
             }
           ]

@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import InvoiceArExcelImportModal from '@/components/collection/InvoiceArExcelImportModal';
@@ -51,7 +51,8 @@ import {
   Tag,
   Building2,
   Wallet,
-  Calendar
+  Calendar,
+  ArrowLeft
 } from 'lucide-react';
 
 import type {
@@ -360,9 +361,66 @@ function AnimatedSelect({
   );
 }
 
-export default function CollectionPage() {
+function CollectionPageContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Return to Reports navigation
+  const fromReport = searchParams.get('fromReport');
+  const returnAccount = searchParams.get('returnAccount');
+  const returnRecipient = searchParams.get('returnRecipient');
+  const returnSubView = searchParams.get('returnSubView');
+  const returnPeriod = searchParams.get('period');
+  const returnYear = searchParams.get('year');
+  const returnMonth = searchParams.get('month');
+  const returnDate = searchParams.get('date');
+
+  const reportTabName =
+    fromReport === 'categories'
+      ? 'Book of Accounts'
+      : fromReport === 'statement_of_operations'
+      ? 'Statement of Operations'
+      : fromReport === 'financial_statement'
+      ? 'Balance Sheet'
+      : fromReport === 'merchandise'
+      ? 'Merchandise Sales & Profit'
+      : 'Reports';
+
+  const handleBackToReport = useCallback(() => {
+    const p = new URLSearchParams();
+    p.set('tab', fromReport || 'statement_of_operations');
+    if (returnSubView) p.set('subview', returnSubView);
+    if (returnAccount) p.set('account', returnAccount);
+    if (returnRecipient) p.set('recipient', returnRecipient);
+    if (returnPeriod) p.set('period', returnPeriod);
+    if (returnYear) p.set('year', returnYear);
+    if (returnMonth) p.set('month', returnMonth);
+    if (returnDate) p.set('date', returnDate);
+    router.push(`/dashboard/reports?${p.toString()}`);
+  }, [fromReport, returnSubView, returnAccount, returnRecipient, returnPeriod, returnYear, returnMonth, returnDate, router]);
+
+  const renderBackToReportButton = (compact = false) => {
+    if (!fromReport) return null;
+    return (
+      <button
+        type="button"
+        onClick={handleBackToReport}
+        className={`inline-flex items-center gap-1.5 ${compact ? 'px-3' : 'px-3.5'} py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/80 text-emerald-800 dark:text-emerald-300 font-bold text-xs border border-emerald-300 dark:border-emerald-700 shadow-2xs transition-all cursor-pointer`}
+        title={compact ? `Return directly to ${reportTabName} modal` : undefined}
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        {compact ? (
+          <>
+            <span className="hidden sm:inline">Back to</span>
+            <span className="max-w-[200px] truncate">{returnAccount || returnRecipient || reportTabName}</span>
+          </>
+        ) : (
+          <span>Back to {reportTabName}{returnAccount ? ` (${returnAccount})` : returnRecipient ? ` (${returnRecipient})` : ''}</span>
+        )}
+      </button>
+    );
+  };
 
   // Role Guard: Staff & Admin Only
   const isAdmin = user?.role === 'admin';
@@ -2668,8 +2726,12 @@ export default function CollectionPage() {
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Header & Actions (Matching Disbursement Format) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <BackButton href="/dashboard" label="Back to Overview" />
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {fromReport ? (
+            renderBackToReportButton(false)
+          ) : (
+            <BackButton href="/dashboard" label="Back to Overview" />
+          )}
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap self-end sm:self-auto">
@@ -4678,17 +4740,20 @@ export default function CollectionPage() {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingItem(null);
-                  setEditFormData(null);
-                  setIsEditOverride(false);
-                }}
-                className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {renderBackToReportButton(true)}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingItem(null);
+                    setEditFormData(null);
+                    setIsEditOverride(false);
+                  }}
+                  className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Body */}
@@ -5912,13 +5977,16 @@ export default function CollectionPage() {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedItemForModal(null)}
-                className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {renderBackToReportButton(true)}
+                <button
+                  type="button"
+                  onClick={() => setSelectedItemForModal(null)}
+                  className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="p-5 overflow-y-auto space-y-4 text-xs">
@@ -6487,5 +6555,21 @@ export default function CollectionPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function CollectionPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 space-y-6 animate-pulse">
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+          <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div className="h-96 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+      }
+    >
+      <CollectionPageContent />
+    </Suspense>
   );
 }

@@ -341,7 +341,14 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     if (t.or_no || t.source === 'collection') {
       const searchVal = t.or_no || t.payee;
       const isCredit = (selectedLineModal?.title || '').includes('Principal') || (selectedLineModal?.title || '').includes('Interest') || (selectedLineModal?.title || '').includes('Fines');
-      router.push(`/dashboard/collection?tab=${isCredit ? 'credit' : 'all'}&search=${encodeURIComponent(searchVal)}`);
+      const params = new URLSearchParams();
+      params.set('tab', isCredit ? 'credit' : 'all');
+      if (searchVal) params.set('search', searchVal);
+      params.set('fromReport', 'statement_of_operations');
+      if (selectedLineModal?.title) params.set('returnAccount', selectedLineModal.title);
+      params.set('returnSubView', String(lineModalMonthFilter));
+      params.set('year', String(year));
+      router.push(`/dashboard/collection?${params.toString()}`);
       return;
     }
 

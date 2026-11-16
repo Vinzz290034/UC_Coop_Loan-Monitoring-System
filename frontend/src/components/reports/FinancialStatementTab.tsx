@@ -285,7 +285,13 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
 
     if (t.source === 'collection' || t.or_no) {
       const searchVal = t.or_no || t.payee;
-      router.push(`/dashboard/collection?search=${encodeURIComponent(searchVal)}`);
+      const params = new URLSearchParams();
+      if (searchVal) params.set('search', searchVal);
+      params.set('fromReport', 'financial_statement');
+      if (selectedLineModal?.title) params.set('returnAccount', selectedLineModal.title);
+      params.set('returnSubView', String(lineModalMonthFilter));
+      params.set('year', String(year));
+      router.push(`/dashboard/collection?${params.toString()}`);
       return;
     }
 
