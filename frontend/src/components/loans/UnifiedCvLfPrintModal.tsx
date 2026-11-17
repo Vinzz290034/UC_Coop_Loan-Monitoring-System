@@ -481,7 +481,7 @@ function resolveItemCategory(it: any, cvDetails?: any[], lfItems?: any[], isHono
 }
 
 function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf') {
-  const rows: { date: string; voucher_no: string; description: string; remarks: string; debit: number | null; credit: number | null; category?: string }[] = [];
+  const rows: { date: string; voucher_no: string; description: string; remarks: string; recipient?: string; debit: number | null; credit: number | null; category?: string }[] = [];
   let debitTotal = 0;
   let creditTotal = 0;
 
@@ -539,6 +539,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
         voucher_no: vNo,
         description: expAccount,
         remarks: it.remarks || '',
+        recipient: it.recipient || it.payee || '',
         debit: amt,
         credit: null,
         category: (() => {
@@ -572,6 +573,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
       const dateStr = item.date ? formatIsoDate(item.date) : (cv?.voucher_date ? formatIsoDate(cv.voucher_date) : '—');
       const vNo = item.voucher_no || (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '—';
       const itemRemarks = item.remarks || item.particulars || item.note || '';
+      const itemRecipient = item.recipient || '';
 
       if (isCreditItem) {
         const creditVal = rawVal < 0
@@ -597,6 +599,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           voucher_no: vNo,
           description: desc || 'Credit / Deduction',
           remarks: itemRemarks,
+          recipient: itemRecipient,
           debit: null,
           credit: creditVal,
           category: creditCat || undefined
@@ -614,6 +617,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           voucher_no: vNo,
           description: desc || 'Disbursement Line',
           remarks: itemRemarks,
+          recipient: itemRecipient,
           debit: rawVal,
           credit: null,
           category: resolvedCat
@@ -625,6 +629,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
           voucher_no: vNo,
           description: desc,
           remarks: itemRemarks,
+          recipient: itemRecipient,
           debit: null,
           credit: null
         });
@@ -646,6 +651,7 @@ function getBalancedCvRows(cv: any, lfItems?: any[], resolvedType?: 'stl' | 'rf'
               voucher_no: r.voucher_no,
               description: `Revolving Fund - ${cat}`,
               remarks: '',
+              recipient: '',
               debit: null,
               credit: r.debit,
               category: cat
@@ -2095,7 +2101,14 @@ export default function UnifiedCvLfPrintModal({
                                 <th className="p-2.5 w-28 text-left border-r border-emerald-700/60 text-white whitespace-nowrap">DATE</th>
                                 <th className="p-2.5 w-28 text-left border-r border-emerald-700/60 text-white whitespace-nowrap">{isHonorariumAndWages ? 'Cash Release Form No.' : (resolvedType === 'stl' ? 'LAF No.' : 'RF VOUCHER #')}</th>
                                 <th className="p-2.5 w-1/3 text-left border-r border-emerald-700/60 text-white">BOOK OF ACCOUNTS</th>
-                                <th className="p-2.5 w-1/3 text-left border-r border-emerald-700/60 text-white">{isHonorariumAndWages ? 'RECIPIENT' : (resolvedType === 'stl' || isStlFund ? 'BORROWER' : 'REMARKS')}</th>
+                                {resolvedType === 'rf' && !isStlFund ? (
+                                  <>
+                                    <th className="p-2.5 w-1/4 text-left border-r border-emerald-700/60 text-white">REMARKS</th>
+                                    <th className="p-2.5 w-1/5 text-left border-r border-emerald-700/60 text-white">RECIPIENT / SUPPLIER</th>
+                                  </>
+                                ) : (
+                                  <th className="p-2.5 w-1/3 text-left border-r border-emerald-700/60 text-white">{isHonorariumAndWages ? 'RECIPIENT' : (resolvedType === 'stl' || isStlFund ? 'BORROWER' : 'REMARKS')}</th>
+                                )}
                                 <th className="p-2.5 w-32 text-right border-r border-emerald-700/60 text-white whitespace-nowrap">DEBIT (₱)</th>
                                 <th className="p-2.5 w-32 text-right text-white whitespace-nowrap">CREDIT (₱)</th>
                               </tr>
@@ -2126,6 +2139,11 @@ export default function UnifiedCvLfPrintModal({
                                     <td className="p-2.5 border-r border-neutral-200 text-[9.5px] text-neutral-600 italic">
                                       {r.remarks || <span className="text-neutral-300">—</span>}
                                     </td>
+                                    {resolvedType === 'rf' && !isStlFund && (
+                                      <td className="p-2.5 border-r border-neutral-200 text-[9.5px] font-medium text-neutral-700">
+                                        {r.recipient || <span className="text-neutral-300">—</span>}
+                                      </td>
+                                    )}
                                     <td className="p-2.5 text-right font-mono font-bold text-neutral-900 border-r border-neutral-200">
                                       {r.debit !== null ? `₱${r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : <span className="text-neutral-400 font-bold">–</span>}
                                     </td>
@@ -2136,7 +2154,7 @@ export default function UnifiedCvLfPrintModal({
                                 ))
                               ) : (
                                 <tr>
-                                  <td colSpan={6} className="p-8 text-center text-neutral-500 font-medium">
+                                  <td colSpan={resolvedType === 'rf' && !isStlFund ? 7 : 6} className="p-8 text-center text-neutral-500 font-medium">
                                     <p className="text-xs font-semibold text-neutral-700">No transactions found for category &ldquo;{selectedCategoryFilter}&rdquo;.</p>
                                     <button
                                       type="button"
@@ -2182,7 +2200,7 @@ export default function UnifiedCvLfPrintModal({
                               ) : (
                                 <>
                                   <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-300 text-[10px]">
-                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">
+                                    <td colSpan={resolvedType === 'rf' && !isStlFund ? 5 : 4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">
                                       {selectedCategoryFilter ? `TOTAL (${selectedCategoryFilter.toUpperCase()}):` : 'TOTAL:'}
                                     </td>
                                     <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
@@ -2197,7 +2215,7 @@ export default function UnifiedCvLfPrintModal({
                                     </td>
                                   </tr>
                                   <tr className="bg-[#ecfdf5] font-bold border-t border-emerald-200 text-[10px]">
-                                    <td colSpan={4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">
+                                    <td colSpan={resolvedType === 'rf' && !isStlFund ? 5 : 4} className="p-2.5 text-right uppercase tracking-wider text-[#064e3b] font-extrabold">
                                       {selectedCategoryFilter ? `${cibName} (${selectedCategoryFilter.toUpperCase()}):` : `${cibName}:`}
                                     </td>
                                     <td className="p-2.5 text-right font-mono font-extrabold text-[#064e3b] border-r border-neutral-200">
@@ -2703,8 +2721,15 @@ export default function UnifiedCvLfPrintModal({
                       <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: 'bold' }}>
                         <th style={{ padding: '2.5px 5px', width: '75px', borderRight: '1px solid #047857', color: '#ffffff', whiteSpace: 'nowrap' }}>DATE</th>
                         <th style={{ padding: '2.5px 5px', width: isHonorariumAndWages ? '95px' : '65px', borderRight: '1px solid #047857', color: '#ffffff', whiteSpace: 'nowrap' }}>{isHonorariumAndWages ? 'Cash Release Form No.' : (resolvedType === 'stl' ? 'LAF No.' : 'RF VOUCHER #')}</th>
-                        <th style={{ padding: '2.5px 5px', width: '30%', borderRight: '1px solid #047857', color: '#ffffff' }}>BOOK OF ACCOUNTS</th>
-                        <th style={{ padding: '2.5px 5px', width: '30%', borderRight: '1px solid #047857', color: '#ffffff' }}>{isHonorariumAndWages ? 'RECIPIENT' : (resolvedType === 'stl' || isStlFund ? 'BORROWER' : 'REMARKS')}</th>
+                        <th style={{ padding: '2.5px 5px', width: '26%', borderRight: '1px solid #047857', color: '#ffffff' }}>BOOK OF ACCOUNTS</th>
+                        {resolvedType === 'rf' && !isStlFund ? (
+                          <>
+                            <th style={{ padding: '2.5px 5px', width: '20%', borderRight: '1px solid #047857', color: '#ffffff' }}>REMARKS</th>
+                            <th style={{ padding: '2.5px 5px', width: '16%', borderRight: '1px solid #047857', color: '#ffffff' }}>RECIPIENT / SUPPLIER</th>
+                          </>
+                        ) : (
+                          <th style={{ padding: '2.5px 5px', width: '30%', borderRight: '1px solid #047857', color: '#ffffff' }}>{isHonorariumAndWages ? 'RECIPIENT' : (resolvedType === 'stl' || isStlFund ? 'BORROWER' : 'REMARKS')}</th>
+                        )}
                         <th style={{ padding: '2.5px 5px', textAlign: 'right', width: '85px', borderRight: '1px solid #047857', color: '#ffffff' }}>DEBIT (₱)</th>
                         <th style={{ padding: '2.5px 5px', textAlign: 'right', width: '85px', color: '#ffffff' }}>CREDIT (₱)</th>
                       </tr>
@@ -2720,6 +2745,11 @@ export default function UnifiedCvLfPrintModal({
                           <td style={{ padding: '2px 5px', borderRight: '1px solid #e5e7eb', fontStyle: 'italic', color: '#6b7280', fontSize: '7.5px' }}>
                             {r.remarks || '—'}
                           </td>
+                          {resolvedType === 'rf' && !isStlFund && (
+                            <td style={{ padding: '2px 5px', borderRight: '1px solid #e5e7eb', color: '#374151', fontSize: '7.5px' }}>
+                              {r.recipient || '—'}
+                            </td>
+                          )}
                           <td style={{ padding: '2px 5px', textAlign: 'right', borderRight: '1px solid #e5e7eb', fontFamily: 'monospace', fontWeight: 'bold', color: '#111827' }}>
                             {r.debit !== null ? `₱${r.debit.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '–'}
                           </td>
@@ -2762,7 +2792,7 @@ export default function UnifiedCvLfPrintModal({
                       ) : (
                         <>
                           <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #6ee7b7', fontWeight: 'bold', color: '#064e3b' }}>
-                            <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>TOTAL:</td>
+                            <td colSpan={resolvedType === 'rf' && !isStlFund ? 5 : 4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>TOTAL:</td>
                             <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
                               ₱{detailedCvData.debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </td>
@@ -2771,7 +2801,7 @@ export default function UnifiedCvLfPrintModal({
                             </td>
                           </tr>
                           <tr style={{ backgroundColor: '#ecfdf5', borderTop: '1px solid #a7f3d0', fontWeight: 'bold', color: '#064e3b' }}>
-                            <td colSpan={4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>{cibName}:</td>
+                            <td colSpan={resolvedType === 'rf' && !isStlFund ? 5 : 4} style={{ padding: '3px 6px', textAlign: 'right', textTransform: 'uppercase', fontSize: '7.5px' }}>{cibName}:</td>
                             <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'monospace', borderRight: '1px solid #a7f3d0' }}>
                               –
                             </td>

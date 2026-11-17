@@ -1479,7 +1479,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
             account_name: cleanAccName,
             category: cat,
             amount: amt,
-            payee: d.remarks || d.recipient || cv.payee || '',
+            payee: d.recipient || d.remarks || cv.payee || '',
             remarks: d.remarks || cv.payee || ''
           });
 
@@ -1487,7 +1487,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
             id: `cv-${cv.id}-${idx}`,
             voucher_id: cv.id || null,
             voucher_no: cv.voucher_no || 'CV',
-            payee: d.remarks || d.recipient || cv.payee || '',
+            payee: d.recipient || d.remarks || cv.payee || '',
             date: cv.voucher_date ? new Date(cv.voucher_date).toISOString().split('T')[0] : 'N/A',
             particulars: cv.particulars || 'Disbursement Voucher',
             account_name: cleanAccName,
@@ -1497,7 +1497,7 @@ export const getExpensesBreakdownReport = async (req, res, next) => {
           });
 
           recordRecipientCompensation(
-            d.remarks || d.recipient || cv.payee || '',
+            d.recipient || d.remarks || cv.payee || '',
             amt,
             cleanAccName,
             d.category || '',
@@ -3104,7 +3104,7 @@ export const getBooksOfAccountsReport = async (req, res, next) => {
                 voucher_no: cv.voucher_no,
                 voucher_id: cv.id,
                 particulars: d.particulars || cv.particulars || 'Disbursement Debit',
-                payee: d.remarks || d.recipient || cv.payee || '—',
+                payee: d.recipient || d.remarks || cv.payee || '—',
                 source: 'Check Voucher'
               }
             );
