@@ -4561,11 +4561,6 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         }
 
         if (cat === 'Service Expense' || isDirectServiceCost(acc)) {
-          if (/^cos\s*-\s*hardbound$/i.test(acc)) {
-            serviceHardbound[which][mIdx] -= amt;
-            if (tx) serviceHardbound.transactions.push({ ...tx, amount: -amt });
-            return;
-          }
           const normalizedSvcAcc = /^cos\s*-\s*locker$/i.test(acc) ? 'COS - Key Duplicate' : acc;
           if (!costOfSales[normalizedSvcAcc]) costOfSales[normalizedSvcAcc] = newStore();
           costOfSales[normalizedSvcAcc][which][mIdx] += amt;
@@ -4695,7 +4690,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 line('', 'Collection from Wifi', 'Cooperative WiFi access fees.', serviceWifi, false),
                 line('', 'Collection from Water Vendo', 'Water vendo machine collections.', serviceWater, false),
                 line('', 'Collection from Printing & Photocopy', 'Printing, photocopying, lamination, and ID photo services.', servicePrinting, false),
-                line('', 'Collection from Hardbound', 'Hardbound collections minus COS - Hardbound (net profit).', serviceHardbound, false),
+                line('', 'Collection from Hardbound', 'Hardbound thesis binding service collections.', serviceHardbound, false),
                 line('', 'Collection from Locker & Key Duplicate', 'Locker rentals (₱250) and key duplicate fees.', serviceLocker, false),
                 line('', 'Collection from Type A & B, Gala & BSNAME', 'Made-to-order Type A & B, Gala, BSNAME and cap collections.', serviceMadeToOrder, false)
               ]
