@@ -33,6 +33,67 @@ async function ensureParticularsColumn(db) {
         OR LOWER(COALESCE(loan_account, '')) LIKE '%common share%'
       );
 
+    -- Reclassify pure Membership Fee / Membership Application Fee collections from Sales & Services into Credit
+    UPDATE collections
+    SET
+      tab = 'credit',
+      membership_fee = CASE
+        WHEN COALESCE(membership_fee, 0) > 0 THEN membership_fee
+        ELSE COALESCE(NULLIF(amount, 0), 200)
+      END,
+      particulars = 'Membership Fee',
+      items = '[]'::jsonb,
+      item_name = NULL,
+      item_category = NULL,
+      quantity = NULL,
+      unit_price = NULL,
+      service_type = NULL,
+      service_copies = NULL,
+      service_rate = NULL
+    WHERE LOWER(TRIM(COALESCE(tab, ''))) IN ('sales', 'services', 'sales_services')
+      AND (
+        LOWER(COALESCE(item_name, '')) LIKE '%membership%'
+        OR LOWER(COALESCE(service_type, '')) LIKE '%membership%'
+        OR LOWER(COALESCE(particulars, '')) LIKE '%membership%'
+        OR LOWER(COALESCE(items::text, '')) LIKE '%membership%'
+      )
+      AND (
+        items IS NULL
+        OR jsonb_typeof(items) != 'array'
+        OR jsonb_array_length(items) = 0
+        OR NOT EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(items) AS elem
+          WHERE LOWER(COALESCE(elem->>'item', elem->>'item_name', '')) NOT LIKE '%membership%'
+        )
+      );
+
+    -- For mixed Sales & Services receipts that also contain a Membership Fee line item,
+    -- move the Membership Fee amount into membership_fee and remove it from Merchandise/Service items
+    UPDATE collections c
+    SET
+      membership_fee = COALESCE(c.membership_fee, 0) + COALESCE((
+        SELECT SUM(COALESCE(NULLIF(elem->>'revenue', '')::numeric, (COALESCE(NULLIF(elem->>'quantity', '')::numeric, 1) * COALESCE(NULLIF(elem->>'selling_price', '')::numeric, 0)), 0))
+        FROM jsonb_array_elements(c.items) AS elem
+        WHERE LOWER(COALESCE(elem->>'item', elem->>'item_name', '')) LIKE '%membership%'
+      ), 0),
+      items = COALESCE((
+        SELECT jsonb_agg(elem)
+        FROM jsonb_array_elements(c.items) AS elem
+        WHERE LOWER(COALESCE(elem->>'item', elem->>'item_name', '')) NOT LIKE '%membership%'
+      ), '[]'::jsonb)
+    WHERE LOWER(TRIM(COALESCE(c.tab, ''))) IN ('sales', 'services', 'sales_services')
+      AND jsonb_typeof(c.items) = 'array'
+      AND jsonb_array_length(c.items) > 0
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(c.items) AS elem
+        WHERE LOWER(COALESCE(elem->>'item', elem->>'item_name', '')) LIKE '%membership%'
+      )
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(c.items) AS elem
+        WHERE LOWER(COALESCE(elem->>'item', elem->>'item_name', '')) NOT LIKE '%membership%'
+      );
+
     -- All Sales & Services from January to October 2026 -> Cash in MBTC
     UPDATE collections
     SET status = 'Cash in MBTC'
