@@ -1175,6 +1175,7 @@ export function normalizeAccountName(rawName) {
   if (/^operation$/i.test(lower)) return 'Miscellaneous Expense';
   if (/^cos\s*-\s*water(\s*vendo)?$/i.test(lower)) return 'COS - Water Vendo';
   if (/^(merchandise\s*)?inventory\s*-\s*pershing\s*cap$/i.test(lower)) return 'Merchandise Inventory - Pershing Cap';
+  if (/^(office\s*)?equipment$/i.test(lower)) return 'Office Equipment';
 
   if (/^cos\s*-\s*/i.test(str)) {
     const suffix = str.replace(/^cos\s*-\s*/i, '').trim();
@@ -3580,7 +3581,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
       }
 
       // Property & Equipment
-      if (text.includes('office equipment') || text.includes('laptop') || text.includes('computer')) {
+      if (text.includes('equipment') || text.includes('laptop') || text.includes('computer')) {
         stores.office_equipment.transactions.push(tx);
       } else if (text.includes('furniture') || text.includes('fixture') || text.includes('cabinet') || text.includes('table') || text.includes('chair')) {
         stores.furnitures_fixtures.transactions.push(tx);
@@ -4451,7 +4452,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       const combined = `${acc} ${particulars || ''}`;
       if (/loan\s*repay|payment\s*of\s*loan|repayment\s*of\s*loan|loan\s*payable/i.test(acc)) return 'loan_repayment';
       if (/\bdp\s*for\b.*system|down\s*payment.*system/i.test(combined)) return 'capex_office_equipment';
-      if (/office\s*equipment|plants?,?\s*property|\bppe\b/i.test(acc) && !/management\s*system|software/i.test(acc)) return 'capex_office_equipment';
+      if (/\b(office\s*)?equipment\b|plants?,?\s*property|\bppe\b/i.test(acc) && !/management\s*system|software/i.test(acc)) return 'capex_office_equipment';
       if (/fixture|furniture/i.test(acc)) return 'capex_furniture';
       if (/\bEE\s*share\b|payable\s*premium|insurance\s*payable|payment\s*to\s*climbs|climbs.*remittance/i.test(acc)) return 'ee_remittances';
       if (/withdrawal/i.test(acc)) return 'withdrawals';
