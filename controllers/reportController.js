@@ -1705,7 +1705,8 @@ export const getLoanProductsReport = async (req, res, next) => {
         lower.includes('merchandise') ||
         lower.includes('uniform') ||
         lower.includes('raffle') ||
-        lower.includes('withdrawal fee')
+        lower.includes('withdrawal fee') ||
+        lower.includes('pe shorts')
       ) {
         return true;
       }
@@ -2217,7 +2218,8 @@ export const getLoanProductsReport = async (req, res, next) => {
       { key: 'donation_grants', label: 'Donation & Grants' },
       { key: 'laundry_soap_sales', label: 'Laundry soap sales' },
       { key: 'merchandise_income', label: 'Income from Merchandise' },
-      { key: 'withdrawal_fee', label: 'Withdrawal Fee' }
+      { key: 'withdrawal_fee', label: 'Withdrawal Fee' },
+      { key: 'pe_shorts_income', label: 'Income from PE Shorts' }
     ];
     const otherMonthlyTracker = {};
     OTHER_TRACKER_KEYS.forEach(o => {
@@ -2413,6 +2415,8 @@ export const getLoanProductsReport = async (req, res, next) => {
           addOtherTrackerAmount('donation_grants', cDate, particularsAmt);
         } else if (/withdrawal\s*fee/i.test(partCat)) {
           addOtherTrackerAmount('withdrawal_fee', cDate, particularsAmt);
+        } else if (/pe\s*shorts/i.test(partCat)) {
+          addOtherTrackerAmount('pe_shorts_income', cDate, particularsAmt);
         } else {
           addOtherTrackerAmount('insurance', cDate, particularsAmt);
         }
@@ -2488,6 +2492,12 @@ export const getLoanProductsReport = async (req, res, next) => {
       if (particularsAmt === 0 && (/withdrawal\s*fee/i.test(combinedDesc))) {
         const effectiveWithdrawal = commonShareAmt > 0 ? unallocatedAfterShare : (colAmount || topPrincipal);
         addOtherTrackerAmount('withdrawal_fee', cDate, effectiveWithdrawal);
+        return;
+      }
+
+      if (particularsAmt === 0 && (/pe\s*shorts/i.test(combinedDesc))) {
+        const effectivePeShorts = commonShareAmt > 0 ? unallocatedAfterShare : (colAmount || topPrincipal);
+        addOtherTrackerAmount('pe_shorts_income', cDate, effectivePeShorts);
         return;
       }
 
@@ -4238,6 +4248,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const membershipFees = newStore();
     const raffleIncome = newStore();
     const withdrawalFees = newStore();
+    const peShortsIncome = newStore();
     const riceSales = newStore();
     const soapSales = newStore();
     const donationsGrants = newStore();
@@ -4296,6 +4307,11 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       if (/withdrawal\s*fee/i.test(text)) {
         const wAmt = particularsAmt > 0 ? particularsAmt : (commonShareAmt > 0 ? Math.max(0, amt - commonShareAmt) : amt);
         bucket(withdrawalFees, cDate, wAmt, meta);
+        return;
+      }
+      if (/pe\s*shorts/i.test(text)) {
+        const peAmt = particularsAmt > 0 ? particularsAmt : (commonShareAmt > 0 ? Math.max(0, amt - commonShareAmt) : amt);
+        bucket(peShortsIncome, cDate, peAmt, meta);
         return;
       }
       if ((/rice|ganador/i.test(text) || ['1446', '1492', '1516'].includes(String(col.or_no))) && !/rice\s*loan/i.test(fullText)) {
@@ -4632,7 +4648,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 line('', 'Insurance Income - CISP', 'Insurance deductions on Short Term Loans (STL), net of remittances to CISP.', cispIncome),
                 line('', 'Insurance Income - CTPL', 'Income from CTPL (vehicle insurance) transactions.', ctplIncome),
                 line('', 'Raffle Ticket Income', 'Money collected from raffle ticket sales.', raffleIncome, false),
-                line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', withdrawalFees, false)
+                line('', 'Withdrawal Fees', 'Fees charged when members withdraw.', withdrawalFees, false),
+                line('', 'Income from PE Shorts', 'Income collected from PE Shorts.', peShortsIncome, false)
               ]
             }
           ]
