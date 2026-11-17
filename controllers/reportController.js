@@ -4700,7 +4700,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               total_label: null,
               lines: [
                 line('', 'Income from Gcash', 'GCash cash-in/cash-out and service fees.', serviceGcash, true),
-                line('', 'Collection from Bonggo', 'Bonggo 2x2 and related service collections.', serviceBonggo, true),
+                line('', 'Collection from 2x2 Photo', 'Bonggo 2x2 and related service collections.', serviceBonggo, true),
                 line('', 'Collection from Wifi', 'Cooperative WiFi access fees.', serviceWifi, false),
                 line('', 'Collection from Water Vendo', 'Water vendo machine collections.', serviceWater, false),
                 line('', 'Collection from Printing & Photocopy', 'Printing, photocopying, lamination, and ID photo services.', servicePrinting, false),
