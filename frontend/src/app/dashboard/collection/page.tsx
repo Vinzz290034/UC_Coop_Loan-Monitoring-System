@@ -239,6 +239,7 @@ const CREDIT_PARTICULARS_OPTIONS: SelectOption[] = [
   { value: 'Raffle Ticket', label: 'Raffle Ticket' },
   { value: 'Donation & Grants', label: 'Donation & Grants' },
   { value: 'Withdrawal Fee', label: 'Withdrawal Fee' },
+  { value: 'Income from PE Shorts', label: 'Income from PE Shorts' },
 ];
 
 interface AnimatedSelectProps {
