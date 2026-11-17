@@ -4576,6 +4576,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           let normalizedSvcAcc = acc;
           if (/^cos\s*-\s*locker$/i.test(acc)) normalizedSvcAcc = 'COS - Key Duplicate';
           else if (/^cos\s*-\s*charts?$/i.test(acc)) normalizedSvcAcc = 'COS - Gnomonic Chart';
+          else if (/^cos\s*-\s*(?:2x2\s*)?photo$/i.test(acc)) normalizedSvcAcc = 'COS - 2x2 Photo';
           if (!costOfSales[normalizedSvcAcc]) costOfSales[normalizedSvcAcc] = newStore();
           costOfSales[normalizedSvcAcc][which][mIdx] += amt;
           if (tx) costOfSales[normalizedSvcAcc].transactions.push(tx);
