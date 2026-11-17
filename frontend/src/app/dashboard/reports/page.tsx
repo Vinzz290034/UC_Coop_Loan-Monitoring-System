@@ -44,7 +44,6 @@ import {
 import FinancialSummaryGraphs from '@/components/reports/FinancialSummaryGraphs';
 import StatementOfOperationsTab from '@/components/reports/StatementOfOperationsTab';
 import FinancialStatementTab from '@/components/reports/FinancialStatementTab';
-import BankReconTab from '@/components/reports/BankReconTab';
 import {
   ACCOUNT_CATEGORIES,
   CATEGORY_THEMES,
@@ -64,7 +63,6 @@ type ReportTab =
   | 'membership'
   | 'statement_of_operations'
   | 'financial_statement'
-  | 'bank_recon'
   | 'summary';
 
 type ReportPeriod = 'daily' | 'monthly' | 'annual';
@@ -127,7 +125,7 @@ function ReportsPageContent() {
   // Active Report Tab - supports deep-linking via ?tab=expenses
   const [activeTab, setActiveTab] = useState<ReportTab>(() => {
     const t = searchParams?.get('tab') as ReportTab | null;
-    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement', 'bank_recon'].includes(t)) {
+    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement'].includes(t)) {
       return t;
     }
     return 'summary';
@@ -136,7 +134,7 @@ function ReportsPageContent() {
   // Keep activeTab synchronized when ?tab= query parameter changes
   useEffect(() => {
     const t = searchParams?.get('tab') as ReportTab | null;
-    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement', 'bank_recon'].includes(t)) {
+    if (t && ['summary', 'expenses', 'categories', 'merchandise', 'loans', 'membership', 'statement_of_operations', 'financial_statement'].includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
@@ -723,7 +721,7 @@ function ReportsPageContent() {
   // Fetch report data based on active tab and period
   const fetchReport = useCallback(async () => {
     // Statement of Operations & Financial Statement load their own data inside their tab components
-    if (activeTab === 'statement_of_operations' || activeTab === 'financial_statement' || activeTab === 'bank_recon') {
+    if (activeTab === 'statement_of_operations' || activeTab === 'financial_statement') {
       setLoading(false);
       return;
     }
@@ -739,7 +737,6 @@ function ReportsPageContent() {
         membership: '/reports/membership-update',
         statement_of_operations: '/reports/statement-of-operations',
         financial_statement: '/reports/financial-statement',
-        bank_recon: '/reports/bank-recon',
         summary: '/reports/financial-statement'
       };
 
@@ -1140,8 +1137,8 @@ function ReportsPageContent() {
           </div>
         </div>
 
-        {/* Global Period & Date Filter Control Bar (hidden on Loan Products, Statement of Operations, Balance Sheet & Bank Recon tabs) */}
-        {activeTab !== 'loans' && activeTab !== 'statement_of_operations' && activeTab !== 'financial_statement' && activeTab !== 'bank_recon' && (
+        {/* Global Period & Date Filter Control Bar (hidden on Loan Products, Statement of Operations & Balance Sheet tabs) */}
+        {activeTab !== 'loans' && activeTab !== 'statement_of_operations' && activeTab !== 'financial_statement' && (
           <div className="flex flex-wrap items-center gap-2 bg-white dark:bg-neutral-900 p-1.5 rounded-2xl border border-emerald-300 dark:border-emerald-800/80 shadow-xs">
             {/* Period Toggle */}
             <div className="flex items-center bg-emerald-50 dark:bg-emerald-950/60 p-0.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 text-xs font-bold">
@@ -1260,7 +1257,6 @@ function ReportsPageContent() {
           { id: 'membership', label: 'Membership Updates', icon: Users },
           { id: 'statement_of_operations', label: 'Statement of Operations', icon: FileText },
           { id: 'financial_statement', label: 'Balance Sheet', icon: Scale },
-          { id: 'bank_recon', label: 'Bank Recon', icon: Landmark },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1311,8 +1307,6 @@ function ReportsPageContent() {
         <StatementOfOperationsTab initialYear={year} initialMonth={month} />
       ) : activeTab === 'financial_statement' ? (
         <FinancialStatementTab initialYear={year} initialMonth={month} />
-      ) : activeTab === 'bank_recon' ? (
-        <BankReconTab initialYear={year} />
       ) : loading ? (
         <div className="p-12 text-center">
           <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />

@@ -1665,6 +1665,153 @@ function CollectionPageContent() {
     });
   };
 
+  const isLikelyMerchandiseInService = (it: any): boolean => {
+    const name = String(it?.item || '').trim();
+    if (!name) return false;
+    const lower = name.toLowerCase();
+
+    const catalogMerch = salesCatalogItems.some(
+      c => (c.item_name || '').trim().toLowerCase() === lower && (c.category || '').trim().toLowerCase() !== 'coop services'
+    );
+    if (catalogMerch) return true;
+
+    const catalogService = salesCatalogItems.some(
+      c => (c.item_name || '').trim().toLowerCase() === lower && (c.category || '').trim().toLowerCase() === 'coop services'
+    );
+    if (catalogService) return false;
+
+    if (/^(printing|locker|gcash|g-cash|wifi|wi-fi|water|photocopy|key duplicate|bookbind|lamination|clearance|delivery|id\b|membership|share capital|interest|fine|penalty|service)/i.test(lower)) {
+      return false;
+    }
+
+    return /(button|cover\s*all|coverall|glove|handbag|hard\s*hat|hardhat|lanyard|shoe|uniform|gala|pershing|goggle|sock|belt|buckle|nameplate|patch|epaulette|scarf|polo|pants|skirt|blouse|shirt|jacket|apron|sling|tote|cap\b)/i.test(lower);
+  };
+
+  const convertServiceRowToMerchItem = (it: any) => {
+    const name = String(it.item || '').trim();
+    const lower = name.toLowerCase();
+    const rawDesc = String(it.description || '').trim();
+    const parts = rawDesc.split(/\s*•\s*/);
+    let desc = rawDesc;
+    let size = String(it.size || '').trim();
+
+    if (!size && parts.length > 1) {
+      size = parts[parts.length - 1].trim();
+      desc = parts.slice(0, -1).join(' • ').trim();
+    }
+
+    const q = parseFloat(String(it.quantity)) || 1;
+    const sp = parseFloat(String(it.selling_price)) || 0;
+
+    const catalogMatches = salesCatalogItems.filter(
+      c => (c.item_name || '').trim().toLowerCase() === lower && (c.category || '').trim().toLowerCase() !== 'coop services'
+    );
+    const matched =
+      catalogMatches.find(c => size && (c.size || '').trim().toLowerCase() === size.toLowerCase()) ||
+      catalogMatches.find(c => sp > 0 && Math.abs((parseFloat(String(c.selling_price)) || 0) - sp) < 0.01) ||
+      catalogMatches[0];
+
+    const cp = matched && matched.cost_price !== undefined && matched.cost_price !== null
+      ? (parseFloat(String(matched.cost_price)) || 0)
+      : (parseFloat(String(it.cost_price)) || 0);
+
+    if (!size && matched?.size) {
+      size = String(matched.size).trim();
+    }
+    if (!desc && matched?.category && matched.category !== 'Coop Services') {
+      desc = String(matched.category).trim();
+    }
+
+    const rev = q * sp;
+    const gp = rev - (q * cp);
+
+    return {
+      ...it,
+      id: it.id || `edit-merch-xfer-${++rowCounterRef.current}`,
+      item_type: 'merchandise',
+      description: desc,
+      size,
+      cost_price: cp > 0 ? String(cp) : (it.cost_price || '0'),
+      selling_price: String(it.selling_price ?? sp),
+      revenue: rev,
+      gross_profit: gp,
+    };
+  };
+
+  const handleEditTransferMerchFromServices = () => {
+    setEditFormData((prev: any) => {
+      const currentSvc = prev.service_items || [];
+      const toMove = currentSvc.filter(isLikelyMerchandiseInService);
+      if (toMove.length === 0) return prev;
+
+      const remainingSvc = currentSvc.filter((it: any) => !toMove.includes(it));
+      const existingMerch = (prev.items || []).filter(
+        (m: any) => String(m.item || '').trim() !== '' || (parseFloat(String(m.selling_price)) || 0) > 0
+      );
+
+      const movedAsMerch = toMove.map(convertServiceRowToMerchItem);
+
+      const nextSvc =
+        remainingSvc.length > 0
+          ? remainingSvc
+          : [{
+              id: `edit-svc-${++rowCounterRef.current}`,
+              item_type: 'service',
+              item: '',
+              description: '',
+              size: '',
+              quantity: '1',
+              cost_price: '0',
+              selling_price: '',
+              revenue: 0,
+              gross_profit: 0,
+            }];
+
+      return {
+        ...prev,
+        items: [...existingMerch, ...movedAsMerch],
+        service_items: nextSvc,
+      };
+    });
+  };
+
+  const handleEditMoveSingleServiceToMerch = (index: number) => {
+    setEditFormData((prev: any) => {
+      const currentSvc = prev.service_items || [];
+      const target = currentSvc[index];
+      if (!target) return prev;
+
+      const remainingSvc = currentSvc.filter((_: any, i: number) => i !== index);
+      const existingMerch = (prev.items || []).filter(
+        (m: any) => String(m.item || '').trim() !== '' || (parseFloat(String(m.selling_price)) || 0) > 0
+      );
+
+      const movedItem = convertServiceRowToMerchItem(target);
+
+      const nextSvc =
+        remainingSvc.length > 0
+          ? remainingSvc
+          : [{
+              id: `edit-svc-${++rowCounterRef.current}`,
+              item_type: 'service',
+              item: '',
+              description: '',
+              size: '',
+              quantity: '1',
+              cost_price: '0',
+              selling_price: '',
+              revenue: 0,
+              gross_profit: 0,
+            }];
+
+      return {
+        ...prev,
+        items: [...existingMerch, movedItem],
+        service_items: nextSvc,
+      };
+    });
+  };
+
   const handleEditServiceItemFieldChange = (index: number, field: keyof CollectionMerchandiseItem, value: string) => {
     setEditFormData((prev: any) => {
       const updated = (prev.service_items || []).map((it: any, i: number) => {
@@ -5506,7 +5653,21 @@ function CollectionPageContent() {
                           </span>
                         </div>
                         {!isEditLocked && (
-                          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                          <div className="flex flex-wrap items-center gap-1.5 self-end sm:self-auto">
+                            {(() => {
+                              const merchInSvcCount = (editFormData.service_items || []).filter(isLikelyMerchandiseInService).length;
+                              if (merchInSvcCount === 0) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={handleEditTransferMerchFromServices}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-400/80 bg-amber-50 dark:bg-amber-950/40 text-[10.5px] font-bold text-amber-800 dark:text-amber-300 hover:bg-amber-100 transition-colors cursor-pointer"
+                                  title="Move all detected merchandise rows into Store Merchandise / Sales"
+                                >
+                                  <span>Move Merch to Merchandise ({merchInSvcCount})</span>
+                                </button>
+                              );
+                            })()}
                             <button
                               type="button"
                               onClick={() => handleEditAddMultipleServiceItems(5)}
@@ -5602,15 +5763,29 @@ function CollectionPageContent() {
                                       ₱{rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </td>
                                     <td className="p-1 text-center">
-                                      {!isEditLocked && (editFormData.service_items || []).length > 1 ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleEditRemoveServiceItem(idx)}
-                                          className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                                          title="Remove service row"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                      {!isEditLocked ? (
+                                        <div className="inline-flex items-center justify-center gap-0.5">
+                                          {(String(it.item || '').trim() !== '' || (parseFloat(String(it.selling_price)) || 0) > 0) && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleEditMoveSingleServiceToMerch(idx)}
+                                              className="p-1 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors cursor-pointer"
+                                              title="Move row to Store Merchandise / Sales"
+                                            >
+                                              <ShoppingBag className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                          {(editFormData.service_items || []).length > 1 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleEditRemoveServiceItem(idx)}
+                                              className="p-1 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                              title="Remove service row"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </div>
                                       ) : (
                                         <span className="text-neutral-300 dark:text-neutral-700 text-[10px]">—</span>
                                       )}

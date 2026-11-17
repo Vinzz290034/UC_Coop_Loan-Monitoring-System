@@ -35,6 +35,7 @@ import {
   ReceiptText,
   TrendingUp,
   HandCoins,
+  Landmark,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
@@ -161,6 +162,12 @@ function DashboardLayoutContent({
       path: '/dashboard/reports',
       icon: BarChart3,
       allowed: user.role === 'admin',
+    },
+    {
+      name: 'Bank Recon',
+      path: '/dashboard/bank-recon',
+      icon: Landmark,
+      allowed: isAdminOrStaff,
     },
     {
       name: 'Support Desk',

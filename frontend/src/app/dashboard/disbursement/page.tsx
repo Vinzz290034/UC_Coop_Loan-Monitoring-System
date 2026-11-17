@@ -1443,6 +1443,10 @@ function DisbursementPageContent() {
       : 'Expense Breakdown';
 
   const handleBackToReport = useCallback(() => {
+    if (fromReport === 'bank_recon') {
+      router.push('/dashboard/bank-recon');
+      return;
+    }
     const p = new URLSearchParams();
     p.set('tab', fromReport || 'expenses');
     if (returnSubView) p.set('subview', returnSubView);
