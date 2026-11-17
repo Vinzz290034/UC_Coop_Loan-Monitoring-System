@@ -880,7 +880,7 @@ export const getMerchandiseSalesReport = async (req, res, next) => {
       if (/penalty|fine/i.test(text)) return;
       if (/fund\s*transfer|replenish/i.test(text)) return;
       if (/donation|grant/i.test(text)) return;
-      if (/wifi|photo|print|photocopy|xerox|hardbound|vendo|alteration/i.test(text)) return;
+      if (/wifi|photo|print|photocopy|xerox|hardbound|gnomonic|chart|vendo|alteration/i.test(text)) return;
       if (row.tab === 'services') return;
 
       let rowDate = row.date || row.created_at;
@@ -909,7 +909,7 @@ export const getMerchandiseSalesReport = async (req, res, next) => {
           const isSvcItem =
             String(it.item_type || '').toLowerCase() === 'service' ||
             (!hasPositiveCost &&
-              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|scoresheet|toga|alteration|service)/i.test(itName));
+              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|gnomonic(\s*chart)?|lamination|id\s*photo|notarial|scoresheet|toga|alteration|service)/i.test(itName));
           if (isSvcItem) return;
 
           const itSize = String(it.size || '—').trim();
@@ -4227,6 +4227,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const serviceWater = newStore();
     const servicePrinting = newStore();
     const serviceHardbound = newStore();
+    const serviceGnomonicChart = newStore();
     const serviceLocker = newStore();
     const lockerDeposits = newStore();
     const serviceMadeToOrder = newStore();
@@ -4239,6 +4240,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       else if (/wifi/.test(n)) bucket(serviceWifi, rawDate, svcAmt, svcMeta);
       else if (/water/.test(n)) bucket(serviceWater, rawDate, svcAmt, svcMeta);
       else if (/hardbound/.test(n)) bucket(serviceHardbound, rawDate, svcAmt, svcMeta);
+      else if (/gnomonic|chart/.test(n)) bucket(serviceGnomonicChart, rawDate, svcAmt, svcMeta);
       else if (/print|photocopy|lamination|id\s*photo/.test(n)) bucket(servicePrinting, rawDate, svcAmt, svcMeta);
       else if (/locker\s*deposit/.test(n)) bucket(lockerDeposits, rawDate, svcAmt, svcMeta);
       else if (/locker|key\s*duplicate/.test(n)) bucket(serviceLocker, rawDate, svcAmt, svcMeta);
@@ -4344,7 +4346,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           const isSvc =
             String(it.item_type || '').toLowerCase() === 'service' ||
             (!hasPositiveCost &&
-              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|scoresheet|toga|alteration|service)/i.test(itName));
+              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|gnomonic(\s*chart)?|lamination|id\s*photo|notarial|scoresheet|toga|alteration|service)/i.test(itName));
           const q = parseFloat(String(it.quantity)) || 1;
           const sp = parseFloat(String(it.selling_price || it.unit_price || 0)) || 0;
           const cp = parseFloat(String(it.cost_price || 0)) || 0;
@@ -4561,7 +4563,9 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         }
 
         if (cat === 'Service Expense' || isDirectServiceCost(acc)) {
-          const normalizedSvcAcc = /^cos\s*-\s*locker$/i.test(acc) ? 'COS - Key Duplicate' : acc;
+          let normalizedSvcAcc = acc;
+          if (/^cos\s*-\s*locker$/i.test(acc)) normalizedSvcAcc = 'COS - Key Duplicate';
+          else if (/^cos\s*-\s*charts?$/i.test(acc)) normalizedSvcAcc = 'COS - Gnomonic Chart';
           if (!costOfSales[normalizedSvcAcc]) costOfSales[normalizedSvcAcc] = newStore();
           costOfSales[normalizedSvcAcc][which][mIdx] += amt;
           if (tx) costOfSales[normalizedSvcAcc].transactions.push(tx);
@@ -4691,6 +4695,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 line('', 'Collection from Water Vendo', 'Water vendo machine collections.', serviceWater, false),
                 line('', 'Collection from Printing & Photocopy', 'Printing, photocopying, lamination, and ID photo services.', servicePrinting, false),
                 line('', 'Collection from Hardbound', 'Hardbound thesis binding service collections.', serviceHardbound, false),
+                line('', 'Collection from Gnomonic Chart', 'Gnomonic chart service collections.', serviceGnomonicChart, false),
                 line('', 'Collection from Locker & Key Duplicate', 'Locker rentals (₱250) and key duplicate fees.', serviceLocker, false),
                 line('', 'Collection from Type A & B, Gala & BSNAME', 'Made-to-order Type A & B, Gala, BSNAME and cap collections.', serviceMadeToOrder, false)
               ]
