@@ -4226,6 +4226,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const serviceWifi = newStore();
     const serviceWater = newStore();
     const servicePrinting = newStore();
+    const serviceHardbound = newStore();
     const serviceLocker = newStore();
     const lockerDeposits = newStore();
     const serviceMadeToOrder = newStore();
@@ -4237,7 +4238,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       else if (/bonggo/.test(n)) bucket(serviceBonggo, rawDate, svcAmt, svcMeta);
       else if (/wifi/.test(n)) bucket(serviceWifi, rawDate, svcAmt, svcMeta);
       else if (/water/.test(n)) bucket(serviceWater, rawDate, svcAmt, svcMeta);
-      else if (/print|photocopy|hardbound|lamination|id\s*photo/.test(n)) bucket(servicePrinting, rawDate, svcAmt, svcMeta);
+      else if (/hardbound/.test(n)) bucket(serviceHardbound, rawDate, svcAmt, svcMeta);
+      else if (/print|photocopy|lamination|id\s*photo/.test(n)) bucket(servicePrinting, rawDate, svcAmt, svcMeta);
       else if (/locker\s*deposit/.test(n)) bucket(lockerDeposits, rawDate, svcAmt, svcMeta);
       else if (/locker|key\s*duplicate/.test(n)) bucket(serviceLocker, rawDate, svcAmt, svcMeta);
       else if (/type\s*a|type\s*b|gala|bsname|\bcap\b/.test(n)) bucket(serviceMadeToOrder, rawDate, svcAmt, svcMeta);
@@ -4559,6 +4561,11 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         }
 
         if (cat === 'Service Expense' || isDirectServiceCost(acc)) {
+          if (/^cos\s*-\s*hardbound$/i.test(acc)) {
+            serviceHardbound[which][mIdx] -= amt;
+            if (tx) serviceHardbound.transactions.push({ ...tx, amount: -amt });
+            return;
+          }
           const normalizedSvcAcc = /^cos\s*-\s*locker$/i.test(acc) ? 'COS - Key Duplicate' : acc;
           if (!costOfSales[normalizedSvcAcc]) costOfSales[normalizedSvcAcc] = newStore();
           costOfSales[normalizedSvcAcc][which][mIdx] += amt;
@@ -4684,12 +4691,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               total_label: null,
               lines: [
                 line('', 'Income from Gcash', 'GCash cash-in/cash-out and service fees.', serviceGcash, true),
-                line('', 'Income from Bonggo', 'Bonggo 2x2 and related service collections.', serviceBonggo, true),
-                line('', 'Income from Wifi', 'Cooperative WiFi access fees.', serviceWifi, false),
-                line('', 'Income from Water Vendo', 'Water vendo machine collections.', serviceWater, false),
-                line('', 'Income from Printing & Photocopy', 'Printing, photocopying, lamination, hardbound and ID photo services.', servicePrinting, false),
-                line('', 'Income from Locker & Key Duplicate', 'Locker rentals (₱250) and key duplicate fees.', serviceLocker, false),
-                line('', 'Income from Type A & B, Gala & BSNAME', 'Made-to-order Type A & B, Gala, BSNAME and cap collections.', serviceMadeToOrder, false)
+                line('', 'Collection from Bonggo', 'Bonggo 2x2 and related service collections.', serviceBonggo, true),
+                line('', 'Collection from Wifi', 'Cooperative WiFi access fees.', serviceWifi, false),
+                line('', 'Collection from Water Vendo', 'Water vendo machine collections.', serviceWater, false),
+                line('', 'Collection from Printing & Photocopy', 'Printing, photocopying, lamination, and ID photo services.', servicePrinting, false),
+                line('', 'Collection from Hardbound', 'Hardbound collections minus COS - Hardbound (net profit).', serviceHardbound, false),
+                line('', 'Collection from Locker & Key Duplicate', 'Locker rentals (₱250) and key duplicate fees.', serviceLocker, false),
+                line('', 'Collection from Type A & B, Gala & BSNAME', 'Made-to-order Type A & B, Gala, BSNAME and cap collections.', serviceMadeToOrder, false)
               ]
             }
           ]
