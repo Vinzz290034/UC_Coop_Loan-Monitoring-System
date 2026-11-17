@@ -5,17 +5,31 @@ import { query } from '../config/db.js';
  */
 const routeModuleMap = {
   '/api/auth/login': { module: 'Authentication', action: 'User Login' },
-  '/api/auth/register': { module: 'Authentication', action: 'User Registration' },
+  '/api/auth/logout': { module: 'Authentication', action: 'User Logout' },
+  '/api/auth/register': { module: 'User Management', action: 'Create User Account' },
+  '/api/auth/users': { module: 'User Management', action: 'Manage User Account' },
   '/api/auth/forgot-password': { module: 'Authentication', action: 'Password Recovery Request' },
-  '/api/members': { module: 'Member Management', action: 'Member Operation' },
-  '/api/accounts/share-capital': { module: 'Share Capital', action: 'Share Capital Transaction' },
-  '/api/accounts/fixed-deposits': { module: 'Fixed Deposits', action: 'Fixed Deposit Operation' },
-  '/api/accounts/investments': { module: 'Investments', action: 'Investment Operation' },
-  '/api/loans/products': { module: 'Loan Products', action: 'Loan Product Configuration' },
-  '/api/loans/repayments': { module: 'Loan Repayments', action: 'Repayment Posting' },
-  '/api/loans': { module: 'Loan Management', action: 'Loan Operation' },
-  '/api/billing': { module: 'Billing', action: 'Billing Operation' },
-  '/api/reports': { module: 'Reports', action: 'Report Generation' },
+  '/api/auth/reset-password': { module: 'Authentication', action: 'Password Reset' },
+  '/api/collections': { module: 'Collection', action: 'Collection Receipt' },
+  '/api/accounts/check-vouchers': { module: 'Disbursement', action: 'Check Voucher' },
+  '/api/revolving-fund': { module: 'Revolving Fund', action: 'Revolving Fund Liquidation' },
+  '/api/stl-liquidations': { module: 'STL Liquidation', action: 'STL Liquidation' },
+  '/api/reports/bank-recon': { module: 'Bank Recon', action: 'Bank Recon Entry' },
+  '/api/members': { module: 'Member Management', action: 'Member Record' },
+  '/api/accounts/share-capital': { module: 'Shared Capital', action: 'Shared Capital Transaction' },
+  '/api/accounts/fixed-deposits': { module: 'Fixed Deposits', action: 'Fixed Deposit' },
+  '/api/accounts/investments': { module: 'Investments', action: 'Investment' },
+  '/api/loans/products': { module: 'Loan Products', action: 'Loan Product' },
+  '/api/loans/repayments': { module: 'Loan Repayments', action: 'Loan Repayment' },
+  '/api/loans': { module: 'Loan Management', action: 'Loan Record' },
+  '/api/billing': { module: 'Billings', action: 'Billing Record' },
+  '/api/dividends': { module: 'Dividend', action: 'Dividend Record' },
+  '/api/import': { module: 'Data Import', action: 'Data Import' },
+  '/api/reports': { module: 'Reports', action: 'Report Operation' },
+  '/api/support': { module: 'Support Desk', action: 'Support Ticket' },
+  '/api/announcements': { module: 'Announcements', action: 'Announcement' },
+  '/api/messages': { module: 'Inbox', action: 'Message' },
+  '/api/notifications': { module: 'Notifications', action: 'Notification' },
 };
 
 /**
@@ -39,15 +53,18 @@ function resolveModuleAndAction(method, path) {
     return { module: 'Investments', action: 'Investment Transaction' };
   }
 
-  // Match route prefixes from the map
-  for (const [routePrefix, mapping] of Object.entries(routeModuleMap)) {
+  // Match route prefixes from the map (longest prefix first)
+  const sortedPrefixes = Object.entries(routeModuleMap).sort((a, b) => b[0].length - a[0].length);
+  for (const [routePrefix, mapping] of sortedPrefixes) {
     if (path.startsWith(routePrefix)) {
-      // Refine the action based on HTTP method
+      if (routePrefix === '/api/auth/login' || routePrefix === '/api/auth/logout' || routePrefix === '/api/auth/register') {
+        return { module: mapping.module, action: mapping.action };
+      }
       let action = mapping.action;
-      if (method === 'POST') action = `Create ${mapping.module.split(' ').pop()}`;
-      else if (method === 'PUT') action = `Update ${mapping.module.split(' ').pop()}`;
-      else if (method === 'PATCH') action = `Modify ${mapping.module.split(' ').pop()}`;
-      else if (method === 'DELETE') action = `Delete ${mapping.module.split(' ').pop()}`;
+      if (method === 'POST') action = `Create ${mapping.action}`;
+      else if (method === 'PUT') action = `Update ${mapping.action}`;
+      else if (method === 'PATCH') action = `Modify ${mapping.action}`;
+      else if (method === 'DELETE') action = `Delete ${mapping.action}`;
       return { module: mapping.module, action };
     }
   }

@@ -210,7 +210,7 @@ function DashboardLayoutContent({
       name: 'Audit Trail',
       path: '/dashboard/audit',
       icon: ScrollText,
-      allowed: user.role === 'admin',
+      allowed: user.role === 'admin' && (user.username || '').trim().toLowerCase() === 'orpheus',
     },
   ];
 
