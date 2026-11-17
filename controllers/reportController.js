@@ -4230,7 +4230,9 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const serviceGnomonicChart = newStore();
     const serviceLocker = newStore();
     const lockerDeposits = newStore();
-    const serviceMadeToOrder = newStore();
+    const serviceTypeAB = newStore();
+    const serviceGala = newStore();
+    const serviceBsname = newStore();
     const serviceOther = newStore();
     const bucketServiceByName = (svcName, rawDate, svcAmt, svcMeta) => {
       if (!svcAmt || svcAmt <= 0) return;
@@ -4244,7 +4246,9 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       else if (/print|photocopy|lamination|id\s*photo/.test(n)) bucket(servicePrinting, rawDate, svcAmt, svcMeta);
       else if (/locker\s*deposit/.test(n)) bucket(lockerDeposits, rawDate, svcAmt, svcMeta);
       else if (/locker|key\s*duplicate/.test(n)) bucket(serviceLocker, rawDate, svcAmt, svcMeta);
-      else if (/type\s*a|type\s*b|gala|bsname|\bcap\b/.test(n)) bucket(serviceMadeToOrder, rawDate, svcAmt, svcMeta);
+      else if (/type\s*a|type\s*b/.test(n)) bucket(serviceTypeAB, rawDate, svcAmt, svcMeta);
+      else if (/\bgala\b|\bcap\b/.test(n)) bucket(serviceGala, rawDate, svcAmt, svcMeta);
+      else if (/bsname/.test(n)) bucket(serviceBsname, rawDate, svcAmt, svcMeta);
       else bucket(serviceOther, rawDate, svcAmt, svcMeta);
     };
     const depositInterest = newStore();
@@ -4481,12 +4485,18 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       return null;
     };
 
-    // Made-to-order uniforms (Type A & B, Gala) are treated as Services when not store merchandise accessories/shoes or bulk Merchandise Inventory restocking
-    const isMadeToOrderServiceCost = (acc, particulars = '', cat = '', mIdx = 0) => {
+    // Made-to-order uniforms (Type A & B, Gala, BSNAME) are treated as Services when not store merchandise accessories/shoes or bulk Merchandise Inventory restocking
+    const getMadeToOrderServiceCostAccount = (acc, particulars = '', cat = '', mIdx = 0) => {
       const combined = `${acc} ${particulars || ''}`;
-      if (/shoe|accessor|accesor|pe\s*short|pe\s*shirt|pe\s*pant|trunk|lanyard|id\s*case|glove/i.test(combined)) return false;
-      if (mIdx >= 2 && (cat === 'Merchandise Expense' || /merchandise\s*inventory|\bpayment\s*(for|of|or)\b/i.test(acc))) return false;
-      return /type\s*a\s*(?:&|and)?\s*b|type\s*a\b|type\s*b\b|\bgala\b|bsname/i.test(combined);
+      if (/shoe|accessor|accesor|pe\s*short|pe\s*shirt|pe\s*pant|trunk|lanyard|id\s*case|glove/i.test(combined)) return null;
+      if (mIdx >= 2 && (cat === 'Merchandise Expense' || /merchandise\s*inventory|\bpayment\s*(for|of|or)\b/i.test(acc))) return null;
+      const matchTarget = (s) => {
+        if (/bsname/i.test(s)) return 'COS - BSNAME';
+        if (/\bgala\b/i.test(s)) return 'COS - Gala';
+        if (/type\s*a\s*(?:&|and)?\s*b|type\s*a\b|type\s*b\b/i.test(s)) return 'COS - Type A & B';
+        return null;
+      };
+      return matchTarget(acc) || matchTarget(combined);
     };
 
     // Stock bought for resale (uniforms, shoes, manuals, columbary, "payment for ..." supplier vouchers, etc.)
@@ -4532,8 +4542,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         } : null;
 
         // Made-to-order uniforms (Type A & B, Gala, BSNAME) stay in Cost of Sales & Services since their revenue is in Services
-        if (isMadeToOrderServiceCost(acc, rec.particulars, cat, mIdx)) {
-          const svcCostAcc = 'COS - Type A & B, Gala & BSNAME';
+        const svcCostAcc = getMadeToOrderServiceCostAccount(acc, rec.particulars, cat, mIdx);
+        if (svcCostAcc) {
           if (!costOfSales[svcCostAcc]) costOfSales[svcCostAcc] = newStore();
           costOfSales[svcCostAcc][which][mIdx] += amt;
           if (tx) costOfSales[svcCostAcc].transactions.push(tx);
@@ -4697,7 +4707,9 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 line('', 'Collection from Hardbound', 'Hardbound thesis binding service collections.', serviceHardbound, false),
                 line('', 'Collection from Gnomonic Chart', 'Gnomonic chart service collections.', serviceGnomonicChart, false),
                 line('', 'Collection from Locker & Key Duplicate', 'Locker rentals (₱250) and key duplicate fees.', serviceLocker, false),
-                line('', 'Collection from Type A & B, Gala & BSNAME', 'Made-to-order Type A & B, Gala, BSNAME and cap collections.', serviceMadeToOrder, false)
+                line('', 'Collection from Type A & B', 'Made-to-order Type A & B uniform collections.', serviceTypeAB, false),
+                line('', 'Collection from Gala', 'Made-to-order Gala and cap collections.', serviceGala, false),
+                line('', 'Collection from BSNAME', 'Made-to-order BSNAME uniform collections.', serviceBsname, false)
               ]
             }
           ]
