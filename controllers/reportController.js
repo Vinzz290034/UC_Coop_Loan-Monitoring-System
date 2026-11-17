@@ -4813,7 +4813,7 @@ export const getBankReconReport = async (req, res, next) => {
 
     const [reconRes, cvRes, colRes] = await Promise.all([
       pool.query(
-        `SELECT id, bank, year, tx_date, voucher_no, depositor_payee, particulars, withdrawal, deposit, entry_type
+        `SELECT id, bank, year, TO_CHAR(tx_date, 'YYYY-MM-DD') AS tx_date, voucher_no, depositor_payee, particulars, withdrawal, deposit, entry_type
          FROM bank_recon_entries
          WHERE year = $1
          ORDER BY tx_date ASC NULLS FIRST, id ASC`,
@@ -4823,9 +4823,9 @@ export const getBankReconReport = async (req, res, next) => {
         `SELECT id, voucher_no, voucher_date, date_released, bank, check_no, payee, particulars, amount, folder_name, status
          FROM check_vouchers
          WHERE COALESCE(status, '') != 'cancelled'
-           AND EXTRACT(YEAR FROM voucher_date) = $1
+           AND EXTRACT(YEAR FROM voucher_date) IN ($1, $2)
          ORDER BY voucher_date ASC, voucher_no ASC`,
-        [targetYear]
+        [targetYear, targetYear - 1]
       ),
       pool.query(
         `SELECT id, or_no, date, created_at, tab, status, payor_name, particulars, item_name, service_type, amount
@@ -4837,18 +4837,73 @@ export const getBankReconReport = async (req, res, next) => {
       )
     ]);
 
+    const cvLookup = new Map();
+    for (const cv of cvRes.rows) {
+      const vNo = String(cv.voucher_no || '').trim();
+      if (!vNo) continue;
+      const lower = vNo.toLowerCase();
+      const cvYear = cv.voucher_date ? new Date(cv.voucher_date).getFullYear() : targetYear;
+      const isTargetYear = cvYear === targetYear;
+
+      if (!cvLookup.has(lower) || isTargetYear) {
+        cvLookup.set(lower, cv);
+      }
+      const stripped = lower.replace(/^cv[\s\-]*/i, '').trim();
+      if (stripped && (!cvLookup.has(stripped) || isTargetYear)) {
+        cvLookup.set(stripped, cv);
+      }
+
+      if (isTargetYear) {
+        const dashMatch = stripped.match(/^(\d{2,4})-(\d+)$/);
+        if (dashMatch) {
+          const num = parseInt(dashMatch[2], 10);
+          if (!Number.isNaN(num)) {
+            const pad2 = String(num).padStart(2, '0');
+            const pad3 = String(num).padStart(3, '0');
+            cvLookup.set(`v${pad2}`, cv);
+            cvLookup.set(`v${pad3}`, cv);
+            cvLookup.set(`v${num}`, cv);
+          }
+        }
+      }
+    }
+
+    const findMatchingCheckVoucher = (rawVoucherNo) => {
+      const raw = String(rawVoucherNo || '').trim();
+      if (!raw) return null;
+      const lower = raw.toLowerCase();
+      const stripped = lower.replace(/^cv[\s\-]*/i, '').trim();
+      if (cvLookup.has(lower)) return cvLookup.get(lower);
+      if (cvLookup.has(stripped)) return cvLookup.get(stripped);
+
+      const vMatch = stripped.match(/^v(?:oucher)?[\s\-]*0*(\d+)$/i);
+      if (vMatch) {
+        const num = parseInt(vMatch[1], 10);
+        const pad2 = String(num).padStart(2, '0');
+        return cvLookup.get(`v${pad2}`) || cvLookup.get(`v${num}`) || null;
+      }
+
+      const shortYearMatch = stripped.match(/^(\d{2})-(\d+)$/);
+      if (shortYearMatch) {
+        const fullKey = `20${shortYearMatch[1]}-${shortYearMatch[2]}`;
+        if (cvLookup.has(fullKey)) return cvLookup.get(fullKey);
+      }
+
+      const fullYearMatch = stripped.match(/^20(\d{2})-(\d+)$/);
+      if (fullYearMatch) {
+        const shortKey = `${fullYearMatch[1]}-${fullYearMatch[2]}`;
+        if (cvLookup.has(shortKey)) return cvLookup.get(shortKey);
+      }
+
+      return null;
+    };
+
     const buildBankLedger = (bankCode) => {
       const bankManualRows = reconRes.rows.filter(r => normalizeBankCode(r.bank) === bankCode);
       const begRow = bankManualRows.find(r => r.entry_type === 'beginning_balance');
       const beginningBalance = begRow
         ? (parseFloat(begRow.deposit) || 0) - (parseFloat(begRow.withdrawal) || 0)
-        : (BANK_DEFAULT_BEGINNING_BALANCE[targetYear]?.[bankCode] || 0);
-
-      const importedVoucherTokens = new Set(
-        bankManualRows
-          .filter(r => r.entry_type !== 'beginning_balance' && r.voucher_no)
-          .map(r => String(r.voucher_no).trim().toLowerCase())
-      );
+        : 0;
 
       const entries = [];
 
@@ -4856,98 +4911,41 @@ export const getBankReconReport = async (req, res, next) => {
       bankManualRows
         .filter(r => r.entry_type !== 'beginning_balance')
         .forEach(r => {
-          const dStr = r.tx_date ? new Date(r.tx_date).toISOString().split('T')[0] : `${targetYear}-01-01`;
+          let dStr = `${targetYear}-01-01`;
+          if (typeof r.tx_date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(r.tx_date)) {
+            dStr = r.tx_date.slice(0, 10);
+          } else if (r.tx_date instanceof Date && !isNaN(r.tx_date.getTime())) {
+            const yy = r.tx_date.getFullYear();
+            const mm = String(r.tx_date.getMonth() + 1).padStart(2, '0');
+            const dd = String(r.tx_date.getDate()).padStart(2, '0');
+            dStr = `${yy}-${mm}-${dd}`;
+          }
+          const matchedCv = findMatchingCheckVoucher(r.voucher_no);
+          const rawPayee = String(r.depositor_payee || '').trim();
+          const enrichedPayee =
+            matchedCv && (!rawPayee || /^check voucher withdrawal$/i.test(rawPayee))
+              ? (matchedCv.payee || rawPayee)
+              : rawPayee;
+          const enrichedParticulars =
+            r.particulars ||
+            (matchedCv?.particulars ? matchedCv.particulars : (r.entry_type === 'import' ? 'Imported Bank Recon Entry' : 'Manual Entry'));
+
           entries.push({
             id: `recon-${r.id}`,
             db_id: r.id,
             date: dStr,
             month: Number(dStr.slice(5, 7)) - 1,
             voucher_no: r.voucher_no || '',
-            depositor_payee: r.depositor_payee || '',
-            particulars: r.particulars || (r.entry_type === 'import' ? 'Imported Bank Recon Entry' : 'Manual Entry'),
+            raw_voucher_no: matchedCv?.voucher_no || r.voucher_no || null,
+            depositor_payee: enrichedPayee,
+            particulars: enrichedParticulars,
             withdrawal: Math.round((parseFloat(r.withdrawal) || 0) * 100) / 100,
             deposit: Math.round((parseFloat(r.deposit) || 0) * 100) / 100,
             source: r.entry_type === 'import' ? 'imported' : 'manual',
-            voucher_id: null,
+            voucher_id: matchedCv ? String(matchedCv.id) : null,
             or_no: null
           });
         });
-
-      // 2. Check Vouchers drawn on this bank (Withdrawals: Loans -> BDO, Merchandise/Service -> MBTC if bank unset)
-      cvRes.rows.forEach(cv => {
-        let cvBank = normalizeBankCode(cv.bank);
-        if (!cvBank) {
-          const folder = String(cv.folder_name || '').toLowerCase();
-          if (folder.includes('merchandise') || folder.includes('service')) cvBank = 'MBTC';
-          else if (folder.includes('loan') || folder.includes('stl')) cvBank = 'BDO';
-        }
-        if (cvBank !== bankCode) return;
-        const vNo = String(cv.voucher_no || '').trim();
-        const vToken = vNo.toLowerCase();
-        const altToken = vToken.replace(/^26-/, 'v');
-        if (vToken && (importedVoucherTokens.has(vToken) || importedVoucherTokens.has(altToken))) return;
-
-        const amt = parseFloat(cv.amount) || 0;
-        if (amt <= 0 || !cv.voucher_date) return;
-        const dStr = new Date(cv.voucher_date).toISOString().split('T')[0];
-        entries.push({
-          id: `cv-${cv.id}`,
-          db_id: null,
-          date: dStr,
-          month: Number(dStr.slice(5, 7)) - 1,
-          voucher_no: vNo ? `CV ${vNo}` : 'CV',
-          raw_voucher_no: vNo,
-          check_no: cv.check_no || null,
-          depositor_payee: cv.payee || 'Payee',
-          particulars: cv.particulars || cv.folder_name || 'Check Voucher Disbursement',
-          withdrawal: Math.round(amt * 100) / 100,
-          deposit: 0,
-          source: 'check_voucher',
-          voucher_id: cv.id,
-          or_no: null
-        });
-      });
-
-      // 3. Cashier Collections deposited to this bank (Deposits)
-      colRes.rows.forEach(col => {
-        const rawDate = col.date || col.created_at;
-        if (!rawDate) return;
-        const d = new Date(rawDate);
-        if (isNaN(d.getTime())) return;
-        const dStr = d.toISOString().split('T')[0];
-
-        let colBank = normalizeBankCode(col.status);
-        if (!colBank) {
-          const tLower = String(col.tab || '').toLowerCase().trim();
-          if (tLower === 'sales' || tLower === 'services' || tLower === 'sales_services') {
-            colBank = 'MBTC';
-          } else if (tLower === 'credit' || tLower === 'billing') {
-            colBank = 'BDO';
-          }
-        }
-        if (colBank !== bankCode) return;
-
-        const orNo = String(col.or_no || '').trim();
-        if (orNo && (importedVoucherTokens.has(`si-${orNo.toLowerCase()}`) || importedVoucherTokens.has(orNo.toLowerCase()))) return;
-
-        const amt = parseFloat(col.amount) || 0;
-        if (amt <= 0) return;
-
-        entries.push({
-          id: `col-${col.id}`,
-          db_id: null,
-          date: dStr,
-          month: Number(dStr.slice(5, 7)) - 1,
-          voucher_no: orNo ? `SI-${orNo}` : 'Collection',
-          depositor_payee: col.payor_name || 'Member',
-          particulars: col.particulars || col.item_name || col.service_type || 'Cashier Collection Deposit',
-          withdrawal: 0,
-          deposit: Math.round(amt * 100) / 100,
-          source: 'collection',
-          voucher_id: null,
-          or_no: orNo || null
-        });
-      });
 
       // Sort chronologically and compute running balance
       entries.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : String(a.voucher_no).localeCompare(String(b.voucher_no))));
@@ -5120,7 +5118,38 @@ export const importBankReconEntries = async (req, res, next) => {
   }
 };
 
-// @desc    Delete a single Bank Recon entry (or clear imported entries)
+// @desc    Clear Bank Recon entries (imported, manual, and beginning balances)
+// @route   DELETE /api/reports/bank-recon/clear
+// @access  Protected (Admin, Staff)
+export const clearBankReconEntries = async (req, res, next) => {
+  try {
+    await ensureBankReconTable();
+    const bank = req.query.bank ? normalizeBankCode(req.query.bank) : null;
+    const year = req.query.year ? Number(req.query.year) : null;
+
+    let sql = 'DELETE FROM bank_recon_entries WHERE 1=1';
+    const params = [];
+    if (bank) {
+      params.push(bank);
+      sql += ` AND bank = $${params.length}`;
+    }
+    if (year) {
+      params.push(year);
+      sql += ` AND year = $${params.length}`;
+    }
+
+    const result = await pool.query(sql, params);
+    return res.status(200).json({
+      success: true,
+      deleted: result.rowCount || 0,
+      message: `Cleared ${result.rowCount || 0} Bank Recon record(s).`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete a single Bank Recon entry
 // @route   DELETE /api/reports/bank-recon/:id
 // @access  Protected (Admin, Staff)
 export const deleteBankReconEntry = async (req, res, next) => {

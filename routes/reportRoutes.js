@@ -16,7 +16,8 @@ import {
   getBankReconReport,
   upsertBankReconEntry,
   importBankReconEntries,
-  deleteBankReconEntry
+  deleteBankReconEntry,
+  clearBankReconEntries
 } from '../controllers/reportController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -65,6 +66,7 @@ router.get('/statement-of-operations', getStatementOfOperationsReport);
 router.get('/bank-recon', getBankReconReport);
 router.post('/bank-recon/entry', upsertBankReconEntry);
 router.post('/bank-recon/import', importBankReconEntries);
+router.delete('/bank-recon/clear', clearBankReconEntries);
 router.delete('/bank-recon/:id', deleteBankReconEntry);
 
 export default router;

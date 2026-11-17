@@ -22,7 +22,9 @@ import {
   ChevronRight,
   AlertCircle,
   CheckCircle2,
-  Edit3
+  Edit3,
+  Check,
+  ChevronDown
 } from 'lucide-react';
 
 export interface BankReconEntry {
@@ -105,7 +107,12 @@ const parseExcelDateValue = (raw: any, fallbackYear: number): string => {
     return `${yy}-${mm}-${dd}`;
   }
   const parsed = new Date(s);
-  if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
+  if (!isNaN(parsed.getTime())) {
+    const yy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+  }
   return `${fallbackYear}-01-01`;
 };
 
@@ -116,12 +123,91 @@ const parseNum = (v: any): number => {
   return isNaN(n) ? 0 : n;
 };
 
+function AnimatedSelect({
+  value,
+  options,
+  onChange,
+  className = '',
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (val: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
+
+  const current = options.find(o => o.value === value) || options[0];
+
+  return (
+    <div className={`relative ${className}`} ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`w-full px-3 py-2 rounded-xl border bg-white dark:bg-neutral-800 font-bold text-xs text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+          open
+            ? 'border-emerald-500 ring-2 ring-emerald-500/20 text-neutral-900 dark:text-white'
+            : 'border-outline-variant/60 text-neutral-900 dark:text-neutral-100 hover:border-emerald-500/60'
+        }`}
+      >
+        <span className="truncate">{current?.label || value}</span>
+        <ChevronDown
+          className={`w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0 transition-transform duration-200 ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1.5 w-full bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl shadow-xl z-50 overflow-hidden animate-dropdown-pop origin-top max-h-56 overflow-y-auto divide-y divide-outline-variant/10">
+          {options.map(opt => {
+            const selected = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-xs text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                  selected
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200 font-bold'
+                    : 'text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 font-medium'
+                }`}
+              >
+                <span className="truncate">{opt.label}</span>
+                {selected && <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BankReconTab({ initialYear }: Props) {
   const router = useRouter();
   const [year, setYear] = useState<number>(() => Math.max(2025, initialYear));
   const [activeBank, setActiveBank] = useState<'BDO' | 'MBTC'>('BDO');
   const [selectedMonth, setSelectedMonth] = useState<number | 'ytd'>('ytd');
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'check_voucher' | 'collection' | 'imported'>('all');
+  const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'deposit' | 'withdrawal'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [data, setData] = useState<BankReconResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,6 +229,8 @@ export default function BankReconTab({ initialYear }: Props) {
   const [isBegBalOpen, setIsBegBalOpen] = useState(false);
   const [begBalValue, setBegBalValue] = useState('');
   const [isAddEntryOpen, setIsAddEntryOpen] = useState(false);
+  const [isClearOpen, setIsClearOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [newEntry, setNewEntry] = useState({
     tx_date: `${initialYear}-01-02`,
     voucher_no: '',
@@ -178,18 +266,13 @@ export default function BankReconTab({ initialYear }: Props) {
     return currentLedger.monthly[selectedMonth - 1]?.ending_balance ?? currentLedger.beginning_balance;
   }, [currentLedger, selectedMonth]);
 
-  const filteredEntries = useMemo(() => {
+  const periodEntries = useMemo(() => {
     if (!currentLedger) return [];
     const q = searchQuery.toLowerCase().trim();
     return currentLedger.entries.filter(e => {
       if (selectedMonth === 'ytd') {
         if (year === 2026 && e.month > 10) return false;
       } else if (e.month !== selectedMonth) {
-        return false;
-      }
-      if (sourceFilter === 'imported') {
-        if (e.source !== 'imported' && e.source !== 'manual') return false;
-      } else if (sourceFilter !== 'all' && e.source !== sourceFilter) {
         return false;
       }
       if (!q) return true;
@@ -200,17 +283,23 @@ export default function BankReconTab({ initialYear }: Props) {
         e.particulars.toLowerCase().includes(q)
       );
     });
-  }, [currentLedger, selectedMonth, sourceFilter, searchQuery, year]);
+  }, [currentLedger, selectedMonth, searchQuery, year]);
+
+  const filteredEntries = useMemo(() => {
+    if (txTypeFilter === 'deposit') return periodEntries.filter(e => e.deposit > 0);
+    if (txTypeFilter === 'withdrawal') return periodEntries.filter(e => e.withdrawal > 0);
+    return periodEntries;
+  }, [periodEntries, txTypeFilter]);
 
   const viewTotals = useMemo(() => {
-    const deposits = filteredEntries.reduce((s, e) => s + e.deposit, 0);
-    const withdrawals = filteredEntries.reduce((s, e) => s + e.withdrawal, 0);
+    const deposits = periodEntries.reduce((s, e) => s + e.deposit, 0);
+    const withdrawals = periodEntries.reduce((s, e) => s + e.withdrawal, 0);
     const ending =
       selectedMonth === 'ytd'
         ? (currentLedger?.ending_balance ?? 0)
         : (currentLedger?.monthly?.[selectedMonth]?.ending_balance ?? openingBalanceForView);
     return { deposits, withdrawals, ending };
-  }, [filteredEntries, selectedMonth, currentLedger, openingBalanceForView]);
+  }, [periodEntries, selectedMonth, currentLedger, openingBalanceForView]);
 
   const parseSheetIntoRows = useCallback((wb: XLSX.WorkBook, sheetName: string, targetBank: 'BDO' | 'MBTC') => {
     const ws = wb.Sheets[sheetName];
@@ -244,6 +333,7 @@ export default function BankReconTab({ initialYear }: Props) {
     let colWithdrawal = 2;
     let colDepositor = 3;
     let colDeposit = 4;
+    let colBalance = 5;
 
     for (let r = 0; r < Math.min(rawGrid.length, 15); r++) {
       const row = (rawGrid[r] || []).map((c: any) => String(c || '').trim().toLowerCase());
@@ -267,16 +357,18 @@ export default function BankReconTab({ initialYear }: Props) {
 
         if (depIdx !== -1) {
           headerIdx = r;
-          blockStart = sliceStart;
-          blockEnd = Math.max(depIdx + 2, sliceEnd);
           const dtIdx = row.findIndex((c, idx) => idx >= sliceStart && idx <= chosenW && c === 'date');
           const vIdx = row.findIndex((c, idx) => idx >= sliceStart && idx <= chosenW && c.includes('voucher'));
           const dprIdx = row.findIndex((c, idx) => idx > chosenW && idx < depIdx && (c.includes('depositor') || c.includes('payee')));
+          const balIdx = row.findIndex((c, idx) => idx >= depIdx && idx <= depIdx + 2 && c === 'balance');
           colDate = dtIdx !== -1 ? dtIdx : chosenW - 2;
           colVoucher = vIdx !== -1 ? vIdx : chosenW - 1;
           colWithdrawal = chosenW;
           colDepositor = dprIdx !== -1 ? dprIdx : chosenW + 1;
           colDeposit = depIdx;
+          colBalance = balIdx !== -1 ? balIdx : depIdx + 1;
+          blockStart = Math.max(0, colDate);
+          blockEnd = colBalance + 1;
           break;
         }
       }
@@ -291,8 +383,13 @@ export default function BankReconTab({ initialYear }: Props) {
       const blockSlice = row.slice(blockStart, Math.min(row.length, blockEnd));
       const blockText = blockSlice.map((c: any) => String(c || '')).join(' ').toLowerCase();
       if (blockText.includes('beginning balance') || blockText.includes('balance forwarded')) {
-        const nums = blockSlice.map(parseNum).filter((n: number) => n > 0);
-        if (nums.length > 0 && !detectedBeg) detectedBeg = String(nums[nums.length - 1]);
+        const balNum = parseNum(row[colBalance]);
+        if (balNum > 0 && !detectedBeg) {
+          detectedBeg = String(Math.round(balNum * 100) / 100);
+        } else {
+          const nums = blockSlice.map(parseNum).filter((n: number) => n > 0);
+          if (nums.length > 0 && !detectedBeg) detectedBeg = String(nums[nums.length - 1]);
+        }
         continue;
       }
       const w = parseNum(row[colWithdrawal]);
@@ -407,7 +504,7 @@ export default function BankReconTab({ initialYear }: Props) {
   };
 
   const handleOpenSource = (e: BankReconEntry) => {
-    if (e.source === 'check_voucher') {
+    if (e.source === 'check_voucher' || (e.source !== 'collection' && (e.voucher_id || e.raw_voucher_no))) {
       const p = new URLSearchParams();
       p.set('tab', 'summary');
       if (e.raw_voucher_no) p.set('voucher', e.raw_voucher_no);
@@ -421,6 +518,21 @@ export default function BankReconTab({ initialYear }: Props) {
       p.set('fromReport', 'bank_recon');
       p.set('year', String(year));
       router.push(`/dashboard/collection?${p.toString()}`);
+    }
+  };
+
+  const handleClearRecords = async (scope: 'current' | 'all') => {
+    try {
+      setIsClearing(true);
+      const params = scope === 'current' ? { bank: activeBank, year } : {};
+      const res = await api.delete('/reports/bank-recon/clear', { params });
+      setIsClearOpen(false);
+      setFeedback({ type: 'success', message: res.data?.message || 'Cleared Bank Recon records.' });
+      await fetchRecon();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.response?.data?.error?.message || 'Failed to clear Bank Recon records.' });
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -500,6 +612,16 @@ export default function BankReconTab({ initialYear }: Props) {
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Entry</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsClearOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-bold hover:bg-rose-100 dark:hover:bg-rose-950/70 cursor-pointer"
+              title="Delete imported/manual Bank Recon entries and custom beginning balances"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear Records</span>
             </button>
 
             <button
@@ -614,26 +736,25 @@ export default function BankReconTab({ initialYear }: Props) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={sourceFilter}
-              onChange={e => setSourceFilter(e.target.value as any)}
-              className="px-3 py-1.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs font-bold"
-            >
-              <option value="all">All Sources</option>
-              <option value="check_voucher">Check Vouchers (Withdrawals)</option>
-              <option value="collection">Collections (Deposits)</option>
-              <option value="imported">Imported / Manual</option>
-            </select>
-
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <div className="relative group w-56 focus-within:w-72 transition-all duration-200">
+              <Search className="w-3.5 h-3.5 text-neutral-400 group-focus-within:text-emerald-600 group-focus-within:scale-110 transition-all duration-200 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search voucher, SI #, depositor..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-8 pr-3 py-1.5 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs w-56"
+                className="w-full pl-8 pr-7 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs outline-none transition-all duration-200 hover:border-emerald-400/70 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:shadow-xs"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-150 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -682,23 +803,55 @@ export default function BankReconTab({ initialYear }: Props) {
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800">
-            <span className="text-[10.5px] font-black uppercase text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-              <ArrowDownLeft className="w-3.5 h-3.5" /> Deposits (Period)
-            </span>
+          <button
+            type="button"
+            onClick={() => setTxTypeFilter(prev => prev === 'deposit' ? 'all' : 'deposit')}
+            title="Click to show deposits only (click again to show all)"
+            className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+              txTypeFilter === 'deposit'
+                ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 ring-2 ring-emerald-500/30 shadow-xs'
+                : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 hover:border-emerald-300 dark:hover:border-emerald-700'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-black uppercase text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                <ArrowDownLeft className="w-3.5 h-3.5" /> Deposits (Period)
+              </span>
+              {txTypeFilter === 'deposit' && (
+                <span className="text-[9.5px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-600 text-white">
+                  Filtered
+                </span>
+              )}
+            </div>
             <div className="text-lg font-black font-mono text-emerald-700 dark:text-emerald-400 mt-1">
               {peso(viewTotals.deposits)}
             </div>
-          </div>
+          </button>
 
-          <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800">
-            <span className="text-[10.5px] font-black uppercase text-rose-600 dark:text-rose-400 flex items-center gap-1">
-              <ArrowUpRight className="w-3.5 h-3.5" /> Withdrawals (Period)
-            </span>
+          <button
+            type="button"
+            onClick={() => setTxTypeFilter(prev => prev === 'withdrawal' ? 'all' : 'withdrawal')}
+            title="Click to show withdrawals only (click again to show all)"
+            className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+              txTypeFilter === 'withdrawal'
+                ? 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-500 ring-2 ring-rose-500/30 shadow-xs'
+                : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 hover:border-rose-300 dark:hover:border-rose-700'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-black uppercase text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                <ArrowUpRight className="w-3.5 h-3.5" /> Withdrawals (Period)
+              </span>
+              {txTypeFilter === 'withdrawal' && (
+                <span className="text-[9.5px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-600 text-white">
+                  Filtered
+                </span>
+              )}
+            </div>
             <div className="text-lg font-black font-mono text-rose-600 dark:text-rose-400 mt-1">
               {peso(viewTotals.withdrawals)}
             </div>
-          </div>
+          </button>
 
           <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800">
             <span className="text-[10.5px] font-black uppercase text-emerald-800 dark:text-emerald-300">
@@ -717,43 +870,41 @@ export default function BankReconTab({ initialYear }: Props) {
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-[#064e3b] text-white text-[10px] font-black uppercase tracking-wider">
               <tr>
-                <th className="p-3 whitespace-nowrap">Date</th>
-                <th className="p-3 whitespace-nowrap">Voucher / Ref #</th>
-                <th className="p-3">Depositor / Payee</th>
-                <th className="p-3">Particulars / Source</th>
+                <th className="p-3 text-center whitespace-nowrap">Date</th>
+                <th className="p-3 text-center whitespace-nowrap">Voucher / Ref #</th>
+                <th className="p-3 text-center">Depositor / Payee</th>
                 <th className="p-3 text-right whitespace-nowrap">Withdrawal (−)</th>
                 <th className="p-3 text-right whitespace-nowrap">Deposit (+)</th>
                 <th className="p-3 text-right whitespace-nowrap">Running Balance</th>
-                <th className="p-3 text-right whitespace-nowrap print:hidden">Action</th>
+                <th className="p-3 text-center whitespace-nowrap print:hidden">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
               <tr className="bg-emerald-50/50 dark:bg-emerald-950/20 font-bold">
-                <td className="p-3 font-mono text-neutral-500">{selectedMonth === 'ytd' ? `${year}-01-01` : `${year}-${String(selectedMonth + 1).padStart(2, '0')}-01`}</td>
-                <td className="p-3 font-mono text-emerald-800 dark:text-emerald-300">BEG-BAL</td>
-                <td className="p-3">Beginning Balance</td>
-                <td className="p-3 text-neutral-500 italic">{activeBank} Opening Balance</td>
+                <td className="p-3 text-center font-mono text-neutral-500">{selectedMonth === 'ytd' ? `${year}-01-01` : `${year}-${String(selectedMonth + 1).padStart(2, '0')}-01`}</td>
+                <td className="p-3 text-center font-mono text-emerald-800 dark:text-emerald-300">BEG-BAL</td>
+                <td className="p-3 text-center">Beginning Balance</td>
                 <td className="p-3 text-right font-mono text-neutral-400">—</td>
                 <td className="p-3 text-right font-mono text-neutral-400">—</td>
                 <td className="p-3 text-right font-mono font-black text-neutral-900 dark:text-white">{peso(openingBalanceForView)}</td>
-                <td className="p-3 text-right print:hidden">—</td>
+                <td className="p-3 text-center print:hidden">—</td>
               </tr>
 
               {loading && !currentLedger ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-neutral-500">Loading {activeBank} Bank Recon ledger...</td>
+                  <td colSpan={7} className="p-8 text-center text-neutral-500">Loading {activeBank} Bank Recon ledger...</td>
                 </tr>
               ) : filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-neutral-500">
+                  <td colSpan={7} className="p-8 text-center text-neutral-500">
                     No transactions match this filter. Import your Bank Recon Excel/CSV or switch months.
                   </td>
                 </tr>
               ) : (
                 filteredEntries.map(e => (
                   <tr key={e.id} className="hover:bg-emerald-50/30 dark:hover:bg-neutral-800/40 transition-colors">
-                    <td className="p-3 font-mono text-[11px] whitespace-nowrap text-neutral-600 dark:text-neutral-400">{e.date}</td>
-                    <td className="p-3 font-mono font-bold whitespace-nowrap">
+                    <td className="p-3 text-center font-mono text-[11px] whitespace-nowrap text-neutral-600 dark:text-neutral-400">{e.date}</td>
+                    <td className="p-3 text-center font-mono font-bold whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded-md text-[10.5px] ${
                         e.source === 'check_voucher'
                           ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300'
@@ -764,8 +915,7 @@ export default function BankReconTab({ initialYear }: Props) {
                         {e.voucher_no || '—'}
                       </span>
                     </td>
-                    <td className="p-3 font-semibold text-neutral-900 dark:text-white">{e.depositor_payee || '—'}</td>
-                    <td className="p-3 text-neutral-600 dark:text-neutral-400 max-w-xs truncate" title={e.particulars}>{e.particulars}</td>
+                    <td className="p-3 text-center font-semibold text-neutral-900 dark:text-white">{e.depositor_payee || '—'}</td>
                     <td className="p-3 text-right font-mono font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap">
                       {e.withdrawal > 0 ? peso(e.withdrawal) : <span className="text-neutral-300 dark:text-neutral-600">—</span>}
                     </td>
@@ -775,26 +925,29 @@ export default function BankReconTab({ initialYear }: Props) {
                     <td className="p-3 text-right font-mono font-black text-neutral-900 dark:text-white whitespace-nowrap">
                       {peso(e.balance)}
                     </td>
-                    <td className="p-3 text-right whitespace-nowrap print:hidden">
-                      {(e.source === 'check_voucher' || e.source === 'collection') ? (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenSource(e)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 text-emerald-800 dark:text-emerald-300 text-[10.5px] font-bold border border-emerald-300/70 dark:border-emerald-700 cursor-pointer"
-                        >
-                          <span>{e.source === 'check_voucher' ? 'Open Voucher' : 'Open Receipt'}</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      ) : e.db_id ? (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteEntry(e.db_id!)}
-                          className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                          title="Delete imported/manual entry"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      ) : null}
+                    <td className="p-3 text-center whitespace-nowrap print:hidden">
+                      <div className="inline-flex items-center justify-center gap-1.5">
+                        {(e.source === 'check_voucher' || e.source === 'collection' || Boolean(e.voucher_id)) && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSource(e)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 text-emerald-800 dark:text-emerald-300 text-[10.5px] font-bold border border-emerald-300/70 dark:border-emerald-700 cursor-pointer"
+                          >
+                            <span>{e.source === 'collection' ? 'Open Receipt' : 'Open Voucher'}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
+                        )}
+                        {e.db_id && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteEntry(e.db_id!)}
+                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                            title="Delete imported/manual entry"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -806,8 +959,8 @@ export default function BankReconTab({ initialYear }: Props) {
 
       {/* IMPORT EXCEL / CSV MODAL */}
       {isImportOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-modal-pop">
             <div className="p-5 border-b border-outline-variant/60 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-black text-neutral-900 dark:text-white">Import Bank Recon Excel / CSV</h3>
@@ -822,20 +975,20 @@ export default function BankReconTab({ initialYear }: Props) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Target Bank</label>
-                  <select
+                  <AnimatedSelect
                     value={importBank}
-                    onChange={e => {
-                      const nextBank = e.target.value as 'BDO' | 'MBTC';
+                    options={[
+                      { value: 'BDO', label: 'BDO Current Account (Loans)' },
+                      { value: 'MBTC', label: 'Metrobank (MBTC) Current Account (Merchandise)' }
+                    ]}
+                    onChange={val => {
+                      const nextBank = val as 'BDO' | 'MBTC';
                       setImportBank(nextBank);
                       if (workbook && selectedSheet) {
                         parseSheetIntoRows(workbook, selectedSheet, nextBank);
                       }
                     }}
-                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-800 font-bold"
-                  >
-                    <option value="BDO">BDO Current Account (Loans)</option>
-                    <option value="MBTC">Metrobank (MBTC) Current Account (Merchandise)</option>
-                  </select>
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Upload Excel / CSV File</label>
@@ -852,16 +1005,14 @@ export default function BankReconTab({ initialYear }: Props) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Worksheet / Tab</label>
-                    <select
+                    <AnimatedSelect
                       value={selectedSheet}
-                      onChange={e => {
-                        setSelectedSheet(e.target.value);
-                        parseSheetIntoRows(workbook, e.target.value, importBank);
+                      options={sheetNames.map(s => ({ value: s, label: s }))}
+                      onChange={val => {
+                        setSelectedSheet(val);
+                        parseSheetIntoRows(workbook, val, importBank);
                       }}
-                      className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-800 font-bold"
-                    >
-                      {sheetNames.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Beginning Balance (Optional)</label>
@@ -877,12 +1028,26 @@ export default function BankReconTab({ initialYear }: Props) {
                 </div>
               )}
 
-              <label className="flex items-center gap-2 text-xs font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer">
+              <label className="inline-flex items-center gap-2.5 text-xs font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer select-none group">
                 <input
                   type="checkbox"
                   checked={replaceExisting}
                   onChange={e => setReplaceExisting(e.target.checked)}
+                  className="sr-only"
                 />
+                <span
+                  className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all duration-200 group-active:scale-90 ${
+                    replaceExisting
+                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs shadow-emerald-600/30 scale-100'
+                      : 'bg-white dark:bg-neutral-800 border-outline-variant group-hover:border-emerald-500/70'
+                  }`}
+                >
+                  <Check
+                    className={`w-3 h-3 stroke-[3] transition-all duration-200 ${
+                      replaceExisting ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
+                    }`}
+                  />
+                </span>
                 <span>Replace previously imported rows for {importBank} ({year})</span>
               </label>
 
@@ -893,7 +1058,7 @@ export default function BankReconTab({ initialYear }: Props) {
                   </div>
                   <div className="max-h-56 overflow-y-auto">
                     <table className="w-full text-[11px]">
-                      <thead className="bg-neutral-50 dark:bg-neutral-900 border-b border-outline-variant/40">
+                      <thead className="bg-neutral-50 dark:bg-neutral-900 border-b border-outline-variant/40 sticky top-0">
                         <tr>
                           <th className="p-2">Date</th>
                           <th className="p-2">Voucher #</th>
@@ -903,7 +1068,7 @@ export default function BankReconTab({ initialYear }: Props) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline-variant/30">
-                        {importRows.slice(0, 25).map((r, i) => (
+                        {importRows.map((r, i) => (
                           <tr key={i}>
                             <td className="p-2 font-mono">{r.tx_date}</td>
                             <td className="p-2 font-mono">{r.voucher_no || '—'}</td>
@@ -939,8 +1104,8 @@ export default function BankReconTab({ initialYear }: Props) {
 
       {/* EDIT BEGINNING BALANCE MODAL */}
       {isBegBalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <form onSubmit={handleSaveBegBal} className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <form onSubmit={handleSaveBegBal} className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl animate-modal-pop">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-black text-neutral-900 dark:text-white">Set {activeBank} Beginning Balance ({year})</h3>
               <button type="button" onClick={() => setIsBegBalOpen(false)} className="p-1 rounded-full hover:bg-neutral-100 cursor-pointer"><X className="w-4 h-4" /></button>
@@ -969,8 +1134,8 @@ export default function BankReconTab({ initialYear }: Props) {
 
       {/* ADD MANUAL ENTRY MODAL */}
       {isAddEntryOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <form onSubmit={handleSaveManualEntry} className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-md w-full p-5 space-y-3 shadow-2xl text-xs">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <form onSubmit={handleSaveManualEntry} className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-md w-full p-5 space-y-3 shadow-2xl text-xs animate-modal-pop">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-black text-neutral-900 dark:text-white">Add {activeBank} Recon Entry</h3>
               <button type="button" onClick={() => setIsAddEntryOpen(false)} className="p-1 rounded-full hover:bg-neutral-100 cursor-pointer"><X className="w-4 h-4" /></button>
@@ -1010,6 +1175,50 @@ export default function BankReconTab({ initialYear }: Props) {
               </button>
             </div>
           </form>
+        </div>,
+        document.body
+      )}
+      {/* CLEAR RECORDS CONFIRMATION MODAL */}
+      {isClearOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl text-xs animate-modal-pop">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-black text-neutral-900 dark:text-white">Clear Bank Recon Records</h3>
+              <button type="button" onClick={() => setIsClearOpen(false)} className="p-1 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-neutral-600 dark:text-neutral-300 leading-relaxed">
+              This removes imported and manual Bank Recon entries (and custom beginning balances) from the database.
+              Your master <strong>Check Vouchers</strong> and <strong>Collections</strong> will not be deleted.
+            </p>
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isClearing}
+                onClick={() => handleClearRecords('current')}
+                className="w-full px-4 py-2.5 rounded-xl font-bold bg-rose-600 hover:bg-rose-700 text-white cursor-pointer disabled:opacity-50"
+              >
+                {isClearing ? 'Clearing...' : `Clear ${activeBank} (${year}) Records Only`}
+              </button>
+              <button
+                type="button"
+                disabled={isClearing}
+                onClick={() => handleClearRecords('all')}
+                className="w-full px-4 py-2.5 rounded-xl font-bold border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 cursor-pointer disabled:opacity-50"
+              >
+                {isClearing ? 'Clearing...' : 'Clear All Bank Recon Records (BDO & MBTC, All Years)'}
+              </button>
+              <button
+                type="button"
+                disabled={isClearing}
+                onClick={() => setIsClearOpen(false)}
+                className="w-full px-4 py-2 rounded-xl font-bold border border-outline-variant/60 cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}
