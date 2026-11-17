@@ -1,4 +1,4 @@
-import { query } from '../config/db.js';
+﻿import { query } from '../config/db.js';
 import { exportToExcel } from '../services/reportExporter.js';
 
 // @desc    Get paginated, filterable audit logs

@@ -1,4 +1,4 @@
-import { query } from '../config/db.js';
+﻿import { query } from '../config/db.js';
 
 /**
  * Maps route path patterns to human-readable module names and action descriptions.

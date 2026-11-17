@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -128,7 +128,7 @@ const extractFriendlyDetails = (details: any): { label: string; value: string }[
     if (typeof val === 'object') return;
     let formatted = String(val);
     if ((k === 'amount' || k === 'fund_amount') && !isNaN(Number(val))) {
-      formatted = `₱${Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      formatted = `â‚±${Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
     entries.push({ label: formatReadableFieldName(k), value: formatted });
     added.add(k);
@@ -239,7 +239,7 @@ const buildHumanActivity = (log: AuditLog): {
   if (d.amount !== undefined && d.amount !== null && d.amount !== '') {
     const num = Number(d.amount);
     if (!isNaN(num) && num !== 0) {
-      parts.push(`₱${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      parts.push(`â‚±${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
     }
   }
   if (d.particulars && parts.length < 3) parts.push(String(d.particulars));
@@ -250,7 +250,7 @@ const buildHumanActivity = (log: AuditLog): {
     badgeColor,
     headline,
     area,
-    summary: parts.length > 0 ? parts.join(' • ') : '',
+    summary: parts.length > 0 ? parts.join(' â€¢ ') : '',
   };
 };
 
@@ -384,7 +384,7 @@ export default function AuditTrailPage() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Audit_Trail_${new Date().toISOString().split('T')[0]}.xlsx`);
+      link.setAttribute('download', `Audit_Logs_${new Date().toISOString().split('T')[0]}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -422,7 +422,7 @@ export default function AuditTrailPage() {
   };
 
   const formatDateTime = (dateStr: string) => {
-    if (!dateStr) return '—';
+    if (!dateStr) return 'â€”';
     const d = new Date(dateStr);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
       ' at ' +
@@ -448,7 +448,7 @@ export default function AuditTrailPage() {
             </span>
           </div>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            See who signed in and what changes each admin, staff, or member made — in plain English.
+            See who signed in and what changes each admin, staff, or member made â€” in plain English.
           </p>
         </div>
 
@@ -465,7 +465,7 @@ export default function AuditTrailPage() {
           >
             <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`} />
             <span>{isLive ? 'Live (5s)' : 'Paused'}</span>
-            {lastUpdated && <span className="text-[10px] opacity-75">• {lastUpdated}</span>}
+            {lastUpdated && <span className="text-[10px] opacity-75">â€¢ {lastUpdated}</span>}
           </button>
           <button
             type="button"
@@ -609,8 +609,8 @@ export default function AuditTrailPage() {
           <div className="mt-3 pt-2.5 border-t border-outline-variant/30 flex items-center justify-between text-xs">
             <span className="text-neutral-500">
               Showing filtered results
-              {usernameFilter ? ` • Person: ${usernameFilter}` : ''}
-              {roleFilter ? ` • Role: ${roleFilter}` : ''}
+              {usernameFilter ? ` â€¢ Person: ${usernameFilter}` : ''}
+              {roleFilter ? ` â€¢ Role: ${roleFilter}` : ''}
             </span>
             <button
               type="button"
@@ -690,7 +690,7 @@ export default function AuditTrailPage() {
                         </span>
                         {activity.summary && (
                           <span className="truncate max-w-2xl font-medium text-neutral-700 dark:text-neutral-300">
-                            • {activity.summary}
+                            â€¢ {activity.summary}
                           </span>
                         )}
                       </div>

@@ -406,6 +406,7 @@ interface CvRowItem {
   voucher_no?: string;
   description: string;
   remarks?: string;
+  recipient?: string;
   debit: string;
   credit: string;
   isAutoCredit?: boolean;
@@ -1601,7 +1602,7 @@ function DisbursementPageContent() {
   const [newCvDetailedApprovedBy, setNewCvDetailedApprovedBy] = useState('CANDILARIO N. TATOY');
   const [newCvDetailedApprovedByTitle, setNewCvDetailedApprovedByTitle] = useState('Chairman');
   const [newCvRows, setNewCvRows] = useState<CvRowItem[]>([
-    { id: 'new-row-1', date: '', voucher_no: '', description: '', remarks: '', debit: '', credit: '' }
+    { id: 'new-row-1', date: '', voucher_no: '', description: '', remarks: '', recipient: '', debit: '', credit: '' }
   ]);
 
   // Edit Check Voucher State
@@ -2647,7 +2648,7 @@ function DisbursementPageContent() {
     const activeAttachedItems = rfItems.length > 0 ? rfItems : stlItems;
 
     if (activeAttachedItems.length > 0 && (debitDetails.length === 0 || detailsAreOnlyCategories)) {
-      const rows: { id: string; date: string; voucher_no: string; description: string; remarks: string; debit: number | null; credit: number | null; isAutoCredit?: boolean; is_credit?: boolean }[] = [];
+      const rows: { id: string; date: string; voucher_no: string; description: string; remarks: string; recipient: string; debit: number | null; credit: number | null; isAutoCredit?: boolean; is_credit?: boolean }[] = [];
       let debitTotal = 0;
       let creditTotal = 0;
       const defaultVNo = (cv?.voucher_no ? String(cv.voucher_no).replace(/^CV-?0*/i, '').trim() : '') || '';
@@ -2667,6 +2668,7 @@ function DisbursementPageContent() {
           voucher_no: vNo,
           description: expAccount,
           remarks: it.remarks || '',
+          recipient: it.recipient || it.payee || '',
           debit: amt,
           credit: null,
           isAutoCredit: false,
@@ -2686,6 +2688,7 @@ function DisbursementPageContent() {
           voucher_no: defaultVNo,
           description: cibLabel,
           remarks: '',
+          recipient: '',
           debit: null,
           credit: debitTotal,
           isAutoCredit: true,
@@ -2697,7 +2700,7 @@ function DisbursementPageContent() {
       return { rows, debitTotal, creditTotal };
     }
 
-    const rows: { id: string; date: string; voucher_no: string; description: string; remarks: string; debit: number | null; credit: number | null; isAutoCredit?: boolean; is_credit?: boolean }[] = [];
+    const rows: { id: string; date: string; voucher_no: string; description: string; remarks: string; recipient: string; debit: number | null; credit: number | null; isAutoCredit?: boolean; is_credit?: boolean }[] = [];
     let debitTotal = 0;
     let creditTotal = 0;
 
@@ -2715,6 +2718,7 @@ function DisbursementPageContent() {
       const dateStr = item.date ? item.date.split('T')[0] : (cv?.voucher_date ? cv.voucher_date.split('T')[0] : '');
       const vNo = item.voucher_no || cv?.voucher_no || '';
       const itemRemarks = item.remarks || item.particulars || item.note || '';
+      const itemRecipient = item.recipient || '';
 
       if (isCreditItem) {
         const creditAmt = rawVal < 0
@@ -2726,6 +2730,7 @@ function DisbursementPageContent() {
           voucher_no: vNo,
           description: desc || 'Credit / Deduction',
           remarks: itemRemarks,
+          recipient: itemRecipient,
           debit: null,
           credit: creditAmt,
           isAutoCredit: true,
@@ -2739,6 +2744,7 @@ function DisbursementPageContent() {
           voucher_no: vNo,
           description: desc || 'Disbursement Line',
           remarks: itemRemarks,
+          recipient: itemRecipient,
           debit: rawVal,
           credit: null,
           isAutoCredit: false,
@@ -2752,6 +2758,7 @@ function DisbursementPageContent() {
           voucher_no: vNo,
           description: desc,
           remarks: itemRemarks,
+          recipient: itemRecipient,
           debit: null,
           credit: null,
           isAutoCredit: false,
@@ -2772,6 +2779,7 @@ function DisbursementPageContent() {
           voucher_no: vNo,
           description: cv?.particulars || 'Disbursement Line',
           remarks: '',
+          recipient: '',
           debit: fallbackAmt,
           credit: null,
           isAutoCredit: false,
@@ -2800,6 +2808,7 @@ function DisbursementPageContent() {
               voucher_no: r.voucher_no,
               description: `Revolving Fund - ${cat}`,
               remarks: '',
+              recipient: '',
               debit: null,
               credit: r.debit,
               isAutoCredit: true,
@@ -2839,6 +2848,7 @@ function DisbursementPageContent() {
           voucher_no: vNo,
           description: cibLabel,
           remarks: '',
+          recipient: '',
           debit: null,
           credit: requiredCibCredit,
           isAutoCredit: true,
@@ -2953,7 +2963,7 @@ function DisbursementPageContent() {
   const updateCvRowField = (
     isEdit: boolean,
     rowId: string,
-    field: 'date' | 'voucher_no' | 'description' | 'remarks' | 'debit' | 'credit',
+    field: 'date' | 'voucher_no' | 'description' | 'remarks' | 'recipient' | 'debit' | 'credit',
     val: string,
     replenishType: 'stl' | 'rf' | null
   ) => {
@@ -3171,6 +3181,7 @@ function DisbursementPageContent() {
       voucher_no: defaultVoucherNo,
       description: defaultDesc,
       remarks: '',
+      recipient: '',
       debit: '',
       credit: '',
       isAutoCredit: isCredit,
@@ -3711,6 +3722,7 @@ function DisbursementPageContent() {
           voucher_no: r.voucher_no || cv.voucher_no || '',
           description: r.description || r.book_of_account || '',
           remarks: r.remarks || '',
+          recipient: r.recipient || '',
           debit: debitVal,
           credit: creditVal,
           isAutoCredit: Boolean(isCredit),
@@ -3732,6 +3744,7 @@ function DisbursementPageContent() {
             voucher_no: defaultVoucherNo,
             description: cv.particulars || (getReplenishmentType(cv.folder_name, cv) === 'stl' ? 'Short Term Loan' : 'Operation'),
             remarks: '',
+            recipient: '',
             debit: amt > 0 ? String(amt) : '',
             credit: '',
             isAutoCredit: false
@@ -3742,6 +3755,7 @@ function DisbursementPageContent() {
             voucher_no: defaultVoucherNo,
             description: defaultBank,
             remarks: '',
+            recipient: '',
             debit: '',
             credit: amt > 0 ? String(amt) : '',
             isAutoCredit: true
@@ -3749,8 +3763,8 @@ function DisbursementPageContent() {
         ];
       } else {
         initialRowsList = [
-          { id: row0Id, date: defaultDate, voucher_no: defaultVoucherNo, description: cv.particulars || 'Disbursement Item', remarks: '', debit: amt > 0 ? String(amt) : '', credit: '' },
-          { id: `cib-${row0Id}`, date: defaultDate, voucher_no: defaultVoucherNo, description: `CIB - ${detectedBank}`, remarks: '', debit: '', credit: amt > 0 ? String(amt) : '' }
+          { id: row0Id, date: defaultDate, voucher_no: defaultVoucherNo, description: cv.particulars || 'Disbursement Item', remarks: '', recipient: '', debit: amt > 0 ? String(amt) : '', credit: '' },
+          { id: `cib-${row0Id}`, date: defaultDate, voucher_no: defaultVoucherNo, description: `CIB - ${detectedBank}`, remarks: '', recipient: '', debit: '', credit: amt > 0 ? String(amt) : '' }
         ];
       }
     }
@@ -3950,6 +3964,7 @@ function DisbursementPageContent() {
             voucher_no: r.voucher_no || null,
             book_of_account: r.description.trim(),
             remarks: r.remarks ? r.remarks.trim() : null,
+            recipient: r.recipient ? r.recipient.trim() : null,
             amount: netAmount,
             debit: isCredit ? null : (debitVal > 0 ? debitVal : null),
             credit: isCredit ? (creditVal > 0 ? creditVal : null) : null,
@@ -3999,6 +4014,7 @@ function DisbursementPageContent() {
             voucher_no: editCvFormData.voucher_no || null,
             book_of_account: cibName,
             remarks: null,
+            recipient: null,
             amount: -cibVal,
             debit: null,
             credit: cibVal,
@@ -4203,6 +4219,8 @@ function DisbursementPageContent() {
           date: today,
           voucher_no: '',
           description: initialDebitDesc,
+          remarks: '',
+          recipient: '',
           debit: '',
           credit: '',
           isAutoCredit: false
@@ -4212,6 +4230,8 @@ function DisbursementPageContent() {
           date: today,
           voucher_no: '',
           description: isReplenish === 'rf' ? `Revolving Fund - ${initialCat}` : (isReplenish === 'stl' ? 'Revolving Fund - STL' : defaultBank),
+          remarks: '',
+          recipient: '',
           debit: '',
           credit: '',
           isAutoCredit: true,
@@ -4220,8 +4240,8 @@ function DisbursementPageContent() {
       ]);
     } else {
       setNewCvRows([
-        { id: row0Id, date: today, voucher_no: '', description: defaultCat === 'Loan' ? 'Loan' : defaultCat, debit: '', credit: '' },
-        { id: `cib-${row0Id}`, date: today, voucher_no: '', description: 'CIB - BDO', debit: '', credit: '' }
+        { id: row0Id, date: today, voucher_no: '', description: defaultCat === 'Loan' ? 'Loan' : defaultCat, remarks: '', recipient: '', debit: '', credit: '' },
+        { id: `cib-${row0Id}`, date: today, voucher_no: '', description: 'CIB - BDO', remarks: '', recipient: '', debit: '', credit: '' }
       ]);
     }
     setIsCreateCVOpen(true);
@@ -4255,6 +4275,7 @@ function DisbursementPageContent() {
             voucher_no: r.voucher_no || null,
             book_of_account: r.description.trim(),
             remarks: r.remarks ? r.remarks.trim() : null,
+            recipient: r.recipient ? r.recipient.trim() : null,
             amount: netAmount,
             debit: isCredit ? null : (debitVal > 0 ? debitVal : null),
             credit: isCredit ? (creditVal > 0 ? creditVal : null) : null,
@@ -4273,6 +4294,7 @@ function DisbursementPageContent() {
             voucher_no: newCvVoucherNo.trim() || null,
             book_of_account: cibName,
             remarks: null,
+            recipient: null,
             amount: -netCheckAmount,
             debit: null,
             credit: netCheckAmount,
@@ -5315,14 +5337,21 @@ function DisbursementPageContent() {
                             </div>
 
                             {/* Table Column Header for Replenishment */}
-                            <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
+                            <div className={`grid ${replenishType === 'rf' ? 'grid-cols-[28px_105px_85px_1.2fr_1fr_0.95fr_95px_95px_42px]' : 'grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_42px]'} px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center`}>
                               <div className="text-center">#</div>
                               <div>Date</div>
                               <div>{getTransactionRefHeader(newCvCategory, newCvRfClassification)}</div>
                               <div>Book of Accounts</div>
-                              <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
-                              <div className="text-right">Debit (₱)</div>
-                              <div className="text-right">Credit (₱)</div>
+                              {replenishType === 'rf' ? (
+                                <>
+                                  <div>Remarks</div>
+                                  <div>Recipient / Supplier</div>
+                                </>
+                              ) : (
+                                <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
+                              )}
+                              <div className="text-center">Debit (₱)</div>
+                              <div className="text-center">Credit (₱)</div>
                               <div className="text-center">Action</div>
                             </div>
 
@@ -5350,7 +5379,7 @@ function DisbursementPageContent() {
                                     }}
                                     onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
                                     style={{ zIndex: newCvRows.length - idx + 10 }}
-                                    className={`relative grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
+                                    className={`relative grid ${replenishType === 'rf' ? 'grid-cols-[28px_105px_85px_1.2fr_1fr_0.95fr_95px_95px_42px]' : 'grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_42px]'} px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
                                       isCreditRow
                                         ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                         : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
@@ -5409,25 +5438,58 @@ function DisbursementPageContent() {
                                         />
                                       )}
                                     </div>
-                                    <div>
-                                      {isHonWagesRow ? (
-                                        <ReplenishmentRecipientDropdown
-                                          value={row.remarks || ''}
-                                          onChange={val => updateCvRowField(false, row.id!, 'remarks', val, replenishType)}
-                                          options={recipientOptions}
-                                          onAddRecipient={handleAddCustomRecipient}
-                                          placeholder="Recipient..."
-                                        />
-                                      ) : (
-                                        <input
-                                          type="text"
-                                          placeholder={replenishType === 'stl' ? 'Borrower...' : 'Remarks...'}
-                                          value={row.remarks || ''}
-                                          onChange={e => updateCvRowField(false, row.id!, 'remarks', e.target.value, replenishType)}
-                                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                                        />
-                                      )}
-                                    </div>
+                                    {replenishType === 'rf' ? (
+                                      <>
+                                        <div>
+                                          <input
+                                            type="text"
+                                            placeholder="Remarks..."
+                                            value={row.remarks || ''}
+                                            onChange={e => updateCvRowField(false, row.id!, 'remarks', e.target.value, replenishType)}
+                                            className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                          />
+                                        </div>
+                                        <div>
+                                          {isHonWagesRow && !isCreditRow ? (
+                                            <ReplenishmentRecipientDropdown
+                                              value={row.recipient || ''}
+                                              onChange={val => updateCvRowField(false, row.id!, 'recipient', val, replenishType)}
+                                              options={recipientOptions}
+                                              onAddRecipient={handleAddCustomRecipient}
+                                              placeholder="Recipient / Supplier..."
+                                            />
+                                          ) : (
+                                            <input
+                                              type="text"
+                                              placeholder="Recipient / Supplier..."
+                                              value={row.recipient || ''}
+                                              onChange={e => updateCvRowField(false, row.id!, 'recipient', e.target.value, replenishType)}
+                                              className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                            />
+                                          )}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div>
+                                        {isHonWagesRow ? (
+                                          <ReplenishmentRecipientDropdown
+                                            value={row.remarks || ''}
+                                            onChange={val => updateCvRowField(false, row.id!, 'remarks', val, replenishType)}
+                                            options={recipientOptions}
+                                            onAddRecipient={handleAddCustomRecipient}
+                                            placeholder="Recipient..."
+                                          />
+                                        ) : (
+                                          <input
+                                            type="text"
+                                            placeholder={replenishType === 'stl' ? 'Borrower...' : 'Remarks...'}
+                                            value={row.remarks || ''}
+                                            onChange={e => updateCvRowField(false, row.id!, 'remarks', e.target.value, replenishType)}
+                                            className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                          />
+                                        )}
+                                      </div>
+                                    )}
                                     <div>
                                       {isCreditRow ? (
                                         <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
@@ -5438,7 +5500,7 @@ function DisbursementPageContent() {
                                           placeholder="0.00"
                                           value={row.debit}
                                           onChange={e => updateCvRowField(false, row.id!, 'debit', e.target.value, replenishType)}
-                                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-center text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                                         />
                                       )}
                                     </div>
@@ -5450,7 +5512,7 @@ function DisbursementPageContent() {
                                           placeholder="0.00"
                                           value={row.credit}
                                           onChange={e => updateCvRowField(false, row.id!, 'credit', e.target.value, replenishType)}
-                                          className="w-full px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 font-mono text-right text-xs font-bold text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                          className="w-full px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 font-mono text-center text-xs font-bold text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                                         />
                                       ) : (
                                         <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
@@ -5479,14 +5541,14 @@ function DisbursementPageContent() {
                             </div>
 
                             {/* Table Total Footer matching Image 2 */}
-                            <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl">
-                              <div className="col-span-5 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                            <div className={`grid ${replenishType === 'rf' ? 'grid-cols-[28px_105px_85px_1.2fr_1fr_0.95fr_95px_95px_42px]' : 'grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_42px]'} px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-xs border-t border-emerald-950/10 items-center rounded-b-2xl`}>
+                              <div className={`${replenishType === 'rf' ? 'col-span-6' : 'col-span-5'} text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200`}>
                                 TOTAL:
                               </div>
-                              <div className="text-right font-mono font-bold text-neutral-900 dark:text-white">
+                              <div className="text-center font-mono font-bold text-neutral-900 dark:text-white">
                                 ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </div>
-                              <div className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                              <div className="text-center font-mono font-bold text-rose-600 dark:text-rose-400">
                                 ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                               </div>
                               <div></div>
@@ -5500,8 +5562,8 @@ function DisbursementPageContent() {
                               <div>Date</div>
                               <div>Book of Account / Item Description</div>
                               <div>Remarks</div>
-                              <div className="text-right">Debit (₱)</div>
-                              <div className="text-right">Credit (₱)</div>
+                              <div className="text-center">Debit (₱)</div>
+                              <div className="text-center">Credit (₱)</div>
                               <div className="text-center">Action</div>
                             </div>
 
@@ -6613,12 +6675,19 @@ function DisbursementPageContent() {
                           </div>
 
                           {/* Table Column Header for Replenishment */}
-                          <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center">
+                          <div className={`grid ${replenishType === 'rf' ? 'grid-cols-[28px_105px_85px_1.2fr_1fr_0.95fr_95px_95px_42px]' : 'grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_42px]'} px-3 py-2 bg-[#ecfdf5] dark:bg-emerald-950/40 font-bold text-[10px] uppercase tracking-wider text-[#064e3b] dark:text-emerald-300 gap-2 border-b border-emerald-950/10 items-center`}>
                             <div className="text-center">#</div>
                             <div>Date</div>
                             <div>{getTransactionRefHeader(editCvFormData.folder_name, editCvFormData.rf_classification)}</div>
                             <div>Book of Accounts</div>
-                            <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
+                            {replenishType === 'rf' ? (
+                              <>
+                                <div>Remarks</div>
+                                <div>Recipient / Supplier</div>
+                              </>
+                            ) : (
+                              <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
+                            )}
                             <div className="text-right">Debit (₱)</div>
                             <div className="text-right">Credit (₱)</div>
                             <div className="text-center">Action</div>
@@ -6648,7 +6717,7 @@ function DisbursementPageContent() {
                                   }}
                                   onDragEnd={() => { dragRowIdx.current = null; dragOverRowIdx.current = null; }}
                                   style={{ zIndex: editCvRows.length - idx + 10 }}
-                                  className={`relative grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
+                                  className={`relative grid ${replenishType === 'rf' ? 'grid-cols-[28px_105px_85px_1.2fr_1fr_0.95fr_95px_95px_42px]' : 'grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_42px]'} px-3 py-2 items-center gap-2 cursor-grab active:cursor-grabbing transition-colors select-none ${
                                     isCreditRow
                                       ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
                                       : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
@@ -6709,25 +6778,58 @@ function DisbursementPageContent() {
                                      )
                                     )}
                                   </div>
-                                  <div>
-                                    {isHonWagesRow ? (
-                                      <ReplenishmentRecipientDropdown
-                                        value={row.remarks || ''}
-                                        onChange={val => updateCvRowField(true, row.id!, 'remarks', val, replenishType)}
-                                        options={recipientOptions}
-                                        onAddRecipient={handleAddCustomRecipient}
-                                        placeholder="Recipient..."
-                                      />
-                                    ) : (
-                                      <input
-                                        type="text"
-                                        placeholder={replenishType === 'stl' ? 'Borrower...' : 'Remarks...'}
-                                        value={row.remarks || ''}
-                                        onChange={e => updateCvRowField(true, row.id!, 'remarks', e.target.value, replenishType)}
-                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                                      />
-                                    )}
-                                  </div>
+                                  {replenishType === 'rf' ? (
+                                    <>
+                                      <div>
+                                        <input
+                                          type="text"
+                                          placeholder="Remarks..."
+                                          value={row.remarks || ''}
+                                          onChange={e => updateCvRowField(true, row.id!, 'remarks', e.target.value, replenishType)}
+                                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        {isHonWagesRow && !isCreditRow ? (
+                                          <ReplenishmentRecipientDropdown
+                                            value={row.recipient || ''}
+                                            onChange={val => updateCvRowField(true, row.id!, 'recipient', val, replenishType)}
+                                            options={recipientOptions}
+                                            onAddRecipient={handleAddCustomRecipient}
+                                            placeholder="Recipient / Supplier..."
+                                          />
+                                        ) : (
+                                          <input
+                                            type="text"
+                                            placeholder="Recipient / Supplier..."
+                                            value={row.recipient || ''}
+                                            onChange={e => updateCvRowField(true, row.id!, 'recipient', e.target.value, replenishType)}
+                                            className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                          />
+                                        )}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div>
+                                      {isHonWagesRow ? (
+                                        <ReplenishmentRecipientDropdown
+                                          value={row.remarks || ''}
+                                          onChange={val => updateCvRowField(true, row.id!, 'remarks', val, replenishType)}
+                                          options={recipientOptions}
+                                          onAddRecipient={handleAddCustomRecipient}
+                                          placeholder="Recipient..."
+                                        />
+                                      ) : (
+                                        <input
+                                          type="text"
+                                          placeholder={replenishType === 'stl' ? 'Borrower...' : 'Remarks...'}
+                                          value={row.remarks || ''}
+                                          onChange={e => updateCvRowField(true, row.id!, 'remarks', e.target.value, replenishType)}
+                                          className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs text-neutral-800 dark:text-neutral-200 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                        />
+                                      )}
+                                    </div>
+                                  )}
                                   <div>
                                     {isCreditRow ? (
                                       <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
@@ -6738,7 +6840,7 @@ function DisbursementPageContent() {
                                         placeholder="0.00"
                                         value={row.debit}
                                         onChange={e => updateCvRowField(true, row.id!, 'debit', e.target.value, replenishType)}
-                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-right text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent font-mono text-center text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                                       />
                                     )}
                                   </div>
@@ -6750,7 +6852,7 @@ function DisbursementPageContent() {
                                         placeholder="0.00"
                                         value={row.credit}
                                         onChange={e => updateCvRowField(true, row.id!, 'credit', e.target.value, replenishType)}
-                                        className="w-full px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 font-mono text-right text-xs font-bold text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                        className="w-full px-2 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 font-mono text-center text-xs font-bold text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
                                       />
                                     ) : (
                                       <div className="text-center font-mono text-xs text-neutral-400 dark:text-neutral-500 py-1.5">—</div>
@@ -6783,21 +6885,21 @@ function DisbursementPageContent() {
                             {replenishType === 'stl' ? (
                               <>
                                 {/* Row 1: TOTAL (deductions) */}
-                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 font-bold text-xs">
+                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_42px] px-3 py-2 items-center gap-2 font-bold text-xs">
                                   <div className="col-span-5 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
                                     TOTAL:
                                   </div>
                                   <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
                                     —
                                   </div>
-                                  <div className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
+                                  <div className="text-center font-mono font-bold text-rose-600 dark:text-rose-400">
                                     ₱{creditTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                   </div>
                                   <div></div>
                                 </div>
 
                                 {/* Row 2: CIB Account with manual input for credit column */}
-                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60">
+                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_42px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60">
                                   <div className="col-span-5 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
                                     {formatCibAccountName(editCvFormData.bank).replace('-', ':')}:
                                   </div>
@@ -6811,7 +6913,7 @@ function DisbursementPageContent() {
                                       placeholder="0.00"
                                       value={editCvCibAmount}
                                       onChange={e => setEditCvCibAmount(e.target.value)}
-                                      className="w-full px-2 py-1 rounded-lg border border-emerald-400 dark:border-emerald-600 bg-white dark:bg-neutral-900 font-mono text-right text-xs font-extrabold text-[#064e3b] dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-2xs"
+                                      className="w-full px-2 py-1 rounded-lg border border-emerald-400 dark:border-emerald-600 bg-white dark:bg-neutral-900 font-mono text-center text-xs font-extrabold text-[#064e3b] dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-2xs"
                                       title={`Manually input ${formatCibAccountName(editCvFormData.bank).replace('-', ':')} credit amount`}
                                     />
                                   </div>
@@ -6819,14 +6921,14 @@ function DisbursementPageContent() {
                                 </div>
 
                                 {/* Row 3: OVERALL (balanced) */}
-                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2.5 items-center gap-2 font-extrabold text-xs bg-[#d1fae5]/70 dark:bg-emerald-900/40 rounded-b-2xl">
+                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_42px] px-3 py-2.5 items-center gap-2 font-extrabold text-xs bg-[#d1fae5]/70 dark:bg-emerald-900/40 rounded-b-2xl">
                                   <div className="col-span-5 text-right pr-4 font-black uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-200">
                                     OVERALL:
                                   </div>
-                                  <div className="text-right font-mono font-black text-[#064e3b] dark:text-emerald-200">
+                                  <div className="text-center font-mono font-black text-[#064e3b] dark:text-emerald-200">
                                     ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                   </div>
-                                  <div className="text-right font-mono font-black text-[#064e3b] dark:text-emerald-200">
+                                  <div className="text-center font-mono font-black text-[#064e3b] dark:text-emerald-200">
                                     ₱{(creditTotal + (parseFloat(editCvCibAmount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                   </div>
                                   <div></div>
@@ -6835,11 +6937,11 @@ function DisbursementPageContent() {
                             ) : (
                               <>
                                 {/* Row 1: TOTAL for Revolving: Debit has total, Credit is — */}
-                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-2 items-center gap-2 font-bold text-xs">
-                                  <div className="col-span-5 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
+                                <div className="grid grid-cols-[28px_105px_85px_1.2fr_1fr_0.95fr_95px_95px_42px] px-3 py-2 items-center gap-2 font-bold text-xs">
+                                  <div className="col-span-6 text-right pr-4 font-bold uppercase tracking-wider text-xs text-emerald-950 dark:text-emerald-200">
                                     TOTAL:
                                   </div>
-                                  <div className="text-right font-mono font-bold text-neutral-900 dark:text-white">
+                                  <div className="text-center font-mono font-bold text-neutral-900 dark:text-white">
                                     ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                   </div>
                                   <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
@@ -6849,14 +6951,14 @@ function DisbursementPageContent() {
                                 </div>
 
                                 {/* Row 2: CIB Account for Revolving: Debit is —, Credit has CIB check amount */}
-                                <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_32px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60 rounded-b-2xl">
-                                  <div className="col-span-5 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
+                                <div className="grid grid-cols-[28px_105px_85px_1.2fr_1fr_0.95fr_95px_95px_42px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60 rounded-b-2xl">
+                                  <div className="col-span-6 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
                                     {formatCibAccountName(editCvFormData.bank).replace('-', ':')}:
                                   </div>
                                   <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
                                     —
                                   </div>
-                                  <div className="text-right font-mono font-extrabold text-[#064e3b] dark:text-emerald-300 pr-1">
+                                  <div className="text-center font-mono font-extrabold text-[#064e3b] dark:text-emerald-300">
                                     ₱{(creditTotal > 0 ? creditTotal : (parseFloat(editCvCibAmount || '0') || debitTotal)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                   </div>
                                   <div></div>
