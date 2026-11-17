@@ -38,8 +38,7 @@ import {
   Plus,
   Trash2,
   Check,
-  Scale,
-  Landmark
+  Scale
 } from 'lucide-react';
 import FinancialSummaryGraphs from '@/components/reports/FinancialSummaryGraphs';
 import StatementOfOperationsTab from '@/components/reports/StatementOfOperationsTab';
