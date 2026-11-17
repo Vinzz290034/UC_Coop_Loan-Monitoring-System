@@ -10,6 +10,8 @@ export const getAuditLogs = async (req, res, next) => {
       page = 1,
       limit = 50,
       user_id,
+      username,
+      user_role,
       action,
       module,
       status,
@@ -29,6 +31,18 @@ export const getAuditLogs = async (req, res, next) => {
     if (user_id) {
       whereClause += ` AND al.user_id = $${paramIndex}`;
       queryParams.push(user_id);
+      paramIndex++;
+    }
+
+    if (username) {
+      whereClause += ` AND LOWER(COALESCE(al.username, al.details->>'username', 'System')) = LOWER($${paramIndex})`;
+      queryParams.push(username);
+      paramIndex++;
+    }
+
+    if (user_role) {
+      whereClause += ` AND LOWER(COALESCE(u.role, u_name.role, 'system')) = LOWER($${paramIndex})`;
+      queryParams.push(user_role);
       paramIndex++;
     }
 
@@ -75,7 +89,13 @@ export const getAuditLogs = async (req, res, next) => {
     }
 
     // Count total matching records
-    const countQuery = `SELECT COUNT(*) as total FROM audit_logs al ${whereClause}`;
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM audit_logs al
+      LEFT JOIN users u ON al.user_id = u.id
+      LEFT JOIN users u_name ON al.user_id IS NULL AND LOWER(u_name.username) = LOWER(COALESCE(al.username, al.details->>'username'))
+      ${whereClause}
+    `;
     const countResult = await query(countQuery, queryParams);
     const totalRecords = parseInt(countResult.rows[0].total, 10);
 
@@ -84,7 +104,8 @@ export const getAuditLogs = async (req, res, next) => {
       SELECT 
         al.id,
         al.user_id,
-        al.username,
+        COALESCE(al.username, NULLIF(al.details->>'username', '')) AS username,
+        COALESCE(u.role, u_name.role, CASE WHEN COALESCE(al.username, al.details->>'username') IS NULL THEN 'system' ELSE 'user' END) AS user_role,
         al.action,
         al.module,
         al.method,
@@ -96,6 +117,8 @@ export const getAuditLogs = async (req, res, next) => {
         al.details,
         al.created_at
       FROM audit_logs al
+      LEFT JOIN users u ON al.user_id = u.id
+      LEFT JOIN users u_name ON al.user_id IS NULL AND LOWER(u_name.username) = LOWER(COALESCE(al.username, al.details->>'username'))
       ${whereClause}
       ORDER BY al.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -292,21 +315,34 @@ export const getUserActivity = async (req, res, next) => {
   }
 };
 
-// @desc    Get distinct modules and actions for filter dropdowns
+// @desc    Get distinct modules, actions, and active users for filter dropdowns & summary
 // @route   GET /api/audit/filters
-// @access  Protected (Admin only)
+// @access  Protected (Orpheus Admin only)
 export const getAuditFilters = async (req, res, next) => {
   try {
-    const [modulesResult, actionsResult] = await Promise.all([
+    const [modulesResult, actionsResult, usersResult] = await Promise.all([
       query('SELECT DISTINCT module FROM audit_logs WHERE module IS NOT NULL ORDER BY module'),
-      query('SELECT DISTINCT action FROM audit_logs WHERE action IS NOT NULL ORDER BY action')
+      query('SELECT DISTINCT action FROM audit_logs WHERE action IS NOT NULL ORDER BY action'),
+      query(`
+        SELECT
+          COALESCE(al.username, NULLIF(al.details->>'username', ''), 'System') AS username,
+          COALESCE(MAX(u.role), MAX(u_name.role), CASE WHEN COALESCE(al.username, NULLIF(al.details->>'username', ''), 'System') = 'System' THEN 'system' ELSE 'user' END) AS role,
+          COUNT(*)::int AS total_actions,
+          MAX(al.created_at) AS last_activity
+        FROM audit_logs al
+        LEFT JOIN users u ON al.user_id = u.id
+        LEFT JOIN users u_name ON al.user_id IS NULL AND LOWER(u_name.username) = LOWER(COALESCE(al.username, al.details->>'username'))
+        GROUP BY COALESCE(al.username, NULLIF(al.details->>'username', ''), 'System')
+        ORDER BY MAX(al.created_at) DESC
+      `)
     ]);
 
     res.status(200).json({
       success: true,
       data: {
         modules: modulesResult.rows.map(r => r.module),
-        actions: actionsResult.rows.map(r => r.action)
+        actions: actionsResult.rows.map(r => r.action),
+        users: usersResult.rows
       }
     });
   } catch (error) {
