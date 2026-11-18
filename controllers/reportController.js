@@ -5147,7 +5147,22 @@ export const importBankReconEntries = async (req, res, next) => {
       );
     }
 
-    if (req.body.beginning_balance !== undefined && req.body.beginning_balance !== null && req.body.beginning_balance !== '') {
+    const minImportMonth = rows.reduce((min, r) => {
+      const m = Number(String(r.tx_date || '').slice(5, 7));
+      return m >= 1 && m <= 12 && m < min ? m : min;
+    }, 13);
+
+    const existingBeg = await pool.query(
+      `SELECT id FROM bank_recon_entries WHERE bank = $1 AND year = $2 AND entry_type = 'beginning_balance' LIMIT 1`,
+      [bank, year]
+    );
+    const shouldUpdateBeg =
+      req.body.beginning_balance !== undefined &&
+      req.body.beginning_balance !== null &&
+      req.body.beginning_balance !== '' &&
+      (existingBeg.rows.length === 0 || minImportMonth === 1 || Boolean(req.body.force_beginning_balance));
+
+    if (shouldUpdateBeg) {
       const begAmt = parseFloat(req.body.beginning_balance) || 0;
       await pool.query(
         `DELETE FROM bank_recon_entries WHERE bank = $1 AND year = $2 AND entry_type = 'beginning_balance'`,

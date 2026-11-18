@@ -423,9 +423,15 @@ export default function BankReconTab({ initialYear }: Props) {
       });
     }
 
-    setImportBegBal(detectedBeg);
+    const minMonth = parsed.length > 0
+      ? Math.min(...parsed.map(r => Number(String(r.tx_date).slice(5, 7)) || 13))
+      : 1;
+    const isJanuaryImport = /jan/i.test(sheetName) || minMonth === 1;
+    const hasExistingBeg = Boolean(data?.banks?.[targetBank]?.beginning_balance_id);
+
+    setImportBegBal(!isJanuaryImport && hasExistingBeg ? '' : detectedBeg);
     setImportRows(parsed);
-  }, [year]);
+  }, [year, data]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
