@@ -856,14 +856,16 @@ export default function BankReconTab({ initialYear }: Props) {
               <span className="text-[10.5px] font-black uppercase text-neutral-500">
                 {selectedMonth === 'ytd' ? 'Beginning Balance' : `Opening (${MONTHS[selectedMonth]})`}
               </span>
-              <button
-                type="button"
-                onClick={() => { setBegBalValue(String(currentLedger.beginning_balance)); setIsBegBalOpen(true); }}
-                className="text-emerald-600 hover:text-emerald-800 p-1 rounded cursor-pointer print:hidden"
-                title="Edit Jan 1 Beginning Balance"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-              </button>
+              {(selectedMonth === 'ytd' || selectedMonth === 0) && (
+                <button
+                  type="button"
+                  onClick={() => { setBegBalValue(String(currentLedger.beginning_balance)); setIsBegBalOpen(true); }}
+                  className="text-emerald-600 hover:text-emerald-800 p-1 rounded cursor-pointer print:hidden"
+                  title="Edit Jan 1 Beginning Balance"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
             <div className="text-lg font-black font-mono text-neutral-900 dark:text-white mt-1">
               {peso(openingBalanceForView)}
