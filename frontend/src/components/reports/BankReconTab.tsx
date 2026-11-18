@@ -149,11 +149,13 @@ function AnimatedSelect({
   options,
   onChange,
   className = '',
+  dropUp = false,
 }: {
   value: string;
   options: { value: string; label: string }[];
   onChange: (val: string) => void;
   className?: string;
+  dropUp?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -195,7 +197,9 @@ function AnimatedSelect({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1.5 w-full bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl shadow-xl z-50 overflow-hidden animate-dropdown-pop origin-top max-h-56 overflow-y-auto divide-y divide-outline-variant/10">
+        <div className={`absolute left-0 w-full bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-xl shadow-xl z-50 overflow-hidden animate-dropdown-pop max-h-56 overflow-y-auto divide-y divide-outline-variant/10 ${
+          dropUp ? 'bottom-full mb-1.5 origin-bottom' : 'top-full mt-1.5 origin-top'
+        }`}>
           {options.map(opt => {
             const selected = opt.value === value;
             return (
@@ -230,6 +234,8 @@ export default function BankReconTab({ initialYear }: Props) {
   const [selectedMonth, setSelectedMonth] = useState<number | 'ytd'>('ytd');
   const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'deposit' | 'withdrawal'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'all'>(25);
   const [data, setData] = useState<BankReconResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -322,6 +328,24 @@ export default function BankReconTab({ initialYear }: Props) {
     if (txTypeFilter === 'withdrawal') return periodEntries.filter(e => e.withdrawal > 0);
     return periodEntries;
   }, [periodEntries, txTypeFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeBank, selectedMonth, txTypeFilter, searchQuery, year, pageSize]);
+
+  const isFullYearPaginated = selectedMonth === 'ytd';
+  const totalPages = useMemo(() => {
+    if (!isFullYearPaginated || pageSize === 'all') return 1;
+    return Math.max(1, Math.ceil(filteredEntries.length / pageSize));
+  }, [isFullYearPaginated, pageSize, filteredEntries.length]);
+
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const displayedEntries = useMemo(() => {
+    if (!isFullYearPaginated || pageSize === 'all') return filteredEntries;
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredEntries.slice(start, start + pageSize);
+  }, [isFullYearPaginated, pageSize, filteredEntries, safeCurrentPage]);
 
   const viewTotals = useMemo(() => {
     const deposits = periodEntries.reduce((s, e) => s + e.deposit, 0);
@@ -962,8 +986,8 @@ export default function BankReconTab({ initialYear }: Props) {
       )}
 
       {/* Bank Recon Running Ledger Table */}
-      <div className="rounded-2xl bg-white dark:bg-neutral-900 border border-outline-variant/60 overflow-hidden shadow-2xs">
-        <div className="overflow-x-auto">
+      <div className="rounded-2xl bg-white dark:bg-neutral-900 border border-outline-variant/60 shadow-2xs">
+        <div className="overflow-x-auto rounded-t-2xl">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-[#064e3b] text-white text-[10px] font-black uppercase tracking-wider">
               <tr>
@@ -977,15 +1001,17 @@ export default function BankReconTab({ initialYear }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-              <tr className="bg-emerald-50/50 dark:bg-emerald-950/20 font-bold">
-                <td className="p-3 text-center font-mono text-neutral-500">{selectedMonth === 'ytd' ? `${year}-01-01` : `${year}-${String(selectedMonth + 1).padStart(2, '0')}-01`}</td>
-                <td className="p-3 text-center font-mono text-emerald-800 dark:text-emerald-300">BEG-BAL</td>
-                <td className="p-3 text-center">Beginning Balance</td>
-                <td className="p-3 text-right font-mono text-neutral-400">—</td>
-                <td className="p-3 text-right font-mono text-neutral-400">—</td>
-                <td className="p-3 text-right font-mono font-black text-neutral-900 dark:text-white">{peso(openingBalanceForView)}</td>
-                <td className="p-3 text-center print:hidden">—</td>
-              </tr>
+              {(!isFullYearPaginated || pageSize === 'all' || safeCurrentPage === 1) && (
+                <tr className="bg-emerald-50/50 dark:bg-emerald-950/20 font-bold">
+                  <td className="p-3 text-center font-mono text-neutral-500">{selectedMonth === 'ytd' ? `${year}-01-01` : `${year}-${String(selectedMonth + 1).padStart(2, '0')}-01`}</td>
+                  <td className="p-3 text-center font-mono text-emerald-800 dark:text-emerald-300">BEG-BAL</td>
+                  <td className="p-3 text-center">Beginning Balance</td>
+                  <td className="p-3 text-right font-mono text-neutral-400">—</td>
+                  <td className="p-3 text-right font-mono text-neutral-400">—</td>
+                  <td className="p-3 text-right font-mono font-black text-neutral-900 dark:text-white">{peso(openingBalanceForView)}</td>
+                  <td className="p-3 text-center print:hidden">—</td>
+                </tr>
+              )}
 
               {loading && !currentLedger ? (
                 <tr>
@@ -998,7 +1024,7 @@ export default function BankReconTab({ initialYear }: Props) {
                   </td>
                 </tr>
               ) : (
-                filteredEntries.map(e => (
+                displayedEntries.map(e => (
                   <tr key={e.id} className="hover:bg-emerald-50/30 dark:hover:bg-neutral-800/40 transition-colors">
                     <td className="p-3 text-center font-mono text-[11px] whitespace-nowrap text-neutral-600 dark:text-neutral-400">{e.date}</td>
                     <td className="p-3 text-center font-mono font-bold whitespace-nowrap">
@@ -1065,6 +1091,86 @@ export default function BankReconTab({ initialYear }: Props) {
             </tbody>
           </table>
         </div>
+
+        {isFullYearPaginated && filteredEntries.length > 0 && (
+          <div className="px-4 py-3 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-950/40 rounded-b-2xl flex flex-wrap items-center justify-between gap-3 text-xs print:hidden">
+            <div className="flex items-center gap-3 text-neutral-600 dark:text-neutral-400">
+              <span>
+                Displaying{' '}
+                <strong className="text-neutral-900 dark:text-white">
+                  {pageSize === 'all' ? 1 : (safeCurrentPage - 1) * pageSize + 1} –{' '}
+                  {pageSize === 'all'
+                    ? filteredEntries.length
+                    : Math.min(safeCurrentPage * pageSize, filteredEntries.length)}
+                </strong>{' '}
+                of <strong className="text-neutral-900 dark:text-white">{filteredEntries.length}</strong> transactions
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold">Rows:</span>
+                <div className="w-20">
+                  <AnimatedSelect
+                    dropUp
+                    value={String(pageSize)}
+                    options={[
+                      { value: '15', label: '15' },
+                      { value: '25', label: '25' },
+                      { value: '50', label: '50' },
+                      { value: '100', label: '100' },
+                      { value: 'all', label: 'All' }
+                    ]}
+                    onChange={val => setPageSize(val === 'all' ? 'all' : Number(val))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {pageSize !== 'all' && totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={safeCurrentPage <= 1}
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  className="px-2.5 py-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 font-bold text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  ‹ Previous
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - safeCurrentPage) <= 1)
+                  .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - arr[idx - 1] > 1) acc.push('ellipsis');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === 'ellipsis' ? (
+                      <span key={`e-${idx}`} className="px-1.5 text-neutral-400">…</span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => setCurrentPage(item)}
+                        className={`min-w-[30px] h-[30px] px-2 rounded-lg font-bold transition-all cursor-pointer ${
+                          safeCurrentPage === item
+                            ? 'bg-emerald-700 text-white shadow-xs'
+                            : 'text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+                <button
+                  type="button"
+                  disabled={safeCurrentPage >= totalPages}
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  className="px-2.5 py-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 font-bold text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Next ›
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* IMPORT EXCEL / CSV MODAL */}
