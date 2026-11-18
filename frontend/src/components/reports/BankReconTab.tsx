@@ -574,10 +574,15 @@ export default function BankReconTab({ initialYear }: Props) {
     }
   };
 
-  const handleClearRecords = async (scope: 'current' | 'all') => {
+  const handleClearRecords = async (scope: 'month' | 'current' | 'all') => {
     try {
       setIsClearing(true);
-      const params = scope === 'current' ? { bank: activeBank, year } : {};
+      const params =
+        scope === 'month' && selectedMonth !== 'ytd'
+          ? { bank: activeBank, year, month: selectedMonth + 1 }
+          : scope === 'current'
+          ? { bank: activeBank, year }
+          : {};
       const res = await api.delete('/reports/bank-recon/clear', { params });
       setIsClearOpen(false);
       setFeedback({ type: 'success', message: res.data?.message || 'Cleared Bank Recon records.' });
@@ -1342,13 +1347,23 @@ export default function BankReconTab({ initialYear }: Props) {
               Your master <strong>Check Vouchers</strong> and <strong>Collections</strong> will not be deleted.
             </p>
             <div className="flex flex-col gap-2 pt-1">
+              {selectedMonth !== 'ytd' && (
+                <button
+                  type="button"
+                  disabled={isClearing}
+                  onClick={() => handleClearRecords('month')}
+                  className="w-full px-4 py-2.5 rounded-xl font-bold bg-amber-600 hover:bg-amber-700 text-white cursor-pointer disabled:opacity-50"
+                >
+                  {isClearing ? 'Clearing...' : `Clear ${MONTHS[selectedMonth]} ${year} (${activeBank}) Only`}
+                </button>
+              )}
               <button
                 type="button"
                 disabled={isClearing}
                 onClick={() => handleClearRecords('current')}
                 className="w-full px-4 py-2.5 rounded-xl font-bold bg-rose-600 hover:bg-rose-700 text-white cursor-pointer disabled:opacity-50"
               >
-                {isClearing ? 'Clearing...' : `Clear ${activeBank} (${year}) Records Only`}
+                {isClearing ? 'Clearing...' : `Clear ${activeBank} (${year}) Full Year Records`}
               </button>
               <button
                 type="button"

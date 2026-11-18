@@ -5210,6 +5210,7 @@ export const clearBankReconEntries = async (req, res, next) => {
     await ensureBankReconTable();
     const bank = req.query.bank ? normalizeBankCode(req.query.bank) : null;
     const year = req.query.year ? Number(req.query.year) : null;
+    const month = req.query.month ? Number(req.query.month) : null;
 
     let sql = 'DELETE FROM bank_recon_entries WHERE 1=1';
     const params = [];
@@ -5220,6 +5221,10 @@ export const clearBankReconEntries = async (req, res, next) => {
     if (year) {
       params.push(year);
       sql += ` AND year = $${params.length}`;
+    }
+    if (month && month >= 1 && month <= 12) {
+      params.push(month);
+      sql += ` AND entry_type != 'beginning_balance' AND EXTRACT(MONTH FROM tx_date) = $${params.length}`;
     }
 
     const result = await pool.query(sql, params);
