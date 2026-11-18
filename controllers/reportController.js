@@ -4228,7 +4228,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const servicePrinting = newStore();
     const serviceHardbound = newStore();
     const serviceGnomonicChart = newStore();
-    const serviceLocker = newStore();
+    const serviceLockerRent = newStore();
+    const serviceKeyDuplicate = newStore();
     const lockerDeposits = newStore();
     const serviceTypeAB = newStore();
     const serviceGala = newStore();
@@ -4245,7 +4246,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       else if (/gnomonic|chart/.test(n)) bucket(serviceGnomonicChart, rawDate, svcAmt, svcMeta);
       else if (/print|photocopy|lamination|id\s*photo/.test(n)) bucket(servicePrinting, rawDate, svcAmt, svcMeta);
       else if (/locker\s*deposit/.test(n)) bucket(lockerDeposits, rawDate, svcAmt, svcMeta);
-      else if (/locker|key\s*duplicate/.test(n)) bucket(serviceLocker, rawDate, svcAmt, svcMeta);
+      else if (/key\s*duplicate/.test(n)) bucket(serviceKeyDuplicate, rawDate, svcAmt, svcMeta);
+      else if (/locker/.test(n)) bucket(serviceLockerRent, rawDate, svcAmt, svcMeta);
       else if (/type\s*a|type\s*b/.test(n)) bucket(serviceTypeAB, rawDate, svcAmt, svcMeta);
       else if (/\bgala\b|\bcap\b/.test(n)) bucket(serviceGala, rawDate, svcAmt, svcMeta);
       else if (/bsname/.test(n)) bucket(serviceBsname, rawDate, svcAmt, svcMeta);
@@ -4707,7 +4709,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 line('', 'Collection from Printing & Photocopy', 'Printing, photocopying, lamination, and ID photo services.', servicePrinting, false),
                 line('', 'Collection from Hardbound', 'Hardbound thesis binding service collections.', serviceHardbound, false),
                 line('', 'Collection from Gnomonic Chart', 'Gnomonic chart service collections.', serviceGnomonicChart, false),
-                line('', 'Collection from Locker & Key Duplicate', 'Locker rentals (₱250) and key duplicate fees.', serviceLocker, false),
+                line('', 'Collection from Locker Rent', 'Locker rental collections (excluding refundable Locker Deposits tracked as a liability).', serviceLockerRent, false),
+                line('', 'Collection from Key Duplicate', 'Key duplicate service fee collections.', serviceKeyDuplicate, false),
                 line('', 'Collection from Type A & B', 'Made-to-order Type A & B uniform collections.', serviceTypeAB, false),
                 line('', 'Collection from Gala', 'Made-to-order Gala and cap collections.', serviceGala, false),
                 line('', 'Collection from BSNAME', 'Made-to-order BSNAME uniform collections.', serviceBsname, false)
