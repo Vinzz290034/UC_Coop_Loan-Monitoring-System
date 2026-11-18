@@ -5019,8 +5019,8 @@ export const getBankReconReport = async (req, res, next) => {
           });
         });
 
-      // Sort by recon month, then date, then insertion order so bank-delayed dates stay in their imported month
-      entries.sort((a, b) => (a.month - b.month) || (a.date > b.date ? 1 : a.date < b.date ? -1 : (a.db_id || 0) - (b.db_id || 0)));
+      // Sort by recon month, then insertion order (db_id) to preserve exact spreadsheet row order
+      entries.sort((a, b) => (a.month - b.month) || ((a.db_id || 0) - (b.db_id || 0)));
 
       let running = Math.round(beginningBalance * 100) / 100;
       let totalDeposits = 0;
