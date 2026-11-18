@@ -5147,10 +5147,8 @@ export const importBankReconEntries = async (req, res, next) => {
       );
     }
 
-    const minImportMonth = rows.reduce((min, r) => {
-      const m = Number(String(r.tx_date || '').slice(5, 7));
-      return m >= 1 && m <= 12 && m < min ? m : min;
-    }, 13);
+    const janCount = rows.filter(r => Number(String(r.tx_date || '').slice(5, 7)) === 1).length;
+    const isMajorityJan = rows.length > 0 && janCount > rows.length / 2;
 
     const existingBeg = await pool.query(
       `SELECT id FROM bank_recon_entries WHERE bank = $1 AND year = $2 AND entry_type = 'beginning_balance' LIMIT 1`,
@@ -5160,7 +5158,7 @@ export const importBankReconEntries = async (req, res, next) => {
       req.body.beginning_balance !== undefined &&
       req.body.beginning_balance !== null &&
       req.body.beginning_balance !== '' &&
-      (existingBeg.rows.length === 0 || minImportMonth === 1 || Boolean(req.body.force_beginning_balance));
+      (existingBeg.rows.length === 0 || isMajorityJan || Boolean(req.body.force_beginning_balance));
 
     if (shouldUpdateBeg) {
       const begAmt = parseFloat(req.body.beginning_balance) || 0;

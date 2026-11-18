@@ -91,29 +91,50 @@ const peso = (n: number) => {
   return isNeg ? `(${str})` : str;
 };
 
-const parseExcelDateValue = (raw: any, fallbackYear: number): string => {
+const detectSheetMonth = (sheetName: string): string | null => {
+  const s = String(sheetName || '').toLowerCase();
+  const months = [
+    ['jan', '01'], ['feb', '02'], ['mar', '03'], ['apr', '04'],
+    ['may', '05'], ['jun', '06'], ['jul', '07'], ['aug', '08'],
+    ['sep', '09'], ['oct', '10'], ['nov', '11'], ['dec', '12']
+  ];
+  for (const [abbr, num] of months) {
+    if (s.includes(abbr)) return num;
+  }
+  return null;
+};
+
+const parseExcelDateValue = (raw: any, fallbackYear: number, fallbackDate?: string): string => {
+  const fb = fallbackDate || `${fallbackYear}-01-01`;
+  const clampYear = (yyStr: string) => {
+    const n = Number(yyStr);
+    return !Number.isNaN(n) && n > fallbackYear + 1 ? String(fallbackYear) : yyStr;
+  };
   if (typeof raw === 'number' && raw > 20000 && raw < 80000) {
     const dt = new Date(Math.round((raw - 25569) * 86400 * 1000));
-    if (!isNaN(dt.getTime())) return dt.toISOString().split('T')[0];
+    if (!isNaN(dt.getTime())) {
+      const iso = dt.toISOString().split('T')[0];
+      return `${clampYear(iso.slice(0, 4))}${iso.slice(4)}`;
+    }
   }
   const s = String(raw || '').trim();
-  if (!s) return `${fallbackYear}-01-01`;
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (!s) return fb;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return `${clampYear(s.slice(0, 4))}${s.slice(4, 10)}`;
   const mdy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
   if (mdy) {
     const mm = mdy[1].padStart(2, '0');
     const dd = mdy[2].padStart(2, '0');
-    const yy = mdy[3].length === 2 ? `20${mdy[3]}` : mdy[3];
+    const yy = clampYear(mdy[3].length === 2 ? `20${mdy[3]}` : mdy[3]);
     return `${yy}-${mm}-${dd}`;
   }
   const parsed = new Date(s);
   if (!isNaN(parsed.getTime())) {
-    const yy = parsed.getFullYear();
+    const yy = clampYear(String(parsed.getFullYear()));
     const mm = String(parsed.getMonth() + 1).padStart(2, '0');
     const dd = String(parsed.getDate()).padStart(2, '0');
     return `${yy}-${mm}-${dd}`;
   }
-  return `${fallbackYear}-01-01`;
+  return fb;
 };
 
 const parseNum = (v: any): number => {
@@ -387,6 +408,8 @@ export default function BankReconTab({ initialYear }: Props) {
 
     const startRow = headerIdx !== -1 ? headerIdx + 1 : 0;
     let detectedBeg = '';
+    const sheetMonth = detectSheetMonth(sheetName);
+    let lastValidDate = `${year}-${sheetMonth || '01'}-01`;
     const parsed: ParsedImportRow[] = [];
 
     for (let r = startRow; r < rawGrid.length; r++) {
@@ -410,9 +433,11 @@ export default function BankReconTab({ initialYear }: Props) {
       const rawDate = row[colDate];
       if (!rawDate && !row[colVoucher] && !row[colDepositor]) continue;
 
+      const parsedDate = parseExcelDateValue(rawDate, year, lastValidDate);
+      if (rawDate) lastValidDate = parsedDate;
       const vNo = String(row[colVoucher] || '').trim();
       parsed.push({
-        tx_date: parseExcelDateValue(rawDate, year),
+        tx_date: parsedDate,
         voucher_no: vNo,
         depositor_payee:
           String(row[colDepositor] || '').trim() ||
@@ -423,10 +448,8 @@ export default function BankReconTab({ initialYear }: Props) {
       });
     }
 
-    const minMonth = parsed.length > 0
-      ? Math.min(...parsed.map(r => Number(String(r.tx_date).slice(5, 7)) || 13))
-      : 1;
-    const isJanuaryImport = /jan/i.test(sheetName) || minMonth === 1;
+    const janCount = parsed.filter(r => String(r.tx_date).slice(5, 7) === '01').length;
+    const isJanuaryImport = sheetMonth ? sheetMonth === '01' : janCount > parsed.length / 2;
     const hasExistingBeg = Boolean(data?.banks?.[targetBank]?.beginning_balance_id);
 
     setImportBegBal(!isJanuaryImport && hasExistingBeg ? '' : detectedBeg);
