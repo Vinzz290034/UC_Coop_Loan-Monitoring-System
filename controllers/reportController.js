@@ -4576,8 +4576,15 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
 
         if (cat === 'Service Expense' || isDirectServiceCost(acc)) {
           let normalizedSvcAcc = acc;
-          if (/^cos\s*-\s*charts?$/i.test(acc)) normalizedSvcAcc = 'COS - Gnomonic Chart';
-          else if (/^cos\s*-\s*(?:2x2\s*)?photo$/i.test(acc)) normalizedSvcAcc = 'COS - 2x2 Photo';
+          if (/^cos\s*-\s*locker$/i.test(acc)) {
+            normalizedSvcAcc = /key|duplicat/i.test(rec.particulars || '') ? 'COS - Key Duplicate' : 'COS - Locker';
+          } else if (/^cos\s*-\s*key\s*duplicat/i.test(acc)) {
+            normalizedSvcAcc = 'COS - Key Duplicate';
+          } else if (/^cos\s*-\s*charts?$/i.test(acc)) {
+            normalizedSvcAcc = 'COS - Gnomonic Chart';
+          } else if (/^cos\s*-\s*(?:2x2\s*)?photo$/i.test(acc)) {
+            normalizedSvcAcc = 'COS - 2x2 Photo';
+          }
           if (!costOfSales[normalizedSvcAcc]) costOfSales[normalizedSvcAcc] = newStore();
           costOfSales[normalizedSvcAcc][which][mIdx] += amt;
           if (tx) costOfSales[normalizedSvcAcc].transactions.push(tx);
@@ -4752,9 +4759,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               title: 'Cost of Sales & Services',
               total_label: null,
               lines: [
-                ...Object.entries(costOfSales)
+                ...Object.entries({
+                  'COS - Key Duplicate': newStore(),
+                  'COS - Locker': newStore(),
+                  ...costOfSales
+                })
                   .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, false))
+                  .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, acc === 'COS - Locker' || acc === 'COS - Key Duplicate'))
               ]
             }
           ]
