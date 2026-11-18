@@ -4950,6 +4950,20 @@ export const getBankReconReport = async (req, res, next) => {
       return null;
     };
 
+    const detectReconSheetMonthIdx = (text) => {
+      const s = String(text || '').toLowerCase();
+      if (!s) return null;
+      const months = [
+        ['jan', 0], ['feb', 1], ['mar', 2], ['apr', 3],
+        ['may', 4], ['jun', 5], ['jul', 6], ['aug', 7],
+        ['sep', 8], ['oct', 9], ['nov', 10], ['dec', 11]
+      ];
+      for (const [abbr, idx] of months) {
+        if (s.includes(abbr)) return idx;
+      }
+      return null;
+    };
+
     const buildBankLedger = (bankCode) => {
       const bankManualRows = reconRes.rows.filter(r => normalizeBankCode(r.bank) === bankCode);
       const begRow = bankManualRows.find(r => r.entry_type === 'beginning_balance');
@@ -4985,11 +4999,14 @@ export const getBankReconReport = async (req, res, next) => {
             r.particulars ||
             (matchedCv?.particulars ? matchedCv.particulars : (r.entry_type === 'import' ? 'Imported Bank Recon Entry' : 'Manual Entry'));
 
+          const sheetMonthIdx = r.entry_type === 'import' ? detectReconSheetMonthIdx(r.particulars) : null;
+          const entryMonth = sheetMonthIdx !== null ? sheetMonthIdx : (Number(dStr.slice(5, 7)) - 1);
+
           entries.push({
             id: `recon-${r.id}`,
             db_id: r.id,
             date: dStr,
-            month: Number(dStr.slice(5, 7)) - 1,
+            month: entryMonth,
             voucher_no: r.voucher_no || '',
             raw_voucher_no: matchedCv?.voucher_no || r.voucher_no || null,
             depositor_payee: enrichedPayee,
@@ -5002,8 +5019,8 @@ export const getBankReconReport = async (req, res, next) => {
           });
         });
 
-      // Sort chronologically and compute running balance
-      entries.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : String(a.voucher_no).localeCompare(String(b.voucher_no))));
+      // Sort by recon month, then date, then insertion order so bank-delayed dates stay in their imported month
+      entries.sort((a, b) => (a.month - b.month) || (a.date > b.date ? 1 : a.date < b.date ? -1 : (a.db_id || 0) - (b.db_id || 0)));
 
       let running = Math.round(beginningBalance * 100) / 100;
       let totalDeposits = 0;
@@ -5221,8 +5238,16 @@ export const clearBankReconEntries = async (req, res, next) => {
       sql += ` AND year = $${params.length}`;
     }
     if (month && month >= 1 && month <= 12) {
+      const monthAbbrs = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      const abbrPattern = `%${monthAbbrs[month - 1]}%`;
+      params.push(abbrPattern);
+      const pAbbr = `$${params.length}`;
       params.push(month);
-      sql += ` AND entry_type != 'beginning_balance' AND EXTRACT(MONTH FROM tx_date) = $${params.length}`;
+      const pMonth = `$${params.length}`;
+      sql += ` AND entry_type != 'beginning_balance' AND (
+        (entry_type = 'import' AND LOWER(COALESCE(particulars, '')) LIKE ${pAbbr})
+        OR ((entry_type != 'import' OR LOWER(COALESCE(particulars, '')) !~ '(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)') AND EXTRACT(MONTH FROM tx_date) = ${pMonth})
+      )`;
     }
 
     const result = await pool.query(sql, params);
