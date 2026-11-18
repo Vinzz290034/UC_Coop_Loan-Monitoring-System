@@ -3565,20 +3565,20 @@ function CollectionPageContent() {
                           ) : null}
                         </td>
                         <td
-                          className="py-3 px-3 text-neutral-700 dark:text-neutral-300"
+                          className="py-3 px-3 text-neutral-700 dark:text-neutral-300 max-w-[220px] lg:max-w-[260px] xl:max-w-[300px]"
                           title={
                             item.items && item.items.length > 1
                               ? `${item.items.length} items:\n` + item.items.map((it: any) => `• ${it.item || 'Item'} (${it.quantity || 1} pcs)`).join('\n') + (remarksText ? `\n\nRemarks: ${remarksText}` : '')
                               : (remarksText && detailsDesc && remarksText !== detailsDesc ? `${remarksText} (${detailsDesc})` : (remarksText || detailsDesc))
                           }
                         >
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-1.5 min-w-0">
                             {item.items && item.items.length > 1 && (
                               <span className="px-1.5 py-0.5 rounded font-mono text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
                                 {item.items.length} Items
                               </span>
                             )}
-                            <span className="truncate font-medium text-neutral-900 dark:text-white">{primaryDesc}</span>
+                            <span className="truncate font-medium text-neutral-900 dark:text-white min-w-0">{primaryDesc}</span>
                           </div>
                           {remarksText && detailsDesc && remarksText !== detailsDesc && (
                             <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
