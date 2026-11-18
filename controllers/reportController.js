@@ -4577,7 +4577,8 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         if (cat === 'Service Expense' || isDirectServiceCost(acc)) {
           let normalizedSvcAcc = acc;
           if (/^cos\s*-\s*locker$/i.test(acc)) {
-            normalizedSvcAcc = /key|duplicat/i.test(rec.particulars || '') ? 'COS - Key Duplicate' : 'COS - Locker';
+            const lockerDesc = `${rec.payee || ''} ${rec.particulars || ''} ${rec.remarks || ''}`;
+            normalizedSvcAcc = /key|duplicat/i.test(lockerDesc) ? 'COS - Key Duplicate' : 'COS - Locker';
           } else if (/^cos\s*-\s*key\s*duplicat/i.test(acc)) {
             normalizedSvcAcc = 'COS - Key Duplicate';
           } else if (/^cos\s*-\s*charts?$/i.test(acc)) {
