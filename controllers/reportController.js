@@ -3337,16 +3337,18 @@ export const getFinancialStatementReport = async (req, res, next) => {
       `)
     ]);
 
-    // Query Statement of Operations to dynamically link Net Surplus for the Period
+    // Query Statement of Operations & Bank Recon to dynamically link Net Surplus and monthly CIB balances
     let sooCur = null;
     let sooPrev = null;
+    let reconCur = null;
     try {
-      [sooCur, sooPrev] = await Promise.all([
+      [sooCur, sooPrev, reconCur] = await Promise.all([
         runReportInternally(getStatementOfOperationsReport, { year: String(targetYear) }),
-        runReportInternally(getStatementOfOperationsReport, { year: String(prevYear) })
+        runReportInternally(getStatementOfOperationsReport, { year: String(prevYear) }),
+        runReportInternally(getBankReconReport, { year: String(targetYear) })
       ]);
     } catch (e) {
-      console.warn('Could not run internal statement of operations:', e.message);
+      console.warn('Could not run internal statement of operations / bank recon:', e.message);
     }
 
     // Baseline Audited Figures from Official Statement of Financial Condition (January 01, 2026 vs Jan 01, 2025)
@@ -3521,6 +3523,20 @@ export const getFinancialStatementReport = async (req, res, next) => {
           .forEach(k => { stores[k].current[11] = stores[k].current[10]; });
         if (Array.isArray(rc.locker_deposit_transactions)) {
           stores.locker_deposit_payable.transactions.push(...rc.locker_deposit_transactions);
+        }
+      }
+
+      // Link CIB - BDO and CIB - METROBANK directly to each month's ending balance from Bank Recon
+      const bdoRecon = reconCur?.banks?.BDO;
+      if (bdoRecon && (bdoRecon.entries?.length > 0 || bdoRecon.beginning_balance_id) && Array.isArray(bdoRecon.monthly)) {
+        for (let m = 0; m < 12; m++) {
+          stores.cib_bdo.current[m] = Math.round((bdoRecon.monthly[m]?.ending_balance ?? stores.cib_bdo.current[m]) * 100) / 100;
+        }
+      }
+      const mbtcRecon = reconCur?.banks?.MBTC;
+      if (mbtcRecon && (mbtcRecon.entries?.length > 0 || mbtcRecon.beginning_balance_id) && Array.isArray(mbtcRecon.monthly)) {
+        for (let m = 0; m < 12; m++) {
+          stores.cib_metrobank.current[m] = Math.round((mbtcRecon.monthly[m]?.ending_balance ?? stores.cib_metrobank.current[m]) * 100) / 100;
         }
       }
 
