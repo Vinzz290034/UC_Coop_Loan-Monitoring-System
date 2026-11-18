@@ -5095,6 +5095,20 @@ export const upsertBankReconEntry = async (req, res, next) => {
     const withdrawal = parseFloat(req.body.withdrawal || 0) || 0;
     const deposit = parseFloat(req.body.deposit || 0) || 0;
 
+    if (req.body.id) {
+      const upd = await pool.query(
+        `UPDATE bank_recon_entries
+         SET tx_date = $1, voucher_no = $2, depositor_payee = $3, particulars = $4, withdrawal = $5, deposit = $6
+         WHERE id = $7
+         RETURNING *`,
+        [txDate, voucherNo, depositorPayee, particulars, withdrawal, deposit, Number(req.body.id)]
+      );
+      if (upd.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Entry not found.' });
+      }
+      return res.status(200).json({ success: true, data: upd.rows[0] });
+    }
+
     const ins = await pool.query(
       `INSERT INTO bank_recon_entries (bank, year, tx_date, voucher_no, depositor_payee, particulars, withdrawal, deposit, entry_type)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

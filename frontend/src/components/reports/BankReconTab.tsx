@@ -231,6 +231,17 @@ export default function BankReconTab({ initialYear }: Props) {
   const [isAddEntryOpen, setIsAddEntryOpen] = useState(false);
   const [isClearOpen, setIsClearOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [manageRowsMode, setManageRowsMode] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<{
+    id: number;
+    tx_date: string;
+    voucher_no: string;
+    depositor_payee: string;
+    particulars: string;
+    withdrawal: string;
+    deposit: string;
+  } | null>(null);
+  const [confirmDeleteRow, setConfirmDeleteRow] = useState(false);
   const [newEntry, setNewEntry] = useState({
     tx_date: `${initialYear}-01-02`,
     voucher_no: '',
@@ -499,10 +510,43 @@ export default function BankReconTab({ initialYear }: Props) {
 
   const handleDeleteEntry = async (dbId: number) => {
     try {
+      setIsSavingEntry(true);
       await api.delete(`/reports/bank-recon/${dbId}`);
+      setEditingEntry(null);
+      setConfirmDeleteRow(false);
+      setFeedback({ type: 'success', message: `Deleted entry from ${activeBank}.` });
       await fetchRecon();
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.response?.data?.message || 'Failed to delete entry.' });
+    } finally {
+      setIsSavingEntry(false);
+    }
+  };
+
+  const handleUpdateEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEntry) return;
+    try {
+      setIsSavingEntry(true);
+      await api.post('/reports/bank-recon/entry', {
+        id: editingEntry.id,
+        bank: activeBank,
+        year,
+        tx_date: editingEntry.tx_date,
+        voucher_no: editingEntry.voucher_no,
+        depositor_payee: editingEntry.depositor_payee,
+        particulars: editingEntry.particulars,
+        withdrawal: parseFloat(editingEntry.withdrawal || '0') || 0,
+        deposit: parseFloat(editingEntry.deposit || '0') || 0
+      });
+      setEditingEntry(null);
+      setConfirmDeleteRow(false);
+      setFeedback({ type: 'success', message: `Updated ${activeBank} entry.` });
+      await fetchRecon();
+    } catch (err: any) {
+      setFeedback({ type: 'error', message: err.response?.data?.message || 'Failed to update entry.' });
+    } finally {
+      setIsSavingEntry(false);
     }
   };
 
@@ -615,6 +659,20 @@ export default function BankReconTab({ initialYear }: Props) {
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Entry</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setManageRowsMode(m => !m)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                manageRowsMode
+                  ? 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 ring-2 ring-amber-400/20'
+                  : 'border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              }`}
+              title="Toggle Edit / Delete button on individual rows"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{manageRowsMode ? 'Done Editing' : 'Manage Rows'}</span>
             </button>
 
             <button
@@ -930,7 +988,7 @@ export default function BankReconTab({ initialYear }: Props) {
                     </td>
                     <td className="p-3 text-center whitespace-nowrap print:hidden">
                       <div className="inline-flex items-center justify-center gap-1.5">
-                        {(e.source === 'check_voucher' || e.source === 'collection' || Boolean(e.voucher_id)) && (
+                        {(e.source === 'check_voucher' || e.source === 'collection' || Boolean(e.voucher_id)) ? (
                           <button
                             type="button"
                             onClick={() => handleOpenSource(e)}
@@ -939,15 +997,28 @@ export default function BankReconTab({ initialYear }: Props) {
                             <span>{e.source === 'collection' ? 'Open Receipt' : 'Open Voucher'}</span>
                             <ExternalLink className="w-3 h-3" />
                           </button>
-                        )}
-                        {e.db_id && (
+                        ) : !manageRowsMode ? (
+                          <span className="text-neutral-300 dark:text-neutral-600">—</span>
+                        ) : null}
+                        {manageRowsMode && e.db_id && (
                           <button
                             type="button"
-                            onClick={() => handleDeleteEntry(e.db_id!)}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
-                            title="Delete imported/manual entry"
+                            onClick={() => {
+                              setConfirmDeleteRow(false);
+                              setEditingEntry({
+                                id: e.db_id!,
+                                tx_date: e.date,
+                                voucher_no: e.voucher_no || '',
+                                depositor_payee: e.depositor_payee || '',
+                                particulars: e.particulars || '',
+                                withdrawal: e.withdrawal > 0 ? String(e.withdrawal) : '',
+                                deposit: e.deposit > 0 ? String(e.deposit) : ''
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 text-[10.5px] font-bold border border-amber-300/70 dark:border-amber-700 cursor-pointer"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Edit3 className="w-3 h-3" />
+                            <span>Edit</span>
                           </button>
                         )}
                       </div>
@@ -1176,6 +1247,73 @@ export default function BankReconTab({ initialYear }: Props) {
               <button type="submit" disabled={isSavingEntry} className="px-4 py-2 rounded-xl font-bold bg-emerald-700 text-white cursor-pointer">
                 {isSavingEntry ? 'Saving...' : 'Add Entry'}
               </button>
+            </div>
+          </form>
+        </div>,
+        document.body
+      )}
+      {/* EDIT / DELETE SINGLE ENTRY MODAL */}
+      {editingEntry && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <form onSubmit={handleUpdateEntry} className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-md w-full p-5 space-y-3 shadow-2xl text-xs animate-modal-pop">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-black text-neutral-900 dark:text-white">Edit {activeBank} Recon Entry</h3>
+              <button type="button" onClick={() => { setEditingEntry(null); setConfirmDeleteRow(false); }} className="p-1 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Date *</label>
+                <input type="date" required value={editingEntry.tx_date} onChange={e => setEditingEntry(p => p ? { ...p, tx_date: e.target.value } : p)} className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-800" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Voucher / SI #</label>
+                <input type="text" placeholder="e.g. 2025-384" value={editingEntry.voucher_no} onChange={e => setEditingEntry(p => p ? { ...p, voucher_no: e.target.value } : p)} className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-800" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Depositor / Payee *</label>
+              <input type="text" required value={editingEntry.depositor_payee} onChange={e => setEditingEntry(p => p ? { ...p, depositor_payee: e.target.value } : p)} className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-800" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Particulars</label>
+              <input type="text" value={editingEntry.particulars} onChange={e => setEditingEntry(p => p ? { ...p, particulars: e.target.value } : p)} className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-800" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Withdrawal (₱)</label>
+                <input type="number" step="0.01" min="0" placeholder="0.00" value={editingEntry.withdrawal} onChange={e => setEditingEntry(p => p ? { ...p, withdrawal: e.target.value } : p)} className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-800 font-mono" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Deposit (₱)</label>
+                <input type="number" step="0.01" min="0" placeholder="0.00" value={editingEntry.deposit} onChange={e => setEditingEntry(p => p ? { ...p, deposit: e.target.value } : p)} className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-800 font-mono" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isSavingEntry}
+                onClick={() => {
+                  if (!confirmDeleteRow) {
+                    setConfirmDeleteRow(true);
+                  } else {
+                    handleDeleteEntry(editingEntry.id);
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold border transition-all cursor-pointer disabled:opacity-50 ${
+                  confirmDeleteRow
+                    ? 'bg-rose-600 border-rose-600 text-white'
+                    : 'border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+                }`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{confirmDeleteRow ? 'Confirm Delete' : 'Delete Row'}</span>
+              </button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => { setEditingEntry(null); setConfirmDeleteRow(false); }} className="px-4 py-2 rounded-xl font-bold border border-outline-variant/60 cursor-pointer">Cancel</button>
+                <button type="submit" disabled={isSavingEntry} className="px-4 py-2 rounded-xl font-bold bg-emerald-700 text-white cursor-pointer disabled:opacity-50">
+                  {isSavingEntry ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
             </div>
           </form>
         </div>,
