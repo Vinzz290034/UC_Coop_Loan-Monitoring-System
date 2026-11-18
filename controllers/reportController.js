@@ -4245,7 +4245,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       else if (/hardbound/.test(n)) bucket(serviceHardbound, rawDate, svcAmt, svcMeta);
       else if (/gnomonic|chart/.test(n)) bucket(serviceGnomonicChart, rawDate, svcAmt, svcMeta);
       else if (/print|photocopy|lamination|id\s*photo/.test(n)) bucket(servicePrinting, rawDate, svcAmt, svcMeta);
-      else if (/locker\s*deposit/.test(n)) bucket(lockerDeposits, rawDate, svcAmt, svcMeta);
+      else if (/locker[\s\-\(\)]*deposit/i.test(n)) bucket(lockerDeposits, rawDate, svcAmt, svcMeta);
       else if (/key\s*duplicate/.test(n)) bucket(serviceKeyDuplicate, rawDate, svcAmt, svcMeta);
       else if (/locker/.test(n)) bucket(serviceLockerRent, rawDate, svcAmt, svcMeta);
       else if (/type\s*a|type\s*b/.test(n)) bucket(serviceTypeAB, rawDate, svcAmt, svcMeta);
@@ -4365,7 +4365,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
             if (rev > 0) {
               hasSvc = true;
               const descPart = it.description ? ` (${it.description})` : '';
-              bucketServiceByName(itName, cDate, rev, {
+              bucketServiceByName(`${itName} ${it.description || ''}`.trim(), cDate, rev, {
                 ...meta,
                 particulars: `${itName || 'Service'}${descPart}`
               });
