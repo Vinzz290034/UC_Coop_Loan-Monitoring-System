@@ -399,10 +399,13 @@ export default function BankReconTab({ initialYear }: Props) {
       const rawDate = row[colDate];
       if (!rawDate && !row[colVoucher] && !row[colDepositor]) continue;
 
+      const vNo = String(row[colVoucher] || '').trim();
       parsed.push({
         tx_date: parseExcelDateValue(rawDate, year),
-        voucher_no: String(row[colVoucher] || '').trim(),
-        depositor_payee: String(row[colDepositor] || '').trim() || (w > 0 ? 'Check Voucher Withdrawal' : 'Bank Deposit'),
+        voucher_no: vNo,
+        depositor_payee:
+          String(row[colDepositor] || '').trim() ||
+          (/^w\/?t$/i.test(vNo) ? 'WITHHOLDING TAX' : w > 0 ? 'Check Voucher Withdrawal' : 'Bank Deposit'),
         particulars: `${sheetName} (${targetBank}) import`,
         withdrawal: Math.round(w * 100) / 100,
         deposit: Math.round(dep * 100) / 100

@@ -4974,8 +4974,11 @@ export const getBankReconReport = async (req, res, next) => {
           }
           const matchedCv = findMatchingCheckVoucher(r.voucher_no);
           const rawPayee = String(r.depositor_payee || '').trim();
+          const isGenericPayee = !rawPayee || /^(check voucher withdrawal|withholding tax)$/i.test(rawPayee);
           const enrichedPayee =
-            matchedCv && (!rawPayee || /^check voucher withdrawal$/i.test(rawPayee))
+            /^w\/?t$/i.test(String(r.voucher_no || '').trim()) && isGenericPayee
+              ? 'WITHHOLDING TAX'
+              : matchedCv && isGenericPayee
               ? (matchedCv.payee || rawPayee)
               : rawPayee;
           const enrichedParticulars =
