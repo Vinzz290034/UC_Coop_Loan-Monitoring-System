@@ -1289,17 +1289,11 @@ export const importMembersRegistry = async (req, res, next) => {
 
       if (!excelLast || !excelFirst) continue;
 
-      // Strict matching logic
+      // Strict matching logic (match strictly by Last Name + First Name so shared/stale member_no values never collide across different people)
       const targetMember = existingMembersRes.rows.find(m => {
         const dbLast = cleanToken(m.ln);
         const dbFirst = cleanToken(m.fn);
 
-        // 1. Check exact Member No match if rawMemberNo is provided
-        if (rawMemberNo && m.member_no && m.member_no.trim() === rawMemberNo.trim()) {
-          return true;
-        }
-
-        // 2. Strict Last Name + First Name match
         if (dbLast === excelLast) {
           if (dbFirst === excelFirst || dbFirst.startsWith(excelFirst) || excelFirst.startsWith(dbFirst)) {
             return true;
@@ -1640,7 +1634,6 @@ export const previewMembersRegistry = async (req, res, next) => {
       const dobVal = colMap.dateOfBirth !== -1 ? cellDateIso(sheet, r, colMap.dateOfBirth) : null;
 
       const targetMember = existingMembersRes.rows.find(m => {
-        if (rawMemberNo && m.member_no && m.member_no.trim() === rawMemberNo.trim()) return true;
         const dbLast = cleanToken(m.ln);
         const dbFirst = cleanToken(m.fn);
         if (dbLast === excelLast) {
@@ -1780,17 +1773,15 @@ export const executeMembersRegistryImport = async (req, res, next) => {
 
       await client.query('SAVEPOINT sp_member');
       try {
-        const targetMember = (row.existingMemberId
-          ? existingMembersRes.rows.find(m => m.id === row.existingMemberId)
-          : null) || existingMembersRes.rows.find(m => {
-          if (rawMemberNo && m.member_no && m.member_no.trim() === rawMemberNo.trim()) return true;
+        const isNameMatch = (m) => {
           const dbLast = cleanToken(m.ln);
           const dbFirst = cleanToken(m.fn);
-          if (dbLast === excelLast) {
-            if (dbFirst === excelFirst || dbFirst.startsWith(excelFirst) || excelFirst.startsWith(dbFirst)) return true;
-          }
-          return false;
-        });
+          if (dbLast !== excelLast) return false;
+          return dbFirst === excelFirst || dbFirst.startsWith(excelFirst) || excelFirst.startsWith(dbFirst);
+        };
+        const targetMember = (row.existingMemberId
+          ? existingMembersRes.rows.find(m => m.id === row.existingMemberId && isNameMatch(m))
+          : null) || existingMembersRes.rows.find(isNameMatch);
 
         if (!targetMember) {
           if (rawMemberNo) {
@@ -1902,10 +1893,12 @@ export const executeMembersRegistryImport = async (req, res, next) => {
           setClauses.push(`tin = $${paramIdx++}`);
           queryParams.push(rawTin);
         }
-        if (rawMiddleName) {
-          setClauses.push(`middle_name = $${paramIdx++}`);
-          queryParams.push(rawMiddleName);
-        }
+        setClauses.push(`first_name = $${paramIdx++}`);
+        queryParams.push(rawFirstName);
+        setClauses.push(`last_name = $${paramIdx++}`);
+        queryParams.push(rawLastName);
+        setClauses.push(`middle_name = $${paramIdx++}`);
+        queryParams.push(rawMiddleName || null);
         if (addressVal) {
           setClauses.push(`address = $${paramIdx++}`);
           queryParams.push(addressVal);
