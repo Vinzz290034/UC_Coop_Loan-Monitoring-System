@@ -3854,7 +3854,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
                 line('Due to CETF - Apex Organization', 'Statutory 50% allocation of CETF due to apex federation.', stores.due_cetf_apex, false),
                 line('CLPP Premium Payable', 'Credit life protection program premiums awaiting remittance.', stores.clpp_premium),
                 line('Insurance Payable', 'Member life and property insurance premiums collected awaiting remittance.', stores.insurance_payable),
-                line('Locker Deposit Payable', 'Refundable ₱200 locker security deposits collected from students (held against locker damage/cleaning until end of semester).', stores.locker_deposit_payable, false)
+                line('Customer Deposit Payable', 'Refundable customer and locker security deposits collected and held in trust.', stores.locker_deposit_payable, false)
               ]
             },
             {
