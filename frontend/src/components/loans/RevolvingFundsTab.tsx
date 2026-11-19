@@ -332,8 +332,40 @@ export default function RevolvingFundsTab({
 
   const fetchAccounts = useCallback(async () => {
     try {
-      const res = await api.get('/revolving-funds/accounts');
-      if (res.data?.success && Array.isArray(res.data.data)) {
+      const [coaRes, res] = await Promise.all([
+        api.get('/reports/chart-of-accounts').catch(() => null),
+        api.get('/revolving-funds/accounts').catch(() => null)
+      ]);
+
+      const importedCoa = coaRes?.data?.success && Array.isArray(coaRes.data.accounts)
+        ? coaRes.data.accounts
+        : [];
+
+      if (importedCoa.length > 0) {
+        const coaNames: string[] = [];
+        const coaCatMap: Record<string, string> = {};
+        const seen = new Set<string>();
+        for (const row of importedCoa) {
+          const title = String(row.account_title || '').trim();
+          const typeLabel = String(row.account_type || 'Other').trim() || 'Other';
+          if (!title) continue;
+          const key = title.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            coaNames.push(title);
+          }
+          coaCatMap[key] = typeLabel;
+        }
+        setAccountOptions(coaNames);
+        setAccountCategoryMap(coaCatMap);
+        try {
+          localStorage.setItem('rf_custom_accounts', JSON.stringify(coaNames));
+          localStorage.setItem('rf_account_categories', JSON.stringify(coaCatMap));
+        } catch {}
+        return;
+      }
+
+      if (res?.data?.success && Array.isArray(res.data.data)) {
         const serverNames: string[] = [];
         const serverCatMap: Record<string, string> = {};
 

@@ -38,7 +38,8 @@ import {
   Plus,
   Trash2,
   Check,
-  Scale
+  Scale,
+  Upload
 } from 'lucide-react';
 import FinancialSummaryGraphs from '@/components/reports/FinancialSummaryGraphs';
 import StatementOfOperationsTab from '@/components/reports/StatementOfOperationsTab';
@@ -213,6 +214,21 @@ function ReportsPageContent() {
   const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<{ name: string; count: number } | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Official Chart of Accounts (Excel Import) States
+  const [chartOfAccounts, setChartOfAccounts] = useState<
+    { id: number; account_type: string; account_title: string; description: string; sort_order: number }[]
+  >([]);
+  const [isCoaImportOpen, setIsCoaImportOpen] = useState(false);
+  const [coaWorkbook, setCoaWorkbook] = useState<XLSX.WorkBook | null>(null);
+  const [coaSheetNames, setCoaSheetNames] = useState<string[]>([]);
+  const [coaSelectedSheet, setCoaSelectedSheet] = useState('');
+  const [coaImportRows, setCoaImportRows] = useState<
+    { account_type: string; account_title: string; description: string }[]
+  >([]);
+  const [coaReplaceExisting, setCoaReplaceExisting] = useState(true);
+  const [isImportingCoa, setIsImportingCoa] = useState(false);
+  const [coaFeedback, setCoaFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Financial Statement Sub-View & Search
   const [fsSubView, setFsSubView] = useState<'combined' | 'balance_sheet' | 'income_statement'>('combined');
@@ -409,10 +425,112 @@ function ReportsPageContent() {
         }
       })
       .catch(() => {});
+    api.get('/reports/chart-of-accounts')
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.data?.success && Array.isArray(res.data.accounts)) {
+          setChartOfAccounts(res.data.accounts);
+        }
+      })
+      .catch(() => {});
     return () => { isMounted = false; };
   }, [accountsVersion]);
 
-  // Group all accounts under the 10 Categories
+  const parseCoaSheet = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) return;
+    const rawGrid = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' });
+    if (!rawGrid || rawGrid.length === 0) {
+      setCoaImportRows([]);
+      return;
+    }
+
+    let headerRowIdx = 0;
+    let colType = 0;
+    let colTitle = 1;
+    let colDesc = 2;
+
+    for (let r = 0; r < Math.min(rawGrid.length, 15); r++) {
+      const cells = (rawGrid[r] || []).map((c: any) => String(c || '').trim().toLowerCase());
+      const tIdx = cells.findIndex((c: string) => c.includes('account type') || c === 'type' || c === 'category');
+      const titleIdx = cells.findIndex((c: string) => c.includes('account title') || c.includes('account name') || c.includes('book of account') || c === 'title');
+      if (tIdx !== -1 || titleIdx !== -1) {
+        headerRowIdx = r;
+        if (tIdx !== -1) colType = tIdx;
+        if (titleIdx !== -1) colTitle = titleIdx;
+        const dIdx = cells.findIndex((c: string) => c.includes('description') || c.includes('note') || c.includes('remark'));
+        if (dIdx !== -1) colDesc = dIdx;
+        break;
+      }
+    }
+
+    const parsed: { account_type: string; account_title: string; description: string }[] = [];
+    let lastType = 'Other';
+    for (let r = headerRowIdx + 1; r < rawGrid.length; r++) {
+      const row = rawGrid[r] || [];
+      const rawType = String(row[colType] || '').trim();
+      const rawTitle = String(row[colTitle] || '').trim();
+      const rawDesc = String(row[colDesc] || '').trim();
+      if (!rawTitle) continue;
+      if (rawType) lastType = rawType;
+      parsed.push({
+        account_type: rawType || lastType,
+        account_title: rawTitle,
+        description: rawDesc
+      });
+    }
+    setCoaImportRows(parsed);
+  }, []);
+
+  const handleCoaFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    setCoaWorkbook(wb);
+    setCoaSheetNames(wb.SheetNames);
+    const firstSheet = wb.SheetNames[0] || '';
+    setCoaSelectedSheet(firstSheet);
+    if (firstSheet) parseCoaSheet(wb, firstSheet);
+  };
+
+  const handleConfirmCoaImport = async () => {
+    if (coaImportRows.length === 0) return;
+    try {
+      setIsImportingCoa(true);
+      const res = await api.post('/reports/chart-of-accounts/import', {
+        rows: coaImportRows,
+        replace_existing: coaReplaceExisting
+      });
+      setIsCoaImportOpen(false);
+      setSelectedCategoryFilter('all');
+      setCoaFeedback({ type: 'success', message: res.data?.message || `Imported ${coaImportRows.length} accounts.` });
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('accounts_updated'));
+      setAccountsVersion(v => v + 1);
+    } catch (err: any) {
+      setCoaFeedback({ type: 'error', message: err.response?.data?.message || 'Failed to import Chart of Accounts.' });
+    } finally {
+      setIsImportingCoa(false);
+    }
+  };
+
+  const handleResetChartOfAccounts = async () => {
+    try {
+      setIsImportingCoa(true);
+      await api.delete('/reports/chart-of-accounts');
+      setChartOfAccounts([]);
+      setSelectedCategoryFilter('all');
+      setCoaFeedback({ type: 'success', message: 'Restored default Book of Accounts view.' });
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('accounts_updated'));
+      setAccountsVersion(v => v + 1);
+    } catch (err: any) {
+      setCoaFeedback({ type: 'error', message: err.response?.data?.message || 'Failed to reset Chart of Accounts.' });
+    } finally {
+      setIsImportingCoa(false);
+    }
+  };
+
+  // Group all accounts under the imported Chart of Accounts (when present) or the 10 default Categories
   const categoryGroupsData = useMemo(() => {
     const deleted = getRfDeletedAccountsSet();
     const accountsData = reportData?.accounts || [];
@@ -430,6 +548,66 @@ function ReportsPageContent() {
           existing.transactions = [...(existing.transactions || []), ...(a.transactions || [])];
         }
       }
+    }
+
+    if (chartOfAccounts.length > 0) {
+      const typeOrder: string[] = [];
+      const byType: Record<string, any[]> = {};
+      for (const row of chartOfAccounts) {
+        const typeLabel = String(row.account_type || 'Other').trim() || 'Other';
+        if (!byType[typeLabel]) {
+          byType[typeLabel] = [];
+          typeOrder.push(typeLabel);
+        }
+        const normTitle = normalizeAccountName(row.account_title);
+        const existingReport = accountsByName.get(normTitle.toLowerCase()) || accountsByName.get(row.account_title.trim().toLowerCase());
+        byType[typeLabel].push({
+          account_name: row.account_title,
+          description: row.description || '',
+          category: typeLabel,
+          total_amount: existingReport ? Number(existingReport.total_amount) || 0 : 0,
+          count: existingReport ? Number(existingReport.count) || 0 : 0,
+          transactions: existingReport?.transactions || [],
+          share_pct: existingReport?.share_pct || '0.0'
+        });
+      }
+
+      const coaThemeFor = (t: string) => {
+        const l = t.toLowerCase();
+        if (l.includes('asset')) return CATEGORY_THEMES['Petty Cash'] || CATEGORY_THEMES['Operation'];
+        if (l.includes('liab')) return CATEGORY_THEMES['Merchandise'] || CATEGORY_THEMES['Operation'];
+        if (l.includes('equit')) return CATEGORY_THEMES['Service'] || CATEGORY_THEMES['Operation'];
+        if (l.includes('income') || l.includes('rev')) return CATEGORY_THEMES['Operation'];
+        if (l.includes('exp') || l.includes('cost')) return CATEGORY_THEMES['CETF'] || CATEGORY_THEMES['Operation'];
+        return CATEGORY_THEMES['Operation'];
+      };
+
+      const q = categorySearch.trim().toLowerCase();
+      return typeOrder.map(typeLabel => {
+        const allAccts = byType[typeLabel] || [];
+        const totalSpent = allAccts.reduce((sum, a) => sum + (Number(a.total_amount) || 0), 0);
+        const totalEntries = allAccts.reduce((sum, a) => sum + (Number(a.count) || 0), 0);
+        const filteredAccts = q
+          ? allAccts.filter(a =>
+              a.account_name.toLowerCase().includes(q) ||
+              (a.description || '').toLowerCase().includes(q) ||
+              typeLabel.toLowerCase().includes(q)
+            )
+          : allAccts;
+
+        return {
+          category: typeLabel,
+          label: typeLabel,
+          color: 'emerald',
+          description: `Official imported ${typeLabel} accounts`,
+          theme: coaThemeFor(typeLabel),
+          accounts: filteredAccts,
+          totalAccountsCount: allAccts.length,
+          total_spent: totalSpent,
+          total_entries: totalEntries,
+          isMatch: q ? (typeLabel.toLowerCase().includes(q) || filteredAccts.length > 0) : true
+        };
+      });
     }
 
     // Combine all known accounts
@@ -520,7 +698,7 @@ function ReportsPageContent() {
         isMatch: q ? (cat.label.toLowerCase().includes(q) || filteredAccts.length > 0) : true
       };
     });
-  }, [reportData?.accounts, customAccounts, accountCategoryMap, categorySearch, accountsVersion]);
+  }, [reportData?.accounts, customAccounts, accountCategoryMap, categorySearch, accountsVersion, chartOfAccounts]);
 
   const visibleCategoryGroups = useMemo(() => {
     if (selectedCategoryFilter === 'all') {
@@ -2191,18 +2369,26 @@ function ReportsPageContent() {
                   <div className="text-2xl font-extrabold text-neutral-900 dark:text-white mt-1.5 font-mono">
                     {totalCategoryAccountsCount}
                   </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Across all 10 active categories</div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">
+                    {chartOfAccounts.length > 0
+                      ? `Official imported Chart of Accounts (${categoryGroupsData.length} types)`
+                      : `Across all ${categoryGroupsData.length} active categories`}
+                  </div>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
                   <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider">Configured Categories</span>
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider">
+                      {chartOfAccounts.length > 0 ? 'Account Types' : 'Configured Categories'}
+                    </span>
                     <FolderTree className="w-4 h-4 text-blue-600" />
                   </div>
                   <div className="text-2xl font-extrabold text-neutral-900 dark:text-white mt-1.5 font-mono">
-                    {ACCOUNT_CATEGORIES.length}
+                    {categoryGroupsData.length}
                   </div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">Operation, Merchandise, Service, etc.</div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">
+                    {chartOfAccounts.length > 0 ? 'Asset, Liability, Equity, Income, Expense' : 'Operation, Merchandise, Service, etc.'}
+                  </div>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-emerald-300 dark:border-emerald-800/80 shadow-2xs">
@@ -2244,6 +2430,33 @@ function ReportsPageContent() {
                     <button
                       type="button"
                       onClick={() => {
+                        setCoaImportRows([]);
+                        setCoaWorkbook(null);
+                        setCoaSheetNames([]);
+                        setCoaSelectedSheet('');
+                        setCoaReplaceExisting(true);
+                        setIsCoaImportOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs hover:shadow-md active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Import Excel / CSV</span>
+                    </button>
+                    {chartOfAccounts.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={isImportingCoa}
+                        onClick={handleResetChartOfAccounts}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-rose-300 dark:border-rose-800 bg-rose-50/70 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/60 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Clear imported Chart of Accounts and revert to default list"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Reset Default</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
                         setNewAccountName('');
                         setNewAccountCategory(selectedCategoryFilter !== 'all' ? selectedCategoryFilter : 'Operation');
                         setIsCategoryManuallyChosen(selectedCategoryFilter !== 'all');
@@ -2271,6 +2484,20 @@ function ReportsPageContent() {
                   </div>
                 </div>
 
+                {coaFeedback && (
+                  <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
+                    coaFeedback.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300'
+                      : 'bg-rose-50 border-rose-300 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {coaFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                      <span>{coaFeedback.message}</span>
+                    </div>
+                    <button type="button" onClick={() => setCoaFeedback(null)} className="cursor-pointer"><X className="w-4 h-4" /></button>
+                  </div>
+                )}
+
                 {/* Category Selector Pills */}
                 <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-neutral-100 dark:border-neutral-800/80">
                   <button
@@ -2282,24 +2509,23 @@ function ReportsPageContent() {
                         : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
                     }`}
                   >
-                    All Categories ({ACCOUNT_CATEGORIES.length})
+                    All {chartOfAccounts.length > 0 ? 'Types' : 'Categories'} ({categoryGroupsData.length})
                   </button>
-                  {ACCOUNT_CATEGORIES.map(cat => {
-                    const isSel = selectedCategoryFilter === cat.value;
-                    const grp = categoryGroupsData.find(g => g.category === cat.value);
-                    const count = grp?.totalAccountsCount || 0;
+                  {categoryGroupsData.map(grp => {
+                    const isSel = selectedCategoryFilter === grp.category;
+                    const count = grp.totalAccountsCount || 0;
                     return (
                       <button
-                        key={cat.value}
+                        key={grp.category}
                         type="button"
-                        onClick={() => setSelectedCategoryFilter(cat.value)}
+                        onClick={() => setSelectedCategoryFilter(grp.category)}
                         className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                           isSel
                             ? 'bg-[#064e3b] text-white shadow-xs'
                             : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
                         }`}
                       >
-                        <span>{cat.label}</span>
+                        <span>{grp.label}</span>
                         <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                           isSel ? 'bg-white/20 text-white' : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300'
                         }`}>
@@ -2388,7 +2614,10 @@ function ReportsPageContent() {
                               <thead className="bg-neutral-50 dark:bg-neutral-800/60 text-neutral-500 dark:text-neutral-400 font-bold uppercase text-[9.5px] border-b border-neutral-200 dark:border-neutral-800">
                                 <tr>
                                   <th className="p-2.5 w-12 text-center border-r border-neutral-200 dark:border-neutral-800">#</th>
-                                  <th className="p-2.5 min-w-[260px] border-r border-neutral-200 dark:border-neutral-800">Book of Accounts Name</th>
+                                  <th className="p-2.5 min-w-[240px] border-r border-neutral-200 dark:border-neutral-800">Book of Accounts Name</th>
+                                  {chartOfAccounts.length > 0 && (
+                                    <th className="p-2.5 min-w-[260px] border-r border-neutral-200 dark:border-neutral-800">Description</th>
+                                  )}
                                   <th className="p-2.5 w-36 text-center border-r border-neutral-200 dark:border-neutral-800">Recorded Entries</th>
                                   <th className="p-2.5 w-40 text-center">Action</th>
                                 </tr>
@@ -2396,7 +2625,7 @@ function ReportsPageContent() {
                               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                                 {grp.accounts.length === 0 ? (
                                   <tr>
-                                    <td colSpan={4} className="py-6 text-center text-neutral-400 italic">
+                                    <td colSpan={chartOfAccounts.length > 0 ? 5 : 4} className="py-6 text-center text-neutral-400 italic">
                                       No accounts found under this category matching your search.
                                     </td>
                                   </tr>
@@ -2404,7 +2633,7 @@ function ReportsPageContent() {
                                   grp.accounts.map((acc, aIdx) => {
                                     return (
                                       <tr
-                                        key={acc.account_name}
+                                        key={`${grp.category}-${acc.account_name}-${aIdx}`}
                                         onClick={() => setSelectedAccountModal(acc)}
                                         className="hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-colors cursor-pointer group"
                                       >
@@ -2423,6 +2652,11 @@ function ReportsPageContent() {
                                             )}
                                           </div>
                                         </td>
+                                        {chartOfAccounts.length > 0 && (
+                                          <td className="p-2.5 text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
+                                            {acc.description || <span className="text-neutral-300 dark:text-neutral-600">—</span>}
+                                          </td>
+                                        )}
                                         <td className="p-2.5 text-center font-mono text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-800">
                                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                             acc.count > 0
@@ -4803,6 +5037,126 @@ function ReportsPageContent() {
                     <span>Confirm Delete</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Import Chart of Accounts (Excel / CSV) Modal */}
+      {isCoaImportOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-neutral-900 border border-outline-variant/60 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-modal-pop">
+            <div className="p-5 border-b border-outline-variant/60 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-neutral-900 dark:text-white">Import Book of Accounts (Excel / CSV)</h3>
+                <p className="text-xs text-neutral-500">Reads Account type, Account Titles, and Description columns from your Chart of Accounts file.</p>
+              </div>
+              <button type="button" onClick={() => setIsCoaImportOpen(false)} className="p-1.5 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Upload Excel / CSV File</label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleCoaFileChange}
+                    className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-700 file:text-white file:font-bold file:cursor-pointer cursor-pointer"
+                  />
+                </div>
+                {coaSheetNames.length > 0 && (
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Worksheet / Tab</label>
+                    <select
+                      value={coaSelectedSheet}
+                      onChange={e => {
+                        setCoaSelectedSheet(e.target.value);
+                        if (coaWorkbook) parseCoaSheet(coaWorkbook, e.target.value);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-800 font-bold text-xs"
+                    >
+                      {coaSheetNames.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <label className="inline-flex items-center gap-2.5 text-xs font-semibold text-neutral-700 dark:text-neutral-300 cursor-pointer select-none group">
+                <span className="relative inline-flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={coaReplaceExisting}
+                    onChange={e => setCoaReplaceExisting(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <span className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all duration-200 ease-out peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500/40 group-active:scale-90 ${
+                    coaReplaceExisting
+                      ? 'bg-emerald-600 border-emerald-600 shadow-xs shadow-emerald-600/30 scale-100'
+                      : 'bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 group-hover:border-emerald-500'
+                  }`}>
+                    <Check
+                      className={`w-3 h-3 text-white stroke-[3] transition-all duration-200 ease-out ${
+                        coaReplaceExisting ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
+                      }`}
+                    />
+                  </span>
+                </span>
+                <span>Replace current Book of Accounts with this imported list (existing transactions stay safe)</span>
+              </label>
+
+              {coaImportRows.length > 0 && (
+                <div className="border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 bg-neutral-50 dark:bg-neutral-800/60 font-bold text-neutral-700 dark:text-neutral-300">
+                    Preview: {coaImportRows.length} accounts detected
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    <table className="w-full text-[11px] border-collapse">
+                      <thead className="bg-neutral-100 dark:bg-neutral-800 text-neutral-500 sticky top-0">
+                        <tr>
+                          <th className="p-2 text-center w-10">#</th>
+                          <th className="p-2 text-left">Account Type</th>
+                          <th className="p-2 text-left">Account Title</th>
+                          <th className="p-2 text-left">Description</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                        {coaImportRows.map((r, idx) => (
+                          <tr key={idx}>
+                            <td className="p-2 text-center font-mono text-neutral-400">{idx + 1}</td>
+                            <td className="p-2 font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{r.account_type}</td>
+                            <td className="p-2 font-semibold text-neutral-900 dark:text-white">{r.account_title}</td>
+                            <td className="p-2 text-neutral-500 dark:text-neutral-400">{r.description || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-outline-variant/60 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCoaImportOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold border border-outline-variant/60 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isImportingCoa || coaImportRows.length === 0}
+                onClick={handleConfirmCoaImport}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-50 cursor-pointer"
+              >
+                {isImportingCoa ? 'Importing...' : `Import ${coaImportRows.length} Accounts`}
               </button>
             </div>
           </div>

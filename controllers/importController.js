@@ -1186,9 +1186,43 @@ export const importMembersRegistry = async (req, res, next) => {
 
     // Fetch existing members from DB
     const existingMembersRes = await client.query(`
-      SELECT id, member_no, LOWER(first_name) as fn, LOWER(last_name) as ln, LOWER(COALESCE(middle_name, '')) as mn
+      SELECT id, user_id, member_no, LOWER(first_name) as fn, LOWER(last_name) as ln, LOWER(COALESCE(middle_name, '')) as mn
       FROM members
     `);
+
+    const existingUsersRes = await client.query('SELECT username FROM users');
+    const existingUsernames = new Set(existingUsersRes.rows.map(r => String(r.username || '').toLowerCase()));
+    let cachedDefaultPasswordHash = null;
+
+    const createLinkedUserAccount = async (firstName, lastName) => {
+      if (!cachedDefaultPasswordHash) {
+        cachedDefaultPasswordHash = await bcrypt.hash('UCCoop@2026', 10);
+      }
+      const cleanPart = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanFirstPart = (s) => {
+        if (!s) return '';
+        const parts = s.trim().split(/\s+/);
+        const mainFirst = parts.filter(p => !p.match(/^[A-Za-z]\.?$/)).join('') || parts[0];
+        return cleanPart(mainFirst);
+      };
+      const baseFirst = cleanFirstPart(firstName) || 'member';
+      const baseLast = cleanPart(lastName) || 'user';
+      const baseUsername = `${baseFirst}.${baseLast}`;
+      let username = baseUsername;
+      let suffix = 1;
+      while (existingUsernames.has(username)) {
+        suffix++;
+        username = `${baseUsername}${suffix}`;
+      }
+      existingUsernames.add(username);
+      const userRes = await client.query(
+        `INSERT INTO users (username, password_hash, role)
+         VALUES ($1, $2, 'member')
+         RETURNING id, username`,
+        [username, cachedDefaultPasswordHash]
+      );
+      return userRes.rows[0].id;
+    };
 
     let updatedCount = 0;
     let createdCount = 0;
@@ -1286,17 +1320,19 @@ export const importMembersRegistry = async (req, res, next) => {
             await client.query(`UPDATE members SET member_no = NULL WHERE id = $1`, [conflictRes.rows[0].id]);
           }
         }
+        const newUserId = await createLinkedUserAccount(rawFirstName, rawLastName);
         const insertedRes = await client.query(
           `INSERT INTO members (
             user_id, member_no, first_name, last_name, middle_name,
             membership_type, tin, address, date_of_birth, age,
             gender, civil_status, email, phone, status, profile_completed
           ) VALUES (
-            NULL, $1, $2, $3, $4,
-            $5, $6, $7, $8, $9,
-            $10, $11, $12, $13, 'active', false
-          ) RETURNING id, member_no, first_name, last_name, middle_name, membership_type, tin`,
+            $1, $2, $3, $4, $5,
+            $6, $7, $8, $9, $10,
+            $11, $12, $13, $14, 'active', false
+          ) RETURNING id, user_id, member_no, first_name, last_name, middle_name, membership_type, tin`,
           [
+            newUserId,
             rawMemberNo ? rawMemberNo.trim() : null,
             rawFirstName,
             rawLastName,
@@ -1316,6 +1352,7 @@ export const importMembersRegistry = async (req, res, next) => {
           const newMem = insertedRes.rows[0];
           existingMembersRes.rows.push({
             id: newMem.id,
+            user_id: newMem.user_id,
             member_no: newMem.member_no,
             fn: rawFirstName.toLowerCase(),
             ln: rawLastName.toLowerCase(),
@@ -1337,6 +1374,13 @@ export const importMembersRegistry = async (req, res, next) => {
       const setClauses = [];
       const queryParams = [];
       let paramIdx = 1;
+
+      if (!targetMember.user_id) {
+        const linkedUserId = await createLinkedUserAccount(rawFirstName, rawLastName);
+        targetMember.user_id = linkedUserId;
+        setClauses.push(`user_id = $${paramIdx++}`);
+        queryParams.push(linkedUserId);
+      }
 
       if (colMap.memberNo !== -1 && rawMemberNo) {
         // Resolve member_no conflict if another member currently holds it

@@ -5290,3 +5290,105 @@ export const deleteBankReconEntry = async (req, res, next) => {
     next(error);
   }
 };
+
+// =========================================================================
+// 13. CHART OF ACCOUNTS (OFFICIAL MASTER LIST IMPORT)
+// =========================================================================
+const ensureChartOfAccountsTable = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS chart_of_accounts (
+      id SERIAL PRIMARY KEY,
+      account_type VARCHAR(100) NOT NULL,
+      account_title VARCHAR(255) NOT NULL,
+      description TEXT DEFAULT '',
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+};
+
+// @desc    Get imported official Chart of Accounts
+// @route   GET /api/reports/chart-of-accounts
+// @access  Protected (Admin, Staff)
+export const getChartOfAccounts = async (_req, res, next) => {
+  try {
+    await ensureChartOfAccountsTable();
+    const result = await pool.query(
+      `SELECT id, account_type, account_title, description, sort_order
+       FROM chart_of_accounts
+       ORDER BY sort_order ASC, id ASC`
+    );
+    return res.status(200).json({
+      success: true,
+      accounts: result.rows
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Bulk import official Chart of Accounts from Excel/CSV
+// @route   POST /api/reports/chart-of-accounts/import
+// @access  Protected (Admin, Staff)
+export const importChartOfAccounts = async (req, res, next) => {
+  try {
+    await ensureChartOfAccountsTable();
+    const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+    const replaceExisting = req.body.replace_existing !== false;
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'No Chart of Accounts rows provided for import.' });
+    }
+
+    if (replaceExisting) {
+      await pool.query('DELETE FROM chart_of_accounts');
+    }
+
+    let startOrder = 0;
+    if (!replaceExisting) {
+      const maxRes = await pool.query('SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM chart_of_accounts');
+      startOrder = Number(maxRes.rows[0]?.max_order) || 0;
+    }
+
+    let inserted = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i] || {};
+      const accountType = String(r.account_type || 'Other').trim();
+      const accountTitle = String(r.account_title || '').trim();
+      const description = String(r.description || '').trim();
+      if (!accountTitle) continue;
+
+      await pool.query(
+        `INSERT INTO chart_of_accounts (account_type, account_title, description, sort_order)
+         VALUES ($1, $2, $3, $4)`,
+        [accountType || 'Other', accountTitle, description, startOrder + i + 1]
+      );
+      inserted++;
+    }
+
+    return res.status(200).json({
+      success: true,
+      inserted,
+      message: `Imported ${inserted} Book of Accounts ${replaceExisting ? '(replaced previous list)' : '(appended)'}.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Clear imported Chart of Accounts (revert to default list)
+// @route   DELETE /api/reports/chart-of-accounts
+// @access  Protected (Admin, Staff)
+export const clearChartOfAccounts = async (_req, res, next) => {
+  try {
+    await ensureChartOfAccountsTable();
+    const result = await pool.query('DELETE FROM chart_of_accounts');
+    return res.status(200).json({
+      success: true,
+      deleted: result.rowCount || 0,
+      message: 'Cleared imported Chart of Accounts and restored default view.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};

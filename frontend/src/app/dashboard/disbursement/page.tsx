@@ -1766,18 +1766,59 @@ function DisbursementPageContent() {
     return counts;
   }, [accountVoucherCounts, checkVouchers]);
 
-  // Fetch accounts from server to sync custom accounts and categories
+  // Fetch accounts from server to sync official Chart of Accounts (when imported) or custom accounts
   const fetchCustomAccounts = useCallback(async () => {
     try {
-      const res = await api.get('/revolving-funds/accounts');
-      if (res.data?.success && Array.isArray(res.data.data)) {
+      const [coaRes, res] = await Promise.all([
+        api.get('/reports/chart-of-accounts').catch(() => null),
+        api.get('/revolving-funds/accounts').catch(() => null)
+      ]);
+
+      const serverCounts: Record<string, number> = {};
+      if (res?.data?.voucher_counts && typeof res.data.voucher_counts === 'object') {
+        Object.assign(serverCounts, res.data.voucher_counts);
+      }
+      if (res?.data?.success && Array.isArray(res.data.data)) {
+        for (const item of res.data.data) {
+          const name = typeof item === 'string' ? item : item.name;
+          if (name && typeof item.voucher_count === 'number') {
+            serverCounts[name] = item.voucher_count;
+          }
+        }
+      }
+      setAccountVoucherCounts(prev => ({ ...prev, ...serverCounts }));
+
+      const importedCoa = coaRes?.data?.success && Array.isArray(coaRes.data.accounts)
+        ? coaRes.data.accounts
+        : [];
+
+      if (importedCoa.length > 0) {
+        const coaNames: string[] = [];
+        const coaCatMap: Record<string, string> = {};
+        const seen = new Set<string>();
+        for (const row of importedCoa) {
+          const title = String(row.account_title || '').trim();
+          const typeLabel = String(row.account_type || 'Other').trim() || 'Other';
+          if (!title) continue;
+          const key = title.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            coaNames.push(title);
+          }
+          coaCatMap[key] = typeLabel;
+        }
+        setCustomAccountOptions(coaNames);
+        setAccountCategoryMap(coaCatMap);
+        try {
+          localStorage.setItem('rf_custom_accounts', JSON.stringify(coaNames));
+          localStorage.setItem('rf_account_categories', JSON.stringify(coaCatMap));
+        } catch {}
+        return;
+      }
+
+      if (res?.data?.success && Array.isArray(res.data.data)) {
         const serverNames: string[] = [];
         const serverCatMap: Record<string, string> = {};
-        const serverCounts: Record<string, number> = {};
-
-        if (res.data?.voucher_counts && typeof res.data.voucher_counts === 'object') {
-          Object.assign(serverCounts, res.data.voucher_counts);
-        }
 
         for (const item of res.data.data) {
           const name = typeof item === 'string' ? item : item.name;
@@ -1785,13 +1826,8 @@ function DisbursementPageContent() {
           if (name) {
             serverNames.push(name);
             if (cat) serverCatMap[name.toLowerCase()] = cat;
-            if (typeof item.voucher_count === 'number') {
-              serverCounts[name] = item.voucher_count;
-            }
           }
         }
-
-        setAccountVoucherCounts(prev => ({ ...prev, ...serverCounts }));
 
         // Also sync server-side deleted accounts if provided
         if (Array.isArray(res.data.deleted) && typeof window !== 'undefined') {

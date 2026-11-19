@@ -17,7 +17,10 @@ import {
   upsertBankReconEntry,
   importBankReconEntries,
   deleteBankReconEntry,
-  clearBankReconEntries
+  clearBankReconEntries,
+  getChartOfAccounts,
+  importChartOfAccounts,
+  clearChartOfAccounts
 } from '../controllers/reportController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -68,5 +71,8 @@ router.post('/bank-recon/entry', upsertBankReconEntry);
 router.post('/bank-recon/import', importBankReconEntries);
 router.delete('/bank-recon/clear', clearBankReconEntries);
 router.delete('/bank-recon/:id', deleteBankReconEntry);
+router.get('/chart-of-accounts', getChartOfAccounts);
+router.post('/chart-of-accounts/import', importChartOfAccounts);
+router.delete('/chart-of-accounts', clearChartOfAccounts);
 
 export default router;
