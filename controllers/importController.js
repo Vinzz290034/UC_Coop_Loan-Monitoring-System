@@ -1152,20 +1152,21 @@ export const importMembersRegistry = async (req, res, next) => {
 
     for (let r = 0; r <= Math.min(10, range.e.r); r++) {
       for (let c = 0; c <= range.e.c; c++) {
-        const val = cleanStr(cellVal(sheet, r, c)).toUpperCase();
-        if (val === 'MEMBER NO.' || val === 'MEMBER NO' || val === 'MEMBER ID') colMap.memberNo = c;
-        else if (val === 'LAST NAME' || val === 'LASTNAME') colMap.lastName = c;
-        else if (val === 'FIRST NAME' || val === 'FIRSTNAME') colMap.firstName = c;
-        else if (val === 'MIDDLE NAME' || val === 'MIDDLENAME') colMap.middleName = c;
-        else if (val === 'TIN' || val === 'TIN NO' || val === 'TIN NO.') colMap.tin = c;
-        else if (val === 'TYPE OF MEMBERSHIP' || val === 'MEMBERSHIP TYPE' || val === 'MEMBERSHIP') colMap.membershipType = c;
-        else if (val === 'AGE') colMap.age = c;
-        else if (val === 'GENDER' || val === 'SEX') colMap.gender = c;
-        else if (val === 'CIVIL STATUS' || val === 'MARITAL STATUS') colMap.civilStatus = c;
-        else if (val === 'EMAIL' || val === 'EMAIL ADDRESS') colMap.email = c;
-        else if (val === 'CONTACT NO.' || val === 'CONTACT NO' || val === 'MOBILE' || val === 'PHONE') colMap.phone = c;
-        else if (val === 'ADDRESS' || val === 'RESIDENCE') colMap.address = c;
-        else if (val === 'BIRTHDAY' || val === 'DATE OF BIRTH' || val === 'DOB') colMap.dateOfBirth = c;
+        const val = cleanStr(cellVal(sheet, r, c)).replace(/\s+/g, ' ').toUpperCase();
+        const compact = val.replace(/[^A-Z0-9]/g, '');
+        if (compact === 'MEMBERNO' || compact === 'MEMBERID' || val === 'MEMBER NO.' || val === 'MEMBER NO' || val === 'MEMBER ID') colMap.memberNo = c;
+        else if (compact === 'LASTNAME' || val === 'LAST NAME') colMap.lastName = c;
+        else if (compact === 'FIRSTNAME' || val === 'FIRST NAME') colMap.firstName = c;
+        else if (compact === 'MIDDLENAME' || val === 'MIDDLE NAME') colMap.middleName = c;
+        else if (compact === 'TIN' || compact === 'TINNO' || val === 'TIN NO.' || val === 'TIN NO') colMap.tin = c;
+        else if (compact === 'TYPEOFMEMBERSHIP' || compact === 'MEMBERSHIPTYPE' || compact === 'MEMBERSHIP') colMap.membershipType = c;
+        else if (compact === 'AGE') colMap.age = c;
+        else if (compact === 'GENDER' || compact === 'SEX') colMap.gender = c;
+        else if (compact === 'CIVILSTATUS' || compact === 'MARITALSTATUS') colMap.civilStatus = c;
+        else if (compact === 'EMAIL' || compact === 'EMAILADDRESS') colMap.email = c;
+        else if (compact === 'CONTACTNO' || compact === 'CONTACTNUMBER' || compact === 'MOBILE' || compact === 'MOBILENO' || compact === 'PHONE' || compact === 'PHONENO') colMap.phone = c;
+        else if (compact === 'ADDRESS' || compact === 'RESIDENCE' || compact === 'HOMEADDRESS') colMap.address = c;
+        else if (compact === 'BIRTHDATE' || compact === 'BIRTHDAY' || compact === 'DATEOFBIRTH' || compact === 'DOB') colMap.dateOfBirth = c;
       }
 
       if (colMap.lastName !== -1 && colMap.firstName !== -1) {
@@ -1188,8 +1189,6 @@ export const importMembersRegistry = async (req, res, next) => {
       SELECT id, member_no, LOWER(first_name) as fn, LOWER(last_name) as ln, LOWER(COALESCE(middle_name, '')) as mn
       FROM members
     `);
-
-    const cleanToken = (str) => (str ? str.toLowerCase().replace(/[^a-z0-9]/g, '') : '');
 
     let updatedCount = 0;
     let createdCount = 0;
@@ -1276,8 +1275,61 @@ export const importMembersRegistry = async (req, res, next) => {
         return false;
       });
 
-      // User Directive: If a name on the excel file is NOT in the system already, ignore it!
+      // Create new member if not yet in the database
       if (!targetMember) {
+        if (colMap.memberNo !== -1 && rawMemberNo) {
+          const conflictRes = await client.query(
+            `SELECT id FROM members WHERE member_no = $1`,
+            [rawMemberNo.trim()]
+          );
+          if (conflictRes.rows.length > 0) {
+            await client.query(`UPDATE members SET member_no = NULL WHERE id = $1`, [conflictRes.rows[0].id]);
+          }
+        }
+        const insertedRes = await client.query(
+          `INSERT INTO members (
+            user_id, member_no, first_name, last_name, middle_name,
+            membership_type, tin, address, date_of_birth, age,
+            gender, civil_status, email, phone, status, profile_completed
+          ) VALUES (
+            NULL, $1, $2, $3, $4,
+            $5, $6, $7, $8, $9,
+            $10, $11, $12, $13, 'active', false
+          ) RETURNING id, member_no, first_name, last_name, middle_name, membership_type, tin`,
+          [
+            rawMemberNo ? rawMemberNo.trim() : null,
+            rawFirstName,
+            rawLastName,
+            rawMiddleName || null,
+            membershipType || 'Regular',
+            rawTin || null,
+            addressVal || null,
+            dobVal || null,
+            ageVal,
+            genderVal,
+            civilStatusVal,
+            emailVal,
+            phoneVal
+          ]
+        );
+        if (insertedRes.rows.length > 0) {
+          const newMem = insertedRes.rows[0];
+          existingMembersRes.rows.push({
+            id: newMem.id,
+            member_no: newMem.member_no,
+            fn: rawFirstName.toLowerCase(),
+            ln: rawLastName.toLowerCase(),
+            mn: (rawMiddleName || '').toLowerCase()
+          });
+          createdCount++;
+          updateLogs.push({
+            name: `${rawFirstName} ${rawLastName}`,
+            memberNo: newMem.member_no,
+            membershipType: newMem.membership_type,
+            tin: newMem.tin,
+            status: 'Created'
+          });
+        }
         continue;
       }
 
