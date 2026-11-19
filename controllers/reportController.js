@@ -3407,7 +3407,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
       dividend_payable: { cur: 0.00, prev: 289790.90 },
       other_noncurrent_liabs: { cur: 0.00, prev: 188225.63 },
       common_shares: { cur: 5676500.19, prev: 3247030.24 },
-      undivided_surplus: { cur: 1040024.48, prev: 0.00 },
+      undivided_surplus: { cur: 1040024.48, prev: 14570.15 },
       donations_grants: { cur: 4303.00, prev: 0.00 },
       reserve_fund: { cur: 102714.76, prev: 102714.76 },
       cetf_fund: { cur: 15001.12, prev: 21570.11 },
@@ -3453,7 +3453,7 @@ export const getFinancialStatementReport = async (req, res, next) => {
       transactions: []
     };
 
-    if (isBaselineYear || isPrevBaselineYear) {
+    if (isBaselineYear) {
       if (sooCur?.statement) {
         const revLines = [];
         const expLines = [];
