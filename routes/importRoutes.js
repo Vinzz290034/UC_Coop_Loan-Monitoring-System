@@ -7,6 +7,8 @@ import {
   previewImport,
   executeImport,
   importMembersRegistry,
+  previewMembersRegistry,
+  executeMembersRegistryImport,
   provisionImportedAccounts,
   importCheckVouchersFromExcel,
   previewCheckVouchers,
@@ -56,6 +58,8 @@ router.use(restrictTo('admin', 'staff'));
 router.post('/preview', upload.single('file'), previewImport);
 router.post('/execute', executeImport);
 router.post('/members-registry', upload.single('file'), importMembersRegistry);
+router.post('/members-registry/preview', upload.single('file'), previewMembersRegistry);
+router.post('/members-registry/execute', executeMembersRegistryImport);
 router.post('/check-vouchers', upload.single('file'), importCheckVouchersFromExcel);
 router.post('/check-vouchers/preview', upload.single('file'), previewCheckVouchers);
 router.post('/check-vouchers/execute', executeCheckVouchersImport);

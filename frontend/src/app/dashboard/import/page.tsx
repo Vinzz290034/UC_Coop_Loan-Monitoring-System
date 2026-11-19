@@ -164,7 +164,13 @@ export default function ImportPage() {
   const [rfExecuting, setRfExecuting] = useState(false);
   const [rfImportResult, setRfImportResult] = useState<any | null>(null);
 
-  // Registry Update Result State
+  // Registry Update Result & Selective Preview States
+  const [registrySheetName, setRegistrySheetName] = useState<string>('');
+  const [registryPreviewRows, setRegistryPreviewRows] = useState<any[]>([]);
+  const [registrySelectedKeys, setRegistrySelectedKeys] = useState<Set<string>>(new Set());
+  const [registrySearchQuery, setRegistrySearchQuery] = useState<string>('');
+  const [registryFilterTab, setRegistryFilterTab] = useState<'all' | 'new' | 'existing' | 'selected'>('all');
+  const [registryExecuting, setRegistryExecuting] = useState<boolean>(false);
   const [registryResult, setRegistryResult] = useState<{
     updatedCount: number;
     createdCount: number;
@@ -328,19 +334,24 @@ export default function ImportPage() {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await api.post('/import/members-registry', formData, {
+        const response = await api.post('/import/members-registry/preview', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
 
         if (response.data.success && response.data.data) {
-          setRegistryResult(response.data.data);
-          setStep('success');
+          const rows = Array.isArray(response.data.data.rows) ? response.data.data.rows : [];
+          setRegistrySheetName(response.data.data.sheetName || '');
+          setRegistryPreviewRows(rows);
+          setRegistrySelectedKeys(new Set(rows.map((r: any) => r.rowKey)));
+          setRegistrySearchQuery('');
+          setRegistryFilterTab('all');
+          setStep('preview');
         } else {
-          setErrorMsg(response.data.error?.message || 'Failed to update members registry from Excel.');
+          setErrorMsg(response.data.error?.message || 'Failed to scan members registry from Excel.');
         }
       } catch (err: any) {
-        console.error('Registry import error:', err);
-        setErrorMsg(err.response?.data?.error?.message || 'Failed to update members registry from Excel.');
+        console.error('Registry preview error:', err);
+        setErrorMsg(err.response?.data?.error?.message || 'Failed to scan members registry from Excel.');
       } finally {
         setIsScanning(false);
       }
@@ -468,6 +479,48 @@ export default function ImportPage() {
     }
   };
 
+  const filteredRegistryRows = useMemo(() => {
+    const q = registrySearchQuery.trim().toLowerCase();
+    return registryPreviewRows.filter((r: any) => {
+      if (registryFilterTab === 'new' && r.isExisting) return false;
+      if (registryFilterTab === 'existing' && !r.isExisting) return false;
+      if (registryFilterTab === 'selected' && !registrySelectedKeys.has(r.rowKey)) return false;
+      if (!q) return true;
+      const fullName = `${r.lastName || ''} ${r.firstName || ''} ${r.middleName || ''}`.toLowerCase();
+      return (
+        fullName.includes(q) ||
+        String(r.memberNo || '').toLowerCase().includes(q) ||
+        String(r.membershipType || '').toLowerCase().includes(q) ||
+        String(r.email || '').toLowerCase().includes(q) ||
+        String(r.phone || '').toLowerCase().includes(q)
+      );
+    });
+  }, [registryPreviewRows, registrySearchQuery, registryFilterTab, registrySelectedKeys]);
+
+  const handleExecuteRegistryImport = async () => {
+    const selectedRows = registryPreviewRows.filter((r: any) => registrySelectedKeys.has(r.rowKey));
+    if (selectedRows.length === 0) {
+      setErrorMsg('Please select at least one member to import.');
+      return;
+    }
+    try {
+      setRegistryExecuting(true);
+      setErrorMsg(null);
+      const response = await api.post('/import/members-registry/execute', { rows: selectedRows });
+      if (response.data.success && response.data.data) {
+        setRegistryResult(response.data.data);
+        setStep('success');
+      } else {
+        setErrorMsg(response.data.error?.message || 'Failed to import selected members.');
+      }
+    } catch (err: any) {
+      console.error('Selective registry execute error:', err);
+      setErrorMsg(err.response?.data?.error?.message || 'Failed to import selected members.');
+    } finally {
+      setRegistryExecuting(false);
+    }
+  };
+
   const resetImporter = () => {
     setSelectedFile(null);
     setSummary(null);
@@ -475,6 +528,11 @@ export default function ImportPage() {
     setExcludedCount(0);
     setExecutionResult(null);
     setRegistryResult(null);
+    setRegistrySheetName('');
+    setRegistryPreviewRows([]);
+    setRegistrySelectedKeys(new Set());
+    setRegistrySearchQuery('');
+    setRegistryFilterTab('all');
     setCvImportResult(null);
     setProvisionResult(null);
     setProvisionError(null);
@@ -1892,6 +1950,284 @@ export default function ImportPage() {
           </div>
         )}
 
+        {/* STEP 2B: SELECTIVE MEMBERS REGISTRY PREVIEW DESK */}
+        {step === 'preview' && importMode === 'members_registry' && (
+          <div className="space-y-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-surface-container-low p-5 rounded-3xl border border-outline-variant/60 shadow-sm">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary">
+                    Selective Member Registry Preview
+                  </span>
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                    File: <span className="font-semibold text-neutral-800 dark:text-neutral-200">{selectedFile?.name}</span>
+                    {registrySheetName ? ` (${registrySheetName})` : ''}
+                  </span>
+                </div>
+                <h2 className="text-lg sm:text-xl font-bold font-headline text-on-surface dark:text-white mt-1">
+                  Select Members to Import to Membership & Users Pages
+                </h2>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Every selected member will be created or updated in <strong>Membership</strong> and linked with a login account on <strong>Users</strong> (default password: <code>UCCoop@2026</code>).
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={resetImporter}
+                  className="px-4 py-2 text-xs font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all cursor-pointer"
+                >
+                  Upload Different File
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteRegistryImport}
+                  disabled={registryExecuting || registrySelectedKeys.size === 0}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {registryExecuting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Importing Selected...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileCheck className="w-4 h-4" />
+                      <span>Import Selected ({registrySelectedKeys.size}) Members</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                  Total Detected
+                </div>
+                <div className="text-2xl font-black font-headline text-on-surface dark:text-white mt-1">
+                  {registryPreviewRows.length}
+                </div>
+              </div>
+              <div className="p-4 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  New Members (+ Users)
+                </div>
+                <div className="text-2xl font-black font-headline text-emerald-700 dark:text-emerald-400 mt-1">
+                  {registryPreviewRows.filter((r: any) => !r.isExisting).length}
+                </div>
+              </div>
+              <div className="p-4 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Existing (Update Profile)
+                </div>
+                <div className="text-2xl font-black font-headline text-blue-700 dark:text-blue-400 mt-1">
+                  {registryPreviewRows.filter((r: any) => r.isExisting).length}
+                </div>
+              </div>
+              <div className="p-4 rounded-2xl bg-white dark:bg-surface-container-low border border-outline-variant/50 shadow-sm">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-primary dark:text-secondary">
+                  Selected to Import
+                </div>
+                <div className="text-2xl font-black font-headline text-primary dark:text-secondary mt-1">
+                  {registrySelectedKeys.size}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-surface-container-low rounded-3xl border border-outline-variant/60 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-outline-variant/40 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search member name, ID #, email, or phone..."
+                    value={registrySearchQuery}
+                    onChange={e => setRegistrySearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-neutral-50 dark:bg-neutral-900 border border-outline-variant/50 focus:outline-none focus:ring-1 focus:ring-primary dark:focus:ring-secondary text-on-surface dark:text-white"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {([
+                    { key: 'all', label: `All (${registryPreviewRows.length})` },
+                    { key: 'new', label: `New Only (${registryPreviewRows.filter((r: any) => !r.isExisting).length})` },
+                    { key: 'existing', label: `Existing Only (${registryPreviewRows.filter((r: any) => r.isExisting).length})` },
+                    { key: 'selected', label: `Selected (${registrySelectedKeys.size})` },
+                  ] as const).map(tab => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setRegistryFilterTab(tab.key)}
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
+                        registryFilterTab === tab.key
+                          ? 'bg-primary dark:bg-secondary text-white dark:text-neutral-950'
+                          : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRegistrySelectedKeys(prev => {
+                        const next = new Set(prev);
+                        filteredRegistryRows.forEach((r: any) => next.add(r.rowKey));
+                        return next;
+                      });
+                    }}
+                    className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-600/20 transition-all cursor-pointer"
+                  >
+                    Select All Filtered
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegistrySelectedKeys(new Set())}
+                    className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 transition-all cursor-pointer"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-[480px] overflow-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-neutral-50 dark:bg-neutral-900/90 text-[10px] font-bold uppercase tracking-wider text-neutral-500 sticky top-0 z-10 border-b border-outline-variant/40">
+                    <tr>
+                      <th className="p-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={
+                            filteredRegistryRows.length > 0 &&
+                            filteredRegistryRows.every((r: any) => registrySelectedKeys.has(r.rowKey))
+                          }
+                          onChange={e => {
+                            const checked = e.target.checked;
+                            setRegistrySelectedKeys(prev => {
+                              const next = new Set(prev);
+                              filteredRegistryRows.forEach((r: any) => {
+                                if (checked) next.add(r.rowKey);
+                                else next.delete(r.rowKey);
+                              });
+                              return next;
+                            });
+                          }}
+                          className="rounded border-neutral-300 dark:border-neutral-600 accent-emerald-600 cursor-pointer"
+                        />
+                      </th>
+                      <th className="p-3 whitespace-nowrap">Member ID</th>
+                      <th className="p-3 whitespace-nowrap">Full Name</th>
+                      <th className="p-3 whitespace-nowrap">Type</th>
+                      <th className="p-3 whitespace-nowrap">Demographics</th>
+                      <th className="p-3 whitespace-nowrap">Import Action & User Account</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/25">
+                    {filteredRegistryRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-neutral-400">
+                          No member rows match your current filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredRegistryRows.map((r: any) => {
+                        const isChecked = registrySelectedKeys.has(r.rowKey);
+                        return (
+                          <tr
+                            key={r.rowKey}
+                            onClick={() => {
+                              setRegistrySelectedKeys(prev => {
+                                const next = new Set(prev);
+                                if (next.has(r.rowKey)) next.delete(r.rowKey);
+                                else next.add(r.rowKey);
+                                return next;
+                              });
+                            }}
+                            className={`transition-colors cursor-pointer ${
+                              isChecked
+                                ? 'bg-emerald-500/[0.04] hover:bg-emerald-500/[0.08]'
+                                : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/40 opacity-70'
+                            }`}
+                          >
+                            <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={e => {
+                                  const checked = e.target.checked;
+                                  setRegistrySelectedKeys(prev => {
+                                    const next = new Set(prev);
+                                    if (checked) next.add(r.rowKey);
+                                    else next.delete(r.rowKey);
+                                    return next;
+                                  });
+                                }}
+                                className="rounded border-neutral-300 dark:border-neutral-600 accent-emerald-600 cursor-pointer"
+                              />
+                            </td>
+                            <td className="p-3 font-mono font-bold text-primary dark:text-secondary whitespace-nowrap">
+                              {r.memberNo || <span className="text-neutral-400 font-normal">Auto / None</span>}
+                            </td>
+                            <td className="p-3 font-semibold text-on-surface dark:text-white">
+                              <div>
+                                {r.lastName}, {r.firstName} {r.middleName || ''}
+                              </div>
+                              {(r.email || r.phone) && (
+                                <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 font-normal">
+                                  {[r.email, r.phone].filter(Boolean).join(' • ')}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-3 whitespace-nowrap">
+                              <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold ${
+                                r.membershipType === 'Associate'
+                                  ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                              }`}>
+                                {r.membershipType}
+                              </span>
+                            </td>
+                            <td className="p-3 text-[11px] text-neutral-600 dark:text-neutral-400">
+                              {[r.dateOfBirth, r.age ? `${r.age} yrs` : null, r.gender, r.civilStatus]
+                                .filter(Boolean)
+                                .join(' • ') || '—'}
+                            </td>
+                            <td className="p-3 whitespace-nowrap">
+                              {r.isExisting ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                    Update Existing
+                                  </span>
+                                  {r.hasUserAccount ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                      Login: {r.existingUsername}
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                      + Create Login
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                  New Member + Create Login
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {step === 'success' && registryResult && !cvImportResult && (
           <div className="bg-white dark:bg-surface-container-low rounded-3xl p-8 sm:p-12 border border-outline-variant/50 shadow-lg space-y-8 max-w-3xl mx-auto text-center">
             <div className="w-20 h-20 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
@@ -1909,11 +2245,14 @@ export default function ImportPage() {
 
             <div className="max-h-72 overflow-y-auto border border-outline-variant/40 rounded-2xl text-left p-4 space-y-2 bg-neutral-50 dark:bg-neutral-900 font-mono text-xs">
               {registryResult.details.map((d: any, idx: number) => (
-                <div key={idx} className="flex justify-between items-center py-1.5 border-b border-outline-variant/20 last:border-0">
+                <div key={idx} className="flex justify-between items-center gap-2 py-1.5 border-b border-outline-variant/20 last:border-0 flex-wrap">
                   <span className="font-bold text-on-surface dark:text-white">{d.name}</span>
-                  <div className="flex items-center gap-3 text-neutral-500 dark:text-neutral-400 text-[11px]">
+                  <div className="flex items-center gap-3 text-neutral-500 dark:text-neutral-400 text-[11px] flex-wrap">
                     <span>ID: <strong className="text-primary dark:text-secondary">{d.memberNo || 'N/A'}</strong></span>
                     <span>Type: <strong className="text-purple-600 dark:text-purple-400">{d.membershipType || 'Regular'}</strong></span>
+                    {d.username && (
+                      <span>User: <strong className="text-blue-600 dark:text-blue-400">{d.username}</strong></span>
+                    )}
                     <span className="text-emerald-500 font-bold px-2 py-0.5 rounded-full bg-emerald-500/10">{d.status}</span>
                   </div>
                 </div>
@@ -1927,6 +2266,13 @@ export default function ImportPage() {
               >
                 <Users className="w-4 h-4" />
                 View Updated Members Directory
+              </Link>
+              <Link
+                href="/dashboard/users"
+                className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold border border-outline-variant/60 bg-white dark:bg-neutral-900 text-on-surface dark:text-white rounded-full hover:shadow-sm transition-all"
+              >
+                <Users className="w-4 h-4" />
+                View Users Page
               </Link>
               <button
                 onClick={resetImporter}

@@ -1494,6 +1494,495 @@ export const importMembersRegistry = async (req, res, next) => {
 };
 
 // ==========================================
+// 3B. PREVIEW MEMBERS REGISTRY & CREDENTIALS (SELECTIVE IMPORT)
+// @route   POST /api/import/members-registry/preview
+// @access  Protected (Admin, Staff)
+// ==========================================
+export const previewMembersRegistry = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No Excel file uploaded. Please upload a .xlsx spreadsheet.' }
+      });
+    }
+
+    const workbook = XLSX.readFile(req.file.path, { cellDates: false });
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'The uploaded file contains no sheets.' }
+      });
+    }
+
+    const targetSheetName = workbook.SheetNames.find(s => s.trim().toUpperCase() === 'PROFILE')
+      || workbook.SheetNames.find(s => s.trim().toUpperCase().includes('PROFILE') && !s.trim().toUpperCase().includes('COPY'))
+      || workbook.SheetNames[0];
+
+    const sheet = workbook.Sheets[targetSheetName];
+    if (!sheet || !sheet['!ref']) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Sheet '${targetSheetName}' contains no data.` }
+      });
+    }
+
+    const range = XLSX.utils.decode_range(sheet['!ref']);
+    let headerRow = -1;
+    const colMap = {
+      memberNo: -1,
+      lastName: -1,
+      firstName: -1,
+      middleName: -1,
+      tin: -1,
+      membershipType: -1,
+      age: -1,
+      gender: -1,
+      civilStatus: -1,
+      email: -1,
+      phone: -1,
+      address: -1,
+      dateOfBirth: -1
+    };
+
+    for (let r = 0; r <= Math.min(10, range.e.r); r++) {
+      for (let c = 0; c <= range.e.c; c++) {
+        const val = cleanStr(cellVal(sheet, r, c)).replace(/\s+/g, ' ').toUpperCase();
+        const compact = val.replace(/[^A-Z0-9]/g, '');
+        if (compact === 'MEMBERNO' || compact === 'MEMBERID' || val === 'MEMBER NO.' || val === 'MEMBER NO' || val === 'MEMBER ID') colMap.memberNo = c;
+        else if (compact === 'LASTNAME' || val === 'LAST NAME') colMap.lastName = c;
+        else if (compact === 'FIRSTNAME' || val === 'FIRST NAME') colMap.firstName = c;
+        else if (compact === 'MIDDLENAME' || val === 'MIDDLE NAME') colMap.middleName = c;
+        else if (compact === 'TIN' || compact === 'TINNO' || val === 'TIN NO.' || val === 'TIN NO') colMap.tin = c;
+        else if (compact === 'TYPEOFMEMBERSHIP' || compact === 'MEMBERSHIPTYPE' || compact === 'MEMBERSHIP') colMap.membershipType = c;
+        else if (compact === 'AGE') colMap.age = c;
+        else if (compact === 'GENDER' || compact === 'SEX') colMap.gender = c;
+        else if (compact === 'CIVILSTATUS' || compact === 'MARITALSTATUS') colMap.civilStatus = c;
+        else if (compact === 'EMAIL' || compact === 'EMAILADDRESS') colMap.email = c;
+        else if (compact === 'CONTACTNO' || compact === 'CONTACTNUMBER' || compact === 'MOBILE' || compact === 'MOBILENO' || compact === 'PHONE' || compact === 'PHONENO') colMap.phone = c;
+        else if (compact === 'ADDRESS' || compact === 'RESIDENCE' || compact === 'HOMEADDRESS') colMap.address = c;
+        else if (compact === 'BIRTHDATE' || compact === 'BIRTHDAY' || compact === 'DATEOFBIRTH' || compact === 'DOB') colMap.dateOfBirth = c;
+      }
+      if (colMap.lastName !== -1 && colMap.firstName !== -1) {
+        headerRow = r;
+        break;
+      }
+    }
+
+    if (headerRow === -1 || colMap.lastName === -1 || colMap.firstName === -1) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Could not detect FIRST NAME and LAST NAME columns in sheet '${targetSheetName}'.` }
+      });
+    }
+
+    const existingMembersRes = await pool.query(`
+      SELECT m.id, m.user_id, u.id AS valid_user_id, u.username, m.member_no,
+             LOWER(m.first_name) AS fn, LOWER(m.last_name) AS ln, LOWER(COALESCE(m.middle_name, '')) AS mn
+      FROM members m
+      LEFT JOIN users u ON m.user_id = u.id
+    `);
+
+    const rows = [];
+    for (let r = headerRow + 1; r <= range.e.r; r++) {
+      const rawFirstName = cleanStr(cellVal(sheet, r, colMap.firstName));
+      const rawLastName = cleanStr(cellVal(sheet, r, colMap.lastName));
+      if (!rawFirstName || !rawLastName || rawFirstName.toUpperCase().includes('NAME') || rawLastName.toUpperCase().includes('NAME')) {
+        continue;
+      }
+      const excelLast = cleanToken(rawLastName);
+      const excelFirst = cleanToken(rawFirstName);
+      if (!excelLast || !excelFirst) continue;
+
+      const rawMiddleName = colMap.middleName !== -1 ? cleanStr(cellVal(sheet, r, colMap.middleName)) : '';
+      const rawMemberNo = colMap.memberNo !== -1 ? cleanStr(cellVal(sheet, r, colMap.memberNo)) : '';
+      const rawTin = colMap.tin !== -1 ? cleanStr(cellVal(sheet, r, colMap.tin)) : '';
+      const rawMembershipType = colMap.membershipType !== -1 ? cleanStr(cellVal(sheet, r, colMap.membershipType)) : '';
+
+      let membershipType = 'Regular';
+      if (rawMembershipType) {
+        const lowerType = rawMembershipType.toLowerCase();
+        if (lowerType.includes('associate')) membershipType = 'Associate';
+      }
+
+      const rawAgeStr = colMap.age !== -1 ? cleanStr(cellVal(sheet, r, colMap.age)) : '';
+      const parsedAge = rawAgeStr ? parseInt(rawAgeStr, 10) : null;
+      const ageVal = (!isNaN(parsedAge) && parsedAge > 0) ? parsedAge : null;
+
+      let genderVal = null;
+      if (colMap.gender !== -1) {
+        const g = cleanStr(cellVal(sheet, r, colMap.gender)).toUpperCase();
+        if (g.startsWith('M') || g.includes('MALE')) genderVal = 'Male';
+        else if (g.startsWith('F') || g.includes('FEMALE')) genderVal = 'Female';
+      }
+
+      let civilStatusVal = null;
+      if (colMap.civilStatus !== -1) {
+        const cs = cleanStr(cellVal(sheet, r, colMap.civilStatus)).toLowerCase();
+        if (cs.includes('single')) civilStatusVal = 'Single';
+        else if (cs.includes('married')) civilStatusVal = 'Married';
+        else if (cs.includes('widow')) civilStatusVal = 'Widowed';
+        else if (cs.includes('separat')) civilStatusVal = 'Separated';
+        else if (cs.includes('divorced')) civilStatusVal = 'Divorced';
+      }
+
+      let emailVal = colMap.email !== -1 ? cleanStr(cellVal(sheet, r, colMap.email)).toLowerCase() : null;
+      if (emailVal && !emailVal.includes('@')) emailVal = null;
+
+      let phoneVal = colMap.phone !== -1 ? cleanStr(cellVal(sheet, r, colMap.phone)) : null;
+      if (phoneVal) phoneVal = phoneVal.replace(/[^0-9+]/g, '') || null;
+
+      const addressVal = colMap.address !== -1 ? (cleanStr(cellVal(sheet, r, colMap.address)) || null) : null;
+      const dobVal = colMap.dateOfBirth !== -1 ? cellDateIso(sheet, r, colMap.dateOfBirth) : null;
+
+      const targetMember = existingMembersRes.rows.find(m => {
+        if (rawMemberNo && m.member_no && m.member_no.trim() === rawMemberNo.trim()) return true;
+        const dbLast = cleanToken(m.ln);
+        const dbFirst = cleanToken(m.fn);
+        if (dbLast === excelLast) {
+          if (dbFirst === excelFirst || dbFirst.startsWith(excelFirst) || excelFirst.startsWith(dbFirst)) return true;
+        }
+        return false;
+      });
+
+      rows.push({
+        rowKey: `row-${r}`,
+        memberNo: rawMemberNo || null,
+        firstName: rawFirstName,
+        lastName: rawLastName,
+        middleName: rawMiddleName || null,
+        membershipType,
+        tin: rawTin || null,
+        age: ageVal,
+        gender: genderVal,
+        civilStatus: civilStatusVal,
+        email: emailVal,
+        phone: phoneVal,
+        address: addressVal,
+        dateOfBirth: dobVal,
+        isExisting: Boolean(targetMember),
+        existingMemberId: targetMember?.id || null,
+        hasUserAccount: Boolean(targetMember?.valid_user_id),
+        existingUsername: targetMember?.username || null
+      });
+    }
+
+    const newCount = rows.filter(r => !r.isExisting).length;
+    const existingCount = rows.length - newCount;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        sheetName: targetSheetName,
+        totalRows: rows.length,
+        newCount,
+        existingCount,
+        rows
+      }
+    });
+  } catch (error) {
+    if (req.file?.path) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+    }
+    next(error);
+  }
+};
+
+// ==========================================
+// 3C. EXECUTE SELECTIVE MEMBERS REGISTRY IMPORT
+// @route   POST /api/import/members-registry/execute
+// @access  Protected (Admin, Staff)
+// ==========================================
+export const executeMembersRegistryImport = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const selectedRows = Array.isArray(req.body.rows) ? req.body.rows : [];
+    if (selectedRows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please select at least one member to import.' }
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const existingMembersRes = await client.query(`
+      SELECT m.id, m.user_id, u.id AS valid_user_id, u.username, m.member_no, m.email,
+             LOWER(m.first_name) AS fn, LOWER(m.last_name) AS ln, LOWER(COALESCE(m.middle_name, '')) AS mn
+      FROM members m
+      LEFT JOIN users u ON m.user_id = u.id
+    `);
+    const existingUsersRes = await client.query('SELECT username FROM users');
+    const existingUsernames = new Set(existingUsersRes.rows.map(r => String(r.username || '').toLowerCase()));
+    const takenEmails = new Map();
+    for (const m of existingMembersRes.rows) {
+      if (m.email) takenEmails.set(String(m.email).trim().toLowerCase(), m.id);
+    }
+
+    let cachedDefaultPasswordHash = null;
+    const createLinkedUserAccount = async (firstName, lastName) => {
+      if (!cachedDefaultPasswordHash) {
+        cachedDefaultPasswordHash = await bcrypt.hash('UCCoop@2026', 10);
+      }
+      const cleanPart = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanFirstPart = (s) => {
+        if (!s) return '';
+        const parts = s.trim().split(/\s+/);
+        const mainFirst = parts.filter(p => !p.match(/^[A-Za-z]\.?$/)).join('') || parts[0];
+        return cleanPart(mainFirst);
+      };
+      const baseFirst = cleanFirstPart(firstName) || 'member';
+      const baseLast = cleanPart(lastName) || 'user';
+      const baseUsername = `${baseFirst}.${baseLast}`;
+      let username = baseUsername;
+      let suffix = 1;
+      while (existingUsernames.has(username)) {
+        suffix++;
+        username = `${baseUsername}${suffix}`;
+      }
+      existingUsernames.add(username);
+      const userRes = await client.query(
+        `INSERT INTO users (username, password_hash, role, is_active)
+         VALUES ($1, $2, 'member', true)
+         RETURNING id, username`,
+        [username, cachedDefaultPasswordHash]
+      );
+      return userRes.rows[0];
+    };
+
+    let updatedCount = 0;
+    let createdCount = 0;
+    const updateLogs = [];
+
+    for (const row of selectedRows) {
+      const rawFirstName = cleanStr(row.firstName);
+      const rawLastName = cleanStr(row.lastName);
+      const excelLast = cleanToken(rawLastName);
+      const excelFirst = cleanToken(rawFirstName);
+      if (!excelLast || !excelFirst) continue;
+
+      const rawMemberNo = row.memberNo ? cleanStr(row.memberNo) : '';
+      const rawMiddleName = row.middleName ? cleanStr(row.middleName) : '';
+      const rawTin = row.tin ? cleanStr(row.tin) : '';
+      const membershipType = row.membershipType === 'Associate' ? 'Associate' : 'Regular';
+      const ageVal = row.age ? parseInt(row.age, 10) : null;
+      const genderVal = row.gender || null;
+      const civilStatusVal = row.civilStatus || null;
+      let emailVal = row.email ? cleanStr(row.email).toLowerCase() : null;
+      if (emailVal && !emailVal.includes('@')) emailVal = null;
+      const phoneVal = row.phone ? cleanStr(row.phone) : null;
+      const addressVal = row.address ? cleanStr(row.address) : null;
+      const dobVal = row.dateOfBirth ? cleanStr(row.dateOfBirth) : null;
+
+      await client.query('SAVEPOINT sp_member');
+      try {
+        const targetMember = (row.existingMemberId
+          ? existingMembersRes.rows.find(m => m.id === row.existingMemberId)
+          : null) || existingMembersRes.rows.find(m => {
+          if (rawMemberNo && m.member_no && m.member_no.trim() === rawMemberNo.trim()) return true;
+          const dbLast = cleanToken(m.ln);
+          const dbFirst = cleanToken(m.fn);
+          if (dbLast === excelLast) {
+            if (dbFirst === excelFirst || dbFirst.startsWith(excelFirst) || excelFirst.startsWith(dbFirst)) return true;
+          }
+          return false;
+        });
+
+        if (!targetMember) {
+          if (rawMemberNo) {
+            const conflictRes = await client.query(
+              `SELECT id FROM members WHERE member_no = $1`,
+              [rawMemberNo]
+            );
+            if (conflictRes.rows.length > 0) {
+              await client.query(`UPDATE members SET member_no = NULL WHERE id = $1`, [conflictRes.rows[0].id]);
+            }
+          }
+          if (emailVal && takenEmails.has(emailVal)) {
+            emailVal = null;
+          }
+
+          const newUser = await createLinkedUserAccount(rawFirstName, rawLastName);
+          const insertedRes = await client.query(
+            `INSERT INTO members (
+              user_id, member_no, first_name, last_name, middle_name,
+              membership_type, tin, address, date_of_birth, age,
+              gender, civil_status, email, phone, status, is_verified, profile_completed
+            ) VALUES (
+              $1, $2, $3, $4, $5,
+              $6, $7, $8, $9, $10,
+              $11, $12, $13, $14, 'pending', false, false
+            ) RETURNING id, user_id, member_no, first_name, last_name, middle_name, membership_type, tin`,
+            [
+              newUser.id,
+              rawMemberNo || null,
+              rawFirstName,
+              rawLastName,
+              rawMiddleName || null,
+              membershipType,
+              rawTin || null,
+              addressVal || null,
+              dobVal || null,
+              (!isNaN(ageVal) && ageVal > 0) ? ageVal : null,
+              genderVal,
+              civilStatusVal,
+              emailVal,
+              phoneVal
+            ]
+          );
+
+          if (insertedRes.rows.length > 0) {
+            const newMem = insertedRes.rows[0];
+            if (emailVal) takenEmails.set(emailVal, newMem.id);
+            await client.query(
+              `INSERT INTO member_status_logs (member_id, previous_status, new_status, changed_by, remarks)
+               VALUES ($1, NULL, 'pending', $2, 'Imported selectively via Members Registry Import Hub.')`,
+              [newMem.id, req.user.id]
+            );
+            existingMembersRes.rows.push({
+              id: newMem.id,
+              user_id: newMem.user_id,
+              valid_user_id: newMem.user_id,
+              username: newUser.username,
+              member_no: newMem.member_no,
+              email: emailVal,
+              fn: rawFirstName.toLowerCase(),
+              ln: rawLastName.toLowerCase(),
+              mn: (rawMiddleName || '').toLowerCase()
+            });
+            createdCount++;
+            updateLogs.push({
+              name: `${rawFirstName} ${rawLastName}`,
+              memberNo: newMem.member_no,
+              membershipType: newMem.membership_type,
+              tin: newMem.tin,
+              username: newUser.username,
+              status: 'Created'
+            });
+          }
+          await client.query('RELEASE SAVEPOINT sp_member');
+          continue;
+        }
+
+        const setClauses = [];
+        const queryParams = [];
+        let paramIdx = 1;
+        let linkedUsername = targetMember.username || null;
+
+        if (!targetMember.valid_user_id) {
+          const newUser = await createLinkedUserAccount(rawFirstName, rawLastName);
+          targetMember.user_id = newUser.id;
+          targetMember.valid_user_id = newUser.id;
+          targetMember.username = newUser.username;
+          linkedUsername = newUser.username;
+          setClauses.push(`user_id = $${paramIdx++}`);
+          queryParams.push(newUser.id);
+        }
+
+        if (rawMemberNo) {
+          const conflictRes = await client.query(
+            `SELECT id FROM members WHERE member_no = $1 AND id != $2`,
+            [rawMemberNo, targetMember.id]
+          );
+          if (conflictRes.rows.length > 0) {
+            await client.query(`UPDATE members SET member_no = NULL WHERE id = $1`, [conflictRes.rows[0].id]);
+          }
+          setClauses.push(`member_no = $${paramIdx++}`);
+          queryParams.push(rawMemberNo);
+        }
+        if (membershipType) {
+          setClauses.push(`membership_type = $${paramIdx++}`);
+          queryParams.push(membershipType);
+        }
+        if (rawTin) {
+          setClauses.push(`tin = $${paramIdx++}`);
+          queryParams.push(rawTin);
+        }
+        if (rawMiddleName) {
+          setClauses.push(`middle_name = $${paramIdx++}`);
+          queryParams.push(rawMiddleName);
+        }
+        if (addressVal) {
+          setClauses.push(`address = $${paramIdx++}`);
+          queryParams.push(addressVal);
+        }
+        if (dobVal) {
+          setClauses.push(`date_of_birth = $${paramIdx++}`);
+          queryParams.push(dobVal);
+        }
+        if (ageVal !== null && !isNaN(ageVal) && ageVal > 0) {
+          setClauses.push(`age = $${paramIdx++}`);
+          queryParams.push(ageVal);
+        }
+        if (genderVal) {
+          setClauses.push(`gender = $${paramIdx++}`);
+          queryParams.push(genderVal);
+        }
+        if (civilStatusVal) {
+          setClauses.push(`civil_status = $${paramIdx++}`);
+          queryParams.push(civilStatusVal);
+        }
+        if (emailVal && (!takenEmails.has(emailVal) || takenEmails.get(emailVal) === targetMember.id)) {
+          setClauses.push(`email = $${paramIdx++}`);
+          queryParams.push(emailVal);
+          takenEmails.set(emailVal, targetMember.id);
+        }
+        if (phoneVal) {
+          setClauses.push(`phone = $${paramIdx++}`);
+          queryParams.push(phoneVal);
+        }
+
+        if (setClauses.length > 0) {
+          setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
+          queryParams.push(targetMember.id);
+          const updatedRes = await client.query(
+            `UPDATE members SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING *`,
+            queryParams
+          );
+          if (updatedRes.rowCount > 0) {
+            updatedCount++;
+            updateLogs.push({
+              name: `${rawFirstName} ${rawLastName}`,
+              memberNo: rawMemberNo || updatedRes.rows[0].member_no,
+              membershipType: membershipType || updatedRes.rows[0].membership_type,
+              tin: rawTin || updatedRes.rows[0].tin,
+              username: linkedUsername,
+              status: 'Updated'
+            });
+          }
+        }
+        await client.query('RELEASE SAVEPOINT sp_member');
+      } catch (rowErr) {
+        await client.query('ROLLBACK TO SAVEPOINT sp_member');
+        console.error('Selective member registry import row skipped:', rawFirstName, rawLastName, rowErr.message);
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      success: true,
+      message: `Members Registry update completed! Updated ${updatedCount} members, created ${createdCount} new members.`,
+      data: {
+        updatedCount,
+        createdCount,
+        totalProcessed: updatedCount + createdCount,
+        details: updateLogs
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
+// ==========================================
 // 4. PROVISION USER ACCOUNTS FOR IMPORTED MEMBERS
 // @route   POST /api/import/provision-accounts
 // @access  Protected (Admin only)
