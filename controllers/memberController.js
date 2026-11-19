@@ -3,6 +3,35 @@ import bcrypt from 'bcryptjs';
 import { exportToExcel } from '../services/reportExporter.js';
 import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
 
+// One-time safe migration: move existing 'approved' members to 'pending' (Pending Review) once per database
+(async () => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS system_one_time_migrations (
+        name VARCHAR(120) PRIMARY KEY,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    const ins = await query(
+      `INSERT INTO system_one_time_migrations (name)
+       VALUES ('reset_approved_members_to_pending_20261119')
+       ON CONFLICT (name) DO NOTHING
+       RETURNING name`
+    );
+    if (ins.rowCount > 0) {
+      await query(
+        `UPDATE members
+         SET status = 'pending',
+             is_verified = false,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE LOWER(COALESCE(status, '')) = 'approved'`
+      );
+    }
+  } catch (err) {
+    console.error('One-time member status migration failed:', err.message);
+  }
+})();
+
 // @desc    Create a new member profile
 // @route   POST /api/members
 // @access  Protected (Admin, Manager)
@@ -515,8 +544,8 @@ export const updateMemberStatus = async (req, res, next) => {
     }
 
     // 2. Update status & sync is_verified and profile_completed flags
-    await client.query(
-      "UPDATE members SET status = $1::text::varchar, is_verified = (CASE WHEN $1::text::varchar IN ('approved', 'active') THEN true ELSE false END), profile_completed = (CASE WHEN $1::text::varchar IN ('approved', 'active') THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+    const updateRes = await client.query(
+      "UPDATE members SET status = $1::text::varchar, is_verified = (CASE WHEN $1::text::varchar IN ('approved', 'active') THEN true ELSE false END), profile_completed = (CASE WHEN $1::text::varchar IN ('approved', 'active') THEN true ELSE profile_completed END), updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
       [status, id]
     );
 
@@ -531,7 +560,8 @@ export const updateMemberStatus = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: `Member status successfully updated from ${previousStatus} to ${status}.`
+      message: `Member status successfully updated from ${previousStatus} to ${status}.`,
+      data: updateRes.rows[0]
     });
   } catch (error) {
     await client.query('ROLLBACK');
