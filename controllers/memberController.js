@@ -273,8 +273,12 @@ export const getAllMembers = async (req, res, next) => {
       FROM members m
       LEFT JOIN users u ON m.user_id = u.id
       WHERE 1=1
-        AND (u.role IS NULL OR u.role = 'member')
         AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%'))
+        AND (
+          u.role IS NULL
+          OR u.role = 'member'
+          OR (m.member_no IS NOT NULL AND m.member_no != '' AND m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%')
+        )
     `;
     const queryParams = [];
     let paramIndex = 1;
@@ -875,8 +879,12 @@ export const exportMembersReport = async (req, res, next) => {
       FROM members m
       LEFT JOIN users u ON m.user_id = u.id
       WHERE 1=1
-        AND (u.role IS NULL OR u.role = 'member')
         AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%'))
+        AND (
+          u.role IS NULL
+          OR u.role = 'member'
+          OR (m.member_no IS NOT NULL AND m.member_no != '' AND m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%')
+        )
     `;
     const queryParams = [];
     let paramIndex = 1;

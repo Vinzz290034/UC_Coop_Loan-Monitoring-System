@@ -52,16 +52,31 @@ export async function migrateMemberIdFormalization() {
       for (const [yearStr, membersList] of Object.entries(membersByYear)) {
         const year = parseInt(yearStr, 10);
 
-        // Fetch current highest sequence for this year
+        // Fetch current highest sequence for this year (considering both member_sequences and existing member_no values)
         const seqRes = await client.query(`
           SELECT current_seq FROM member_sequences WHERE year = $1 FOR UPDATE
         `, [year]);
+        const existingNosRes = await client.query(`
+          SELECT member_no FROM members WHERE member_no LIKE $1
+        `, [`${year}-%`]);
+        const takenSet = new Set(existingNosRes.rows.map(r => String(r.member_no || '').trim()));
+        let maxExisting = 0;
+        for (const no of takenSet) {
+          const m = no.match(/^(\d{4})-(\d+)$/);
+          if (m) {
+            const n = parseInt(m[2], 10);
+            if (!isNaN(n) && n > maxExisting) maxExisting = n;
+          }
+        }
 
-        let seq = seqRes.rows.length > 0 ? parseInt(seqRes.rows[0].current_seq, 10) : 0;
+        let seq = Math.max(seqRes.rows.length > 0 ? parseInt(seqRes.rows[0].current_seq, 10) : 0, maxExisting);
 
         for (const member of membersList) {
-          seq += 1;
+          do {
+            seq += 1;
+          } while (takenSet.has(`${year}-${seq}`));
           const memberNo = `${year}-${seq}`;
+          takenSet.add(memberNo);
           await client.query(`
             UPDATE members 
             SET member_no = $1 
