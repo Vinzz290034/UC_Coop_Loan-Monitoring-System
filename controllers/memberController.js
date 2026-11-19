@@ -27,6 +27,51 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
          WHERE LOWER(COALESCE(status, '')) = 'approved'`
       );
     }
+
+    // Auto-provision login accounts for any existing members who do not have a linked user account yet
+    const unlinkedRes = await query(
+      `SELECT id, first_name, last_name
+       FROM members
+       WHERE user_id IS NULL
+       ORDER BY last_name, first_name`
+    );
+    if (unlinkedRes.rowCount > 0) {
+      const existingUsersRes = await query('SELECT username FROM users');
+      const existingUsernames = new Set(existingUsersRes.rows.map(r => String(r.username || '').toLowerCase()));
+      const passwordHash = await bcrypt.hash('UCCoop@2026', 10);
+      const cleanPart = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanFirstPart = (s) => {
+        if (!s) return '';
+        const parts = s.trim().split(/\s+/);
+        const mainFirst = parts.filter(p => !p.match(/^[A-Za-z]\.?$/)).join('') || parts[0];
+        return cleanPart(mainFirst);
+      };
+
+      for (const m of unlinkedRes.rows) {
+        const baseFirst = cleanFirstPart(m.first_name) || 'member';
+        const baseLast = cleanPart(m.last_name) || 'user';
+        const baseUsername = `${baseFirst}.${baseLast}`;
+        let username = baseUsername;
+        let suffix = 1;
+        while (existingUsernames.has(username)) {
+          suffix++;
+          username = `${baseUsername}${suffix}`;
+        }
+        existingUsernames.add(username);
+        const userRes = await query(
+          `INSERT INTO users (username, password_hash, role)
+           VALUES ($1, $2, 'member')
+           RETURNING id`,
+          [username, passwordHash]
+        );
+        if (userRes.rows[0]?.id) {
+          await query(
+            `UPDATE members SET user_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id IS NULL`,
+            [userRes.rows[0].id, m.id]
+          );
+        }
+      }
+    }
   } catch (err) {
     console.error('One-time member status migration failed:', err.message);
   }
