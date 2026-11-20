@@ -2020,13 +2020,6 @@ function DisbursementPageContent() {
   const getEditCvDisbursedAmount = (): number => {
     const activeCv = editingOriginalCv || selectedCvForModal;
     const replenishType = getReplenishmentType(editCvFormData.folder_name, activeCv);
-    if (replenishType === 'stl') {
-      const cibVal = parseFloat(editCvCibAmount || '0') || 0;
-      if (cibVal > 0) return cibVal;
-      if (activeCv?.cib_amount && parseFloat(activeCv.cib_amount) > 0) return parseFloat(activeCv.cib_amount);
-      if (activeCv?.amount && parseFloat(activeCv.amount) > 0) return parseFloat(activeCv.amount);
-    }
-
     let debitTotal = 0;
     let nonCibCreditTotal = 0;
     let cibCreditTotal = 0;
@@ -2043,6 +2036,11 @@ function DisbursementPageContent() {
       } else {
         debitTotal += parseFloat(String(r.debit || '0')) || 0;
       }
+    }
+    if (replenishType === 'stl') {
+      if (debitTotal > 0) return Math.max(0, debitTotal - nonCibCreditTotal);
+      if (activeCv?.cib_amount && parseFloat(activeCv.cib_amount) > 0) return parseFloat(activeCv.cib_amount);
+      if (activeCv?.amount && parseFloat(activeCv.amount) > 0) return parseFloat(activeCv.amount);
     }
     if (!replenishType) {
       if (cibCreditTotal > 0) return cibCreditTotal;
@@ -4027,7 +4025,7 @@ function DisbursementPageContent() {
       const balancingCib = Math.max(0, debitRowsSum - creditRowsSum);
       const manualCib = parseFloat(editCvCibAmount || '0') || 0;
       const cibVal = isStl
-        ? (manualCib > 0 ? manualCib : balancingCib)
+        ? balancingCib
         : (balancingCib > 0 ? balancingCib : (manualCib > 0 ? manualCib : debitRowsSum));
 
       // Persist the balancing CIB row
@@ -6934,7 +6932,7 @@ function DisbursementPageContent() {
                                   <div></div>
                                 </div>
 
-                                {/* Row 2: CIB Account with manual input for credit column */}
+                                {/* Row 2: Fixed auto-computed CIB Account for credit column */}
                                 <div className="grid grid-cols-[32px_115px_105px_1.4fr_1.1fr_95px_95px_42px] px-3 py-1.5 items-center gap-2 font-bold text-xs bg-emerald-100/40 dark:bg-emerald-950/60">
                                   <div className="col-span-5 text-right pr-4 font-extrabold uppercase tracking-wider text-xs text-[#064e3b] dark:text-emerald-300">
                                     {formatCibAccountName(editCvFormData.bank).replace('-', ':')}:
@@ -6942,16 +6940,8 @@ function DisbursementPageContent() {
                                   <div className="text-center font-mono font-bold text-neutral-400 dark:text-neutral-500">
                                     —
                                   </div>
-                                  <div>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      placeholder="0.00"
-                                      value={editCvCibAmount}
-                                      onChange={e => setEditCvCibAmount(e.target.value)}
-                                      className="w-full px-2 py-1 rounded-lg border border-emerald-400 dark:border-emerald-600 bg-white dark:bg-neutral-900 font-mono text-center text-xs font-extrabold text-[#064e3b] dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-2xs"
-                                      title={`Manually input ${formatCibAccountName(editCvFormData.bank).replace('-', ':')} credit amount`}
-                                    />
+                                  <div className="text-center font-mono font-extrabold text-[#064e3b] dark:text-emerald-300">
+                                    ₱{Math.max(0, debitTotal - creditTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                   </div>
                                   <div></div>
                                 </div>
@@ -6965,7 +6955,7 @@ function DisbursementPageContent() {
                                     ₱{debitTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                   </div>
                                   <div className="text-center font-mono font-black text-[#064e3b] dark:text-emerald-200">
-                                    ₱{(creditTotal + (parseFloat(editCvCibAmount || '0') || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                    ₱{(creditTotal + Math.max(0, debitTotal - creditTotal)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                   </div>
                                   <div></div>
                                 </div>
@@ -7156,7 +7146,7 @@ function DisbursementPageContent() {
                       const hasCibInRows = editCvRows.some(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
                       const balancingCib = hasCibInRows ? 0 : Math.max(0, debitTotal - creditTotal);
                       const cibVal = isStl
-                        ? manualCib
+                        ? balancingCib
                         : (creditTotal > 0 ? balancingCib : (manualCib > 0 ? manualCib : balancingCib));
                       const overallCreditTotal = creditTotal + (hasCibInRows ? 0 : cibVal);
                       const isBalanced = Math.abs(debitTotal - overallCreditTotal) < 0.01 && debitTotal > 0;
