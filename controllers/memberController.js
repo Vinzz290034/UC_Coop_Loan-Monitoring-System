@@ -146,10 +146,10 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
       );
     }
 
-    // One-time safe migration: restore Noemi Filomeno (2025-267) LAF 26-230 active balance (₱7,403.33 principal) and missing ₱30,000 Share Capital deposit
+    // One-time safe migration: restore Noemi Filomeno (2025-267) LAF 26-230 active balance (₱7,403.33 principal) and missing ₱15,000 Share Capital deposit (Invoice 2706 -> ₱30,000 total)
     const filomenoMig = await query(
       `INSERT INTO system_one_time_migrations (name)
-       VALUES ('fix_filomeno_26_230_and_sc_20261120')
+       VALUES ('fix_filomeno_26_230_and_sc_v2_20261120')
        ON CONFLICT (name) DO NOTHING
        RETURNING name`
     );
@@ -168,7 +168,7 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
           if (loanRes.rowCount > 0) {
             const lid = loanRes.rows[0].id;
             await fClient.query(`UPDATE loans SET status = 'disbursed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [lid]);
-            // Remove duplicate 0-interest extra schedule rows if 8 rows exist
+            // Remove duplicate 0-interest extra schedule rows if > 6 rows exist
             const schedRes = await fClient.query(
               `SELECT id, installment_number, interest_due FROM repayment_schedules WHERE loan_id = $1 ORDER BY installment_number ASC`,
               [lid]
@@ -210,21 +210,21 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
             }
           }
 
-          // 2. Add missing ₱30,000.00 Share Capital credit from Row 30 (6/10/2026) if not already recorded
+          // 2. Clean up any temporary 30,000 Row 30 entry and ensure Invoice 2706 (11/19/2026, ₱15,000.00) is recorded so total = ₱30,000.00
+          await fClient.query(
+            `DELETE FROM share_capital_transactions
+             WHERE member_id = $1 AND remarks = 'Imported Share Capital deposit (Excel Row 30)'`,
+            [mid]
+          );
           const scExist = await fClient.query(
-            `SELECT id FROM share_capital_transactions WHERE member_id = $1 AND amount = 30000.00 LIMIT 1`,
+            `SELECT id FROM share_capital_transactions WHERE member_id = $1 AND (invoice_no = '2706' OR (amount = 15000.00 AND transaction_date::date = '2026-11-19')) LIMIT 1`,
             [mid]
           );
           if (scExist.rowCount === 0) {
-            const lastBalRes = await fClient.query(
-              `SELECT COALESCE(balance_after, 0) AS bal FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC, id DESC LIMIT 1`,
-              [mid]
-            );
-            const prevBal = lastBalRes.rowCount > 0 ? parseFloat(lastBalRes.rows[0].bal) : 0;
             await fClient.query(
-              `INSERT INTO share_capital_transactions (member_id, transaction_type, amount, balance_after, transaction_date, remarks, status)
-               VALUES ($1, 'credit', 30000.00, $2, '2026-06-10', 'Imported Share Capital deposit (Excel Row 30)', 'completed')`,
-              [mid, prevBal + 30000.00]
+              `INSERT INTO share_capital_transactions (member_id, transaction_type, amount, balance_after, transaction_date, invoice_no, remarks, status)
+               VALUES ($1, 'credit', 15000.00, 30000.00, '2026-11-19', '2706', 'Imported from Excel - LAF/Invoice: 2706', 'completed')`,
+              [mid]
             );
           }
         }
