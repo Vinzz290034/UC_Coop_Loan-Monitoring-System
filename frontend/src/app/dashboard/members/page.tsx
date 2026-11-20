@@ -1496,7 +1496,7 @@ export default function MembersPage() {
       {/* Add Member Modal Popup System */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop overflow-visible">
             <button
               onClick={() => setIsModalOpen(false)}
               className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -1660,7 +1660,6 @@ export default function MembersPage() {
                     >
                       {[
                         { value: 'pending', label: 'Pending Review' },
-                        { value: 'approved', label: 'Approved' },
                         { value: 'disapproved', label: 'Disapproved' },
                         { value: 'active', label: 'Active' },
                         { value: 'withdrawn', label: 'Withdrawn' },
