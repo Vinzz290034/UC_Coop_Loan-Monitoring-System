@@ -153,7 +153,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hideEmpty, setHideEmpty] = useState(false);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
   const yearDropdownRef = useRef<HTMLDivElement>(null);
@@ -512,7 +512,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     return `${MONTHS[mIdx]} ${lastDay}, ${year}`;
   }, [isYtd, year, selectedPeriod]);
 
-  const toggleSection = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleSection = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
   // ---- Excel export -------------------------------------------------------
   const handleExport = () => {
@@ -608,7 +608,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const renderSection = (s: SooSection, isExpenseOrMode: boolean | 'revenue' | 'expense' | 'repayment', number: number) => {
     const isExpense = isExpenseOrMode === true || isExpenseOrMode === 'expense';
     const isRepayment = isExpenseOrMode === 'repayment';
-    const isCollapsed = q ? false : !!collapsed[s.key];
+    const isCollapsed = q ? false : !expanded[s.key];
     const sf = sectionFigures(s);
 
     const hasAnyMatchingLine = s.groups.some(g => g.lines.some(l => isLineVisible(l)));
@@ -638,10 +638,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
               {number}
             </span>
             <div>
-              <div className="text-sm font-black text-neutral-900 dark:text-white">
-                <HighlightText text={s.plain_title} query={q} />
-              </div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+              <div className="text-sm font-black uppercase tracking-wide text-neutral-900 dark:text-white">
                 <HighlightText text={s.title} query={q} />
               </div>
               <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5 max-w-xl">{s.description}</div>
@@ -657,12 +654,18 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                 {isYtd ? `Full Year: ${peso(sf.ytd)}` : `This month: ${peso(sf.thisMonth)}`}
               </div>
             </div>
-            <ChevronDown className={`w-5 h-5 text-neutral-400 transition-transform print:hidden ${isCollapsed ? '' : 'rotate-180'}`} />
+            <ChevronDown className={`w-5 h-5 text-neutral-400 transition-transform duration-300 ease-in-out print:hidden ${isCollapsed ? '' : 'rotate-180'}`} />
           </div>
         </button>
 
-        {!isCollapsed && (
-          <div className="overflow-x-auto border-t border-neutral-200 dark:border-neutral-800">
+        <div
+          className={`grid transition-all duration-300 ease-in-out print:grid-rows-[1fr] print:opacity-100 ${
+            isCollapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
+          }`}
+          aria-hidden={isCollapsed}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <div className="overflow-x-auto border-t border-neutral-200 dark:border-neutral-800">
             <table className="w-full text-xs border-collapse">
               <TableHead />
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
@@ -747,8 +750,9 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     );
   };
