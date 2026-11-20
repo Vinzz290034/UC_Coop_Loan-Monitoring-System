@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, use } from 'react';
+import React, { useEffect, useRef, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -22,6 +22,8 @@ import {
   History,
   CheckCircle,
   CheckCircle2,
+  ChevronDown,
+  Check,
   X,
   UserCheck,
   Building,
@@ -81,10 +83,29 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
 
   // Update status state
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-  const [newStatus, setNewStatus] = useState<'active' | 'suspended' | 'inactive'>('active');
+  const [newStatus, setNewStatus] = useState<'active' | 'withdrawn' | 'pending' | 'approved' | 'disapproved'>('active');
+  const [isStatusSelectOpen, setIsStatusSelectOpen] = useState(false);
+  const statusSelectRef = useRef<HTMLDivElement>(null);
   const [statusRemarks, setStatusRemarks] = useState('');
   const [statusError, setStatusError] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (statusSelectRef.current && !statusSelectRef.current.contains(e.target as Node)) {
+        setIsStatusSelectOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsStatusSelectOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
 
   // Delete member state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -265,6 +286,13 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
             <CheckCircle className="w-3.5 h-3.5" />
             Active
+          </span>
+        );
+      case 'withdrawn':
+        return (
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Withdrawn
           </span>
         );
       case 'suspended':
@@ -1158,17 +1186,67 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
             )}
 
             <form onSubmit={handleStatusChangeSubmit} className="space-y-4">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" ref={statusSelectRef}>
                 <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Select Status</label>
-                <select
-                  value={newStatus}
-                  onChange={(e: any) => setNewStatus(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                >
-                  <option value="active">Active</option>
-                  <option value="suspended">Suspended</option>
-                  <option value="inactive">Inactive</option>
-                </select>
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-expanded={isStatusSelectOpen}
+                    onClick={() => setIsStatusSelectOpen((prev) => !prev)}
+                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white font-semibold flex items-center justify-between gap-2 cursor-pointer"
+                  >
+                    <span>
+                      {({
+                        pending: 'Pending Review',
+                        approved: 'Approved',
+                        disapproved: 'Disapproved',
+                        active: 'Active',
+                        withdrawn: 'Withdrawn',
+                      } as Record<string, string>)[newStatus] || 'Active'}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-primary dark:text-secondary transition-transform duration-200 ${
+                        isStatusSelectOpen ? 'rotate-180' : 'rotate-0'
+                      }`}
+                    />
+                  </button>
+
+                  <div
+                    className={`absolute left-0 right-0 mt-1.5 z-30 rounded-xl border border-outline-variant bg-white dark:bg-neutral-900 shadow-lg overflow-hidden origin-top transition-all duration-200 ease-out ${
+                      isStatusSelectOpen
+                        ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                        : 'opacity-0 scale-95 -translate-y-1.5 pointer-events-none'
+                    }`}
+                  >
+                    {[
+                      { value: 'pending' as const, label: 'Pending Review' },
+                      { value: 'approved' as const, label: 'Approved' },
+                      { value: 'disapproved' as const, label: 'Disapproved' },
+                      { value: 'active' as const, label: 'Active' },
+                      { value: 'withdrawn' as const, label: 'Withdrawn' },
+                    ].map((opt) => {
+                      const selected = newStatus === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            setNewStatus(opt.value);
+                            setIsStatusSelectOpen(false);
+                          }}
+                          className={`w-full px-3.5 py-2.5 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                            selected
+                              ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary'
+                              : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                          }`}
+                        >
+                          <span>{opt.label}</span>
+                          {selected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-1.5">

@@ -28,6 +28,22 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
       );
     }
 
+    // One-time safe migration: allow 'withdrawn' status in members_status_check constraint
+    const withdrawnMig = await query(
+      `INSERT INTO system_one_time_migrations (name)
+       VALUES ('allow_withdrawn_member_status_20261120')
+       ON CONFLICT (name) DO NOTHING
+       RETURNING name`
+    );
+    if (withdrawnMig.rowCount > 0) {
+      await query(`ALTER TABLE members DROP CONSTRAINT IF EXISTS members_status_check`);
+      await query(`
+        ALTER TABLE members
+        ADD CONSTRAINT members_status_check
+        CHECK (status IN ('active', 'withdrawn', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'))
+      `);
+    }
+
     // Auto-provision login accounts for any existing members who do not have a linked user account yet
     const unlinkedRes = await query(
       `SELECT id, first_name, last_name
@@ -83,7 +99,7 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
 export const createMember = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id, is_verified, membership_type } = req.body;
+    const { member_no, first_name, last_name, middle_name, age, email, phone, address, date_of_birth, gender, civil_status, tin, title, status, user_id, is_verified, membership_type } = req.body;
 
     if (!first_name || !last_name) {
       return res.status(400).json({
@@ -161,8 +177,21 @@ export const createMember = async (req, res, next) => {
       provisionedUsername = candidateUsername;
     }
 
-    // Generate atomic sequential Member ID (YYYY-N)
-    const memberNo = await generateNextMemberNo(client, new Date().getFullYear());
+    // Use provided Member ID if supplied, otherwise generate atomic sequential Member ID (YYYY-N)
+    const customMemberNo = member_no ? String(member_no).trim() : '';
+    let memberNo = customMemberNo;
+    if (customMemberNo) {
+      const existingNo = await client.query('SELECT id FROM members WHERE member_no = $1 LIMIT 1', [customMemberNo]);
+      if (existingNo.rowCount > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          error: { message: `Member ID "${customMemberNo}" is already assigned to another member.` }
+        });
+      }
+    } else {
+      memberNo = await generateNextMemberNo(client, new Date().getFullYear());
+    }
 
     // 1. Insert Member
     const insertMemberQuery = `
@@ -561,10 +590,10 @@ export const updateMemberStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status, remarks } = req.body;
 
-    if (!status || !['active', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'].includes(status)) {
+    if (!status || !['active', 'withdrawn', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'].includes(status)) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Please provide a valid status: pending, approved, disapproved, active, suspended, or inactive.' }
+        error: { message: 'Please provide a valid status: pending, approved, disapproved, active, or withdrawn.' }
       });
     }
 

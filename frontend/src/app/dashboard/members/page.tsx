@@ -26,6 +26,7 @@ import {
   Maximize2,
   Minimize2,
   Users,
+  ChevronDown,
 } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
@@ -44,11 +45,97 @@ interface Member {
   address?: string;
   date_of_birth?: string;
   profile_picture_url?: string | null;
-  status: 'active' | 'suspended' | 'inactive' | 'pending' | 'approved' | 'disapproved';
+  status: 'active' | 'withdrawn' | 'suspended' | 'inactive' | 'pending' | 'approved' | 'disapproved';
   membership_type?: 'Regular' | 'Associate';
   user_role?: string;
   profile_completed?: boolean;
   created_at: string;
+}
+
+function AnimatedSelect({
+  value,
+  options,
+  onChange,
+  placeholder = 'Select...',
+  className = '',
+  menuClassName = '',
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  menuClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
+
+  const activeLabel = options.find((o) => o.value === value)?.label || placeholder;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className={`w-full px-3 py-1.5 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white font-semibold flex items-center justify-between gap-2 cursor-pointer transition-all focus:outline-none focus:ring-1 focus:ring-primary ${className}`}
+      >
+        <span className="truncate">{activeLabel}</span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-primary dark:text-secondary shrink-0 transition-transform duration-200 ${
+            open ? 'rotate-180' : 'rotate-0'
+          }`}
+        />
+      </button>
+
+      <div
+        className={`absolute left-0 right-0 mt-1 z-30 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 shadow-lg overflow-hidden origin-top transition-all duration-200 ease-out max-h-56 overflow-y-auto ${
+          open
+            ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 scale-95 -translate-y-1.5 pointer-events-none'
+        } ${menuClassName}`}
+      >
+        {options.map((opt) => {
+          const selected = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className={`w-full px-3 py-1.5 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                selected
+                  ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary'
+                  : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              }`}
+            >
+              <span className="truncate">{opt.label}</span>
+              {selected && <Check className="w-3 h-3 shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export default function MembersPage() {
@@ -71,23 +158,47 @@ export default function MembersPage() {
 
   // Add Member Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [titleInput, setTitleInput] = useState('');
-  const [tinInput, setTinInput] = useState('');
+  const [memberNoInput, setMemberNoInput] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
-  const [ageInput, setAgeInput] = useState('');
-  const [genderInput, setGenderInput] = useState('');
-  const [civilStatusInput, setCivilStatusInput] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [dob, setDob] = useState('');
   const [memberStatus, setMemberStatus] = useState<string>('active');
   const [membershipTypeInput, setMembershipTypeInput] = useState<'Regular' | 'Associate'>('Regular');
-  const [userId, setUserId] = useState('');
+  const [isMembershipTypeOpen, setIsMembershipTypeOpen] = useState(false);
+  const [isInitialStatusOpen, setIsInitialStatusOpen] = useState(false);
+  const [isInlineStatusOpen, setIsInlineStatusOpen] = useState(false);
+  const membershipTypeDropdownRef = useRef<HTMLDivElement>(null);
+  const initialStatusDropdownRef = useRef<HTMLDivElement>(null);
+  const inlineStatusDropdownRef = useRef<HTMLDivElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (membershipTypeDropdownRef.current && !membershipTypeDropdownRef.current.contains(e.target as Node)) {
+        setIsMembershipTypeOpen(false);
+      }
+      if (initialStatusDropdownRef.current && !initialStatusDropdownRef.current.contains(e.target as Node)) {
+        setIsInitialStatusOpen(false);
+      }
+      if (inlineStatusDropdownRef.current && !inlineStatusDropdownRef.current.contains(e.target as Node)) {
+        setIsInlineStatusOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMembershipTypeOpen(false);
+        setIsInitialStatusOpen(false);
+        setIsInlineStatusOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const router = useRouter();
 
@@ -304,39 +415,23 @@ export default function MembersPage() {
 
     try {
       const res = await api.post('/members', {
-        title: titleInput?.trim() || undefined,
-        tin: tinInput?.trim() || undefined,
+        member_no: memberNoInput?.trim() || undefined,
         first_name: firstName,
         last_name: lastName,
         middle_name: middleName || undefined,
-        age: ageInput ? parseInt(ageInput, 10) : undefined,
-        gender: genderInput || undefined,
-        civil_status: civilStatusInput || undefined,
-        email: email || undefined,
-        phone: phone || undefined,
-        address: address || undefined,
-        date_of_birth: dob || undefined,
         status: memberStatus,
         membership_type: membershipTypeInput,
-        user_id: userId ? parseInt(userId, 10) : undefined
       });
 
       // Clear Form and Close Modal
-      setTitleInput('');
-      setTinInput('');
+      setMemberNoInput('');
       setFirstName('');
       setLastName('');
       setMiddleName('');
-      setAgeInput('');
-      setGenderInput('');
-      setCivilStatusInput('');
-      setEmail('');
-      setPhone('');
-      setAddress('');
-      setDob('');
       setMemberStatus('active');
       setMembershipTypeInput('Regular');
-      setUserId('');
+      setIsMembershipTypeOpen(false);
+      setIsInitialStatusOpen(false);
       setIsModalOpen(false);
 
       if (res.data?.provisioned_account) {
@@ -400,6 +495,13 @@ export default function MembersPage() {
             Disapproved
           </span>
         );
+      case 'withdrawn':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Withdrawn
+          </span>
+        );
       case 'suspended':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-tertiary/10 text-tertiary">
@@ -459,50 +561,52 @@ export default function MembersPage() {
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-start lg:justify-end">
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Sort By:</label>
-              <select
+              <AnimatedSelect
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer"
-              >
-                <option value="name_asc">Name (A → Z)</option>
-                <option value="name_desc">Name (Z → A)</option>
-                <option value="age_asc">Age (Youngest → Oldest)</option>
-                <option value="age_desc">Age (Oldest → Youngest)</option>
-                <option value="created_at_desc">Registration (Newest → Oldest)</option>
-                <option value="created_at_asc">Registration (Oldest → Newest)</option>
-                <option value="status">Status (Active First)</option>
-                <option value="updated">Recently Updated</option>
-              </select>
+                onChange={(val) => setSortBy(val)}
+                className="py-2 bg-white dark:bg-surface-container-low border-outline-variant min-w-[185px]"
+                options={[
+                  { value: 'name_asc', label: 'Name (A → Z)' },
+                  { value: 'name_desc', label: 'Name (Z → A)' },
+                  { value: 'age_asc', label: 'Age (Youngest → Oldest)' },
+                  { value: 'age_desc', label: 'Age (Oldest → Youngest)' },
+                  { value: 'created_at_desc', label: 'Registration (Newest → Oldest)' },
+                  { value: 'created_at_asc', label: 'Registration (Oldest → Newest)' },
+                  { value: 'status', label: 'Status (Active First)' },
+                  { value: 'updated', label: 'Recently Updated' },
+                ]}
+              />
             </div>
 
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Membership:</label>
-              <select
+              <AnimatedSelect
                 value={membershipFilter}
-                onChange={(e) => setMembershipFilter(e.target.value)}
-                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer"
-              >
-                <option value="">All Memberships</option>
-                <option value="Regular">Regular Member</option>
-                <option value="Associate">Associate Member</option>
-              </select>
+                onChange={(val) => setMembershipFilter(val)}
+                className="py-2 bg-white dark:bg-surface-container-low border-outline-variant min-w-[155px]"
+                options={[
+                  { value: '', label: 'All Memberships' },
+                  { value: 'Regular', label: 'Regular Member' },
+                  { value: 'Associate', label: 'Associate Member' },
+                ]}
+              />
             </div>
 
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold font-label text-neutral-600 dark:text-neutral-400 whitespace-nowrap">Status:</label>
-              <select
+              <AnimatedSelect
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white cursor-pointer"
-              >
-                <option value="">All Statuses</option>
-                <option value="pending">Pending Review</option>
-                <option value="approved">Approved</option>
-                <option value="disapproved">Disapproved</option>
-                <option value="active">Active</option>
-                <option value="suspended">Suspended</option>
-                <option value="inactive">Inactive</option>
-              </select>
+                onChange={(val) => setStatusFilter(val)}
+                className="py-2 bg-white dark:bg-surface-container-low border-outline-variant min-w-[140px]"
+                options={[
+                  { value: '', label: 'All Statuses' },
+                  { value: 'pending', label: 'Pending Review' },
+                  { value: 'approved', label: 'Approved' },
+                  { value: 'disapproved', label: 'Disapproved' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'withdrawn', label: 'Withdrawn' },
+                ]}
+              />
             </div>
           </div>
         </div>
@@ -763,16 +867,16 @@ export default function MembersPage() {
                           {/* Membership Type Cell */}
                           <td className="px-4 py-3.5 relative font-medium">
                             {isEditingMembershipType ? (
-                              <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
+                              <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-20 relative min-w-[130px]">
                                 <p className="text-[10px] uppercase font-bold text-primary dark:text-secondary">Edit Type</p>
-                                <select
+                                <AnimatedSelect
                                   value={inlineData.membership_type || member.membership_type || 'Regular'}
-                                  onChange={(e) => setInlineData({ ...inlineData, membership_type: e.target.value })}
-                                  className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white font-semibold"
-                                >
-                                  <option value="Regular">Regular</option>
-                                  <option value="Associate">Associate</option>
-                                </select>
+                                  onChange={(val) => setInlineData({ ...inlineData, membership_type: val })}
+                                  options={[
+                                    { value: 'Regular', label: 'Regular' },
+                                    { value: 'Associate', label: 'Associate' },
+                                  ]}
+                                />
                                 {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
                                 <div className="flex items-center justify-end gap-1 pt-1">
                                   <button
@@ -891,16 +995,17 @@ export default function MembersPage() {
                           {/* Sex/Gender Cell */}
                           <td className="px-4 py-3.5 hidden xl:table-cell relative font-medium">
                             {editingCell?.memberId === member.id && editingCell?.field === 'gender' ? (
-                              <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
-                                <select
+                              <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-20 relative min-w-[130px]">
+                                <AnimatedSelect
                                   value={inlineData.gender || member.gender || ''}
-                                  onChange={(e) => setInlineData({ ...inlineData, gender: e.target.value })}
-                                  className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
-                                >
-                                  <option value="">Select Gender</option>
-                                  <option value="Male">Male</option>
-                                  <option value="Female">Female</option>
-                                </select>
+                                  onChange={(val) => setInlineData({ ...inlineData, gender: val })}
+                                  placeholder="Select Gender"
+                                  options={[
+                                    { value: '', label: 'Select Gender' },
+                                    { value: 'Male', label: 'Male' },
+                                    { value: 'Female', label: 'Female' },
+                                  ]}
+                                />
                                 {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
                                 <div className="flex items-center gap-1 pt-1">
                                   <button
@@ -951,19 +1056,20 @@ export default function MembersPage() {
                           {/* Civil Status Cell */}
                           <td className="px-4 py-3.5 hidden xl:table-cell relative font-medium">
                             {editingCell?.memberId === member.id && editingCell?.field === 'civil_status' ? (
-                              <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
-                                <select
+                              <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-20 relative min-w-[135px]">
+                                <AnimatedSelect
                                   value={inlineData.civil_status || member.civil_status || ''}
-                                  onChange={(e) => setInlineData({ ...inlineData, civil_status: e.target.value })}
-                                  className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white"
-                                >
-                                  <option value="">Select Status</option>
-                                  <option value="Single">Single</option>
-                                  <option value="Married">Married</option>
-                                  <option value="Widowed">Widowed</option>
-                                  <option value="Separated">Separated</option>
-                                  <option value="Divorced">Divorced</option>
-                                </select>
+                                  onChange={(val) => setInlineData({ ...inlineData, civil_status: val })}
+                                  placeholder="Select Status"
+                                  options={[
+                                    { value: '', label: 'Select Status' },
+                                    { value: 'Single', label: 'Single' },
+                                    { value: 'Married', label: 'Married' },
+                                    { value: 'Widowed', label: 'Widowed' },
+                                    { value: 'Separated', label: 'Separated' },
+                                    { value: 'Divorced', label: 'Divorced' },
+                                  ]}
+                                />
                                 {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
                                 <div className="flex items-center gap-1 pt-1">
                                   <button
@@ -1132,24 +1238,76 @@ export default function MembersPage() {
                           {/* Status Cell */}
                           <td className="px-4 py-3.5 relative">
                             {isEditingStatus ? (
-                              <div className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-10">
-                                <select
-                                  value={inlineData.status || member.status}
-                                  onChange={(e) => setInlineData({ ...inlineData, status: e.target.value })}
-                                  className="px-2.5 py-1 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white font-semibold"
-                                >
-                                  <option value="pending">Pending Review</option>
-                                  <option value="approved">Approved</option>
-                                  <option value="disapproved">Disapproved</option>
-                                  <option value="active">Active</option>
-                                  <option value="suspended">Suspended</option>
-                                  <option value="inactive">Inactive</option>
-                                </select>
+                              <div ref={inlineStatusDropdownRef} className="p-2 bg-white dark:bg-neutral-900 border border-primary/30 rounded-2xl shadow-xl space-y-2 z-20 relative">
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    aria-expanded={isInlineStatusOpen}
+                                    onClick={() => setIsInlineStatusOpen((prev) => !prev)}
+                                    className="w-full min-w-[145px] px-3 py-1.5 text-xs border border-outline-variant/60 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-on-surface dark:text-white font-semibold flex items-center justify-between gap-2 cursor-pointer transition-all focus:outline-none focus:ring-1 focus:ring-primary"
+                                  >
+                                    <span>
+                                      {({
+                                        pending: 'Pending Review',
+                                        approved: 'Approved',
+                                        disapproved: 'Disapproved',
+                                        active: 'Active',
+                                        withdrawn: 'Withdrawn',
+                                        suspended: 'Suspended',
+                                        inactive: 'Inactive',
+                                      } as Record<string, string>)[inlineData.status || member.status] || 'Active'}
+                                    </span>
+                                    <ChevronDown
+                                      className={`w-3.5 h-3.5 text-primary dark:text-secondary transition-transform duration-200 ${
+                                        isInlineStatusOpen ? 'rotate-180' : 'rotate-0'
+                                      }`}
+                                    />
+                                  </button>
+
+                                  <div
+                                    className={`absolute left-0 right-0 mt-1 z-30 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 shadow-lg overflow-hidden origin-top transition-all duration-200 ease-out ${
+                                      isInlineStatusOpen
+                                        ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                                        : 'opacity-0 scale-95 -translate-y-1.5 pointer-events-none'
+                                    }`}
+                                  >
+                                    {[
+                                      { value: 'pending', label: 'Pending Review' },
+                                      { value: 'disapproved', label: 'Disapproved' },
+                                      { value: 'active', label: 'Active' },
+                                      { value: 'withdrawn', label: 'Withdrawn' },
+                                    ].map((opt) => {
+                                      const currentVal = inlineData.status || member.status;
+                                      const selected = currentVal === opt.value;
+                                      return (
+                                        <button
+                                          key={opt.value}
+                                          type="button"
+                                          onClick={() => {
+                                            setInlineData({ ...inlineData, status: opt.value });
+                                            setIsInlineStatusOpen(false);
+                                          }}
+                                          className={`w-full px-3 py-1.5 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                            selected
+                                              ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary'
+                                              : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                          }`}
+                                        >
+                                          <span>{opt.label}</span>
+                                          {selected && <Check className="w-3 h-3 shrink-0" />}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                                 {inlineError && <p className="text-[10px] text-tertiary font-semibold">{inlineError}</p>}
                                 <div className="flex items-center gap-1">
                                   <button
                                     type="button"
-                                    onClick={() => setEditingCell(null)}
+                                    onClick={() => {
+                                      setIsInlineStatusOpen(false);
+                                      setEditingCell(null);
+                                    }}
                                     className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
                                   >
                                     <X className="w-3.5 h-3.5" />
@@ -1157,7 +1315,10 @@ export default function MembersPage() {
                                   <button
                                     type="button"
                                     disabled={inlineSaving}
-                                    onClick={() => handleSaveInline(member.id, 'status')}
+                                    onClick={() => {
+                                      setIsInlineStatusOpen(false);
+                                      handleSaveInline(member.id, 'status');
+                                    }}
                                     className="p-1 bg-primary text-white rounded hover:opacity-90 disabled:opacity-50"
                                   >
                                     {inlineSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -1353,27 +1514,15 @@ export default function MembersPage() {
             )}
 
             <form onSubmit={handleAddMember} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Title (Optional)</label>
-                  <input
-                    type="text"
-                    value={titleInput}
-                    onChange={(e) => setTitleInput(e.target.value)}
-                    placeholder="e.g. Mr., Ms., Engr., Dr."
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">TIN (Taxpayer ID)</label>
-                  <input
-                    type="text"
-                    value={tinInput}
-                    onChange={(e) => setTinInput(e.target.value)}
-                    placeholder="000-000-000-000"
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Member ID</label>
+                <input
+                  type="text"
+                  value={memberNoInput}
+                  onChange={(e) => setMemberNoInput(e.target.value)}
+                  placeholder="e.g. 2026-326 (auto-generated if left blank)"
+                  className="w-full px-3.5 py-2.5 text-xs font-mono bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1401,156 +1550,158 @@ export default function MembersPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1.5 col-span-1">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Middle Name</label>
-                  <input
-                    type="text"
-                    value={middleName}
-                    onChange={(e) => setMiddleName(e.target.value)}
-                    placeholder="Optional"
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  />
-                </div>
-                <div className="space-y-1.5 col-span-1">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Age</label>
-                  <input
-                    type="number"
-                    min={18}
-                    max={120}
-                    value={ageInput}
-                    onChange={(e) => setAgeInput(e.target.value)}
-                    placeholder="e.g. 28"
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  />
-                </div>
-                <div className="space-y-1.5 col-span-1">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Date of Birth</label>
-                  <input
-                    type="date"
-                    value={dob}
-                    onChange={(e) => setDob(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Sex / Gender</label>
-                  <select
-                    value={genderInput}
-                    onChange={(e) => setGenderInput(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  >
-                    <option value="">Select Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Civil Status</label>
-                  <select
-                    value={civilStatusInput}
-                    onChange={(e) => setCivilStatusInput(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  >
-                    <option value="">Select Civil Status</option>
-                    <option value="Single">Single</option>
-                    <option value="Married">Married</option>
-                    <option value="Widowed">Widowed</option>
-                    <option value="Separated">Separated</option>
-                    <option value="Divorced">Divorced</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Email Address</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. jean@coop.org"
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Phone Number</label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g. 09123456789"
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  />
-                </div>
-              </div>
-
               <div className="space-y-1.5">
-                <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Home Address</label>
+                <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Middle Name (Optional)</label>
                 <input
                   type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Street details, City"
+                  value={middleName}
+                  onChange={(e) => setMiddleName(e.target.value)}
+                  placeholder="Optional"
                   className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+                {/* Animated Membership Type Dropdown */}
+                <div className="space-y-1.5" ref={membershipTypeDropdownRef}>
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Membership Type *</label>
-                  <select
-                    value={membershipTypeInput}
-                    onChange={(e: any) => setMembershipTypeInput(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white font-semibold"
-                  >
-                    <option value="Regular">Regular Member (Full Rights & Loans)</option>
-                    <option value="Associate">Associate Member (Non-Voting / Restricted)</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Initial Status</label>
-                  <select
-                    value={memberStatus}
-                    onChange={(e: any) => setMemberStatus(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white font-semibold"
-                  >
-                    <option value="pending">Pending Review</option>
-                    <option value="approved">Approved</option>
-                    <option value="disapproved">Disapproved</option>
-                    <option value="active">Active</option>
-                    <option value="suspended">Suspended</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-expanded={isMembershipTypeOpen}
+                      onClick={() => {
+                        setIsMembershipTypeOpen((prev) => !prev);
+                        setIsInitialStatusOpen(false);
+                      }}
+                      className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white font-semibold flex items-center justify-between gap-2 cursor-pointer"
+                    >
+                      <span className="truncate">
+                        {membershipTypeInput === 'Regular'
+                          ? 'Regular Member (Full Rights & Loans)'
+                          : 'Associate Member (Non-Voting / Restricted)'}
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-primary dark:text-secondary shrink-0 transition-transform duration-200 ${
+                          isMembershipTypeOpen ? 'rotate-180' : 'rotate-0'
+                        }`}
+                      />
+                    </button>
 
-              <div className="space-y-1.5">
-                <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Linked Login User ID (Optional)</label>
-                <input
-                  type="number"
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  placeholder="System User ID"
-                  className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                />
+                    <div
+                      className={`absolute left-0 right-0 mt-1.5 z-30 rounded-xl border border-outline-variant bg-white dark:bg-neutral-900 shadow-lg overflow-hidden origin-top transition-all duration-200 ease-out ${
+                        isMembershipTypeOpen
+                          ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                          : 'opacity-0 scale-95 -translate-y-1.5 pointer-events-none'
+                      }`}
+                    >
+                      {[
+                        { value: 'Regular' as const, label: 'Regular Member (Full Rights & Loans)' },
+                        { value: 'Associate' as const, label: 'Associate Member (Non-Voting / Restricted)' },
+                      ].map((opt) => {
+                        const selected = membershipTypeInput === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setMembershipTypeInput(opt.value);
+                              setIsMembershipTypeOpen(false);
+                            }}
+                            className={`w-full px-3.5 py-2.5 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                              selected
+                                ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary'
+                                : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                            }`}
+                          >
+                            <span>{opt.label}</span>
+                            {selected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Animated Initial Status Dropdown */}
+                <div className="space-y-1.5" ref={initialStatusDropdownRef}>
+                  <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Initial Status</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-expanded={isInitialStatusOpen}
+                      onClick={() => {
+                        setIsInitialStatusOpen((prev) => !prev);
+                        setIsMembershipTypeOpen(false);
+                      }}
+                      className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white font-semibold flex items-center justify-between gap-2 cursor-pointer"
+                    >
+                      <span className="truncate">
+                        {({
+                          pending: 'Pending Review',
+                          approved: 'Approved',
+                          disapproved: 'Disapproved',
+                          active: 'Active',
+                          withdrawn: 'Withdrawn',
+                        } as Record<string, string>)[memberStatus] || 'Active'}
+                      </span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-primary dark:text-secondary shrink-0 transition-transform duration-200 ${
+                          isInitialStatusOpen ? 'rotate-180' : 'rotate-0'
+                        }`}
+                      />
+                    </button>
+
+                    <div
+                      className={`absolute left-0 right-0 mt-1.5 z-30 rounded-xl border border-outline-variant bg-white dark:bg-neutral-900 shadow-lg overflow-hidden origin-top transition-all duration-200 ease-out max-h-56 overflow-y-auto ${
+                        isInitialStatusOpen
+                          ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                          : 'opacity-0 scale-95 -translate-y-1.5 pointer-events-none'
+                      }`}
+                    >
+                      {[
+                        { value: 'pending', label: 'Pending Review' },
+                        { value: 'approved', label: 'Approved' },
+                        { value: 'disapproved', label: 'Disapproved' },
+                        { value: 'active', label: 'Active' },
+                        { value: 'withdrawn', label: 'Withdrawn' },
+                      ].map((opt) => {
+                        const selected = memberStatus === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setMemberStatus(opt.value);
+                              setIsInitialStatusOpen(false);
+                            }}
+                            className={`w-full px-3.5 py-2 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                              selected
+                                ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary'
+                                : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                            }`}
+                          >
+                            <span>{opt.label}</span>
+                            {selected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="pt-4 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95"
+                  className="px-6 py-2.5 border border-outline-variant rounded-full text-xs font-bold hover:bg-neutral/5 text-neutral-600 dark:text-neutral-400 transition-all active:scale-95 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-60"
+                  className="px-6 py-2.5 bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full text-xs font-bold hover:shadow-lg transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
                 >
                   {submitting ? 'Saving Profile...' : 'Save Profile'}
                 </button>

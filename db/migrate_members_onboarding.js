@@ -28,11 +28,11 @@ export async function migrateMembersOnboarding() {
       await client.query(`ALTER TABLE members DROP CONSTRAINT IF EXISTS ${row.conname}`);
     }
 
-    // 3. Re-add status check constraint allowing pending, approved, disapproved, active, suspended, inactive
+    // 3. Re-add status check constraint allowing pending, approved, disapproved, active, withdrawn, suspended, inactive
     await client.query(`
       ALTER TABLE members 
       ADD CONSTRAINT members_status_check 
-      CHECK (status IN ('active', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'))
+      CHECK (status IN ('active', 'withdrawn', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'))
     `);
 
     // 4. Backfill existing active member accounts so legacy users are marked approved & completed
