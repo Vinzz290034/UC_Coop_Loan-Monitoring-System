@@ -48,13 +48,16 @@ export const getDashboardSummary = async (req, res, next) => {
         -- Investment totals
         (SELECT COALESCE(SUM(current_balance), 0) FROM investments WHERE status = 'active') as total_active_investments,
 
-        -- Repayment totals
-        (SELECT COALESCE(SUM(amount), 0) FROM loan_payments) as total_repayments_collected,
+        -- Repayment totals (include historical repayments recorded in repayment_schedules as well as loan_payments)
+        GREATEST(
+          (SELECT COALESCE(SUM(principal_paid + interest_paid), 0) FROM repayment_schedules),
+          (SELECT COALESCE(SUM(amount), 0) FROM loan_payments)
+        ) as total_repayments_collected,
         (SELECT COALESCE(SUM(interest_paid), 0) FROM repayment_schedules) as total_interest_earned,
 
-        -- Outstanding balance (total remaining unpaid balance)
+        -- Outstanding balance (sum remaining unpaid balance per active installment, avoiding negative offsets)
         COALESCE(
-          (SELECT SUM(rs.total_due - (rs.principal_paid + rs.interest_paid)) 
+          (SELECT SUM(GREATEST(0, rs.total_due - (rs.principal_paid + rs.interest_paid))) 
            FROM repayment_schedules rs 
            JOIN loans l ON rs.loan_id = l.id 
            WHERE l.status IN ('disbursed', 'approved', 'active', 'defaulted')),
