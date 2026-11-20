@@ -3674,16 +3674,11 @@ function LoansPageContent() {
             <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm">
               <div className="w-full lg:w-auto flex-1 max-w-md">
                 <SearchInput
-                  key={loansSearch}
                   placeholder={isAdminOrManager ? "Search by LAF No., borrower, product, contract ID..." : "Search by LAF No., product, or contract ID..."}
                   defaultValue={loansSearch}
                   onSearch={(val) => {
-                    setLoansSearch((prev) => {
-                      if (prev !== val) {
-                        setLoansPage(1);
-                      }
-                      return val;
-                    });
+                    setLoansSearch(val);
+                    setLoansPage(1);
                   }}
                 />
               </div>

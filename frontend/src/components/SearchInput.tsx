@@ -27,6 +27,13 @@ export default function SearchInput({
   }, [onSearch]);
 
   useEffect(() => {
+    if (defaultValue !== prevValueRef.current) {
+      prevValueRef.current = defaultValue;
+      setValue(defaultValue);
+    }
+  }, [defaultValue]);
+
+  useEffect(() => {
     if (prevValueRef.current === value) return;
 
     const handler = setTimeout(() => {
