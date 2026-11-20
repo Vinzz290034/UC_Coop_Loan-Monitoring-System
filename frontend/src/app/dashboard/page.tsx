@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -95,22 +95,107 @@ const getStatusBadge = (status: string) => {
           Disapproved
         </span>
       );
+    case 'withdrawn':
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap">
+          <AlertTriangle className="w-3 h-3" />
+          Withdrawn
+        </span>
+      );
     case 'suspended':
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-tertiary/10 text-tertiary">
-          <AlertTriangle className="w-3.5 h-3.5" />
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary whitespace-nowrap">
+          <AlertTriangle className="w-3 h-3" />
           Suspended
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral/15 text-neutral-600 dark:text-neutral-400">
-          <X className="w-3.5 h-3.5" />
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-neutral/15 text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
+          <X className="w-3 h-3" />
           Inactive
         </span>
       );
   }
 };
+
+function AnimatedSortDropdown({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
+
+  const currentLabel = options.find((o) => o.value === value)?.label || 'Default View';
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex items-center gap-1.5 text-xs font-bold text-on-surface dark:text-white cursor-pointer focus:outline-none"
+      >
+        <span>{currentLabel}</span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-primary dark:text-secondary transition-transform duration-200 ${
+            open ? 'rotate-180' : 'rotate-0'
+          }`}
+        />
+      </button>
+
+      <div
+        className={`absolute left-0 mt-2.5 w-56 z-40 rounded-2xl border border-outline-variant/60 bg-white dark:bg-neutral-900 shadow-xl overflow-hidden origin-top transition-all duration-200 ease-out max-h-72 overflow-y-auto ${
+          open
+            ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 scale-95 -translate-y-1.5 pointer-events-none'
+        }`}
+      >
+        {options.map((opt) => {
+          const selected = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className={`w-full px-3.5 py-2 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                selected
+                  ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary'
+                  : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              }`}
+            >
+              <span>{opt.label}</span>
+              {selected && <Check className="w-3.5 h-3.5 shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const getLoanStatusBadge = (status: string) => {
   switch (status) {
@@ -419,6 +504,7 @@ export default function OverviewPage() {
 
   // Member Financial Overview sorting, search & expanded modal state
   const [memberSortBy, setMemberSortBy] = useState<string>('default');
+  const [memberOverviewPage, setMemberOverviewPage] = useState<number>(1);
   const [modalMembersSearch, setModalMembersSearch] = useState<string>('');
   const [isExpandedMembersModalOpen, setIsExpandedMembersModalOpen] = useState<boolean>(false);
   const [isExportingPDF, setIsExportingPDF] = useState<boolean>(false);
@@ -670,27 +756,28 @@ export default function OverviewPage() {
     return membersList.map((m: any) => (
       <tr key={m.id} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40 transition-colors">
         {/* Member Profile */}
-        <td className="px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-bold flex items-center justify-center text-xs flex-shrink-0">
+        <td className="px-3 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-full bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary font-bold flex items-center justify-center text-[11px] flex-shrink-0">
               {m.first_name?.[0] || 'M'}{m.last_name?.[0] || ''}
             </div>
-            <div>
+            <div className="min-w-0">
               <Link
                 href={`/dashboard/members/${m.id}`}
-                className="font-bold text-on-surface dark:text-white hover:text-primary dark:hover:text-secondary block"
+                className="font-bold text-on-surface dark:text-white hover:text-primary dark:hover:text-secondary block truncate max-w-[135px]"
+                title={`${m.last_name}, ${m.first_name} ${m.middle_name || ''}`}
               >
                 {m.last_name}, {m.first_name} {m.middle_name ? `${m.middle_name[0]}.` : ''}
               </Link>
-              <span className="text-[10px] text-primary dark:text-secondary font-mono font-bold block truncate max-w-[140px]" title={`Member ID: ${m.member_no || 'N/A'}`}>
-                Member ID: {m.member_no || 'N/A'}
+              <span className="text-[10px] text-primary dark:text-secondary font-mono font-bold block truncate max-w-[135px]" title={`Member ID: ${m.member_no || 'N/A'}`}>
+                {m.member_no || 'N/A'}
               </span>
             </div>
           </div>
         </td>
 
         {/* Account Balance (Share Capital - Editable) */}
-        <td className="px-4 py-3.5 text-right font-extrabold text-primary dark:text-secondary font-mono group/edit">
+        <td className="px-2.5 py-3 text-right font-extrabold text-primary dark:text-secondary font-mono group/edit whitespace-nowrap">
           {editingCell?.memberId === m.id && editingCell?.field === 'share_capital_balance' ? (
             <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-end gap-1.5">
@@ -745,7 +832,7 @@ export default function OverviewPage() {
         </td>
 
         {/* Member Status (Editable) */}
-        <td className="px-4 py-3.5 text-center whitespace-nowrap group/edit">
+        <td className="px-2.5 py-3 text-center whitespace-nowrap group/edit">
           {editingCell?.memberId === m.id && editingCell?.field === 'status' ? (
             <div className="flex flex-col items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-center gap-1.5">
@@ -756,12 +843,10 @@ export default function OverviewPage() {
                   disabled={inlineSaving}
                   autoFocus
                 >
-                  <option value="active">Active</option>
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="suspended">Suspended</option>
-                  <option value="inactive">Inactive</option>
+                  <option value="pending">Pending Review</option>
                   <option value="disapproved">Disapproved</option>
+                  <option value="active">Active</option>
+                  <option value="withdrawn">Withdrawn</option>
                 </select>
                 <button
                   onClick={() => handleSaveInlineFinancial(m.id, 'status')}
@@ -804,18 +889,18 @@ export default function OverviewPage() {
         </td>
 
         {/* Loan Amount */}
-        <td className="px-4 py-3.5 text-right font-extrabold text-on-surface dark:text-white font-mono">
+        <td className="px-2.5 py-3 text-right font-extrabold text-on-surface dark:text-white font-mono whitespace-nowrap">
           {formatCurrency(parseFloat(m.total_loans_taken || 0))}
         </td>
 
         {/* Loan Product (Supports Multiple Loans) */}
-        <td className="px-4 py-3.5 text-center whitespace-nowrap">
+        <td className="px-2.5 py-3 text-center">
           {m.member_loans && m.member_loans.length > 0 ? (
-            <div className="flex flex-col gap-1 items-start">
+            <div className="flex flex-col gap-1 items-center">
               {m.member_loans.map((loan: any, idx: number) => (
                 <span
                   key={loan.loan_id || idx}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-on-surface dark:text-white border border-outline-variant/40 max-w-[170px] truncate"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-on-surface dark:text-white border border-outline-variant/40 max-w-[125px] truncate"
                   title={loan.product_name}
                 >
                   <FileSpreadsheet className="w-3 h-3 text-primary dark:text-secondary flex-shrink-0" />
@@ -824,12 +909,12 @@ export default function OverviewPage() {
               ))}
             </div>
           ) : (
-            <span className="text-neutral-400 text-xs italic">N/A</span>
+            <span className="text-neutral-400 text-[11px] italic">N/A</span>
           )}
         </td>
 
         {/* Loan Status (Supports Multiple Loan Statuses) */}
-        <td className="px-4 py-3.5 text-center whitespace-nowrap">
+        <td className="px-2 py-3 text-center whitespace-nowrap">
           {m.member_loans && m.member_loans.length > 0 ? (
             <div className="flex flex-col gap-1 items-center justify-center">
               {m.member_loans.map((loan: any, idx: number) => (
@@ -843,11 +928,11 @@ export default function OverviewPage() {
           )}
         </td>
 
-        {/* Actions - Vertically Stacked Controls */}
-        <td className="px-5 py-3.5 text-right whitespace-nowrap">
-          <div className="flex flex-col gap-1.5 items-end justify-center min-w-[100px] max-w-[110px] ml-auto">
+        {/* Actions */}
+        <td className="px-2.5 py-3 text-right whitespace-nowrap">
+          <div className="flex flex-col gap-1 items-end justify-center w-[88px] ml-auto">
             {m.status === 'pending' && (
-              <>
+              <div className="flex items-center gap-1 w-full">
                 {/* Accept/Approve Action Button */}
                 <button
                   onClick={async () => {
@@ -858,11 +943,10 @@ export default function OverviewPage() {
                       alert(err.response?.data?.error?.message || 'Failed to approve profile.');
                     }
                   }}
-                  className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all border border-emerald-500/20 cursor-pointer shadow-2xs"
+                  className="inline-flex items-center justify-center flex-1 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold transition-all border border-emerald-500/20 cursor-pointer shadow-2xs"
                   title="Approve Member Profile"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>Approve</span>
                 </button>
 
                 {/* Reject Action Button */}
@@ -875,22 +959,21 @@ export default function OverviewPage() {
                       alert(err.response?.data?.error?.message || 'Failed to disapprove profile.');
                     }
                   }}
-                  className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20 cursor-pointer shadow-2xs"
+                  className="inline-flex items-center justify-center flex-1 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-[11px] font-bold transition-all border border-red-500/20 cursor-pointer shadow-2xs"
                   title="Disapprove Member Profile"
                 >
                   <X className="w-3.5 h-3.5" />
-                  <span>Reject</span>
                 </button>
-              </>
+              </div>
             )}
 
             {/* View Profile Action Link */}
             <Link
               href={`/dashboard/members/${m.id}`}
-              className="inline-flex items-center justify-center gap-1.5 w-full px-2.5 py-1.5 mt-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-xs font-bold transition-all active:scale-95 shadow-2xs text-center"
+              className="inline-flex items-center justify-center gap-1 w-full px-2 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 dark:bg-secondary/10 dark:hover:bg-secondary/20 text-primary dark:text-secondary text-[11px] font-bold transition-all active:scale-95 shadow-2xs text-center"
             >
-              <Eye className="w-3.5 h-3.5" />
-              <span>View Profile</span>
+              <Eye className="w-3 h-3" />
+              <span>View</span>
             </Link>
           </div>
         </td>
@@ -3814,51 +3897,51 @@ export default function OverviewPage() {
                 </div>
               </button>
 
-              {/* Pending Approval */}
+              {/* Fully Paid Loans */}
               <button
                 type="button"
-                onClick={() => router.push('/dashboard/loans?status=pending_approval')}
-                className="p-4 sm:p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs hover:shadow-md hover:border-amber-500/50 transition-all cursor-pointer text-left w-full h-full min-h-[128px] flex flex-col justify-between group active:scale-98 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                title="Click to view Pending Approval Loans"
+                onClick={() => router.push('/dashboard/loans?status=fully_paid')}
+                className="p-4 sm:p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs hover:shadow-md hover:border-emerald-500/50 transition-all cursor-pointer text-left w-full h-full min-h-[128px] flex flex-col justify-between group active:scale-98 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                title="Click to view Fully Paid Loans"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform flex-shrink-0" />
-                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label">Pending Approval</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform flex-shrink-0" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label">Fully Paid Loans</span>
                   </div>
                   <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                 </div>
                 <div className="my-auto py-1">
-                  <div className={`font-headline text-xl sm:text-2xl font-extrabold tabular-nums ${(ds.pending_loans || 0) > 0 ? 'text-amber-500' : 'text-on-surface dark:text-white'}`}>
-                    {ds.pending_loans || 0}
+                  <div className="font-headline text-xl sm:text-2xl font-extrabold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    {ds.fully_paid_loans || 0}
                   </div>
                 </div>
-                <div className={`flex items-center gap-1.5 mt-auto pt-1.5 text-[10px] ${(ds.pending_loans || 0) > 0 ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-neutral-500 dark:text-neutral-400 font-medium'}`}>
-                  <span>{(ds.pending_loans || 0) > 0 ? 'Action required' : 'Queue cleared'}</span>
+                <div className="flex items-center gap-1.5 mt-auto pt-1.5 text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">
+                  <span>Settled &amp; completed contracts</span>
                 </div>
               </button>
 
-              {/* Defaulted */}
+              {/* Total Loan Contracts */}
               <button
                 type="button"
-                onClick={() => router.push('/dashboard/loans?status=defaulted')}
-                className="p-4 sm:p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs hover:shadow-md hover:border-red-500/50 transition-all cursor-pointer text-left w-full h-full min-h-[128px] flex flex-col justify-between group active:scale-98 focus:outline-none focus:ring-2 focus:ring-red-500/20"
-                title="Click to view Defaulted Loans"
+                onClick={() => router.push('/dashboard/loans')}
+                className="p-4 sm:p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-xs hover:shadow-md hover:border-blue-500/50 transition-all cursor-pointer text-left w-full h-full min-h-[128px] flex flex-col justify-between group active:scale-98 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                title="Click to view All Loan Contracts"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform flex-shrink-0" />
-                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label">Defaulted</span>
+                    <FileCheck className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform flex-shrink-0" />
+                    <span className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider font-label">Total Loan Contracts</span>
                   </div>
                   <ArrowRight className="w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                 </div>
                 <div className="my-auto py-1">
-                  <div className={`font-headline text-xl sm:text-2xl font-extrabold tabular-nums ${(ds.defaulted_loans || 0) > 0 ? 'text-red-500' : 'text-on-surface dark:text-white'}`}>
-                    {ds.defaulted_loans || 0}
+                  <div className="font-headline text-xl sm:text-2xl font-extrabold tabular-nums text-on-surface dark:text-white">
+                    {ds.total_loans || 0}
                   </div>
                 </div>
-                <div className={`flex items-center gap-1.5 mt-auto pt-1.5 text-[10px] ${(ds.defaulted_loans || 0) > 0 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-neutral-500 dark:text-neutral-400 font-medium'}`}>
-                  <span>{(ds.defaulted_loans || 0) > 0 ? 'Risk exposure' : 'Zero delinquencies'}</span>
+                <div className="flex items-center gap-1.5 mt-auto pt-1.5 text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
+                  <span>All recorded loan agreements</span>
                 </div>
               </button>
             </div>
@@ -3883,24 +3966,26 @@ export default function OverviewPage() {
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800 border border-outline-variant/50 text-xs font-semibold text-neutral-700 dark:text-neutral-300 shadow-2xs">
                   <ArrowUpDown className="w-3.5 h-3.5 text-primary dark:text-secondary flex-shrink-0" />
                   <span className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400">Sort:</span>
-                  <select
+                  <AnimatedSortDropdown
                     value={memberSortBy}
-                    onChange={(e) => setMemberSortBy(e.target.value)}
-                    className="bg-transparent border-none outline-none text-xs font-bold text-on-surface dark:text-white cursor-pointer pr-1"
-                    title="Sort Member Financial Overview"
-                  >
-                    <option value="default">Default View</option>
-                    <option value="member_id_asc">Member ID (Low to High)</option>
-                    <option value="member_id_desc">Member ID (High to Low)</option>
-                    <option value="name_asc">Last Name (A–Z)</option>
-                    <option value="name_desc">Last Name (Z–A)</option>
-                    <option value="loan_amount_desc">Loan Amount (High to Low)</option>
-                    <option value="loan_amount_asc">Loan Amount (Low to High)</option>
-                    <option value="balance_desc">Balance (High to Low)</option>
-                    <option value="balance_asc">Balance (Low to High)</option>
-                    <option value="status_pending">Status (Pending First)</option>
-                    <option value="status_active">Status (Active First)</option>
-                  </select>
+                    onChange={(val) => {
+                      setMemberSortBy(val);
+                      setMemberOverviewPage(1);
+                    }}
+                    options={[
+                      { value: 'default', label: 'Default View' },
+                      { value: 'member_id_asc', label: 'Member ID (Low to High)' },
+                      { value: 'member_id_desc', label: 'Member ID (High to Low)' },
+                      { value: 'name_asc', label: 'Last Name (A–Z)' },
+                      { value: 'name_desc', label: 'Last Name (Z–A)' },
+                      { value: 'loan_amount_desc', label: 'Loan Amount (High to Low)' },
+                      { value: 'loan_amount_asc', label: 'Loan Amount (Low to High)' },
+                      { value: 'balance_desc', label: 'Balance (High to Low)' },
+                      { value: 'balance_asc', label: 'Balance (Low to High)' },
+                      { value: 'status_pending', label: 'Status (Pending First)' },
+                      { value: 'status_active', label: 'Status (Active First)' },
+                    ]}
+                  />
                 </div>
 
                 {/* View Full Table Link (Far Right) */}
@@ -3927,42 +4012,79 @@ export default function OverviewPage() {
               </div>
             )}
 
-            <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm flex flex-col p-1.5">
-              {/* Scrollable Container with Integrated End-Arrow Stepper Scrollbars (vertical scroll triggers when entries exceed 8) */}
-              <div className={`overflow-x-auto custom-scrollbar ${sortedAdminMembers.length > 8 ? 'max-h-[640px] overflow-y-auto' : 'overflow-y-visible'}`}>
-                <table className="w-full text-left border-collapse min-w-[920px]">
-                  <thead className="sticky top-0 z-10 bg-neutral-50/95 dark:bg-neutral-800/95 backdrop-blur-xs border-b border-outline-variant/50">
-                    <tr className="text-[11px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                      <th className="px-5 py-3.5">Member Profile</th>
-                      <th className="px-4 py-3.5 text-center">Account Balance</th>
-                      <th className="px-4 py-3.5 text-center">Member Status</th>
-                      <th className="px-4 py-3.5 text-center">Loan Amount</th>
-                      <th className="px-4 py-3.5 text-center">Loan Product</th>
-                      <th className="px-4 py-3.5 text-center">Loan Status</th>
-                      <th className="px-5 py-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
-                    {renderMemberFinancialTableRows(sortedAdminMembers)}
-                  </tbody>
-                </table>
-              </div>
+            {(() => {
+              const OVERVIEW_PAGE_SIZE = 6;
+              const totalMembersCount = sortedAdminMembers.length;
+              const totalOverviewPages = Math.max(1, Math.ceil(totalMembersCount / OVERVIEW_PAGE_SIZE));
+              const safePage = Math.min(memberOverviewPage, totalOverviewPages);
+              const startIdx = (safePage - 1) * OVERVIEW_PAGE_SIZE;
+              const paginatedMembers = sortedAdminMembers.slice(startIdx, startIdx + OVERVIEW_PAGE_SIZE);
 
-              {/* Table Footer with Summary & Expand All List Action */}
-              {adminMembersList.length > 5 && (
-                <div className="px-5 py-2.5 bg-neutral-50/90 dark:bg-neutral-800/90 border-t border-outline-variant/40 text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
-                  <span>Showing {Math.min(sortedAdminMembers.length, 5)} visible of {adminMembersList.length} total members</span>
-                  <button
-                    onClick={() => setIsExpandedMembersModalOpen(true)}
-                    className="text-primary dark:text-secondary flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-extrabold hover:underline cursor-pointer transition-colors"
-                    title="Open Expanded Roster Modal"
-                  >
-                    <Maximize2 className="w-3.5 h-3.5" />
-                    <span>Expand All List</span>
-                  </button>
+              return (
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm flex flex-col p-1.5">
+                  <div className="w-full overflow-visible">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-neutral-50/95 dark:bg-neutral-800/95 border-b border-outline-variant/50">
+                        <tr className="text-[10px] font-headline font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                          <th className="px-3 py-3">Member Profile</th>
+                          <th className="px-2.5 py-3 text-right">Balance</th>
+                          <th className="px-2.5 py-3 text-center">Member Status</th>
+                          <th className="px-2.5 py-3 text-right">Loan Amt</th>
+                          <th className="px-2.5 py-3 text-center">Loan Product</th>
+                          <th className="px-2.5 py-3 text-center">Loan Status</th>
+                          <th className="px-2.5 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
+                        {renderMemberFinancialTableRows(paginatedMembers)}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Table Footer with Pagination & Expand All List Action */}
+                  {totalMembersCount > 0 && (
+                    <div className="px-4 py-2.5 bg-neutral-50/90 dark:bg-neutral-800/90 border-t border-outline-variant/40 text-[11px] font-bold text-neutral-500 dark:text-neutral-400 flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        Showing {startIdx + 1}–{Math.min(startIdx + OVERVIEW_PAGE_SIZE, totalMembersCount)} of {totalMembersCount} members
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {totalOverviewPages > 1 && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={safePage === 1}
+                              onClick={() => setMemberOverviewPage((p) => Math.max(1, p - 1))}
+                              className="px-2.5 py-1 rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-900 text-[11px] font-bold disabled:opacity-40 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                            >
+                              Prev
+                            </button>
+                            <span className="px-2 font-mono text-[11px] text-on-surface dark:text-white">
+                              {safePage} / {totalOverviewPages}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={safePage === totalOverviewPages}
+                              onClick={() => setMemberOverviewPage((p) => Math.min(totalOverviewPages, p + 1))}
+                              className="px-2.5 py-1 rounded-lg border border-outline-variant/60 bg-white dark:bg-neutral-900 text-[11px] font-bold disabled:opacity-40 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                            >
+                              Next
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => setIsExpandedMembersModalOpen(true)}
+                          className="text-primary dark:text-secondary flex items-center gap-1 text-[11px] uppercase tracking-wider font-extrabold hover:underline cursor-pointer transition-colors ml-1"
+                          title="Open Expanded Roster Modal"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>Expand All</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })()}
           </div>
 
           {/* Financial Assets */}
