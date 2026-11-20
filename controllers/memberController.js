@@ -146,6 +146,97 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
       );
     }
 
+    // One-time safe migration: restore Noemi Filomeno (2025-267) LAF 26-230 active balance (₱7,403.33 principal) and missing ₱30,000 Share Capital deposit
+    const filomenoMig = await query(
+      `INSERT INTO system_one_time_migrations (name)
+       VALUES ('fix_filomeno_26_230_and_sc_20261120')
+       ON CONFLICT (name) DO NOTHING
+       RETURNING name`
+    );
+    if (filomenoMig.rowCount > 0) {
+      const fClient = await pool.connect();
+      try {
+        await fClient.query('BEGIN');
+        const memRes = await fClient.query(`SELECT id FROM members WHERE member_no = '2025-267' LIMIT 1`);
+        if (memRes.rowCount > 0) {
+          const mid = memRes.rows[0].id;
+          // 1. Fix LAF 26-230 (45,000, 6 terms, 11/28/2026 installment has ₱7,403.33 remaining principal)
+          const loanRes = await fClient.query(
+            `SELECT id FROM loans WHERE member_id = $1 AND laf_no = '26-230' LIMIT 1`,
+            [mid]
+          );
+          if (loanRes.rowCount > 0) {
+            const lid = loanRes.rows[0].id;
+            await fClient.query(`UPDATE loans SET status = 'disbursed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [lid]);
+            // Remove duplicate 0-interest extra schedule rows if 8 rows exist
+            const schedRes = await fClient.query(
+              `SELECT id, installment_number, interest_due FROM repayment_schedules WHERE loan_id = $1 ORDER BY installment_number ASC`,
+              [lid]
+            );
+            if (schedRes.rowCount > 6) {
+              const zeroIntIds = schedRes.rows.filter(r => parseFloat(r.interest_due) === 0).map(r => r.id);
+              if (zeroIntIds.length > 0) {
+                await fClient.query(`DELETE FROM loan_payment_allocations WHERE repayment_schedule_id = ANY($1::uuid[])`, [zeroIntIds]);
+                await fClient.query(`DELETE FROM repayment_schedules WHERE id = ANY($1::uuid[])`, [zeroIntIds]);
+              }
+            }
+            // Renumber remaining 6 schedules cleanly 1..6 and set #6 (11/28/2026) to partially_paid with ₱96.67 principal paid & ₱121.66 interest paid
+            const remSched = await fClient.query(
+              `SELECT id FROM repayment_schedules WHERE loan_id = $1 ORDER BY due_date ASC, installment_number ASC`,
+              [lid]
+            );
+            for (let i = 0; i < remSched.rows.length; i++) {
+              const sid = remSched.rows[i].id;
+              if (i === remSched.rows.length - 1) {
+                await fClient.query(
+                  `UPDATE repayment_schedules
+                   SET installment_number = $1,
+                       principal_due = 7500.00,
+                       interest_due = 155.00,
+                       total_due = 7655.00,
+                       principal_paid = 96.67,
+                       interest_paid = 121.66,
+                       status = 'partially_paid',
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = $2`,
+                  [i + 1, sid]
+                );
+              } else {
+                await fClient.query(
+                  `UPDATE repayment_schedules SET installment_number = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+                  [i + 1, sid]
+                );
+              }
+            }
+          }
+
+          // 2. Add missing ₱30,000.00 Share Capital credit from Row 30 (6/10/2026) if not already recorded
+          const scExist = await fClient.query(
+            `SELECT id FROM share_capital_transactions WHERE member_id = $1 AND amount = 30000.00 LIMIT 1`,
+            [mid]
+          );
+          if (scExist.rowCount === 0) {
+            const lastBalRes = await fClient.query(
+              `SELECT COALESCE(balance_after, 0) AS bal FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC, id DESC LIMIT 1`,
+              [mid]
+            );
+            const prevBal = lastBalRes.rowCount > 0 ? parseFloat(lastBalRes.rows[0].bal) : 0;
+            await fClient.query(
+              `INSERT INTO share_capital_transactions (member_id, transaction_type, amount, balance_after, transaction_date, remarks, status)
+               VALUES ($1, 'credit', 30000.00, $2, '2026-06-10', 'Imported Share Capital deposit (Excel Row 30)', 'completed')`,
+              [mid, prevBal + 30000.00]
+            );
+          }
+        }
+        await fClient.query('COMMIT');
+      } catch (fErr) {
+        await fClient.query('ROLLBACK');
+        console.error('Filomeno fix migration error:', fErr);
+      } finally {
+        fClient.release();
+      }
+    }
+
     // Auto-provision login accounts for any existing members who do not have a linked user account yet
     const unlinkedRes = await query(
       `SELECT id, first_name, last_name

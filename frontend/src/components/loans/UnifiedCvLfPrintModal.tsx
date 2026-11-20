@@ -287,13 +287,16 @@ function getCategoryForAccount(acct: string): string {
   if (!trimmed) return 'Operation';
   const lower = trimmed.toLowerCase();
 
-  // 1. Check localStorage cache if available
+  // 1. Check localStorage cache if available (only cooperative fund categories, not broad COA types like Assets/Expenses)
   if (typeof window !== 'undefined') {
     try {
       const saved = localStorage.getItem('rf_account_categories');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed[lower]) return parsed[lower];
+        const cached = parsed[lower];
+        if (cached && ['operation', 'merchandise', 'service', 'petty cash loan', 'petty cash', 'revolving fund', 'cetf', 'cdf', 'honorarium', 'allowances', 'wages'].includes(String(cached).trim().toLowerCase())) {
+          return cached === 'Petty Cash' ? 'Petty Cash Loan' : cached;
+        }
       }
     } catch {
       // ignore

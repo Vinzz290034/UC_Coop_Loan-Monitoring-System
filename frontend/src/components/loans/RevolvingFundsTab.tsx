@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import api from '@/lib/api';
 import UnifiedCvLfPrintModal from '@/components/loans/UnifiedCvLfPrintModal';
-import { dedupeAccountOptions } from '@/lib/accountCategories';
+import { dedupeAccountOptions, isCooperativeFundCategory } from '@/lib/accountCategories';
 import {
   FileSpreadsheet,
   Search,
@@ -337,6 +337,15 @@ export default function RevolvingFundsTab({
         api.get('/revolving-funds/accounts').catch(() => null)
       ]);
 
+      const serverCatMap: Record<string, string> = {};
+      if (res?.data?.success && Array.isArray(res.data.data)) {
+        for (const item of res.data.data) {
+          const name = typeof item === 'string' ? item : item.name;
+          const cat = typeof item === 'string' ? '' : item.category;
+          if (name && cat) serverCatMap[name.toLowerCase()] = cat;
+        }
+      }
+
       const importedCoa = coaRes?.data?.success && Array.isArray(coaRes.data.accounts)
         ? coaRes.data.accounts
         : [];
@@ -347,14 +356,14 @@ export default function RevolvingFundsTab({
         const seen = new Set<string>();
         for (const row of importedCoa) {
           const title = String(row.account_title || '').trim();
-          const typeLabel = String(row.account_type || 'Other').trim() || 'Other';
           if (!title) continue;
           const key = title.toLowerCase();
           if (!seen.has(key)) {
             seen.add(key);
             coaNames.push(title);
           }
-          coaCatMap[key] = typeLabel;
+          const savedCat = serverCatMap[key];
+          coaCatMap[key] = isCooperativeFundCategory(savedCat) ? savedCat : getCategoryForAccount(title);
         }
         setAccountOptions(coaNames);
         setAccountCategoryMap(coaCatMap);

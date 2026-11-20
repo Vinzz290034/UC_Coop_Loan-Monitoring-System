@@ -284,6 +284,25 @@ export function normalizeAccountName(rawName: string): string {
     .join(' ');
 }
 
+export const FUND_CATEGORY_SET = new Set([
+  'operation',
+  'merchandise',
+  'service',
+  'petty cash loan',
+  'petty cash',
+  'revolving fund',
+  'cetf',
+  'cdf',
+  'honorarium',
+  'allowances',
+  'wages',
+]);
+
+export function isCooperativeFundCategory(cat?: string): boolean {
+  if (!cat) return false;
+  return FUND_CATEGORY_SET.has(String(cat).trim().toLowerCase());
+}
+
 export const getCategoryForAccount = (acct: string, categoryMap?: Record<string, string>): string => {
   const trimmed = (acct || '').trim();
   if (!trimmed) return 'Operation';
@@ -301,18 +320,20 @@ export const getCategoryForAccount = (acct: string, categoryMap?: Record<string,
     return 'Petty Cash Loan';
   }
 
-  // 1. Check explicitly passed category map
-  if (categoryMap && categoryMap[lower]) {
+  // 1. Check explicitly passed category map (only cooperative fund categories, never broad COA types like Assets/Expenses)
+  if (categoryMap && categoryMap[lower] && isCooperativeFundCategory(categoryMap[lower])) {
     return categoryMap[lower] === 'Petty Cash' ? 'Petty Cash Loan' : categoryMap[lower];
   }
 
-  // 2. Check localStorage cache
+  // 2. Check localStorage cache (only cooperative fund categories)
   if (typeof window !== 'undefined') {
     try {
       const saved = localStorage.getItem('rf_account_categories');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed[lower]) return parsed[lower] === 'Petty Cash' ? 'Petty Cash Loan' : parsed[lower];
+        if (parsed[lower] && isCooperativeFundCategory(parsed[lower])) {
+          return parsed[lower] === 'Petty Cash' ? 'Petty Cash Loan' : parsed[lower];
+        }
       }
     } catch {
       // ignore
