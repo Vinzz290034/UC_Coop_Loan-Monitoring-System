@@ -123,6 +123,29 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
       }
     }
 
+    // One-time safe migration: unlink official cooperative member profiles from staff/admin logins
+    // so they receive a dedicated 'member' login account while keeping the staff/admin account separate
+    const staffMemberMig = await query(
+      `INSERT INTO system_one_time_migrations (name)
+       VALUES ('provision_member_account_for_staff_members_20261120')
+       ON CONFLICT (name) DO NOTHING
+       RETURNING name`
+    );
+    if (staffMemberMig.rowCount > 0) {
+      await query(
+        `UPDATE members m
+         SET user_id = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         FROM users u
+         WHERE m.user_id = u.id
+           AND u.role IN ('staff', 'admin')
+           AND m.member_no IS NOT NULL
+           AND TRIM(m.member_no) != ''
+           AND m.member_no NOT LIKE 'ADM-%'
+           AND m.member_no NOT LIKE 'STF-%'`
+      );
+    }
+
     // Auto-provision login accounts for any existing members who do not have a linked user account yet
     const unlinkedRes = await query(
       `SELECT id, first_name, last_name
