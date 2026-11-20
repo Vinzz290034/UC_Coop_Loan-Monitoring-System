@@ -722,18 +722,22 @@ const getCategoryForAccount = (acct: string, categoryMap?: Record<string, string
     return 'Petty Cash Loan';
   }
 
-  // 1. Check explicitly passed category map
-  if (categoryMap && categoryMap[lower]) {
+  const isFundCat = (c?: string) => Boolean(c && ACCOUNT_CATEGORIES.some(ac => ac.value.toLowerCase() === String(c).trim().toLowerCase() || String(c).trim().toLowerCase() === 'petty cash'));
+
+  // 1. Check explicitly passed category map (only cooperative fund categories, not COA types like Expense/Asset)
+  if (categoryMap && categoryMap[lower] && isFundCat(categoryMap[lower])) {
     return categoryMap[lower] === 'Petty Cash' ? 'Petty Cash Loan' : categoryMap[lower];
   }
 
-  // 2. Check localStorage cache
+  // 2. Check localStorage cache (only cooperative fund categories)
   if (typeof window !== 'undefined') {
     try {
       const saved = localStorage.getItem('rf_account_categories');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed[lower]) return parsed[lower] === 'Petty Cash' ? 'Petty Cash Loan' : parsed[lower];
+        if (parsed[lower] && isFundCat(parsed[lower])) {
+          return parsed[lower] === 'Petty Cash' ? 'Petty Cash Loan' : parsed[lower];
+        }
       }
     } catch {
       // ignore
@@ -5458,14 +5462,6 @@ function DisbursementPageContent() {
                                           className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-xs font-bold text-emerald-900 dark:text-emerald-200 italic"
                                           placeholder="Credit Account (e.g. CIB-MBTC)"
                                         />
-                                      ) : replenishType === 'stl' ? (
-                                        <input
-                                          type="text"
-                                          value={row.description}
-                                          onChange={e => updateCvRowField(false, row.id!, 'description', e.target.value, replenishType)}
-                                          className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                                          placeholder="Book of Accounts"
-                                        />
                                       ) : (
                                         <ReplenishmentAccountDropdown
                                           value={row.description}
@@ -5477,6 +5473,7 @@ function DisbursementPageContent() {
                                           disbursementCategory={newCvCategory}
                                           onAddAccount={handleAddCustomAccount}
                                           onDeleteAccount={handleDeleteCustomAccount}
+                                          placeholder="Book of Accounts"
                                         />
                                       )}
                                     </div>
@@ -5644,27 +5641,17 @@ function DisbursementPageContent() {
                                     />
                                   </div>
                                   <div>
-                                    {row.is_credit || checkIsCreditRow(row) ? (
-                                      <input
-                                        type="text"
-                                        placeholder="Credit Account / Deduction (e.g. Common Share)"
-                                        value={row.description}
-                                        onChange={e => updateCvRowField(false, row.id!, 'description', e.target.value, null)}
-                                        className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-bold text-emerald-900 dark:text-emerald-200"
-                                      />
-                                    ) : (
-                                      <ReplenishmentAccountDropdown
-                                        value={row.description}
-                                        onChange={val => updateCvRowField(false, row.id!, 'description', val, null)}
-                                        options={customAccountOptions}
-                                        categoryMap={accountCategoryMap}
-                                        voucherCounts={effectiveVoucherCounts}
-                                        disbursementCategory={newCvCategory}
-                                        onAddAccount={handleAddCustomAccount}
-                                        onDeleteAccount={handleDeleteCustomAccount}
-                                        placeholder="Book of Account / Item Description"
-                                      />
-                                    )}
+                                    <ReplenishmentAccountDropdown
+                                      value={row.description}
+                                      onChange={val => updateCvRowField(false, row.id!, 'description', val, null)}
+                                      options={customAccountOptions}
+                                      categoryMap={accountCategoryMap}
+                                      voucherCounts={effectiveVoucherCounts}
+                                      disbursementCategory={newCvCategory}
+                                      onAddAccount={handleAddCustomAccount}
+                                      onDeleteAccount={handleDeleteCustomAccount}
+                                      placeholder={row.is_credit || checkIsCreditRow(row) ? 'Credit Account / Deduction (e.g. Common Share)' : 'Book of Account / Item Description'}
+                                    />
                                   </div>
                                   <div>
                                     <input
@@ -6797,16 +6784,7 @@ function DisbursementPageContent() {
                                         placeholder="Credit Account (e.g. CIB-MBTC)"
                                       />
                                     ) : (
-                                      replenishType === 'stl' ? (
-                                        <input
-                                          type="text"
-                                          value={row.description}
-                                          onChange={e => updateCvRowField(true, row.id!, 'description', e.target.value, replenishType)}
-                                          className="w-full px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-bold text-neutral-900 dark:text-neutral-100 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                                          placeholder="Book of Accounts"
-                                        />
-                                      ) : (
-                                        <ReplenishmentAccountDropdown
+                                      <ReplenishmentAccountDropdown
                                         value={row.description}
                                         onChange={val => updateCvRowField(true, row.id!, 'description', val, replenishType)}
                                         options={customAccountOptions}
@@ -6816,8 +6794,8 @@ function DisbursementPageContent() {
                                         excludeOptions={recipientOptions}
                                         onAddAccount={handleAddCustomAccount}
                                         onDeleteAccount={handleDeleteCustomAccount}
+                                        placeholder="Book of Accounts"
                                       />
-                                     )
                                     )}
                                   </div>
                                   {replenishType === 'rf' ? (
@@ -7045,27 +7023,17 @@ function DisbursementPageContent() {
                                   />
                                 </div>
                                 <div>
-                                  {row.is_credit || checkIsCreditRow(row) ? (
-                                    <input
-                                      type="text"
-                                      placeholder="Credit Account / Deduction (e.g. CIB-MBTC)"
-                                      value={row.description}
-                                      onChange={e => updateCvRowField(true, row.id!, 'description', e.target.value, null)}
-                                      className="w-full px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-transparent text-xs font-bold text-emerald-900 dark:text-emerald-200"
-                                    />
-                                  ) : (
-                                    <ReplenishmentAccountDropdown
-                                      value={row.description}
-                                      onChange={val => updateCvRowField(true, row.id!, 'description', val, null)}
-                                      options={customAccountOptions}
-                                      categoryMap={accountCategoryMap}
-                                      voucherCounts={effectiveVoucherCounts}
-                                      disbursementCategory={editCvFormData.folder_name}
-                                      onAddAccount={handleAddCustomAccount}
-                                      onDeleteAccount={handleDeleteCustomAccount}
-                                      placeholder="Book of Account / Item Description"
-                                    />
-                                  )}
+                                  <ReplenishmentAccountDropdown
+                                    value={row.description}
+                                    onChange={val => updateCvRowField(true, row.id!, 'description', val, null)}
+                                    options={customAccountOptions}
+                                    categoryMap={accountCategoryMap}
+                                    voucherCounts={effectiveVoucherCounts}
+                                    disbursementCategory={editCvFormData.folder_name}
+                                    onAddAccount={handleAddCustomAccount}
+                                    onDeleteAccount={handleDeleteCustomAccount}
+                                    placeholder={row.is_credit || checkIsCreditRow(row) ? 'Credit Account / Deduction (e.g. CIB-MBTC)' : 'Book of Account / Item Description'}
+                                  />
                                 </div>
                                 <div>
                                   <input
