@@ -48,6 +48,94 @@ interface MemberProfileProps {
   params: Promise<{ id: string }>;
 }
 
+function AnimatedSelect({
+  value,
+  options,
+  onChange,
+  placeholder = 'Select...',
+  className = '',
+  openUpward = false,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  openUpward?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
+
+  const activeLabel = options.find((o) => o.value === value)?.label || placeholder;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className={`w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white flex items-center justify-between gap-2 cursor-pointer ${className}`}
+      >
+        <span className="truncate">{activeLabel}</span>
+        <ChevronDown
+          className={`w-4 h-4 text-primary dark:text-secondary shrink-0 transition-transform duration-200 ${
+            open ? 'rotate-180' : 'rotate-0'
+          }`}
+        />
+      </button>
+
+      <div
+        className={`absolute left-0 right-0 z-30 rounded-xl border border-outline-variant bg-white dark:bg-neutral-900 shadow-lg overflow-hidden transition-all duration-200 ease-out max-h-56 overflow-y-auto ${
+          openUpward ? 'bottom-full mb-1.5 origin-bottom' : 'top-full mt-1.5 origin-top'
+        } ${
+          open
+            ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+            : `opacity-0 scale-95 ${openUpward ? 'translate-y-1.5' : '-translate-y-1.5'} pointer-events-none`
+        }`}
+      >
+        {options.map((opt) => {
+          const selected = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className={`w-full px-3.5 py-2 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                selected
+                  ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary'
+                  : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              }`}
+            >
+              <span className="truncate">{opt.label}</span>
+              {selected && <Check className="w-3.5 h-3.5 shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function MemberProfilePage({ params }: MemberProfileProps) {
   const router = useRouter();
   const { user } = useAuth();
@@ -948,7 +1036,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
       {/* Edit Profile Modal */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
-          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop max-h-[95vh] overflow-y-auto">
+          <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative animate-modal-pop overflow-visible">
             <button
               onClick={() => setIsEditModalOpen(false)}
               className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral/10 dark:hover:bg-neutral/20 text-neutral-500 hover:text-on-surface dark:text-neutral-400 dark:hover:text-white transition-all active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -1059,30 +1147,32 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Sex / Gender</label>
-                  <select
+                  <AnimatedSelect
                     value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  >
-                    <option value="">Select Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
+                    onChange={(val) => setGender(val)}
+                    placeholder="Select Gender"
+                    options={[
+                      { value: '', label: 'Select Gender' },
+                      { value: 'Male', label: 'Male' },
+                      { value: 'Female', label: 'Female' },
+                    ]}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Civil Status</label>
-                  <select
+                  <AnimatedSelect
                     value={civilStatus}
-                    onChange={(e) => setCivilStatus(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-                  >
-                    <option value="">Select Civil Status</option>
-                    <option value="Single">Single</option>
-                    <option value="Married">Married</option>
-                    <option value="Widowed">Widowed</option>
-                    <option value="Separated">Separated</option>
-                    <option value="Divorced">Divorced</option>
-                  </select>
+                    onChange={(val) => setCivilStatus(val)}
+                    placeholder="Select Civil Status"
+                    options={[
+                      { value: '', label: 'Select Civil Status' },
+                      { value: 'Single', label: 'Single' },
+                      { value: 'Married', label: 'Married' },
+                      { value: 'Widowed', label: 'Widowed' },
+                      { value: 'Separated', label: 'Separated' },
+                      { value: 'Divorced', label: 'Divorced' },
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -1110,14 +1200,15 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Membership Type *</label>
-                  <select
+                  <AnimatedSelect
                     value={membershipType}
-                    onChange={(e: any) => setMembershipType(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-white dark:bg-surface border border-outline-variant rounded-xl focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white font-semibold"
-                  >
-                    <option value="Regular">Regular Member (Full Rights & Loans)</option>
-                    <option value="Associate">Associate Member (Non-Voting / Restricted)</option>
-                  </select>
+                    onChange={(val) => setMembershipType(val as 'Regular' | 'Associate')}
+                    className="font-semibold"
+                    options={[
+                      { value: 'Regular', label: 'Regular Member (Full Rights & Loans)' },
+                      { value: 'Associate', label: 'Associate Member (Non-Voting / Restricted)' },
+                    ]}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="font-label text-xs text-neutral-600 dark:text-neutral-400 px-1">Home Address</label>
@@ -1131,15 +1222,30 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2 px-1">
-                <input
-                  type="checkbox"
+              <div className="flex items-center gap-2.5 pt-2 px-1">
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={isVerified}
                   id="isVerifiedCheckbox"
-                  checked={isVerified}
-                  onChange={(e) => setIsVerified(e.target.checked)}
-                  className="w-4 h-4 text-primary dark:text-secondary rounded border-outline-variant focus:ring-primary/20 cursor-pointer"
-                />
-                <label htmlFor="isVerifiedCheckbox" className="font-label text-xs font-bold text-neutral-700 dark:text-neutral-300 cursor-pointer select-none">
+                  onClick={() => setIsVerified((prev) => !prev)}
+                  className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-200 active:scale-90 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                    isVerified
+                      ? 'bg-primary dark:bg-secondary border-primary dark:border-secondary text-white dark:text-neutral-950 shadow-xs'
+                      : 'bg-white dark:bg-surface border-outline-variant hover:border-primary/60'
+                  }`}
+                >
+                  <Check
+                    className={`w-3.5 h-3.5 stroke-[3] transition-all duration-200 ${
+                      isVerified ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
+                    }`}
+                  />
+                </button>
+                <label
+                  htmlFor="isVerifiedCheckbox"
+                  onClick={() => setIsVerified((prev) => !prev)}
+                  className="font-label text-xs font-bold text-neutral-700 dark:text-neutral-300 cursor-pointer select-none"
+                >
                   Fully Verified (Unlocks Loan Privileges)
                 </label>
               </div>
