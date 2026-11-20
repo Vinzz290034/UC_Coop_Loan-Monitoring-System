@@ -1531,9 +1531,21 @@ export const getLoanMetricsSummary = async (req, res, next) => {
       SELECT
         -- Total number of all active loans disbursed
         COUNT(CASE WHEN status IN ('disbursed', 'approved', 'active') THEN 1 END) as active_loans_count,
+
+        -- Total number of fully paid loans
+        COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_loans_count,
         
-        -- Total principal capital ever deployed to members
+        -- Total principal capital deployed across active loans
         COALESCE(SUM(CASE WHEN status IN ('disbursed', 'approved', 'active') THEN principal_amount ELSE 0 END), 0) as total_capital_deployed,
+
+        -- Remaining principal balance across active loans only (avoids paid loans dragging active balance to 0)
+        COALESCE((
+          SELECT SUM(GREATEST(0, l2.principal_amount - COALESCE((
+            SELECT SUM(rs2.principal_paid) FROM repayment_schedules rs2 WHERE rs2.loan_id = l2.id
+          ), 0)))
+          FROM loans l2
+          WHERE l2.status IN ('disbursed', 'approved', 'active')
+        ), 0) as active_outstanding_principal,
         
         -- Cumulative principal recovered through payments
         COALESCE(
@@ -1547,6 +1559,13 @@ export const getLoanMetricsSummary = async (req, res, next) => {
           0
         ) as total_interest_earned,
 
+        -- Total repayments collected from loan_payments
+        COALESCE((SELECT SUM(amount) FROM loan_payments), 0) as total_repayments_collected,
+        COALESCE((SELECT COUNT(*) FROM loan_payments), 0) as total_payments_count,
+        COALESCE((SELECT SUM(amount) FROM loan_payments WHERE payment_date::date = CURRENT_DATE), 0) as today_repayments,
+        COALESCE((SELECT SUM(amount) FROM loan_payments WHERE DATE_TRUNC('month', payment_date) = DATE_TRUNC('month', CURRENT_DATE)), 0) as month_repayments,
+        COALESCE((SELECT SUM(amount) FROM loan_payments WHERE EXTRACT(YEAR FROM payment_date) = EXTRACT(YEAR FROM CURRENT_DATE)), 0) as year_repayments,
+
         -- Total number of applications requiring underwriter review
         COUNT(CASE WHEN status = 'pending_approval' THEN 1 END) as pending_applications_count,
 
@@ -1558,25 +1577,273 @@ export const getLoanMetricsSummary = async (req, res, next) => {
     const result = await query(metricsQuery);
     const metrics = result.rows[0];
 
-    // Compute remaining active portfolio risk asset metrics
     const totalDeployed = parseFloat(metrics.total_capital_deployed);
     const totalRecovered = parseFloat(metrics.total_principal_recovered);
-    const totalOutstandingPrincipal = Math.max(0, totalDeployed - totalRecovered);
+    const totalOutstandingPrincipal = parseFloat(metrics.active_outstanding_principal);
 
     res.status(200).json({
       success: true,
       data: {
         portfolio_health: {
           active_loans: parseInt(metrics.active_loans_count, 10),
+          paid_loans: parseInt(metrics.paid_loans_count, 10),
           defaulted_loans: parseInt(metrics.defaulted_loans_count, 10),
-          pending_applications: parseInt(metrics.pending_applications_count, 10)
+          pending_applications: parseInt(metrics.pending_applications_count, 10),
+          total_payments_count: parseInt(metrics.total_payments_count, 10)
         },
         ledger_aggregates: {
           total_capital_deployed: totalDeployed,
           total_principal_recovered: totalRecovered,
           current_outstanding_balance: totalOutstandingPrincipal,
-          total_interest_earned: parseFloat(metrics.total_interest_earned)
+          total_interest_earned: parseFloat(metrics.total_interest_earned),
+          total_repayments_collected: parseFloat(metrics.total_repayments_collected),
+          today_repayments: parseFloat(metrics.today_repayments),
+          month_repayments: parseFloat(metrics.month_repayments),
+          year_repayments: parseFloat(metrics.year_repayments)
         }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get repayment and interest paid summary by day, month, or year
+// @route   GET /api/loans/repayments/summary
+// @access  Protected (Admin, Staff)
+export const getRepaymentSummary = async (req, res, next) => {
+  try {
+    const period = ['day', 'month', 'year'].includes(req.query.period) ? req.query.period : 'month';
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const defaultDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const defaultMonth = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+    const defaultYear = `${now.getFullYear()}`;
+
+    const selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : defaultDate;
+    const selectedMonth = /^\d{4}-\d{2}$/.test(String(req.query.month || '')) ? String(req.query.month) : defaultMonth;
+    const selectedYear = /^\d{4}$/.test(String(req.query.year || '')) ? parseInt(String(req.query.year), 10) : parseInt(defaultYear, 10);
+
+    let whereClause = '';
+    const params = [];
+    if (period === 'day') {
+      params.push(selectedDate);
+      whereClause = `lp.payment_date::date = $1::date`;
+    } else if (period === 'month') {
+      const [yr, mo] = selectedMonth.split('-').map(Number);
+      params.push(yr, mo);
+      whereClause = `EXTRACT(YEAR FROM lp.payment_date) = $1 AND EXTRACT(MONTH FROM lp.payment_date) = $2`;
+    } else {
+      params.push(selectedYear);
+      whereClause = `EXTRACT(YEAR FROM lp.payment_date) = $1`;
+    }
+
+    const baseSelect = `
+      WITH payment_allocs AS (
+        SELECT
+          lp.id,
+          lp.loan_id,
+          lp.amount,
+          lp.payment_date,
+          lp.payment_method,
+          lp.reference_no,
+          lp.created_at,
+          l.laf_no,
+          l.member_id,
+          COALESCE(lprod.name, 'General Loan') AS product_name,
+          TRIM(CONCAT(m.last_name, ', ', m.first_name)) AS member_name,
+          m.member_no,
+          COALESCE(alloc.principal_paid, 0) AS principal_paid,
+          COALESCE(alloc.interest_paid, 0) AS interest_paid
+        FROM loan_payments lp
+        JOIN loans l ON lp.loan_id = l.id
+        JOIN members m ON l.member_id = m.id
+        LEFT JOIN loan_products lprod ON l.loan_product_id = lprod.id
+        LEFT JOIN (
+          SELECT
+            loan_payment_id,
+            SUM(principal_allocated) AS principal_paid,
+            SUM(interest_allocated) AS interest_paid
+          FROM loan_payment_allocations
+          GROUP BY loan_payment_id
+        ) alloc ON alloc.loan_payment_id = lp.id
+      )
+    `;
+
+    const [summaryRes, comparisonRes, byProductRes, byMethodRes, timelineRes, txRes] = await Promise.all([
+      query(
+        `${baseSelect}
+         SELECT
+           COALESCE(SUM(amount), 0) AS total_repayment,
+           COALESCE(SUM(principal_paid), 0) AS principal_paid,
+           COALESCE(SUM(interest_paid), 0) AS interest_paid,
+           COUNT(*)::int AS payment_count,
+           COUNT(DISTINCT member_id)::int AS unique_borrowers,
+           COALESCE(AVG(amount), 0) AS avg_payment
+         FROM payment_allocs lp
+         WHERE ${whereClause}`,
+        params
+      ),
+      query(
+        `${baseSelect}
+         SELECT
+           COALESCE(SUM(CASE WHEN payment_date::date = CURRENT_DATE THEN amount ELSE 0 END), 0) AS today_total,
+           COALESCE(SUM(CASE WHEN payment_date::date = CURRENT_DATE THEN principal_paid ELSE 0 END), 0) AS today_principal,
+           COALESCE(SUM(CASE WHEN payment_date::date = CURRENT_DATE THEN interest_paid ELSE 0 END), 0) AS today_interest,
+           COUNT(CASE WHEN payment_date::date = CURRENT_DATE THEN 1 END)::int AS today_count,
+
+           COALESCE(SUM(CASE WHEN DATE_TRUNC('month', payment_date) = DATE_TRUNC('month', CURRENT_DATE) THEN amount ELSE 0 END), 0) AS month_total,
+           COALESCE(SUM(CASE WHEN DATE_TRUNC('month', payment_date) = DATE_TRUNC('month', CURRENT_DATE) THEN principal_paid ELSE 0 END), 0) AS month_principal,
+           COALESCE(SUM(CASE WHEN DATE_TRUNC('month', payment_date) = DATE_TRUNC('month', CURRENT_DATE) THEN interest_paid ELSE 0 END), 0) AS month_interest,
+           COUNT(CASE WHEN DATE_TRUNC('month', payment_date) = DATE_TRUNC('month', CURRENT_DATE) THEN 1 END)::int AS month_count,
+
+           COALESCE(SUM(CASE WHEN EXTRACT(YEAR FROM payment_date) = EXTRACT(YEAR FROM CURRENT_DATE) THEN amount ELSE 0 END), 0) AS year_total,
+           COALESCE(SUM(CASE WHEN EXTRACT(YEAR FROM payment_date) = EXTRACT(YEAR FROM CURRENT_DATE) THEN principal_paid ELSE 0 END), 0) AS year_principal,
+           COALESCE(SUM(CASE WHEN EXTRACT(YEAR FROM payment_date) = EXTRACT(YEAR FROM CURRENT_DATE) THEN interest_paid ELSE 0 END), 0) AS year_interest,
+           COUNT(CASE WHEN EXTRACT(YEAR FROM payment_date) = EXTRACT(YEAR FROM CURRENT_DATE) THEN 1 END)::int AS year_count
+         FROM payment_allocs`
+      ),
+      query(
+        `${baseSelect}
+         SELECT
+           product_name,
+           COUNT(*)::int AS payment_count,
+           COALESCE(SUM(amount), 0) AS total_repayment,
+           COALESCE(SUM(principal_paid), 0) AS principal_paid,
+           COALESCE(SUM(interest_paid), 0) AS interest_paid
+         FROM payment_allocs lp
+         WHERE ${whereClause}
+         GROUP BY product_name
+         ORDER BY total_repayment DESC`,
+        params
+      ),
+      query(
+        `${baseSelect}
+         SELECT
+           COALESCE(NULLIF(TRIM(payment_method), ''), 'Unspecified') AS payment_method,
+           COUNT(*)::int AS payment_count,
+           COALESCE(SUM(amount), 0) AS total_repayment,
+           COALESCE(SUM(principal_paid), 0) AS principal_paid,
+           COALESCE(SUM(interest_paid), 0) AS interest_paid
+         FROM payment_allocs lp
+         WHERE ${whereClause}
+         GROUP BY COALESCE(NULLIF(TRIM(payment_method), ''), 'Unspecified')
+         ORDER BY total_repayment DESC`,
+        params
+      ),
+      period === 'year'
+        ? query(
+            `${baseSelect}
+             SELECT
+               EXTRACT(MONTH FROM payment_date)::int AS bucket_num,
+               TO_CHAR(payment_date, 'Mon YYYY') AS label,
+               TO_CHAR(payment_date, 'YYYY-MM') AS period_key,
+               COUNT(*)::int AS payment_count,
+               COALESCE(SUM(amount), 0) AS total_repayment,
+               COALESCE(SUM(principal_paid), 0) AS principal_paid,
+               COALESCE(SUM(interest_paid), 0) AS interest_paid
+             FROM payment_allocs lp
+             WHERE ${whereClause}
+             GROUP BY EXTRACT(MONTH FROM payment_date), TO_CHAR(payment_date, 'Mon YYYY'), TO_CHAR(payment_date, 'YYYY-MM')
+             ORDER BY bucket_num ASC`,
+            params
+          )
+        : period === 'month'
+        ? query(
+            `${baseSelect}
+             SELECT
+               EXTRACT(DAY FROM payment_date)::int AS bucket_num,
+               TO_CHAR(payment_date, 'Mon DD, YYYY') AS label,
+               TO_CHAR(payment_date, 'YYYY-MM-DD') AS period_key,
+               COUNT(*)::int AS payment_count,
+               COALESCE(SUM(amount), 0) AS total_repayment,
+               COALESCE(SUM(principal_paid), 0) AS principal_paid,
+               COALESCE(SUM(interest_paid), 0) AS interest_paid
+             FROM payment_allocs lp
+             WHERE ${whereClause}
+             GROUP BY EXTRACT(DAY FROM payment_date), TO_CHAR(payment_date, 'Mon DD, YYYY'), TO_CHAR(payment_date, 'YYYY-MM-DD')
+             ORDER BY bucket_num ASC`,
+            params
+          )
+        : Promise.resolve({ rows: [] }),
+      query(
+        `${baseSelect}
+         SELECT
+           id, loan_id, laf_no, member_name, member_no, product_name,
+           payment_date, payment_method, reference_no,
+           amount, principal_paid, interest_paid
+         FROM payment_allocs lp
+         WHERE ${whereClause}
+         ORDER BY payment_date DESC, created_at DESC
+         LIMIT 500`,
+        params
+      )
+    ]);
+
+    const s = summaryRes.rows[0] || {};
+    const c = comparisonRes.rows[0] || {};
+
+    res.status(200).json({
+      success: true,
+      data: {
+        period,
+        filters: { date: selectedDate, month: selectedMonth, year: selectedYear },
+        summary: {
+          total_repayment: parseFloat(s.total_repayment || 0),
+          principal_paid: parseFloat(s.principal_paid || 0),
+          interest_paid: parseFloat(s.interest_paid || 0),
+          payment_count: s.payment_count || 0,
+          unique_borrowers: s.unique_borrowers || 0,
+          avg_payment: parseFloat(s.avg_payment || 0)
+        },
+        comparison: {
+          today: {
+            total_repayment: parseFloat(c.today_total || 0),
+            principal_paid: parseFloat(c.today_principal || 0),
+            interest_paid: parseFloat(c.today_interest || 0),
+            payment_count: c.today_count || 0
+          },
+          month: {
+            total_repayment: parseFloat(c.month_total || 0),
+            principal_paid: parseFloat(c.month_principal || 0),
+            interest_paid: parseFloat(c.month_interest || 0),
+            payment_count: c.month_count || 0
+          },
+          year: {
+            total_repayment: parseFloat(c.year_total || 0),
+            principal_paid: parseFloat(c.year_principal || 0),
+            interest_paid: parseFloat(c.year_interest || 0),
+            payment_count: c.year_count || 0
+          }
+        },
+        by_product: byProductRes.rows.map(r => ({
+          product_name: r.product_name,
+          payment_count: r.payment_count,
+          total_repayment: parseFloat(r.total_repayment || 0),
+          principal_paid: parseFloat(r.principal_paid || 0),
+          interest_paid: parseFloat(r.interest_paid || 0)
+        })),
+        by_method: byMethodRes.rows.map(r => ({
+          payment_method: r.payment_method,
+          payment_count: r.payment_count,
+          total_repayment: parseFloat(r.total_repayment || 0),
+          principal_paid: parseFloat(r.principal_paid || 0),
+          interest_paid: parseFloat(r.interest_paid || 0)
+        })),
+        timeline: timelineRes.rows.map(r => ({
+          label: r.label,
+          period_key: r.period_key,
+          payment_count: r.payment_count,
+          total_repayment: parseFloat(r.total_repayment || 0),
+          principal_paid: parseFloat(r.principal_paid || 0),
+          interest_paid: parseFloat(r.interest_paid || 0)
+        })),
+        transactions: txRes.rows.map(r => ({
+          ...r,
+          amount: parseFloat(r.amount || 0),
+          principal_paid: parseFloat(r.principal_paid || 0),
+          interest_paid: parseFloat(r.interest_paid || 0)
+        }))
       }
     });
   } catch (error) {

@@ -69,6 +69,7 @@ import {
 import LoanApprovalModal from '@/components/loans/LoanApprovalModal';
 import RevolvingFundsTab from '@/components/loans/RevolvingFundsTab';
 import LoanVouchersTab from '@/components/loans/LoanVouchersTab';
+import RepaymentSummaryTab from '@/components/loans/RepaymentSummaryTab';
 
 interface LoanProduct {
   id: number | string;
@@ -471,7 +472,7 @@ function LoansPageContent() {
   const isAdminOrManager = user?.role === 'admin' || user?.role === 'staff' || (user?.role as string) === 'manager';
   const isVerified = isAdminOrManager || user?.profile?.status === 'approved' || user?.profile?.status === 'active' || user?.profile?.is_verified === true;
 
-  const [activeTab, setActiveTab] = useState<'loans' | 'vouchers' | 'payments' | 'products'>('loans');
+  const [activeTab, setActiveTab] = useState<'loans' | 'vouchers' | 'payments' | 'repayment_summary' | 'products'>('loans');
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -3467,18 +3468,18 @@ function LoansPageContent() {
           <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdminOrManager ? 'xl:grid-cols-4' : 'lg:grid-cols-3'} gap-4 sm:gap-5 items-stretch`}>
             {isAdminOrManager ? (
               <>
-                {/* Card 1: Active Portfolio */}
+                {/* Card 1: Capital Deployed */}
                 <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
                   <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
                     <Banknote className="w-6 h-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Active Portfolio</span>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Capital Deployed</span>
                     <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
-                      {formatCurrency(adminMetrics?.ledger_aggregates?.current_outstanding_balance || 0)}
+                      {formatCurrency(adminMetrics?.ledger_aggregates?.total_capital_deployed || 0)}
                     </span>
                     <span className="text-[9px] font-bold text-neutral-500 block mt-0.5 truncate">
-                      Deployed: {formatCurrency(adminMetrics?.ledger_aggregates?.total_capital_deployed || 0)} ({adminMetrics?.portfolio_health?.active_loans || 0} loans)
+                      Outstanding: {formatCurrency(adminMetrics?.ledger_aggregates?.current_outstanding_balance || 0)} ({adminMetrics?.portfolio_health?.active_loans || 0} active)
                     </span>
                   </div>
                 </div>
@@ -3499,37 +3500,38 @@ function LoansPageContent() {
                   </div>
                 </div>
 
-                {/* Card 3: Pending Underwriting */}
-                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
-                  <div className="w-12 h-12 rounded-2xl bg-tertiary/10 text-tertiary flex items-center justify-center flex-shrink-0">
-                    <Clock className="w-6 h-6" />
+                {/* Card 3: Total Repayments */}
+                <div
+                  onClick={() => setActiveTab('repayment_summary')}
+                  className="bg-white dark:bg-surface-container-low border border-outline-variant/65 hover:border-primary/40 dark:hover:border-secondary/40 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-all h-full min-w-0 cursor-pointer"
+                  title="Open Repayment Summary"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center flex-shrink-0">
+                    <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Underwriting Queue</span>
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Total Repayments</span>
                     <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
-                      {adminMetrics?.portfolio_health?.pending_applications || 0} Applications
+                      {formatCurrency(adminMetrics?.ledger_aggregates?.total_repayments_collected || 0)}
                     </span>
-                    <span className="text-[9px] font-bold text-tertiary block mt-0.5 truncate">
-                      Awaiting manager review/disbursement
+                    <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 block mt-0.5 truncate">
+                      Principal: {formatCurrency(adminMetrics?.ledger_aggregates?.total_principal_recovered || 0)} · {adminMetrics?.portfolio_health?.total_payments_count || 0} payments
                     </span>
                   </div>
                 </div>
 
-                {/* Card 4: Default Risks */}
+                {/* Card 4: Contract Status */}
                 <div className="bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl p-5 flex items-center gap-4 hover:shadow-md transition-shadow h-full min-w-0">
-                  <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="w-6 h-6" />
+                  <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center flex-shrink-0">
+                    <FileCheck className="w-6 h-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Delinquency Risk</span>
-                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate"
-                      title={
-                        `Accounts Defaulted: ${adminMetrics?.portfolio_health?.defaulted_loans || 0}`
-                      }>
-                      {adminMetrics?.portfolio_health?.defaulted_loans || 0} Accounts Defaulted
+                    <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 block tracking-wider font-label truncate">Contract Status</span>
+                    <span className="text-xl font-headline font-extrabold tabular-nums tracking-tight text-on-surface dark:text-white block mt-0.5 truncate">
+                      {adminMetrics?.portfolio_health?.active_loans || 0} Active · {adminMetrics?.portfolio_health?.paid_loans || 0} Paid
                     </span>
-                    <span className="text-[9px] font-bold text-red-500 block mt-0.5 truncate">
-                      Rate: {(((adminMetrics?.portfolio_health?.defaulted_loans || 0) / ((adminMetrics?.portfolio_health?.active_loans || 0) + (adminMetrics?.portfolio_health?.defaulted_loans || 0) || 1)) * 100).toFixed(2)}% of portfolio
+                    <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 block mt-0.5 truncate">
+                      This Month: {formatCurrency(adminMetrics?.ledger_aggregates?.month_repayments || 0)}
                     </span>
                   </div>
                 </div>
@@ -3652,6 +3654,18 @@ function LoansPageContent() {
                   {loanPayments.length}
                 </span>
               )}
+            </button>
+          )}
+          {isAdminOrManager && (
+            <button
+              onClick={() => setActiveTab('repayment_summary')}
+              className={`px-6 py-3 font-headline text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 cursor-pointer ${activeTab === 'repayment_summary'
+                ? 'border-primary dark:border-secondary text-primary dark:text-secondary'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-on-surface'
+                }`}
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Repayment Summary</span>
             </button>
           )}
           {isAdminOrManager && (
@@ -5394,6 +5408,8 @@ function LoansPageContent() {
               )}
             </div>
           </div>
+        ) : activeTab === 'repayment_summary' ? (
+          <RepaymentSummaryTab />
         ) : (
           /* PRODUCTS TAB */
           <div className="space-y-6">

@@ -9,6 +9,7 @@ import {
   getLoanById,
   postRepayment,
   getRepayments,
+  getRepaymentSummary,
   rejectLoanApplication,
   getLoanMetricsSummary,
   previewAmortizationSchedule,
@@ -56,6 +57,8 @@ router.route('/metrics/summary')
 // ==========================================
 // 4. REPAYMENTS
 // ==========================================
+router.get('/repayments/summary', restrictTo('admin', 'staff'), getRepaymentSummary);
+
 router.route('/repayments')
   .get(getRepayments)
   .post(restrictTo('admin', 'staff'), postRepayment);
