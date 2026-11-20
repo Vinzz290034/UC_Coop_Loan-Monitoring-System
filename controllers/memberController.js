@@ -44,6 +44,85 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
       `);
     }
 
+    // One-time safe migration: merge known duplicate/placeholder member rows into official profiles
+    const mergeMig = await query(
+      `INSERT INTO system_one_time_migrations (name)
+       VALUES ('merge_duplicate_members_20261120')
+       ON CONFLICT (name) DO NOTHING
+       RETURNING name`
+    );
+    if (mergeMig.rowCount > 0) {
+      const mClient = await pool.connect();
+      try {
+        await mClient.query('BEGIN');
+        const mergeMember = async (dupId, dupUserId, targetId) => {
+          await mClient.query('UPDATE loans SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await mClient.query('UPDATE share_capital_transactions SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await mClient.query('UPDATE collections SET member_id = $1::text WHERE member_id = $2::text', [targetId, dupId]);
+          await mClient.query('UPDATE fixed_deposits SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await mClient.query('UPDATE investments SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await mClient.query('UPDATE appointments SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await mClient.query('DELETE FROM members WHERE id = $1', [dupId]);
+          if (dupUserId) {
+            await mClient.query("DELETE FROM users WHERE id = $1 AND role = 'member' AND id NOT IN (SELECT user_id FROM members WHERE user_id IS NOT NULL)", [dupUserId]);
+          }
+        };
+
+        const idPairs = [
+          ['2026-19', '2025-227'], ['2026-75', '2014-053'], ['2026-107', '2023-159'],
+          ['2026-199', '2025-238'], ['2026-202', '2026-283'], ['2026-204', '2014-017'],
+          ['2026-188', '2016-093'], ['2026-165', '2019-114'], ['2026-166', '2023-167'],
+          ['2026-215', '2026-309']
+        ];
+        for (const [dupNo, targetNo] of idPairs) {
+          const d = await mClient.query('SELECT id, user_id FROM members WHERE member_no = $1', [dupNo]);
+          const t = await mClient.query('SELECT id FROM members WHERE member_no = $1', [targetNo]);
+          if (d.rowCount === 1 && t.rowCount === 1 && d.rows[0].id !== t.rows[0].id) {
+            await mergeMember(d.rows[0].id, d.rows[0].user_id, t.rows[0].id);
+          }
+        }
+
+        const nullLastPairs = [
+          ['EVARDO', '2018-106'], ['LABANDRIA', '2020-131'], ['CALISA', '2023-154'],
+          ['DILUVIO', '2023-157'], ['LAGUS', '2023-163'], ['SARMIENTO', '2023-169'],
+          ['DOLOJOL', '2014-036'], ['BENATIRO', '2024-184'], ['RAMOS', '2014-04'],
+          ['MARTINEZ', '2014-012'], ['YU', '2016-088'], ['ESCARAN', '2016-091'],
+          ['TIGLEY', '2019-127'], ['ASENSI', '2025-218'], ['Vilanoba', '2025-242'],
+          ['ARIESGA', '2025-253'], ['ACABADO', '2026-288'], ['CONSTANTINO', '2026-301'],
+          ['Miasco', '2014-022'], ['PABLE', '2014-063']
+        ];
+        for (const [lastName, targetNo] of nullLastPairs) {
+          const d = await mClient.query('SELECT id, user_id FROM members WHERE member_no IS NULL AND LOWER(last_name) = LOWER($1)', [lastName]);
+          const t = await mClient.query('SELECT id FROM members WHERE member_no = $1', [targetNo]);
+          if (d.rowCount === 1 && t.rowCount === 1 && d.rows[0].id !== t.rows[0].id) {
+            await mergeMember(d.rows[0].id, d.rows[0].user_id, t.rows[0].id);
+          }
+        }
+
+        for (const cond of [
+          "member_no IS NULL AND LOWER(last_name) = 'test' AND LOWER(first_name) = 'test'",
+          "member_no = '2026-152' AND LOWER(last_name) = 'chevalier'"
+        ]) {
+          const d = await mClient.query(`SELECT id, user_id FROM members WHERE ${cond}`);
+          if (d.rowCount === 1) {
+            const l = await mClient.query('SELECT COUNT(*)::int AS c FROM loans WHERE member_id = $1', [d.rows[0].id]);
+            if (l.rows[0].c === 0) {
+              await mClient.query('DELETE FROM members WHERE id = $1', [d.rows[0].id]);
+              if (d.rows[0].user_id) {
+                await mClient.query("DELETE FROM users WHERE id = $1 AND role = 'member' AND id NOT IN (SELECT user_id FROM members WHERE user_id IS NOT NULL)", [d.rows[0].user_id]);
+              }
+            }
+          }
+        }
+        await mClient.query('COMMIT');
+      } catch (mergeErr) {
+        await mClient.query('ROLLBACK');
+        console.error('Duplicate member merge migration error:', mergeErr);
+      } finally {
+        mClient.release();
+      }
+    }
+
     // Auto-provision login accounts for any existing members who do not have a linked user account yet
     const unlinkedRes = await query(
       `SELECT id, first_name, last_name
