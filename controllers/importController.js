@@ -1141,6 +1141,7 @@ export const importMembersRegistry = async (req, res, next) => {
       middleName: -1,
       tin: -1,
       membershipType: -1,
+      membershipStatus: -1,
       age: -1,
       gender: -1,
       civilStatus: -1,
@@ -1160,6 +1161,7 @@ export const importMembersRegistry = async (req, res, next) => {
         else if (compact === 'MIDDLENAME' || val === 'MIDDLE NAME') colMap.middleName = c;
         else if (compact === 'TIN' || compact === 'TINNO' || val === 'TIN NO.' || val === 'TIN NO') colMap.tin = c;
         else if (compact === 'TYPEOFMEMBERSHIP' || compact === 'MEMBERSHIPTYPE' || compact === 'MEMBERSHIP') colMap.membershipType = c;
+        else if (compact === 'MEMBERSHIPSTATUS' || compact === 'STATUS' || val === 'MEMBERSHIP STATUS') colMap.membershipStatus = c;
         else if (compact === 'AGE') colMap.age = c;
         else if (compact === 'GENDER' || compact === 'SEX') colMap.gender = c;
         else if (compact === 'CIVILSTATUS' || compact === 'MARITALSTATUS') colMap.civilStatus = c;
@@ -1284,6 +1286,10 @@ export const importMembersRegistry = async (req, res, next) => {
         }
       }
 
+      // Only 'Withdrawn' on Excel updates/sets status to 'withdrawn'; Active / Dormant / Active-returnee stay 'pending' (Pending Review)
+      const rawMembershipStatus = colMap.membershipStatus !== -1 ? cleanStr(cellVal(sheet, r, colMap.membershipStatus)) : '';
+      const targetStatus = rawMembershipStatus.toLowerCase().includes('withdraw') ? 'withdrawn' : 'pending';
+
       const excelLast = cleanToken(rawLastName);
       const excelFirst = cleanToken(rawFirstName);
 
@@ -1323,7 +1329,7 @@ export const importMembersRegistry = async (req, res, next) => {
           ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9, $10,
-            $11, $12, $13, $14, 'active', false
+            $11, $12, $13, $14, $15, false
           ) RETURNING id, user_id, member_no, first_name, last_name, middle_name, membership_type, tin`,
           [
             newUserId,
@@ -1339,7 +1345,8 @@ export const importMembersRegistry = async (req, res, next) => {
             genderVal,
             civilStatusVal,
             emailVal,
-            phoneVal
+            phoneVal,
+            targetStatus
           ]
         );
         if (insertedRes.rows.length > 0) {
@@ -1392,6 +1399,11 @@ export const importMembersRegistry = async (req, res, next) => {
       if (colMap.membershipType !== -1 && membershipType) {
         setClauses.push(`membership_type = $${paramIdx++}`);
         queryParams.push(membershipType);
+      }
+
+      if (targetStatus === 'withdrawn') {
+        setClauses.push(`status = $${paramIdx++}`);
+        queryParams.push('withdrawn');
       }
 
       if (colMap.tin !== -1 && rawTin) {
@@ -1534,6 +1546,7 @@ export const previewMembersRegistry = async (req, res, next) => {
       middleName: -1,
       tin: -1,
       membershipType: -1,
+      membershipStatus: -1,
       age: -1,
       gender: -1,
       civilStatus: -1,
@@ -1553,6 +1566,7 @@ export const previewMembersRegistry = async (req, res, next) => {
         else if (compact === 'MIDDLENAME' || val === 'MIDDLE NAME') colMap.middleName = c;
         else if (compact === 'TIN' || compact === 'TINNO' || val === 'TIN NO.' || val === 'TIN NO') colMap.tin = c;
         else if (compact === 'TYPEOFMEMBERSHIP' || compact === 'MEMBERSHIPTYPE' || compact === 'MEMBERSHIP') colMap.membershipType = c;
+        else if (compact === 'MEMBERSHIPSTATUS' || compact === 'STATUS' || val === 'MEMBERSHIP STATUS') colMap.membershipStatus = c;
         else if (compact === 'AGE') colMap.age = c;
         else if (compact === 'GENDER' || compact === 'SEX') colMap.gender = c;
         else if (compact === 'CIVILSTATUS' || compact === 'MARITALSTATUS') colMap.civilStatus = c;
@@ -1603,6 +1617,9 @@ export const previewMembersRegistry = async (req, res, next) => {
         if (lowerType.includes('associate')) membershipType = 'Associate';
       }
 
+      const rawMembershipStatus = colMap.membershipStatus !== -1 ? cleanStr(cellVal(sheet, r, colMap.membershipStatus)) : '';
+      const targetStatus = rawMembershipStatus.toLowerCase().includes('withdraw') ? 'withdrawn' : 'pending';
+
       const rawAgeStr = colMap.age !== -1 ? cleanStr(cellVal(sheet, r, colMap.age)) : '';
       const parsedAge = rawAgeStr ? parseInt(rawAgeStr, 10) : null;
       const ageVal = (!isNaN(parsedAge) && parsedAge > 0) ? parsedAge : null;
@@ -1649,6 +1666,8 @@ export const previewMembersRegistry = async (req, res, next) => {
         lastName: rawLastName,
         middleName: rawMiddleName || null,
         membershipType,
+        status: targetStatus,
+        excelStatus: rawMembershipStatus || null,
         tin: rawTin || null,
         age: ageVal,
         gender: genderVal,
@@ -1762,6 +1781,7 @@ export const executeMembersRegistryImport = async (req, res, next) => {
       const rawMiddleName = row.middleName ? cleanStr(row.middleName) : '';
       const rawTin = row.tin ? cleanStr(row.tin) : '';
       const membershipType = row.membershipType === 'Associate' ? 'Associate' : 'Regular';
+      const rowStatus = String(row.status || '').toLowerCase() === 'withdrawn' ? 'withdrawn' : 'pending';
       const ageVal = row.age ? parseInt(row.age, 10) : null;
       const genderVal = row.gender || null;
       const civilStatusVal = row.civilStatus || null;
@@ -1806,7 +1826,7 @@ export const executeMembersRegistryImport = async (req, res, next) => {
             ) VALUES (
               $1, $2, $3, $4, $5,
               $6, $7, $8, $9, $10,
-              $11, $12, $13, $14, 'pending', false, false
+              $11, $12, $13, $14, $15, false, false
             ) RETURNING id, user_id, member_no, first_name, last_name, middle_name, membership_type, tin`,
             [
               newUser.id,
@@ -1822,7 +1842,8 @@ export const executeMembersRegistryImport = async (req, res, next) => {
               genderVal,
               civilStatusVal,
               emailVal,
-              phoneVal
+              phoneVal,
+              rowStatus
             ]
           );
 
@@ -1831,8 +1852,8 @@ export const executeMembersRegistryImport = async (req, res, next) => {
             if (emailVal) takenEmails.set(emailVal, newMem.id);
             await client.query(
               `INSERT INTO member_status_logs (member_id, previous_status, new_status, changed_by, remarks)
-               VALUES ($1, NULL, 'pending', $2, 'Imported selectively via Members Registry Import Hub.')`,
-              [newMem.id, req.user.id]
+               VALUES ($1, NULL, $2, $3, 'Imported selectively via Members Registry Import Hub.')`,
+              [newMem.id, rowStatus, req.user.id]
             );
             existingMembersRes.rows.push({
               id: newMem.id,
@@ -1888,6 +1909,10 @@ export const executeMembersRegistryImport = async (req, res, next) => {
         if (membershipType) {
           setClauses.push(`membership_type = $${paramIdx++}`);
           queryParams.push(membershipType);
+        }
+        if (rowStatus === 'withdrawn') {
+          setClauses.push(`status = $${paramIdx++}`);
+          queryParams.push('withdrawn');
         }
         if (rawTin) {
           setClauses.push(`tin = $${paramIdx++}`);
