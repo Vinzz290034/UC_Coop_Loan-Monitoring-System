@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
@@ -14,6 +14,8 @@ import {
   UserX,
   Clock,
   ChevronRight,
+  ChevronDown,
+  Check,
   Filter,
   AlertTriangle,
   Plus,
@@ -60,16 +62,36 @@ function CreateAccountModal({
 }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('member');
+  const [role, setRole] = useState('staff');
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+  const roleDropdownRef = useRef<HTMLDivElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target as Node)) {
+        setRoleMenuOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setRoleMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
+
   const resetForm = () => {
     setUsername('');
     setPassword('');
-    setRole('member');
+    setRole('staff');
+    setRoleMenuOpen(false);
     setShowPassword(false);
     setError(null);
     setSuccess(false);
@@ -196,21 +218,60 @@ function CreateAccountModal({
           </div>
 
           {/* Role */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" ref={roleDropdownRef}>
             <label className="text-xs font-bold uppercase tracking-wider text-on-surface dark:text-neutral-200" htmlFor="create-role">
               Role
             </label>
-            <select
-              id="create-role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              disabled={success}
-              className="w-full px-4 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/65 rounded-xl text-sm font-body font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-secondary/30 disabled:opacity-50 transition-all cursor-pointer"
-            >
-              <option value="member">Member</option>
-              <option value="staff">Staff</option>
-              <option value="admin">Admin</option>
-            </select>
+            <div className="relative">
+              <button
+                id="create-role"
+                type="button"
+                disabled={success}
+                aria-expanded={roleMenuOpen}
+                onClick={() => setRoleMenuOpen((prev) => !prev)}
+                className="w-full px-4 py-2.5 bg-neutral-50 dark:bg-neutral-800/50 border border-outline-variant/65 rounded-xl text-sm font-body font-semibold text-on-surface dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/30 dark:focus:ring-secondary/30 disabled:opacity-50 transition-all cursor-pointer flex items-center justify-between"
+              >
+                <span>{role === 'admin' ? 'Admin' : 'Staff'}</span>
+                <ChevronDown
+                  className={`w-4 h-4 text-primary dark:text-secondary transition-transform duration-200 ${
+                    roleMenuOpen ? 'rotate-180' : 'rotate-0'
+                  }`}
+                />
+              </button>
+
+              <div
+                className={`absolute left-0 right-0 mt-1.5 z-30 rounded-xl border border-outline-variant/65 bg-white dark:bg-neutral-900 shadow-lg overflow-hidden origin-top transition-all duration-200 ease-out ${
+                  roleMenuOpen
+                    ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                    : 'opacity-0 scale-95 -translate-y-1.5 pointer-events-none'
+                }`}
+              >
+                {[
+                  { value: 'staff', label: 'Staff' },
+                  { value: 'admin', label: 'Admin' },
+                ].map((opt) => {
+                  const selected = role === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setRole(opt.value);
+                        setRoleMenuOpen(false);
+                      }}
+                      className={`w-full px-4 py-2.5 text-left text-sm font-body font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                        selected
+                          ? 'bg-primary/10 dark:bg-secondary/15 text-primary dark:text-secondary'
+                          : 'text-on-surface dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                      {selected && <Check className="w-4 h-4" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Actions */}
