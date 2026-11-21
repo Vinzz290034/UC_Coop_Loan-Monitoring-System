@@ -77,6 +77,28 @@ const categoryLabel = (tab: CollectionItem['tab']) => {
 };
 
 // Build itemized particulars lines for the receipt body
+const normalizeLoanAccountName = (val?: string | null) => {
+  const trimmed = String(val || '').trim();
+  if (!trimmed) return '';
+  if (/^Loans\s+(?:Payable|Receivable)\b/i.test(trimmed)) {
+    return trimmed.replace(/^Loans\s+Payable\b/i, 'Loans Receivable');
+  }
+  const lower = trimmed.toLowerCase();
+  if (/regular\s*loan|salary/.test(lower)) return 'Loans Receivable - Salary';
+  if (/project/.test(lower)) return 'Loans Receivable - Project';
+  if (/product/.test(lower)) return 'Loans Receivable - Product';
+  if (/calamity/.test(lower)) return 'Loans Receivable - Calamity Loan';
+  if (/mortuary|columbary/.test(lower)) return 'Loans Receivable - Mortuary Loan (Columbary Loan)';
+  if (/petty\s*cash/.test(lower)) return 'Loans Receivable - Petty Cash Loan';
+  if (/cash\s*express|express/.test(lower)) return 'Loans Receivable - Cash Express';
+  if (/emergency/.test(lower)) return 'Loans Receivable - Emergency';
+  if (/special\s*occasion|occasion/.test(lower)) return 'Loans Receivable - Special Occasion';
+  if (/utility/.test(lower)) return 'Loans Receivable - Utility';
+  if (/rice/.test(lower)) return 'Loans Receivable - Rice';
+  if (/soap/.test(lower)) return 'Loans Receivable - Laundry Soap';
+  return trimmed;
+};
+
 const buildLines = (item: CollectionItem): { description: string; detail?: string; amount: number }[] => {
   if (item.tab === 'credit') {
     const lines: { description: string; detail?: string; amount: number }[] = [];
@@ -84,7 +106,7 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
     if (item.loans && item.loans.length > 0) {
       for (const loan of item.loans) {
         if (loan.principal_amount && loan.principal_amount > 0) {
-          lines.push({ description: loan.loan_account || 'Loans Payable', amount: loan.principal_amount });
+          lines.push({ description: normalizeLoanAccountName(loan.loan_account) || 'Loans Receivable', amount: loan.principal_amount });
         }
         if (loan.interest_amount && loan.interest_amount > 0) {
           lines.push({ description: loan.interest_account || 'Interest Received', amount: loan.interest_amount });
@@ -94,7 +116,7 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
         }
       }
     } else {
-      const account = item.loan_account || item.particulars || 'Loans Payable';
+      const account = normalizeLoanAccountName(item.loan_account) || item.particulars || 'Loans Receivable';
       const principal = item.principal_amount || 0;
       const interest = item.interest_amount || 0;
       const fines = item.fines_amount || 0;
@@ -127,7 +149,7 @@ const buildLines = (item: CollectionItem): { description: string; detail?: strin
     }
 
     if (lines.length > 0) return lines;
-    return [{ description: item.loan_account || item.particulars || 'Loans Payable', amount: item.amount }];
+    return [{ description: normalizeLoanAccountName(item.loan_account) || item.particulars || 'Loans Receivable', amount: item.amount }];
   }
   if (item.items && item.items.length > 0) {
     return item.items.map(it => {
