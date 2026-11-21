@@ -5393,6 +5393,167 @@ const ensureChartOfAccountsTable = async () => {
   `);
 };
 
+// @desc    Get all recorded entries across Check Vouchers (debits & credits), Revolving Funds, and Collections grouped by Book of Account
+// @route   GET /api/reports/book-of-accounts-entries
+// @access  Protected (Admin, Staff)
+export const getBookOfAccountsEntries = async (req, res, next) => {
+  try {
+    const { period, year, month, date } = parsePeriodParams(req.query);
+    const [cvResult, rfResult, colResult] = await Promise.all([
+      pool.query(`
+        SELECT id, voucher_no, voucher_date, payee, particulars, folder_name, details, amount
+        FROM check_vouchers
+        WHERE status != 'cancelled'
+        ORDER BY voucher_date DESC, created_at DESC
+      `),
+      pool.query(`
+        SELECT rfe.id, rfe.entry_date, rfe.voucher_no, rfe.account_name, rfe.particulars, rfe.recipient, rfe.amount, rfe.remarks,
+               rf.fund_name
+        FROM revolving_fund_entries rfe
+        LEFT JOIN revolving_funds rf ON rf.id = rfe.fund_id
+        WHERE COALESCE(rfe.is_cancelled, false) = false
+        ORDER BY rfe.entry_date DESC, rfe.created_at DESC
+      `).catch(() => ({ rows: [] })),
+      pool.query(`
+        SELECT id, or_no, payor_name, date, created_at, tab, items, item_name, service_type, particulars, other_category, remarks, amount,
+               loans, loan_account, principal_amount, interest_account, interest_amount, fines_account, fines_amount,
+               common_share_amount, membership_fee, billing_amount, particulars_amount
+        FROM collections
+        WHERE COALESCE(status, 'completed') != 'cancelled'
+        ORDER BY date DESC, created_at DESC
+      `)
+    ]);
+
+    const accountMap = new Map();
+    const recordEntry = (rawAccount, amt, tx) => {
+      const name = String(rawAccount || '').trim();
+      const val = Math.abs(parseFloat(amt) || 0);
+      if (!name || val <= 0) return;
+      const key = name.toLowerCase();
+      if (!accountMap.has(key)) {
+        accountMap.set(key, {
+          account_name: name,
+          category: tx.category || 'Account',
+          total_amount: 0,
+          count: 0,
+          transactions: []
+        });
+      }
+      const bucket = accountMap.get(key);
+      bucket.total_amount += val;
+      bucket.count += 1;
+      bucket.transactions.push({ ...tx, account_name: bucket.account_name, amount: val });
+    };
+
+    // 1. Check Vouchers (BOTH debit and credit lines)
+    cvResult.rows.forEach(cv => {
+      if (!matchesPeriod(cv.voucher_date, period, year, month, date)) return;
+      const dateStr = cv.voucher_date ? new Date(cv.voucher_date).toISOString().split('T')[0] : 'N/A';
+      let details = cv.details;
+      if (typeof details === 'string') {
+        try { details = JSON.parse(details); } catch { details = []; }
+      }
+      if (Array.isArray(details) && details.length > 0) {
+        details.forEach((d, idx) => {
+          const accName = String(d.book_of_account || d.description || '').trim();
+          const rawVal = parseFloat(String(d.amount ?? d.debit ?? d.credit ?? 0)) || 0;
+          const amt = Math.abs(rawVal);
+          if (!accName || amt <= 0) return;
+          recordEntry(accName, amt, {
+            id: `cv-${cv.id}-${idx}`,
+            voucher_id: cv.id || null,
+            voucher_no: cv.voucher_no || 'CV',
+            date: dateStr,
+            particulars: cv.particulars || 'Disbursement Voucher',
+            category: d.is_credit || rawVal < 0 ? 'Credit' : 'Debit',
+            payee: d.recipient || d.remarks || cv.payee || '',
+            remarks: d.remarks || cv.payee || ''
+          });
+        });
+      } else {
+        const amt = parseFloat(String(cv.amount || 0)) || 0;
+        if (amt > 0) {
+          const fallbackAcc = String(cv.folder_name || cv.particulars || 'Disbursement').trim();
+          recordEntry(fallbackAcc, amt, {
+            id: `cv-${cv.id}`,
+            voucher_id: cv.id || null,
+            voucher_no: cv.voucher_no || 'CV',
+            date: dateStr,
+            particulars: cv.particulars || 'Disbursement Voucher',
+            category: 'Debit',
+            payee: cv.payee || '',
+            remarks: cv.particulars || ''
+          });
+        }
+      }
+    });
+
+    // 2. Revolving Fund Entries
+    rfResult.rows.forEach(rf => {
+      if (!matchesPeriod(rf.entry_date, period, year, month, date)) return;
+      const amt = parseFloat(String(rf.amount || 0)) || 0;
+      if (amt <= 0) return;
+      const accName = String(rf.account_name || rf.particulars || rf.fund_name || 'Revolving Fund').trim();
+      recordEntry(accName, amt, {
+        id: `rf-${rf.id}`,
+        voucher_no: rf.voucher_no || 'RF',
+        date: rf.entry_date ? new Date(rf.entry_date).toISOString().split('T')[0] : 'N/A',
+        particulars: rf.particulars || rf.fund_name || 'Revolving Fund Entry',
+        category: 'Revolving Fund',
+        payee: rf.recipient || '',
+        remarks: rf.remarks || ''
+      });
+    });
+
+    // 3. Collections
+    colResult.rows.forEach(col => {
+      const cDate = col.date || col.created_at;
+      if (!matchesPeriod(cDate, period, year, month, date)) return;
+      const dateStr = cDate ? new Date(cDate).toISOString().split('T')[0] : 'N/A';
+      const baseTx = {
+        voucher_no: col.or_no ? `OR #${col.or_no}` : 'OR',
+        date: dateStr,
+        particulars: col.particulars || col.remarks || 'Collection Receipt',
+        category: 'Collection',
+        payee: col.payor_name || 'Member',
+        remarks: col.remarks || ''
+      };
+
+      if (Array.isArray(col.loans) && col.loans.length > 0) {
+        col.loans.forEach((l, idx) => {
+          if (parseFloat(l.principal_amount) > 0) recordEntry(l.loan_account || 'Loans Receivable - Salary', l.principal_amount, { ...baseTx, id: `col-${col.id}-p-${idx}` });
+          if (parseFloat(l.interest_amount) > 0) recordEntry(l.interest_account || 'Interest Received', l.interest_amount, { ...baseTx, id: `col-${col.id}-i-${idx}` });
+          if (parseFloat(l.fines_amount) > 0) recordEntry(l.fines_account || 'Fines & Penalties', l.fines_amount, { ...baseTx, id: `col-${col.id}-f-${idx}` });
+        });
+      } else {
+        if (parseFloat(col.principal_amount) > 0) recordEntry(col.loan_account || 'Loans Receivable - Salary', col.principal_amount, { ...baseTx, id: `col-${col.id}-p` });
+        if (parseFloat(col.interest_amount) > 0) recordEntry(col.interest_account || 'Interest Received', col.interest_amount, { ...baseTx, id: `col-${col.id}-i` });
+        if (parseFloat(col.fines_amount) > 0) recordEntry(col.fines_account || 'Fines & Penalties', col.fines_amount, { ...baseTx, id: `col-${col.id}-f` });
+      }
+      if (parseFloat(col.common_share_amount) > 0) recordEntry('Share Capital - Common', col.common_share_amount, { ...baseTx, id: `col-${col.id}-cs` });
+      if (parseFloat(col.membership_fee) > 0) recordEntry('Membership Fee', col.membership_fee, { ...baseTx, id: `col-${col.id}-mf` });
+      if (parseFloat(col.particulars_amount) > 0 && col.other_category) recordEntry(col.other_category, col.particulars_amount, { ...baseTx, id: `col-${col.id}-oth` });
+      if (Array.isArray(col.items) && col.items.length > 0) {
+        col.items.forEach((it, idx) => {
+          const rev = parseFloat(String(it.revenue)) || ((parseFloat(String(it.quantity)) || 1) * (parseFloat(String(it.selling_price || 0)) || 0));
+          if (rev > 0) recordEntry(it.item || it.item_name || 'Store Sales', rev, { ...baseTx, id: `col-${col.id}-it-${idx}` });
+        });
+      } else if (col.tab !== 'credit' && parseFloat(col.amount) > 0) {
+        recordEntry(col.service_type || col.item_name || col.particulars || 'Collection', col.amount, { ...baseTx, id: `col-${col.id}-amt` });
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      period,
+      filter: { year, month, date },
+      accounts: Array.from(accountMap.values())
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Get imported official Chart of Accounts
 // @route   GET /api/reports/chart-of-accounts
 // @access  Protected (Admin, Staff)

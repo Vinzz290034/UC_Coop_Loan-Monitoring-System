@@ -536,19 +536,37 @@ function ReportsPageContent() {
   const categoryGroupsData = useMemo(() => {
     const deleted = getRfDeletedAccountsSet();
     const accountsData = reportData?.accounts || [];
+    const canonicalAccountMatchKey = (raw: string) => {
+      let s = String(raw || '').trim().toLowerCase();
+      s = s.replace(/^cib\s*[-–—]?\s*bdo\b/, 'cash in bank bdo');
+      s = s.replace(/^cib\s*[-–—]?\s*mbtc\b/, 'cash in bank mbtc');
+      s = s.replace(/^cib\s*[-–—]?\s*metrobank\b/, 'cash in bank mbtc');
+      s = s.replace(/\bloans\s+receivable\b/g, 'loan receivable');
+      s = s.replace(/\bloans\s+payable\b/g, 'loan receivable');
+      return s.replace(/[^a-z0-9]+/g, ' ').trim();
+    };
     const accountsByName = new Map<string, any>();
+    const accountsByCanonical = new Map<string, any>();
+    const mergeReportBucket = (map: Map<string, any>, key: string, a: any, displayName: string) => {
+      if (!key) return;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, { ...a, account_name: displayName });
+      } else {
+        existing.total_amount = (Number(existing.total_amount) || 0) + (Number(a.total_amount) || 0);
+        existing.count = (Number(existing.count) || 0) + (Number(a.count) || 0);
+        existing.transactions = [...(existing.transactions || []), ...(a.transactions || [])];
+      }
+    };
     for (const a of accountsData) {
       if (a.account_name) {
+        const rawKey = String(a.account_name).trim().toLowerCase();
         const norm = normalizeAccountName(a.account_name);
-        const key = norm.toLowerCase();
-        const existing = accountsByName.get(key);
-        if (!existing) {
-          accountsByName.set(key, { ...a, account_name: norm });
-        } else {
-          existing.total_amount = (Number(existing.total_amount) || 0) + (Number(a.total_amount) || 0);
-          existing.count = (Number(existing.count) || 0) + (Number(a.count) || 0);
-          existing.transactions = [...(existing.transactions || []), ...(a.transactions || [])];
+        mergeReportBucket(accountsByName, rawKey, a, String(a.account_name).trim());
+        if (norm.toLowerCase() !== rawKey) {
+          mergeReportBucket(accountsByName, norm.toLowerCase(), a, norm);
         }
+        mergeReportBucket(accountsByCanonical, canonicalAccountMatchKey(a.account_name), a, String(a.account_name).trim());
       }
     }
 
@@ -562,7 +580,10 @@ function ReportsPageContent() {
           typeOrder.push(typeLabel);
         }
         const normTitle = normalizeAccountName(row.account_title);
-        const existingReport = accountsByName.get(normTitle.toLowerCase()) || accountsByName.get(row.account_title.trim().toLowerCase());
+        const existingReport =
+          accountsByName.get(row.account_title.trim().toLowerCase()) ||
+          accountsByName.get(normTitle.toLowerCase()) ||
+          accountsByCanonical.get(canonicalAccountMatchKey(row.account_title));
         byType[typeLabel].push({
           account_name: row.account_title,
           description: row.description || '',
@@ -929,7 +950,7 @@ function ReportsPageContent() {
       const endpointMap: Record<ReportTab, string> = {
         merchandise: '/reports/merchandise-sales',
         expenses: '/reports/expenses-breakdown',
-        categories: '/reports/expenses-breakdown',
+        categories: '/reports/book-of-accounts-entries',
         loans: '/reports/loan-products',
         membership: '/reports/membership-update',
         statement_of_operations: '/reports/statement-of-operations',

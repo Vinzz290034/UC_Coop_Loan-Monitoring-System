@@ -19,6 +19,7 @@ import {
   deleteBankReconEntry,
   clearBankReconEntries,
   getChartOfAccounts,
+  getBookOfAccountsEntries,
   importChartOfAccounts,
   deleteChartOfAccountItem,
   clearChartOfAccounts
@@ -73,6 +74,7 @@ router.post('/bank-recon/import', importBankReconEntries);
 router.delete('/bank-recon/clear', clearBankReconEntries);
 router.delete('/bank-recon/:id', deleteBankReconEntry);
 router.get('/chart-of-accounts', getChartOfAccounts);
+router.get('/book-of-accounts-entries', getBookOfAccountsEntries);
 router.post('/chart-of-accounts/import', importChartOfAccounts);
 router.delete('/chart-of-accounts/item/:title', deleteChartOfAccountItem);
 router.delete('/chart-of-accounts', clearChartOfAccounts);
