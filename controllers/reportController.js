@@ -4239,35 +4239,62 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const merchSales = newStore();
     const merchItemMap = new Map();
     const formatMerchItemLabel = (raw) => {
-      const cleaned = String(raw || '').trim();
+      const cleaned = String(raw || '').trim().replace(/\s+/g, ' ');
       const lower = cleaned.toLowerCase();
-      const aliases = {
-        'kit': 'Kit',
-        'id case': 'ID Case',
-        's.board': 'S.Board',
-        'basic. ed': 'Basic Ed',
-        'pershing cap': 'Pershing Cap',
-        'cap device': 'Cap Device',
-        'class bar': 'Class Bar',
-        'buckle & belt': 'Buckle & Belt',
-        'safety gloves': 'Safety Gloves',
-        'safety shoes': 'Safety Shoes',
-        'hard hat': 'Hard Hat',
-        'pe': 'PE Uniform',
-        'type a & b': 'Type A & B',
-        'type c': 'Type C',
-        'bsname': 'BSNAME'
-      };
-      if (aliases[lower]) return aliases[lower];
-      return cleaned.replace(/\b[a-z]/g, c => c.toUpperCase());
+      const canonicalRules = [
+        [/^(safety\s*)?g+o+g+l+e+s*$/i, 'Safety Goggles'],
+        [/^score\s*sheets?$/i, 'Scoresheet'],
+        [/^hard\s*hats?$/i, 'Hard Hat'],
+        [/^safety\s*gloves?$/i, 'Safety Gloves'],
+        [/^safety\s*shoes?$/i, 'Safety Shoes'],
+        [/^id\s*cases?$/i, 'ID Case'],
+        [/^pershing\s*caps?$/i, 'Pershing Cap'],
+        [/^cap\s*devices?$/i, 'Cap Device'],
+        [/^class\s*bars?$/i, 'Class Bar'],
+        [/^buckles?\s*(&|and)\s*belts?$/i, 'Buckle & Belt'],
+        [/^type\s*a\s*(&|and)\s*b$/i, 'Type A & B'],
+        [/^type\s*c$/i, 'Type C'],
+        [/^p\.?\s*e\.?(\s*uniforms?)?$/i, 'PE Uniform'],
+        [/^lanyards?$/i, 'Lanyard'],
+        [/^coveralls?$/i, 'Coverall'],
+        [/^ropes?$/i, 'Rope'],
+        [/^stickers?$/i, 'Sticker'],
+        [/^patches?$/i, 'Patch'],
+        [/^buttons?$/i, 'Buttons'],
+        [/^gloves?$/i, 'Gloves'],
+        [/^shoes?$/i, 'Shoes'],
+        [/^sheets?$/i, 'Sheets'],
+        [/^bags?$/i, 'Bag'],
+        [/^pins?$/i, 'Pin'],
+        [/^manuals?$/i, 'Manual'],
+        [/^kits?$/i, 'Kit'],
+        [/^cloth(es|s)?$/i, 'Cloth'],
+        [/^s\.?\s*boards?$/i, 'S.Board'],
+        [/^basic\.?\s*ed$/i, 'Basic Ed'],
+        [/^bsname$/i, 'BSNAME'],
+        [/^gala$/i, 'Gala'],
+        [/^swim+ing$/i, 'Swimming']
+      ];
+      for (const [pattern, label] of canonicalRules) {
+        if (pattern.test(lower)) return label;
+      }
+      return cleaned.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
     };
     const ensureMerchEntry = (rawName, category = 'Store Merchandise') => {
       const label = formatMerchItemLabel(rawName);
-      const key = label.toLowerCase();
-      if (!merchItemMap.has(key)) {
-        merchItemMap.set(key, { label, category, store: newStore() });
+      const baseKey = label.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const singularKey = baseKey.replace(/s$/, '');
+      const matchedKey = merchItemMap.has(baseKey)
+        ? baseKey
+        : merchItemMap.has(singularKey)
+        ? singularKey
+        : merchItemMap.has(`${baseKey}s`)
+        ? `${baseKey}s`
+        : baseKey;
+      if (!merchItemMap.has(matchedKey)) {
+        merchItemMap.set(matchedKey, { label, category, store: newStore() });
       }
-      return merchItemMap.get(key);
+      return merchItemMap.get(matchedKey);
     };
     (merchCur?.products || []).forEach((p) => {
       if (p.is_batch) return;

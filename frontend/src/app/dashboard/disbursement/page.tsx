@@ -712,6 +712,15 @@ const ACCOUNT_CATEGORIES = [
   { value: 'Wages', label: 'Wages', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700' }
 ] as const;
 
+const BOOK_ACCOUNT_TYPES = [
+  { value: 'Asset', label: 'Asset', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' },
+  { value: 'Liabilities', label: 'Liabilities', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700' },
+  { value: 'Equity', label: 'Equity', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 border-purple-300 dark:border-purple-700' },
+  { value: 'Revenue', label: 'Revenue', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 border-blue-300 dark:border-blue-700' },
+  { value: 'Expense', label: 'Expense', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300 border-rose-300 dark:border-rose-700' },
+  { value: 'Net Income', label: 'Net Income', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border-teal-300 dark:border-teal-700' }
+] as const;
+
 const getCategoryForAccount = (acct: string, categoryMap?: Record<string, string>): string => {
   const trimmed = (acct || '').trim();
   if (!trimmed) return 'Operation';
@@ -843,7 +852,7 @@ function ReplenishmentAccountDropdown({
   categoryMap?: Record<string, string>;
   voucherCounts?: Record<string, number>;
   disbursementCategory?: string;
-  onAddAccount?: (name: string, category: string) => void;
+  onAddAccount?: (name: string, category: string, bookType?: string) => void;
   onDeleteAccount?: (name: string) => void;
   placeholder?: string;
   excludeOptions?: string[];
@@ -852,6 +861,7 @@ function ReplenishmentAccountDropdown({
   const [search, setSearch] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [newAcctName, setNewAcctName] = useState('');
+  const [newAcctBookType, setNewAcctBookType] = useState('Expense');
   const [newAcctCategory, setNewAcctCategory] = useState('Operation');
   const [categoryManuallySet, setCategoryManuallySet] = useState(false);
 
@@ -960,6 +970,7 @@ function ReplenishmentAccountDropdown({
       ? (targetCategoryKey === 'Petty Cash' ? 'Petty Cash Loan' : targetCategoryKey)
       : getCategoryForAccount(suggestedName, categoryMap);
     setNewAcctCategory(defaultCat);
+    setNewAcctBookType('Expense');
     setCategoryManuallySet(false);
     setIsCreating(true);
   };
@@ -968,9 +979,10 @@ function ReplenishmentAccountDropdown({
     const cleanName = newAcctName.trim();
     if (!cleanName) return;
     const cat = newAcctCategory.trim() || 'Operation';
+    const bookType = newAcctBookType.trim() || 'Expense';
 
     if (onAddAccount) {
-      onAddAccount(cleanName, cat);
+      onAddAccount(cleanName, cat, bookType);
     }
     onChange(cleanName);
     setIsCreating(false);
@@ -1061,7 +1073,7 @@ function ReplenishmentAccountDropdown({
 
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
-                  Select Category
+                  Select Category <span className="font-normal normal-case text-neutral-400">(Disbursement Dropdown)</span>
                 </label>
                 <div className="grid grid-cols-3 gap-1.5">
                   {ACCOUNT_CATEGORIES.map(cat => {
@@ -1082,6 +1094,32 @@ function ReplenishmentAccountDropdown({
                       >
                         {isSelected && <Check className="w-3 h-3 shrink-0" />}
                         <span>{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
+                  Book of Account Type <span className="font-normal normal-case text-neutral-400">(Book of Accounts Tab)</span>
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {BOOK_ACCOUNT_TYPES.map(bt => {
+                    const isSelected = newAcctBookType === bt.value;
+                    return (
+                      <button
+                        key={bt.value}
+                        type="button"
+                        onClick={() => setNewAcctBookType(bt.value)}
+                        className={`px-2 py-1.5 rounded-lg text-xs font-bold border transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
+                          isSelected
+                            ? `${bt.color} ring-2 ring-emerald-500 shadow-xs font-black`
+                            : 'border-outline-variant/40 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 shrink-0" />}
+                        <span>{bt.label}</span>
                       </button>
                     );
                   })}
@@ -1819,6 +1857,7 @@ function DisbursementPageContent() {
           }
           coaCatMap[key] = getCategoryForAccount(title, serverCatMap);
         }
+        try { localStorage.setItem('rf_has_imported_coa', '1'); } catch {}
         setCustomAccountOptions(coaNames);
         setAccountCategoryMap(coaCatMap);
         try {
@@ -1827,6 +1866,7 @@ function DisbursementPageContent() {
         } catch {}
         return;
       }
+      try { localStorage.removeItem('rf_has_imported_coa'); } catch {}
 
       if (res?.data?.success && Array.isArray(res.data.data)) {
         const serverNames: string[] = [];
@@ -1931,10 +1971,11 @@ function DisbursementPageContent() {
     fetchRecipients();
   }, [fetchCustomAccounts, fetchRecipients]);
 
-  const handleAddCustomAccount = async (name: string, category: string) => {
+  const handleAddCustomAccount = async (name: string, category: string, bookType?: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
     const catToUse = category.trim() || 'Operation';
+    const bookTypeToUse = (bookType || 'Expense').trim();
 
     restoreRfDeletedAccount(trimmed);
 
@@ -1961,6 +2002,13 @@ function DisbursementPageContent() {
     // 3. Persist to backend
     try {
       await api.post('/revolving-funds/accounts', { name: trimmed, category: catToUse });
+      const hasCoa = typeof window !== 'undefined' && localStorage.getItem('rf_has_imported_coa') === '1';
+      if (hasCoa) {
+        await api.post('/reports/chart-of-accounts/import', {
+          rows: [{ account_type: bookTypeToUse, account_title: trimmed, description: '' }],
+          replace_existing: false
+        });
+      }
     } catch (err) {
       console.error('Failed to save custom account to backend:', err);
     }

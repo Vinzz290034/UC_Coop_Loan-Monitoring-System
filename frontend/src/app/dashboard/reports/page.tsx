@@ -46,6 +46,7 @@ import StatementOfOperationsTab from '@/components/reports/StatementOfOperations
 import FinancialStatementTab from '@/components/reports/FinancialStatementTab';
 import {
   ACCOUNT_CATEGORIES,
+  BOOK_ACCOUNT_TYPES,
   CATEGORY_THEMES,
   getCategoryForAccount,
   normalizeAccountName,
@@ -210,6 +211,7 @@ function ReportsPageContent() {
   const [isCreateAccountModalOpen, setIsCreateAccountModalOpen] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountCategory, setNewAccountCategory] = useState('Operation');
+  const [newAccountBookType, setNewAccountBookType] = useState('Expense');
   const [isCategoryManuallyChosen, setIsCategoryManuallyChosen] = useState(false);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<{ name: string; count: number } | null>(null);
@@ -573,12 +575,13 @@ function ReportsPageContent() {
       }
 
       const coaThemeFor = (t: string) => {
+        if (CATEGORY_THEMES[t]) return CATEGORY_THEMES[t];
         const l = t.toLowerCase();
-        if (l.includes('asset')) return CATEGORY_THEMES['Petty Cash'] || CATEGORY_THEMES['Operation'];
-        if (l.includes('liab')) return CATEGORY_THEMES['Merchandise'] || CATEGORY_THEMES['Operation'];
-        if (l.includes('equit')) return CATEGORY_THEMES['Service'] || CATEGORY_THEMES['Operation'];
-        if (l.includes('income') || l.includes('rev')) return CATEGORY_THEMES['Operation'];
-        if (l.includes('exp') || l.includes('cost')) return CATEGORY_THEMES['CETF'] || CATEGORY_THEMES['Operation'];
+        if (l.includes('asset')) return CATEGORY_THEMES['Asset'] || CATEGORY_THEMES['Operation'];
+        if (l.includes('liab')) return CATEGORY_THEMES['Liabilities'] || CATEGORY_THEMES['Operation'];
+        if (l.includes('equit')) return CATEGORY_THEMES['Equity'] || CATEGORY_THEMES['Operation'];
+        if (l.includes('income') || l.includes('rev')) return CATEGORY_THEMES['Revenue'] || CATEGORY_THEMES['Operation'];
+        if (l.includes('exp') || l.includes('cost')) return CATEGORY_THEMES['Expense'] || CATEGORY_THEMES['Operation'];
         return CATEGORY_THEMES['Operation'];
       };
 
@@ -770,6 +773,7 @@ function ReportsPageContent() {
     const trimmed = newAccountName.trim();
     if (!trimmed) return;
     const catToUse = newAccountCategory.trim() || 'Operation';
+    const bookTypeToUse = newAccountBookType.trim() || 'Expense';
 
     setIsSavingAccount(true);
     restoreRfDeletedAccount(trimmed);
@@ -794,6 +798,16 @@ function ReportsPageContent() {
     // 3. Persist to backend
     try {
       await api.post('/revolving-funds/accounts', { name: trimmed, category: catToUse });
+      if (chartOfAccounts.length > 0) {
+        await api.post('/reports/chart-of-accounts/import', {
+          rows: [{ account_type: bookTypeToUse, account_title: trimmed, description: '' }],
+          replace_existing: false
+        });
+        setChartOfAccounts(prev => [
+          ...prev,
+          { id: Date.now(), account_type: bookTypeToUse, account_title: trimmed, description: '', sort_order: prev.length + 1 }
+        ]);
+      }
     } catch (err) {
       console.error('Failed to save account to backend:', err);
     }
@@ -4892,6 +4906,7 @@ function ReportsPageContent() {
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-300 mb-1.5">
                   Select Category <span className="text-red-500">*</span>
+                  <span className="ml-1.5 font-normal normal-case text-neutral-400">(Disbursement Dropdown)</span>
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {ACCOUNT_CATEGORIES.map(cat => {
@@ -4912,6 +4927,33 @@ function ReportsPageContent() {
                       >
                         {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
                         <span>{cat.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-300 mb-1.5">
+                  Book of Account Type <span className="text-red-500">*</span>
+                  <span className="ml-1.5 font-normal normal-case text-neutral-400">(Book of Accounts Tab)</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {BOOK_ACCOUNT_TYPES.map(bt => {
+                    const isSelected = newAccountBookType === bt.value;
+                    return (
+                      <button
+                        key={bt.value}
+                        type="button"
+                        onClick={() => setNewAccountBookType(bt.value)}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+                          isSelected
+                            ? `${bt.color} ring-2 ring-emerald-500 shadow-xs font-black`
+                            : 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        <span>{bt.label}</span>
                       </button>
                     );
                   })}

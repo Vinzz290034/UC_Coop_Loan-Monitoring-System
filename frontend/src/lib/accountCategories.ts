@@ -136,6 +136,15 @@ export const ACCOUNT_CATEGORIES: readonly AccountCategoryOption[] = [
   { value: 'Wages', label: 'Wages', color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700', description: 'Regular staff compensation, payroll, employee wages & labor' }
 ] as const;
 
+export const BOOK_ACCOUNT_TYPES: readonly AccountCategoryOption[] = [
+  { value: 'Asset', label: 'Asset', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700', description: 'Cash, receivables, inventory, property & equipment assets' },
+  { value: 'Liabilities', label: 'Liabilities', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border-amber-300 dark:border-amber-700', description: 'Payables, deposits, accrued obligations & member liabilities' },
+  { value: 'Equity', label: 'Equity', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 border-purple-300 dark:border-purple-700', description: 'Share capital, statutory reserves, undivided net surplus & equity' },
+  { value: 'Revenue', label: 'Revenue', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 border-blue-300 dark:border-blue-700', description: 'Interest income, service fees, merchandise sales & cooperative revenue' },
+  { value: 'Expense', label: 'Expense', color: 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300 border-rose-300 dark:border-rose-700', description: 'Administrative, operating, marketing & direct cost expenses' },
+  { value: 'Net Income', label: 'Net Income', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 border-teal-300 dark:border-teal-700', description: 'Net surplus / net income summary accounts' }
+] as const;
+
 export const CATEGORY_THEMES: Record<string, { bg: string; text: string; border: string; badge: string; iconBg: string }> = {
   'Operation': {
     bg: 'bg-blue-50/70 dark:bg-blue-950/20',
@@ -213,6 +222,48 @@ export const CATEGORY_THEMES: Record<string, { bg: string; text: string; border:
     border: 'border-indigo-200 dark:border-indigo-800/60',
     badge: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700',
     iconBg: 'bg-indigo-600 text-white'
+  },
+  'Asset': {
+    bg: 'bg-emerald-50/70 dark:bg-emerald-950/20',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-200 dark:border-emerald-800/60',
+    badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700',
+    iconBg: 'bg-emerald-600 text-white'
+  },
+  'Liabilities': {
+    bg: 'bg-amber-50/70 dark:bg-amber-950/20',
+    text: 'text-amber-700 dark:text-amber-300',
+    border: 'border-amber-200 dark:border-amber-800/60',
+    badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 border border-amber-200 dark:border-amber-700',
+    iconBg: 'bg-amber-600 text-white'
+  },
+  'Equity': {
+    bg: 'bg-purple-50/70 dark:bg-purple-950/20',
+    text: 'text-purple-700 dark:text-purple-300',
+    border: 'border-purple-200 dark:border-purple-800/60',
+    badge: 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-300 border border-purple-200 dark:border-purple-700',
+    iconBg: 'bg-purple-600 text-white'
+  },
+  'Revenue': {
+    bg: 'bg-blue-50/70 dark:bg-blue-950/20',
+    text: 'text-blue-700 dark:text-blue-300',
+    border: 'border-blue-200 dark:border-blue-800/60',
+    badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300 border border-blue-200 dark:border-blue-700',
+    iconBg: 'bg-blue-600 text-white'
+  },
+  'Expense': {
+    bg: 'bg-rose-50/70 dark:bg-rose-950/20',
+    text: 'text-rose-700 dark:text-rose-300',
+    border: 'border-rose-200 dark:border-rose-800/60',
+    badge: 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300 border border-rose-200 dark:border-rose-700',
+    iconBg: 'bg-rose-600 text-white'
+  },
+  'Net Income': {
+    bg: 'bg-teal-50/70 dark:bg-teal-950/20',
+    text: 'text-teal-800 dark:text-teal-300',
+    border: 'border-teal-200 dark:border-teal-800/60',
+    badge: 'bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-300 border border-teal-200 dark:border-teal-700',
+    iconBg: 'bg-teal-600 text-white'
   }
 };
 
