@@ -4087,14 +4087,17 @@ function DisbursementPageContent() {
         }
       }
       const balancingCib = Math.max(0, debitRowsSum - creditRowsSum);
-      const manualCib = parseFloat(editCvCibAmount || '0') || 0;
+      const hasCibRowInEdit = editCvRows.some(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+      const manualCib = hasCibRowInEdit ? (parseFloat(editCvCibAmount || '0') || 0) : 0;
       const cibVal = isStl
         ? balancingCib
-        : (balancingCib > 0 ? balancingCib : (manualCib > 0 ? manualCib : debitRowsSum));
+        : (hasCibRowInEdit
+            ? (balancingCib > 0 ? balancingCib : (manualCib > 0 ? manualCib : debitRowsSum))
+            : balancingCib);
 
-      // Persist the balancing CIB row
+      // Persist the balancing CIB row only when needed or present
       const existingCibIdx = detailsArray.findIndex(d => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((d.book_of_account || '').trim()));
-      if (cibVal > 0) {
+      if (cibVal > 0 && (hasCibRowInEdit || balancingCib > 0)) {
         const cibName = formatCibAccountName(editCvFormData.bank);
         if (existingCibIdx >= 0) {
           detailsArray[existingCibIdx] = {
@@ -4120,7 +4123,7 @@ function DisbursementPageContent() {
             isAutoCredit: true
           });
         }
-      } else if (existingCibIdx >= 0 && !isReplenish) {
+      } else if (existingCibIdx >= 0) {
         detailsArray.splice(existingCibIdx, 1);
       }
 
