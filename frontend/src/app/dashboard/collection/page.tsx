@@ -189,6 +189,9 @@ const parseCollectionDate = (rawDate?: string) => {
   return { year: null, month: null };
 };
 
+const normalizeLoanAccountName = (val?: string | null) =>
+  String(val || '').replace(/^Loans Payable\b/i, 'Loans Receivable');
+
 const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
   { value: 'Loans Receivable - Salary', label: 'Loans Receivable - Salary' },
   { value: 'Loans Receivable - Project', label: 'Loans Receivable - Project' },
@@ -1208,7 +1211,7 @@ function CollectionPageContent() {
         .filter(l => !/shared\s*capital|share\s*capital|fixed\s*deposit|common\s*share/i.test(l.loan_account || ''))
         .map((l, idx) => ({
           id: `edit-loan-${idx}-${Date.now()}`,
-          loan_account: l.loan_account || 'Loans Receivable - Salary',
+          loan_account: normalizeLoanAccountName(l.loan_account) || 'Loans Receivable - Salary',
           principal_amount: l.principal_amount ? String(l.principal_amount) : '',
           interest_account: l.interest_account || 'Interest Received - Salary',
           interest_amount: l.interest_amount ? String(l.interest_amount) : '',
@@ -1222,7 +1225,7 @@ function CollectionPageContent() {
       initialLoans = [
         {
           id: `edit-loan-0-${++rowCounterRef.current}`,
-          loan_account: isLegacyShareCapital ? 'Loans Receivable - Salary' : (item.loan_account || 'Loans Receivable - Salary'),
+          loan_account: isLegacyShareCapital ? 'Loans Receivable - Salary' : (normalizeLoanAccountName(item.loan_account) || 'Loans Receivable - Salary'),
           principal_amount: isLegacyShareCapital ? '' : (item.principal_amount ? String(item.principal_amount) : ''),
           interest_account: isLegacyShareCapital ? 'Interest Received - Salary' : (item.interest_account || 'Interest Received - Salary'),
           interest_amount: isLegacyShareCapital ? '' : (item.interest_amount ? String(item.interest_amount) : ''),
@@ -1348,7 +1351,7 @@ function CollectionPageContent() {
       payor_name: item.payor_name || '',
       member_id: item.member_id || '',
       loans: initialLoans,
-      loan_account: item.loan_account || 'Loans Receivable - Salary',
+      loan_account: normalizeLoanAccountName(item.loan_account) || 'Loans Receivable - Salary',
       principal_amount: item.principal_amount ? String(item.principal_amount) : '',
       interest_account: item.interest_account || 'Interest Received - Salary',
       interest_amount: item.interest_amount ? String(item.interest_amount) : '',
@@ -6231,7 +6234,7 @@ function CollectionPageContent() {
                     ) : (
                       (selectedItemForModal.principal_amount || selectedItemForModal.interest_amount || selectedItemForModal.fines_amount) ? (
                         <div className="space-y-1">
-                          <p className="font-medium text-neutral-800 dark:text-neutral-200">Account: {selectedItemForModal.loan_account || 'Loans Receivable'}</p>
+                          <p className="font-medium text-neutral-800 dark:text-neutral-200">Account: {normalizeLoanAccountName(selectedItemForModal.loan_account) || 'Loans Receivable'}</p>
                           {selectedItemForModal.principal_amount !== undefined && selectedItemForModal.principal_amount > 0 && (
                             <p className="text-neutral-500">Principal: ₱{selectedItemForModal.principal_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                           )}
