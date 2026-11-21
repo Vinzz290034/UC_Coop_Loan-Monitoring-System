@@ -6108,7 +6108,7 @@ function DisbursementPageContent() {
                 const detailedData = getBalancedCvRows(selectedCvForModal);
                 const activeData = isReplenish ? summaryData : detailedData;
                 const { rows, debitTotal, creditTotal } = activeData;
-                const cibRow = detailedData.rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+                const cibRow = rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
                 const actualDisbursedAmount = (cibRow && cibRow.credit !== null && cibRow.credit !== undefined && Number(cibRow.credit) > 0)
                   ? Number(cibRow.credit)
                   : (isReplenish ? (getCvDisbursedAmount(selectedCvForModal) || summaryData.debitTotal || debitTotal) : getCvDisbursedAmount(selectedCvForModal));
