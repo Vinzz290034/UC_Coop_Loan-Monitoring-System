@@ -190,18 +190,18 @@ const parseCollectionDate = (rawDate?: string) => {
 };
 
 const LOANS_PAYABLE_OPTIONS: SelectOption[] = [
-  { value: 'Loans Payable - Salary', label: 'Loans Payable - Salary' },
-  { value: 'Loans Payable - Project', label: 'Loans Payable - Project' },
-  { value: 'Loans Payable - Product', label: 'Loans Payable - Product' },
-  { value: 'Loans Payable - Calamity Loan', label: 'Loans Payable - Calamity Loan' },
-  { value: 'Loans Payable - Mortuary Loan (Columbary Loan)', label: 'Loans Payable - Mortuary Loan (Columbary Loan)' },
-  { value: 'Loans Payable - Petty Cash Loan', label: 'Loans Payable - Petty Cash Loan' },
-  { value: 'Loans Payable - Cash Express', label: 'Loans Payable - Cash Express' },
-  { value: 'Loans Payable - Emergency', label: 'Loans Payable - Emergency' },
-  { value: 'Loans Payable - Special Occasion', label: 'Loans Payable - Special Occasion' },
-  { value: 'Loans Payable - Utility', label: 'Loans Payable - Utility' },
-  { value: 'Loans Payable - Rice', label: 'Loans Payable - Rice' },
-  { value: 'Loans Payable - Laundry Soap', label: 'Loans Payable - Laundry Soap' },
+  { value: 'Loans Receivable - Salary', label: 'Loans Receivable - Salary' },
+  { value: 'Loans Receivable - Project', label: 'Loans Receivable - Project' },
+  { value: 'Loans Receivable - Product', label: 'Loans Receivable - Product' },
+  { value: 'Loans Receivable - Calamity Loan', label: 'Loans Receivable - Calamity Loan' },
+  { value: 'Loans Receivable - Mortuary Loan (Columbary Loan)', label: 'Loans Receivable - Mortuary Loan (Columbary Loan)' },
+  { value: 'Loans Receivable - Petty Cash Loan', label: 'Loans Receivable - Petty Cash Loan' },
+  { value: 'Loans Receivable - Cash Express', label: 'Loans Receivable - Cash Express' },
+  { value: 'Loans Receivable - Emergency', label: 'Loans Receivable - Emergency' },
+  { value: 'Loans Receivable - Special Occasion', label: 'Loans Receivable - Special Occasion' },
+  { value: 'Loans Receivable - Utility', label: 'Loans Receivable - Utility' },
+  { value: 'Loans Receivable - Rice', label: 'Loans Receivable - Rice' },
+  { value: 'Loans Receivable - Laundry Soap', label: 'Loans Receivable - Laundry Soap' },
 ];
 
 const INTEREST_RECEIVED_OPTIONS: SelectOption[] = [
@@ -737,7 +737,7 @@ function CollectionPageContent() {
     loans: [
       {
         id: 'loan-1',
-        loan_account: 'Loans Payable - Salary',
+        loan_account: 'Loans Receivable - Salary',
         principal_amount: '',
         interest_account: 'Interest Received - Salary',
         interest_amount: '',
@@ -745,7 +745,7 @@ function CollectionPageContent() {
         fines_amount: '',
       }
     ] as FormLoanEntry[],
-    loan_account: 'Loans Payable - Salary',
+    loan_account: 'Loans Receivable - Salary',
     principal_amount: '',
     interest_account: 'Interest Received - Salary',
     interest_amount: '',
@@ -1062,7 +1062,7 @@ function CollectionPageContent() {
       const updatedLoans = prev.loans.map((loan, i) => {
         if (i !== index) return loan;
         if (field === 'loan_account') {
-          const suffix = value.replace(/^Loans Payable\s*-\s*/, '');
+          const suffix = value.replace(/^Loans (?:Payable|Receivable)\s*-\s*/, '');
           const matchingInterest = `Interest Received - ${suffix}`;
           const matchingFines = `Fines - ${suffix}`;
           return {
@@ -1097,7 +1097,7 @@ function CollectionPageContent() {
     setFormData(prev => {
       const usedAccounts = prev.loans.map(l => l.loan_account);
       const nextOpt = LOANS_PAYABLE_OPTIONS.find(opt => !usedAccounts.includes(opt.value)) || LOANS_PAYABLE_OPTIONS[0];
-      const suffix = nextOpt.value.replace(/^Loans Payable\s*-\s*/, '');
+      const suffix = nextOpt.value.replace(/^Loans (?:Payable|Receivable)\s*-\s*/, '');
       const matchingInterest = `Interest Received - ${suffix}`;
       const matchingFines = `Fines - ${suffix}`;
 
@@ -1208,7 +1208,7 @@ function CollectionPageContent() {
         .filter(l => !/shared\s*capital|share\s*capital|fixed\s*deposit|common\s*share/i.test(l.loan_account || ''))
         .map((l, idx) => ({
           id: `edit-loan-${idx}-${Date.now()}`,
-          loan_account: l.loan_account || 'Loans Payable - Salary',
+          loan_account: l.loan_account || 'Loans Receivable - Salary',
           principal_amount: l.principal_amount ? String(l.principal_amount) : '',
           interest_account: l.interest_account || 'Interest Received - Salary',
           interest_amount: l.interest_amount ? String(l.interest_amount) : '',
@@ -1222,7 +1222,7 @@ function CollectionPageContent() {
       initialLoans = [
         {
           id: `edit-loan-0-${++rowCounterRef.current}`,
-          loan_account: isLegacyShareCapital ? 'Loans Payable - Salary' : (item.loan_account || 'Loans Payable - Salary'),
+          loan_account: isLegacyShareCapital ? 'Loans Receivable - Salary' : (item.loan_account || 'Loans Receivable - Salary'),
           principal_amount: isLegacyShareCapital ? '' : (item.principal_amount ? String(item.principal_amount) : ''),
           interest_account: isLegacyShareCapital ? 'Interest Received - Salary' : (item.interest_account || 'Interest Received - Salary'),
           interest_amount: isLegacyShareCapital ? '' : (item.interest_amount ? String(item.interest_amount) : ''),
@@ -1234,7 +1234,7 @@ function CollectionPageContent() {
       initialLoans = [
         {
           id: `edit-loan-0-${++rowCounterRef.current}`,
-          loan_account: 'Loans Payable - Salary',
+          loan_account: 'Loans Receivable - Salary',
           principal_amount: '',
           interest_account: 'Interest Received - Salary',
           interest_amount: '',
@@ -1348,7 +1348,7 @@ function CollectionPageContent() {
       payor_name: item.payor_name || '',
       member_id: item.member_id || '',
       loans: initialLoans,
-      loan_account: item.loan_account || 'Loans Payable - Salary',
+      loan_account: item.loan_account || 'Loans Receivable - Salary',
       principal_amount: item.principal_amount ? String(item.principal_amount) : '',
       interest_account: item.interest_account || 'Interest Received - Salary',
       interest_amount: item.interest_amount ? String(item.interest_amount) : '',
@@ -1845,7 +1845,7 @@ function CollectionPageContent() {
     setEditFormData((prev: any) => {
       const nextLoans = [...prev.loans];
       if (field === 'loan_account') {
-        const suffix = val.replace(/^Loans Payable\s*-\s*/, '');
+        const suffix = val.replace(/^Loans (?:Payable|Receivable)\s*-\s*/, '');
         const matchingInterest = `Interest Received - ${suffix}`;
         const matchingFines = `Fines - ${suffix}`;
         nextLoans[index] = {
@@ -1869,7 +1869,7 @@ function CollectionPageContent() {
     setEditFormData((prev: any) => {
       const usedAccounts = (prev.loans || []).map((l: any) => l.loan_account);
       const nextOpt = LOANS_PAYABLE_OPTIONS.find(opt => !usedAccounts.includes(opt.value)) || LOANS_PAYABLE_OPTIONS[0];
-      const suffix = nextOpt.value.replace(/^Loans Payable\s*-\s*/, '');
+      const suffix = nextOpt.value.replace(/^Loans (?:Payable|Receivable)\s*-\s*/, '');
       const matchingInterest = `Interest Received - ${suffix}`;
       const matchingFines = `Fines - ${suffix}`;
 
@@ -2358,7 +2358,7 @@ function CollectionPageContent() {
       loans: [
         {
           id: `loan-${Date.now()}`,
-          loan_account: 'Loans Payable - Salary',
+          loan_account: 'Loans Receivable - Salary',
           principal_amount: '',
           interest_account: 'Interest Received - Salary',
           interest_amount: '',
@@ -2366,7 +2366,7 @@ function CollectionPageContent() {
           fines_amount: '',
         }
       ],
-      loan_account: 'Loans Payable - Salary',
+      loan_account: 'Loans Receivable - Salary',
       principal_amount: '',
       interest_account: 'Interest Received - Salary',
       interest_amount: '',
@@ -4059,7 +4059,7 @@ function CollectionPageContent() {
                               value={loan.loan_account}
                               onChange={val => handleLoanFieldChange(idx, 'loan_account', val)}
                               options={LOANS_PAYABLE_OPTIONS}
-                              placeholder="Select Loans Payable..."
+                              placeholder="Select Loans Receivable..."
                               buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
                             />
                             <div className="relative">
@@ -5169,7 +5169,7 @@ function CollectionPageContent() {
                               value={loan.loan_account}
                               onChange={val => handleEditLoanFieldChange(idx, 'loan_account', val)}
                               options={LOANS_PAYABLE_OPTIONS}
-                              placeholder="Select Loans Payable..."
+                              placeholder="Select Loans Receivable..."
                               disabled={isEditLocked}
                               buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
                             />
@@ -6231,7 +6231,7 @@ function CollectionPageContent() {
                     ) : (
                       (selectedItemForModal.principal_amount || selectedItemForModal.interest_amount || selectedItemForModal.fines_amount) ? (
                         <div className="space-y-1">
-                          <p className="font-medium text-neutral-800 dark:text-neutral-200">Account: {selectedItemForModal.loan_account || 'Loans Payable'}</p>
+                          <p className="font-medium text-neutral-800 dark:text-neutral-200">Account: {selectedItemForModal.loan_account || 'Loans Receivable'}</p>
                           {selectedItemForModal.principal_amount !== undefined && selectedItemForModal.principal_amount > 0 && (
                             <p className="text-neutral-500">Principal: ₱{selectedItemForModal.principal_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                           )}
