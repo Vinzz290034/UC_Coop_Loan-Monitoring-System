@@ -135,6 +135,30 @@ const isServiceCollectionItem = (it: any): boolean => {
   return /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|lamination|id\s*photo|notarial|scoresheet|toga|alteration|service)/i.test(name);
 };
 
+const getDisplayCollectionAmount = (item: CollectionItem): number => {
+  if (
+    (item.tab === 'sales' || item.tab === 'sales_services' || item.tab === 'services') &&
+    Array.isArray(item.items) &&
+    item.items.length > 0
+  ) {
+    return item.items.reduce((sum, it: any) => {
+      const q = parseFloat(String(it.quantity)) || 0;
+      const sp = parseFloat(String(it.selling_price || 0)) || 0;
+      if (isServiceCollectionItem(it)) {
+        const rev = it.revenue !== undefined && it.revenue !== null ? (parseFloat(String(it.revenue)) || 0) : (q * sp);
+        return sum + rev;
+      }
+      const cp = parseFloat(String(it.cost_price || 0)) || 0;
+      const profit =
+        it.gross_profit !== undefined && it.gross_profit !== null && String(it.gross_profit) !== ''
+          ? (parseFloat(String(it.gross_profit)) || 0)
+          : (q * (sp - cp));
+      return sum + profit;
+    }, 0);
+  }
+  return Number(item.amount) || 0;
+};
+
 const SERVICE_SUGGESTIONS = [
   'Wifi',
   'Water Vendo',
@@ -2280,7 +2304,7 @@ function CollectionPageContent() {
     let mbtcTotal = 0;
     let bdoTotal = 0;
     filteredCollections.forEach(c => {
-      const amt = parseFloat(String(c.amount || 0)) || 0;
+      const amt = getDisplayCollectionAmount(c);
       const s = (c.status || 'Cash in vault').toLowerCase();
       if (s.includes('mbtc') || s.includes('metrobank')) {
         mbtcTotal += amt;
@@ -3616,7 +3640,7 @@ function CollectionPageContent() {
                           </div>
                         </td>
                         <td className="py-3 px-3 font-headline font-bold text-center text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                          ₱{item.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₱{getDisplayCollectionAmount(item).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                           {renderStatusBadge(item.status)}
@@ -6445,7 +6469,7 @@ function CollectionPageContent() {
                 <div>
                   <span className="text-[10px] uppercase font-bold text-neutral-500">Total Collected</span>
                   <div className="text-xl font-headline font-black text-primary dark:text-secondary mt-0.5">
-                    ₱{selectedItemForModal.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ₱{getDisplayCollectionAmount(selectedItemForModal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
                 <div className="text-right">
@@ -6722,9 +6746,9 @@ function CollectionPageContent() {
 
         <div className="grid grid-cols-2 gap-2 text-xs border p-3 rounded bg-neutral-50 font-bold">
           <div>Credit Collections: ₱{collections.filter(c => c.tab === 'credit').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
-          <div>Sales & Services: ₱{collections.filter(c => c.tab === 'sales' || c.tab === 'services' || c.tab === 'sales_services').reduce((s, c) => s + c.amount, 0).toFixed(2)}</div>
+          <div>Sales & Services: ₱{collections.filter(c => c.tab === 'sales' || c.tab === 'services' || c.tab === 'sales_services').reduce((s, c) => s + getDisplayCollectionAmount(c), 0).toFixed(2)}</div>
           <div className="col-span-2 text-sm font-black text-right border-t pt-1">
-            GRAND TOTAL COLLECTED: ₱{collections.reduce((s, c) => s + c.amount, 0).toFixed(2)}
+            GRAND TOTAL COLLECTED: ₱{collections.reduce((s, c) => s + getDisplayCollectionAmount(c), 0).toFixed(2)}
           </div>
         </div>
 
