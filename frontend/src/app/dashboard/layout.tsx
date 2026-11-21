@@ -164,7 +164,7 @@ function DashboardLayoutContent({
       allowed: user.role === 'admin',
     },
     {
-      name: 'Bank Recon',
+      name: 'Bank Deposit',
       path: '/dashboard/bank-recon',
       icon: Landmark,
       allowed: user.role === 'admin',
@@ -487,7 +487,7 @@ function DashboardLayoutContent({
                         appointments: 'Schedule',
                         messages: 'Inbox',
                         notifications: isMember ? 'Notification' : 'Inbox',
-                        'bank-recon': 'Bank Recon',
+                        'bank-recon': 'Bank Deposit',
                       };
                       return breadcrumbLabels[segment] || staticOverrides[segment] || segment;
                     })
