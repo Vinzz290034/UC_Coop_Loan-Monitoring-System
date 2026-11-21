@@ -4237,6 +4237,56 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
 
     // ---------- Store merchandise, services, deposit interest, CTPL, CISP, CLIMBS (Collections page) ----------
     const merchSales = newStore();
+    const merchItemMap = new Map();
+    const formatMerchItemLabel = (raw) => {
+      const cleaned = String(raw || '').trim();
+      const lower = cleaned.toLowerCase();
+      const aliases = {
+        'kit': 'Kit',
+        'id case': 'ID Case',
+        's.board': 'S.Board',
+        'basic. ed': 'Basic Ed',
+        'pershing cap': 'Pershing Cap',
+        'cap device': 'Cap Device',
+        'class bar': 'Class Bar',
+        'buckle & belt': 'Buckle & Belt',
+        'safety gloves': 'Safety Gloves',
+        'safety shoes': 'Safety Shoes',
+        'hard hat': 'Hard Hat',
+        'pe': 'PE Uniform',
+        'type a & b': 'Type A & B',
+        'type c': 'Type C',
+        'bsname': 'BSNAME'
+      };
+      if (aliases[lower]) return aliases[lower];
+      return cleaned.replace(/\b[a-z]/g, c => c.toUpperCase());
+    };
+    const ensureMerchEntry = (rawName, category = 'Store Merchandise') => {
+      const label = formatMerchItemLabel(rawName);
+      const key = label.toLowerCase();
+      if (!merchItemMap.has(key)) {
+        merchItemMap.set(key, { label, category, store: newStore() });
+      }
+      return merchItemMap.get(key);
+    };
+    (merchCur?.products || []).forEach((p) => {
+      if (p.is_batch) return;
+      const catLower = String(p.category || '').toLowerCase();
+      const nameLower = String(p.item_name || '').trim().toLowerCase();
+      if (!nameLower || catLower === 'services' || /^(rice|soap|locker)$/.test(nameLower)) return;
+      ensureMerchEntry(p.item_name, p.category || 'Store Merchandise');
+    });
+    const bucketMerchByName = (itemName, rawDate, itemAmt, itemMeta) => {
+      if (!itemAmt || itemAmt <= 0) return;
+      const raw = String(itemName || '').trim();
+      const lower = raw.toLowerCase();
+      if (!raw || /store\s*merchandise|daily\s*store\s*sales|merchandise\s*item/i.test(lower)) {
+        bucket(merchSales, rawDate, itemAmt, itemMeta);
+        return;
+      }
+      const entry = ensureMerchEntry(raw);
+      bucket(entry.store, rawDate, itemAmt, itemMeta);
+    };
     const serviceGcash = newStore();
     const serviceBonggo = newStore();
     const serviceWifi = newStore();
@@ -4359,7 +4409,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       if (/donation|grant|share\s*capital/.test(text)) return;
 
       if (hasItemsArray) {
-        let merchAmt = 0;
+        let hasMerch = false;
         let hasSvc = false;
         col.items.forEach((it) => {
           const itName = String(it.item || it.item_name || '').trim();
@@ -4386,18 +4436,22 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
                 particulars: `${itName || 'Service'}${descPart}`
               });
             }
-          } else {
-            merchAmt += profit;
+          } else if (profit > 0) {
+            hasMerch = true;
+            const descPart = it.description ? ` (${it.description})` : '';
+            bucketMerchByName(itName, cDate, profit, {
+              ...meta,
+              particulars: `${itName || 'Merchandise'}${descPart}`
+            });
           }
         });
-        if (merchAmt > 0 || hasSvc) {
-          if (merchAmt > 0) bucket(merchSales, cDate, merchAmt, meta);
+        if (hasMerch || hasSvc) {
           return;
         }
       }
 
       if (hasItemsArray || !col.service_type) {
-        bucket(merchSales, cDate, amt, meta);
+        bucketMerchByName(col.item_name || col.particulars || '', cDate, amt, meta);
       } else {
         bucketServiceByName(col.service_type || col.particulars || '', cDate, amt, meta);
       }
@@ -4707,7 +4761,12 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               title: 'Store Sales',
               total_label: null,
               lines: [
-                line('', 'Store Merchandise / Uniform Sales', 'Net profit (selling price minus receipt cost) from uniforms and store merchandise.', merchSales),
+                ...Array.from(merchItemMap.values())
+                  .sort((a, b) => a.label.localeCompare(b.label))
+                  .map(m =>
+                    line('', `Income from ${m.label}`, `${m.category} — net profit (selling price minus cost) from ${m.label} sales.`, m.store, true)
+                  ),
+                line('', 'Store Merchandise / Uniform Sales (General / Daily Batches)', 'Daily over-the-counter store merchandise & uniform batch sales.', merchSales, true),
                 line('', 'Rice Sales', 'Rice sold to members.', riceSales, true),
                 line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', soapSales, true)
               ]
