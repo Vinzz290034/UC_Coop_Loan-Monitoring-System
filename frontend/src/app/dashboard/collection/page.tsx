@@ -1974,18 +1974,19 @@ function CollectionPageContent() {
         }))
         .filter((l: CollectionLoanPayment) => (l.principal_amount || 0) > 0 || (l.interest_amount || 0) > 0 || (l.fines_amount || 0) > 0);
     } else if (editFormData.tab === 'sales' || editFormData.tab === 'sales_services' || editFormData.tab === 'services') {
-      const merchRev = (editFormData.items || []).reduce((sum: number, it: any) => {
+      const merchProfit = (editFormData.items || []).reduce((sum: number, it: any) => {
         const q = parseFloat(String(it.quantity)) || 0;
         const sp = parseFloat(String(it.selling_price)) || 0;
-        return sum + (q * sp);
+        const cp = parseFloat(String(it.cost_price)) || 0;
+        return sum + (q * (sp - cp));
       }, 0);
       const svcRev = (editFormData.service_items || []).reduce((sum: number, it: any) => {
         const q = parseFloat(String(it.quantity)) || 0;
         const sp = parseFloat(String(it.selling_price)) || 0;
         return sum + (q * sp);
       }, 0);
-      if (merchRev + svcRev > 0) {
-        calculatedAmount = merchRev + svcRev;
+      if (merchProfit + svcRev > 0) {
+        calculatedAmount = merchProfit + svcRev;
       } else {
         const q = parseInt(editFormData.quantity || '1', 10) || 1;
         const u = parseFloat(editFormData.unit_price || '0') || 0;
@@ -2472,18 +2473,19 @@ function CollectionPageContent() {
       const partAmt = parseFloat(formData.particulars_amount || '0') || 0;
       if (loansSum + cs + mf + billing + partAmt > 0) calculatedAmount = loansSum + cs + mf + billing + partAmt;
     } else if (formData.tab === 'sales_services' || (formData.tab as any) === 'sales' || (formData.tab as any) === 'services') {
-      const merchRev = (formData.items || []).reduce((sum, it) => {
+      const merchProfit = (formData.items || []).reduce((sum, it) => {
         const q = parseFloat(String(it.quantity)) || 0;
         const sp = parseFloat(String(it.selling_price)) || 0;
-        return sum + (q * sp);
+        const cp = parseFloat(String(it.cost_price)) || 0;
+        return sum + (q * (sp - cp));
       }, 0);
       const svcRev = (formData.service_items || []).reduce((sum, it) => {
         const q = parseFloat(String(it.quantity)) || 0;
         const sp = parseFloat(String(it.selling_price)) || 0;
         return sum + (q * sp);
       }, 0);
-      if (merchRev + svcRev > 0) {
-        calculatedAmount = merchRev + svcRev;
+      if (merchProfit + svcRev > 0) {
+        calculatedAmount = merchProfit + svcRev;
       } else {
         const q = parseInt(formData.quantity || '1', 10) || 1;
         const u = parseFloat(formData.unit_price || '0') || 0;
@@ -4669,7 +4671,7 @@ function CollectionPageContent() {
                   <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex flex-wrap items-center justify-between gap-3 text-[11px]">
                     <div className="flex items-center gap-4 text-neutral-600 dark:text-neutral-300">
                       <span>
-                        Merchandise: <strong className="font-mono text-neutral-900 dark:text-white">₱{formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        Merchandise (Profit): <strong className="font-mono text-neutral-900 dark:text-white">₱{formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * ((parseFloat(String(it.selling_price)) || 0) - (parseFloat(String(it.cost_price)) || 0))), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                       </span>
                       <span>
                         Services: <strong className="font-mono text-neutral-900 dark:text-white">₱{(formData.service_items || []).reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
@@ -4677,7 +4679,7 @@ function CollectionPageContent() {
                     </div>
                     <div className="font-bold text-emerald-900 dark:text-emerald-300">
                       Grand Total Receipt: <span className="font-mono text-sm font-black ml-1">₱{(
-                        formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0) +
+                        formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * ((parseFloat(String(it.selling_price)) || 0) - (parseFloat(String(it.cost_price)) || 0))), 0) +
                         (formData.service_items || []).reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0)
                       ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
@@ -5852,7 +5854,7 @@ function CollectionPageContent() {
                   <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex flex-wrap items-center justify-between gap-3 text-[11px]">
                     <div className="flex items-center gap-4 text-neutral-600 dark:text-neutral-300">
                       <span>
-                        Merchandise: <strong className="font-mono text-neutral-900 dark:text-white">₱{(editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        Merchandise (Profit): <strong className="font-mono text-neutral-900 dark:text-white">₱{(editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * ((parseFloat(String(it.selling_price)) || 0) - (parseFloat(String(it.cost_price)) || 0))), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                       </span>
                       <span>
                         Services: <strong className="font-mono text-neutral-900 dark:text-white">₱{(editFormData.service_items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
@@ -5860,7 +5862,7 @@ function CollectionPageContent() {
                     </div>
                     <div className="font-bold text-emerald-900 dark:text-emerald-300">
                       Grand Total Receipt: <span className="font-mono text-sm font-black ml-1">₱{(
-                        (editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0) +
+                        (editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * ((parseFloat(String(it.selling_price)) || 0) - (parseFloat(String(it.cost_price)) || 0))), 0) +
                         (editFormData.service_items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0)
                       ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
