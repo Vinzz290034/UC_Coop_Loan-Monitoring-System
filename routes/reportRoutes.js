@@ -20,6 +20,7 @@ import {
   clearBankReconEntries,
   getChartOfAccounts,
   importChartOfAccounts,
+  deleteChartOfAccountItem,
   clearChartOfAccounts
 } from '../controllers/reportController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
@@ -73,6 +74,7 @@ router.delete('/bank-recon/clear', clearBankReconEntries);
 router.delete('/bank-recon/:id', deleteBankReconEntry);
 router.get('/chart-of-accounts', getChartOfAccounts);
 router.post('/chart-of-accounts/import', importChartOfAccounts);
+router.delete('/chart-of-accounts/item/:title', deleteChartOfAccountItem);
 router.delete('/chart-of-accounts', clearChartOfAccounts);
 
 export default router;

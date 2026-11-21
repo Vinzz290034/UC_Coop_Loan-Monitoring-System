@@ -5462,6 +5462,30 @@ export const importChartOfAccounts = async (req, res, next) => {
   }
 };
 
+// @desc    Delete a single Chart of Accounts item by title
+// @route   DELETE /api/reports/chart-of-accounts/item/:title
+// @access  Protected (Admin, Staff)
+export const deleteChartOfAccountItem = async (req, res, next) => {
+  try {
+    await ensureChartOfAccountsTable();
+    const rawTitle = decodeURIComponent(req.params.title || '').trim();
+    if (!rawTitle) {
+      return res.status(400).json({ success: false, message: 'Account title is required.' });
+    }
+    const result = await pool.query(
+      'DELETE FROM chart_of_accounts WHERE LOWER(TRIM(account_title)) = LOWER(TRIM($1))',
+      [rawTitle]
+    );
+    return res.status(200).json({
+      success: true,
+      deleted: result.rowCount || 0,
+      message: `Removed "${rawTitle}" from Chart of Accounts.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Clear imported Chart of Accounts (revert to default list)
 // @route   DELETE /api/reports/chart-of-accounts
 // @access  Protected (Admin, Staff)

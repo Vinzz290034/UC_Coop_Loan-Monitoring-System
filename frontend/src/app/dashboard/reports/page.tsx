@@ -853,6 +853,9 @@ function ReportsPageContent() {
 
     // 3. Update state
     setCustomAccounts(prev => prev.filter(a => a.toLowerCase() !== trimmed.toLowerCase()));
+    setChartOfAccounts(prev =>
+      prev.filter(a => String(a.account_title || '').trim().toLowerCase() !== trimmed.toLowerCase())
+    );
     setAccountCategoryMap(prev => {
       const next = { ...prev };
       delete next[trimmed.toLowerCase()];
@@ -862,6 +865,9 @@ function ReportsPageContent() {
     // 4. Persist to backend
     try {
       await api.delete(`/revolving-funds/accounts/${encodeURIComponent(trimmed)}`);
+      if (chartOfAccounts.length > 0) {
+        await api.delete(`/reports/chart-of-accounts/item/${encodeURIComponent(trimmed)}`);
+      }
     } catch (err) {
       console.error('Failed to delete account on backend:', err);
     }

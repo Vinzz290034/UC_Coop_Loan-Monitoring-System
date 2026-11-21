@@ -2043,6 +2043,10 @@ function DisbursementPageContent() {
 
     try {
       await api.delete(`/revolving-funds/accounts/${encodeURIComponent(trimmed)}`);
+      const hasCoa = typeof window !== 'undefined' && localStorage.getItem('rf_has_imported_coa') === '1';
+      if (hasCoa) {
+        await api.delete(`/reports/chart-of-accounts/item/${encodeURIComponent(trimmed)}`);
+      }
     } catch (err) {
       console.error('Failed to remove custom account:', err);
     }
