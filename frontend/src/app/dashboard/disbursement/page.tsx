@@ -5469,7 +5469,7 @@ function DisbursementPageContent() {
                                   <div>Recipient / Supplier</div>
                                 </>
                               ) : (
-                                <div>{(newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
+                                <div>{replenishType === 'stl' || (newCvRfClassification || '').toLowerCase().includes('honorarium') || (newCvRfClassification || '').toLowerCase().includes('wages') ? 'Recipient' : 'Remarks'}</div>
                               )}
                               <div className="text-center">Debit (₱)</div>
                               <div className="text-center">Credit (₱)</div>
@@ -5585,7 +5585,7 @@ function DisbursementPageContent() {
                                       </>
                                     ) : (
                                       <div>
-                                        {isHonWagesRow ? (
+                                        {isHonWagesRow || replenishType === 'stl' ? (
                                           <ReplenishmentRecipientDropdown
                                             value={row.remarks || ''}
                                             onChange={val => updateCvRowField(false, row.id!, 'remarks', val, replenishType)}
@@ -6790,7 +6790,7 @@ function DisbursementPageContent() {
                                 <div>Recipient / Supplier</div>
                               </>
                             ) : (
-                              <div>{(editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Recipient' : (replenishType === 'stl' ? 'Borrower' : 'Remarks')}</div>
+                              <div>{replenishType === 'stl' || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('honorarium') || (editCvFormData.rf_classification || editCvFormData.folder_name || '').toLowerCase().includes('wages') ? 'Recipient' : 'Remarks'}</div>
                             )}
                             <div className="text-right">Debit (₱)</div>
                             <div className="text-right">Credit (₱)</div>
@@ -6906,7 +6906,7 @@ function DisbursementPageContent() {
                                     </>
                                   ) : (
                                     <div>
-                                      {isHonWagesRow ? (
+                                      {isHonWagesRow || replenishType === 'stl' ? (
                                         <ReplenishmentRecipientDropdown
                                           value={row.remarks || ''}
                                           onChange={val => updateCvRowField(true, row.id!, 'remarks', val, replenishType)}
