@@ -77,11 +77,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function loadUserFromStorage() {
       if (typeof window === 'undefined') return;
 
-      const storedToken = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
+      const storedToken = sessionStorage.getItem('token') || localStorage.getItem('token');
+      const storedUser = sessionStorage.getItem('user') || localStorage.getItem('user');
 
       if (storedToken && storedUser) {
         try {
+          sessionStorage.setItem('token', storedToken);
+          sessionStorage.setItem('user', storedUser);
           setToken(storedToken);
           setUser(JSON.parse(storedUser));
           
@@ -89,7 +91,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const response = await api.get('/auth/me');
           const freshUser = response.data.data || response.data.user;
           setUser(freshUser);
-          localStorage.setItem('user', JSON.stringify(freshUser));
+          const freshUserStr = JSON.stringify(freshUser);
+          sessionStorage.setItem('user', freshUserStr);
+          localStorage.setItem('user', freshUserStr);
         } catch (error: any) {
           if (error?.response?.status === 401) {
             console.warn('Session token expired or invalid, clearing local session.');
@@ -141,6 +145,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { token: receivedToken, user: receivedUser } = response.data;
       
       if (typeof window !== 'undefined') {
+        sessionStorage.setItem('token', receivedToken);
+        sessionStorage.setItem('user', JSON.stringify(receivedUser));
         localStorage.setItem('token', receivedToken);
         localStorage.setItem('user', JSON.stringify(receivedUser));
       }
@@ -241,6 +247,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ignore network errors during logout
     } finally {
       if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
@@ -256,7 +264,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const freshUser = response.data.data || response.data.user;
       setUser(freshUser);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('user', JSON.stringify(freshUser));
+        const freshUserStr = JSON.stringify(freshUser);
+        sessionStorage.setItem('user', freshUserStr);
+        localStorage.setItem('user', freshUserStr);
       }
     } catch (error: any) {
       if (error?.response?.status === 401) {
@@ -271,7 +281,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser((prev) => {
       if (!prev) return null;
       const newUser = { ...prev, ...updatedFields };
-      localStorage.setItem('user', JSON.stringify(newUser));
+      const newUserStr = JSON.stringify(newUser);
+      sessionStorage.setItem('user', newUserStr);
+      localStorage.setItem('user', newUserStr);
       return newUser;
     });
   };
