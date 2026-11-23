@@ -757,50 +757,65 @@ function CollectionPageContent() {
     fetchCatalog();
   }, []);
 
-  // Fetch members list on mount & when collections change
+  // Fetch official members list on mount (deduplicated by member_no and normalized name)
   useEffect(() => {
     const fetchMembers = async () => {
       try {
         const res = await api.get('/members');
         const data = res.data?.data || [];
-        const mapped: MemberOption[] = data.map((m: any) => {
+        const seenMemberNos = new Set<string>();
+        const seenNames = new Set<string>();
+        const mapped: MemberOption[] = [];
+
+        for (const m of data) {
+          const isStaffOrAdminRole = m.user_role === 'admin' || m.user_role === 'staff' || m.user_role === 'manager';
+          const memberNo = String(m.member_no || m.member_id || '').trim();
+          const isStaffOrAdminNo = memberNo.startsWith('ADM-') || memberNo.startsWith('STF-');
+          if (isStaffOrAdminRole || isStaffOrAdminNo) continue;
+
           const fullName = `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.name || m.full_name || 'Member';
-          return {
+          const normName = fullName.toLowerCase().replace(/\s+/g, ' ').trim();
+          const normNo = memberNo.toLowerCase();
+
+          if (normNo && seenMemberNos.has(normNo)) continue;
+          if (seenNames.has(normName)) continue;
+
+          if (normNo) seenMemberNos.add(normNo);
+          seenNames.add(normName);
+
+          mapped.push({
             id: String(m.id),
             name: fullName,
-            member_no: m.member_no || m.member_id || '',
-          };
-        });
-
-        // Also merge any existing members recorded in collections if not already in list
-        collections.forEach(col => {
-          if (col.payor_name && !mapped.some(m => m.name.toLowerCase() === col.payor_name.toLowerCase())) {
-            mapped.push({
-              id: `col-${col.payor_name}`,
-              name: col.payor_name,
-              member_no: col.member_id || '',
-            });
-          }
-        });
+            member_no: memberNo,
+          });
+        }
 
         setMembersList(mapped);
       } catch (err) {
         console.error('Failed to load members from api:', err);
         const fallback: MemberOption[] = [];
+        const seenNos = new Set<string>();
+        const seenNames = new Set<string>();
         collections.forEach(col => {
-          if (col.payor_name && !fallback.some(m => m.name.toLowerCase() === col.payor_name.toLowerCase())) {
-            fallback.push({
-              id: `col-${col.payor_name}`,
-              name: col.payor_name,
-              member_no: col.member_id || '',
-            });
-          }
+          const name = String(col.payor_name || '').trim();
+          const memberNo = String(col.member_id || '').trim();
+          if (!name) return;
+          const normName = name.toLowerCase().replace(/\s+/g, ' ');
+          const normNo = memberNo.toLowerCase();
+          if ((normNo && seenNos.has(normNo)) || seenNames.has(normName)) return;
+          if (normNo) seenNos.add(normNo);
+          seenNames.add(normName);
+          fallback.push({
+            id: `col-${name}`,
+            name,
+            member_no: memberNo,
+          });
         });
         setMembersList(fallback);
       }
     };
     fetchMembers();
-  }, [collections]);
+  }, []);
 
   // Click outside to close member dropdown
   useEffect(() => {

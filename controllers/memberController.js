@@ -183,6 +183,59 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
       }
     }
 
+    // One-time safe migration: merge any remaining duplicate member rows sharing the same member_no & last_name
+    const dedupeSameNoMig = await query(
+      `INSERT INTO system_one_time_migrations (name)
+       VALUES ('dedupe_same_member_no_20261123')
+       ON CONFLICT (name) DO NOTHING
+       RETURNING name`
+    );
+    if (dedupeSameNoMig.rowCount > 0) {
+      const dClient = await pool.connect();
+      try {
+        await dClient.query('BEGIN');
+        const dupGroups = await dClient.query(
+          `SELECT TRIM(member_no) AS mno, LOWER(TRIM(last_name)) AS ln
+           FROM members
+           WHERE member_no IS NOT NULL AND TRIM(member_no) <> ''
+           GROUP BY TRIM(member_no), LOWER(TRIM(last_name))
+           HAVING COUNT(*) > 1`
+        );
+        for (const grp of dupGroups.rows) {
+          const rowsRes = await dClient.query(
+            `SELECT id, user_id
+             FROM members
+             WHERE TRIM(member_no) = $1 AND LOWER(TRIM(last_name)) = $2
+             ORDER BY (CASE WHEN middle_name IS NOT NULL AND TRIM(middle_name) <> '' THEN 0 ELSE 1 END), id ASC`,
+            [grp.mno, grp.ln]
+          );
+          if (rowsRes.rowCount > 1) {
+            const targetId = rowsRes.rows[0].id;
+            for (let i = 1; i < rowsRes.rows.length; i++) {
+              const dupId = rowsRes.rows[i].id;
+              const dupUserId = rowsRes.rows[i].user_id;
+              await dClient.query('UPDATE loans SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+              await dClient.query('UPDATE share_capital_transactions SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+              await dClient.query('UPDATE collections SET member_id = $1::text WHERE member_id = $2::text', [targetId, dupId]);
+              await dClient.query('UPDATE fixed_deposits SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+              await dClient.query('UPDATE investments SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+              await dClient.query('UPDATE appointments SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+              await dClient.query('DELETE FROM members WHERE id = $1', [dupId]);
+              if (dupUserId) {
+                await dClient.query("DELETE FROM users WHERE id = $1 AND role = 'member' AND id NOT IN (SELECT user_id FROM members WHERE user_id IS NOT NULL)", [dupUserId]);
+              }
+            }
+          }
+        }
+        await dClient.query('COMMIT');
+      } catch (dedupeErr) {
+        await dClient.query('ROLLBACK');
+        console.error('Same-member_no dedupe migration error:', dedupeErr);
+      } finally {
+        dClient.release();
+      }
+    }
+
     // One-time safe migration: unlink official cooperative member profiles from staff/admin logins
     // so they receive a dedicated 'member' login account while keeping the staff/admin account separate
     const staffMemberMig = await query(
