@@ -28,7 +28,7 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
       );
     }
 
-    // One-time safe migration: allow 'withdrawn' status in members_status_check constraint
+    // One-time safe migration: allow 'withdrawn' and 'dormant' statuses in members_status_check constraint
     const withdrawnMig = await query(
       `INSERT INTO system_one_time_migrations (name)
        VALUES ('allow_withdrawn_member_status_20261120')
@@ -40,8 +40,68 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
       await query(`
         ALTER TABLE members
         ADD CONSTRAINT members_status_check
-        CHECK (status IN ('active', 'withdrawn', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'))
+        CHECK (status IN ('active', 'dormant', 'withdrawn', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'))
       `);
+    }
+
+    const dormantMig = await query(
+      `INSERT INTO system_one_time_migrations (name)
+       VALUES ('allow_dormant_member_status_20261123')
+       ON CONFLICT (name) DO NOTHING
+       RETURNING name`
+    );
+    if (dormantMig.rowCount > 0) {
+      await query(`ALTER TABLE members DROP CONSTRAINT IF EXISTS members_status_check`);
+      await query(`
+        ALTER TABLE members
+        ADD CONSTRAINT members_status_check
+        CHECK (status IN ('active', 'dormant', 'withdrawn', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'))
+      `);
+    }
+
+    // One-time safe migration: mark Dormant members from the imported roster Excel sheet
+    const dormantSeedMig = await query(
+      `INSERT INTO system_one_time_migrations (name)
+       VALUES ('mark_dormant_members_from_excel_20261123')
+       ON CONFLICT (name) DO NOTHING
+       RETURNING name`
+    );
+    if (dormantSeedMig.rowCount > 0) {
+      const dormantTargets = [
+        { ln: 'tan', fn: 'rosielyn' },
+        { ln: 'aban', fn: 'lurina' },
+        { ln: 'pahamutang', fn: 'danilo' },
+        { ln: 'abella', fn: 'malcom' },
+        { ln: 'yu', fn: 'wellington' },
+        { ln: 'mata', fn: 'angel' },
+        { ln: 'miñoza', fn: 'hanna marie' },
+        { ln: 'minoza', fn: 'hanna marie' },
+        { ln: 'egay', fn: 'alvin carlos' },
+        { ln: 'kahulugan', fn: 'benjamin' },
+        { ln: 'cornejo', fn: 'mary margaret' },
+        { ln: 'ancheta', fn: 'rebecca' },
+        { ln: 'brizo', fn: 'samantha' },
+        { ln: 'diaz', fn: 'henry' },
+        { ln: 'polistico', fn: 'dave' }
+      ];
+      for (const dt of dormantTargets) {
+        await query(
+          `UPDATE members
+           SET status = 'dormant', is_verified = false, updated_at = CURRENT_TIMESTAMP
+           WHERE LOWER(TRIM(last_name)) = $1
+             AND (LOWER(TRIM(first_name)) = $2 OR LOWER(TRIM(first_name)) LIKE $3)
+             AND status <> 'withdrawn'`,
+          [dt.ln, dt.fn, `${dt.fn}%`]
+        );
+      }
+      // 2014-015 Alberto Felisilda (distinct from 2025-261 Alberto Jr. Felisilda who is Active)
+      await query(
+        `UPDATE members
+         SET status = 'dormant', is_verified = false, updated_at = CURRENT_TIMESTAMP
+         WHERE member_no = '2014-015'
+           AND LOWER(TRIM(last_name)) = 'felisilda'
+           AND status <> 'withdrawn'`
+      );
     }
 
     // One-time safe migration: merge known duplicate/placeholder member rows into official profiles
@@ -783,10 +843,10 @@ export const updateMemberStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status, remarks } = req.body;
 
-    if (!status || !['active', 'withdrawn', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'].includes(status)) {
+    if (!status || !['active', 'dormant', 'withdrawn', 'suspended', 'inactive', 'pending', 'approved', 'disapproved'].includes(status)) {
       return res.status(400).json({
         success: false,
-        error: { message: 'Please provide a valid status: pending, approved, disapproved, active, or withdrawn.' }
+        error: { message: 'Please provide a valid status: pending, approved, disapproved, active, dormant, or withdrawn.' }
       });
     }
 

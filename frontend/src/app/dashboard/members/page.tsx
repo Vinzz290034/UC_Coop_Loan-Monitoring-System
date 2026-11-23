@@ -27,6 +27,8 @@ import {
   Minimize2,
   Users,
   ChevronDown,
+  Clock,
+  Shield,
 } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
@@ -45,7 +47,7 @@ interface Member {
   address?: string;
   date_of_birth?: string;
   profile_picture_url?: string | null;
-  status: 'active' | 'withdrawn' | 'suspended' | 'inactive' | 'pending' | 'approved' | 'disapproved';
+  status: 'active' | 'dormant' | 'withdrawn' | 'suspended' | 'inactive' | 'pending' | 'approved' | 'disapproved';
   membership_type?: 'Regular' | 'Associate';
   user_role?: string;
   profile_completed?: boolean;
@@ -142,7 +144,37 @@ export default function MembersPage() {
   const { user } = useAuth();
   const isAdminOrManager = user ? (user.role === 'admin' || user.role === 'staff') : true;
   const [members, setMembers] = useState<Member[]>([]);
+  const [allMembersSummary, setAllMembersSummary] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const memberStats = React.useMemo(() => {
+    const source = allMembersSummary.length > 0 ? allMembersSummary : members;
+    let regular = 0;
+    let associate = 0;
+    let active = 0;
+    let withdrawn = 0;
+    let dormant = 0;
+    let pending = 0;
+    for (const m of source) {
+      const mt = String(m.membership_type || '').toLowerCase();
+      if (mt.includes('associate')) {
+        associate += 1;
+      } else if (mt.includes('regular')) {
+        regular += 1;
+      }
+      const st = String(m.status || '').toLowerCase();
+      if (st === 'active' || st === 'approved') {
+        active += 1;
+      } else if (st === 'withdrawn') {
+        withdrawn += 1;
+      } else if (st === 'dormant' || st === 'inactive') {
+        dormant += 1;
+      } else if (st === 'pending') {
+        pending += 1;
+      }
+    }
+    return { total: source.length, regular, associate, active, withdrawn, dormant, pending };
+  }, [allMembersSummary, members]);
   const [error, setError] = useState<string | null>(null);
 
   // Search, filter, and sort state
@@ -355,6 +387,9 @@ export default function MembersPage() {
         return !isStaffOrAdminRole && !isStaffOrAdminNo;
       });
       setMembers(filteredMembers);
+      if (!search && !statusFilter && !membershipFilter) {
+        setAllMembersSummary(filteredMembers);
+      }
       setCurrentPage(1);
     } catch (err: any) {
       console.error('Error fetching members:', err);
@@ -502,6 +537,13 @@ export default function MembersPage() {
             Withdrawn
           </span>
         );
+      case 'dormant':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/25">
+            <Clock className="w-3.5 h-3.5" />
+            Dormant
+          </span>
+        );
       case 'suspended':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-tertiary/10 text-tertiary">
@@ -549,6 +591,87 @@ export default function MembersPage() {
               <UserPlus className="w-4 h-4" />
               Register Member
             </button>
+          </div>
+        </div>
+
+        {/* Membership Summary Boxes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Box 1: Regular vs Associate Members */}
+          <div className="p-5 rounded-3xl bg-white dark:bg-surface-container-low border border-outline-variant/60 shadow-sm flex flex-col justify-between gap-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                  Total Members by Classification
+                </span>
+                <p className="text-2xl font-headline font-black text-on-surface dark:text-white mt-0.5">
+                  {memberStats.total}
+                </p>
+              </div>
+              <div className="p-3 rounded-2xl bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary">
+                <Users className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-outline-variant/40">
+              <div className="p-2.5 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 block">
+                  Regular
+                </span>
+                <span className="text-lg font-black text-neutral-900 dark:text-white">
+                  {memberStats.regular}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-purple-500/10 border border-purple-500/20">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 block">
+                  Associate
+                </span>
+                <span className="text-lg font-black text-neutral-900 dark:text-white">
+                  {memberStats.associate}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Box 2: Active, Withdrawn, Dormant */}
+          <div className="p-5 rounded-3xl bg-white dark:bg-surface-container-low border border-outline-variant/60 shadow-sm flex flex-col justify-between gap-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                  Members by Status
+                </span>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                  {memberStats.pending > 0 ? `${memberStats.pending} pending review` : 'Roster status breakdown'}
+                </p>
+              </div>
+              <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                <Shield className="w-5 h-5" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-outline-variant/40">
+              <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 block">
+                  Active
+                </span>
+                <span className="text-lg font-black text-neutral-900 dark:text-white">
+                  {memberStats.active}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 block">
+                  Withdrawn
+                </span>
+                <span className="text-lg font-black text-neutral-900 dark:text-white">
+                  {memberStats.withdrawn}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-slate-500/10 border border-slate-500/25">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
+                  Dormant
+                </span>
+                <span className="text-lg font-black text-neutral-900 dark:text-white">
+                  {memberStats.dormant}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -604,6 +727,7 @@ export default function MembersPage() {
                   { value: 'approved', label: 'Approved' },
                   { value: 'disapproved', label: 'Disapproved' },
                   { value: 'active', label: 'Active' },
+                  { value: 'dormant', label: 'Dormant' },
                   { value: 'withdrawn', label: 'Withdrawn' },
                 ]}
               />
@@ -1252,6 +1376,7 @@ export default function MembersPage() {
                                         approved: 'Approved',
                                         disapproved: 'Disapproved',
                                         active: 'Active',
+                                        dormant: 'Dormant',
                                         withdrawn: 'Withdrawn',
                                         suspended: 'Suspended',
                                         inactive: 'Inactive',
@@ -1275,6 +1400,7 @@ export default function MembersPage() {
                                       { value: 'pending', label: 'Pending Review' },
                                       { value: 'disapproved', label: 'Disapproved' },
                                       { value: 'active', label: 'Active' },
+                                      { value: 'dormant', label: 'Dormant' },
                                       { value: 'withdrawn', label: 'Withdrawn' },
                                     ].map((opt) => {
                                       const currentVal = inlineData.status || member.status;
@@ -1641,6 +1767,7 @@ export default function MembersPage() {
                           approved: 'Approved',
                           disapproved: 'Disapproved',
                           active: 'Active',
+                          dormant: 'Dormant',
                           withdrawn: 'Withdrawn',
                         } as Record<string, string>)[memberStatus] || 'Active'}
                       </span>
@@ -1662,6 +1789,7 @@ export default function MembersPage() {
                         { value: 'pending', label: 'Pending Review' },
                         { value: 'disapproved', label: 'Disapproved' },
                         { value: 'active', label: 'Active' },
+                        { value: 'dormant', label: 'Dormant' },
                         { value: 'withdrawn', label: 'Withdrawn' },
                       ].map((opt) => {
                         const selected = memberStatus === opt.value;

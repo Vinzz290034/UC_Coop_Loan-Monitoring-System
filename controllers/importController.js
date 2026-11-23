@@ -1286,9 +1286,14 @@ export const importMembersRegistry = async (req, res, next) => {
         }
       }
 
-      // Only 'Withdrawn' on Excel updates/sets status to 'withdrawn'; Active / Dormant / Active-returnee stay 'pending' (Pending Review)
+      // Map 'Withdrawn' -> 'withdrawn' and 'Dormant' -> 'dormant'; Active / Active-returnee stay 'pending' (Pending Review)
       const rawMembershipStatus = colMap.membershipStatus !== -1 ? cleanStr(cellVal(sheet, r, colMap.membershipStatus)) : '';
-      const targetStatus = rawMembershipStatus.toLowerCase().includes('withdraw') ? 'withdrawn' : 'pending';
+      const lowerMembershipStatus = rawMembershipStatus.toLowerCase();
+      const targetStatus = lowerMembershipStatus.includes('withdraw')
+        ? 'withdrawn'
+        : lowerMembershipStatus.includes('dormant')
+        ? 'dormant'
+        : 'pending';
 
       const excelLast = cleanToken(rawLastName);
       const excelFirst = cleanToken(rawFirstName);
