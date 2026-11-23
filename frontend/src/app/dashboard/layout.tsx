@@ -234,31 +234,34 @@ function DashboardLayoutContent({
   const sidebarContent = (
     <>
       {/* Brand Banner */}
-      <div className={`h-20 border-b border-outline-variant/50 flex items-center justify-between flex-shrink-0 ${isCollapsed ? 'px-3' : 'px-6'
+      <div className={`border-b border-outline-variant/50 flex flex-shrink-0 ${
+        isCollapsed
+          ? 'h-22 py-2.5 px-2 flex-col items-center justify-center gap-1.5'
+          : 'h-20 px-6 items-center justify-between'
         }`}>
         {/* Brand Logo & Name (Role-Based Dashboard Navigation Link) */}
         {(!sidebarCollapsed || mobileSidebarOpen) ? (
           <Link
             href={getRoleDashboardRoute(user?.role)}
             onClick={() => setMobileSidebarOpen(false)}
-            className="font-brandname font-bold text-lg text-primary dark:text-secondary flex items-center gap-1.5 hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:focus-visible:ring-secondary rounded-xl transition-all cursor-pointer select-none"
+            className="font-brandname font-bold text-lg text-primary dark:text-secondary flex items-center gap-1.5 hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:focus-visible:ring-secondary rounded-xl transition-all cursor-pointer select-none min-w-0"
             aria-label="Coop Sync Dashboard"
             title="Go to Dashboard"
           >
             <span className="p-0.5 rounded-full ring-2 ring-primary inline-flex flex-shrink-0">
-              <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" className="w-7 h-7 object-cover rounded-full" />
+              <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" className="w-7 h-7 aspect-square object-cover rounded-full flex-shrink-0" />
             </span>
-            <span>Coop Sync</span>
+            <span className="truncate">Coop Sync</span>
           </Link>
         ) : (
           <Link
             href={getRoleDashboardRoute(user?.role)}
-            className="flex items-center justify-center p-1 rounded-xl hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:focus-visible:ring-secondary transition-all mx-auto cursor-pointer"
+            className="flex items-center justify-center p-0.5 rounded-full hover:opacity-85 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:focus-visible:ring-secondary transition-all cursor-pointer flex-shrink-0"
             aria-label="Coop Sync Dashboard"
             title="Go to Dashboard"
           >
-            <span className="p-0.5 rounded-full ring-2 ring-primary inline-flex">
-              <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" className="w-7 h-7 object-cover rounded-full" />
+            <span className="p-0.5 rounded-full ring-2 ring-primary inline-flex flex-shrink-0">
+              <img src="/Coop.jpeg" alt="UC-METC Multipurpose Cooperative Logo" className="w-8 h-8 aspect-square object-cover rounded-full flex-shrink-0" />
             </span>
           </Link>
         )}
@@ -266,12 +269,14 @@ function DashboardLayoutContent({
         {/* Desktop collapse toggle — hidden on mobile */}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="p-1 rounded bg-surface hover:bg-neutral/10 dark:hover:bg-neutral/20 border border-outline-variant/50 hidden md:flex items-center justify-center text-neutral-600 dark:text-neutral-400 transition-colors cursor-pointer"
+          className={`rounded-lg bg-surface hover:bg-neutral/10 dark:hover:bg-neutral/20 border border-outline-variant/50 hidden md:flex items-center justify-center text-neutral-600 dark:text-neutral-400 transition-colors cursor-pointer flex-shrink-0 ${
+            isCollapsed ? 'w-8 h-5' : 'p-1.5'
+          }`}
           aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {sidebarCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           ) : (
             <ChevronLeft className="w-4 h-4" />
           )}
