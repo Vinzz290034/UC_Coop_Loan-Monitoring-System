@@ -160,16 +160,10 @@ const getDisplayCollectionAmount = (item: CollectionItem): number => {
     return item.items.reduce((sum, it: any) => {
       const q = parseFloat(String(it.quantity)) || 0;
       const sp = parseFloat(String(it.selling_price || 0)) || 0;
-      if (isServiceCollectionItem(it)) {
-        const rev = it.revenue !== undefined && it.revenue !== null ? (parseFloat(String(it.revenue)) || 0) : (q * sp);
-        return sum + rev;
-      }
-      const cp = parseFloat(String(it.cost_price || 0)) || 0;
-      const profit =
-        it.gross_profit !== undefined && it.gross_profit !== null && String(it.gross_profit) !== ''
-          ? (parseFloat(String(it.gross_profit)) || 0)
-          : (q * (sp - cp));
-      return sum + profit;
+      const rev = it.revenue !== undefined && it.revenue !== null && String(it.revenue) !== ''
+        ? (parseFloat(String(it.revenue)) || 0)
+        : (q * sp);
+      return sum + rev;
     }, 0);
   }
   return Number(item.amount) || 0;
@@ -2028,19 +2022,18 @@ function CollectionPageContent() {
         }))
         .filter((l: CollectionLoanPayment) => (l.principal_amount || 0) > 0 || (l.interest_amount || 0) > 0 || (l.fines_amount || 0) > 0);
     } else if (editFormData.tab === 'sales' || editFormData.tab === 'sales_services' || editFormData.tab === 'services') {
-      const merchProfit = (editFormData.items || []).reduce((sum: number, it: any) => {
+      const merchRev = (editFormData.items || []).reduce((sum: number, it: any) => {
         const q = parseFloat(String(it.quantity)) || 0;
         const sp = parseFloat(String(it.selling_price)) || 0;
-        const cp = parseFloat(String(it.cost_price)) || 0;
-        return sum + (q * (sp - cp));
+        return sum + (q * sp);
       }, 0);
       const svcRev = (editFormData.service_items || []).reduce((sum: number, it: any) => {
         const q = parseFloat(String(it.quantity)) || 0;
         const sp = parseFloat(String(it.selling_price)) || 0;
         return sum + (q * sp);
       }, 0);
-      if (merchProfit + svcRev > 0) {
-        calculatedAmount = merchProfit + svcRev;
+      if (merchRev + svcRev > 0) {
+        calculatedAmount = merchRev + svcRev;
       } else {
         const q = parseInt(editFormData.quantity || '1', 10) || 1;
         const u = parseFloat(editFormData.unit_price || '0') || 0;
@@ -2713,19 +2706,18 @@ function CollectionPageContent() {
       const partAmt = parseFloat(formData.particulars_amount || '0') || 0;
       if (loansSum + cs + mf + billing + partAmt > 0) calculatedAmount = loansSum + cs + mf + billing + partAmt;
     } else if (formData.tab === 'sales_services' || (formData.tab as any) === 'sales' || (formData.tab as any) === 'services') {
-      const merchProfit = (formData.items || []).reduce((sum, it) => {
+      const merchRev = (formData.items || []).reduce((sum, it) => {
         const q = parseFloat(String(it.quantity)) || 0;
         const sp = parseFloat(String(it.selling_price)) || 0;
-        const cp = parseFloat(String(it.cost_price)) || 0;
-        return sum + (q * (sp - cp));
+        return sum + (q * sp);
       }, 0);
       const svcRev = (formData.service_items || []).reduce((sum, it) => {
         const q = parseFloat(String(it.quantity)) || 0;
         const sp = parseFloat(String(it.selling_price)) || 0;
         return sum + (q * sp);
       }, 0);
-      if (merchProfit + svcRev > 0) {
-        calculatedAmount = merchProfit + svcRev;
+      if (merchRev + svcRev > 0) {
+        calculatedAmount = merchRev + svcRev;
       } else {
         const q = parseInt(formData.quantity || '1', 10) || 1;
         const u = parseFloat(formData.unit_price || '0') || 0;
@@ -3650,31 +3642,18 @@ function CollectionPageContent() {
                   </div>
                 ) : (
                   isAdmin && monthlyDepositStats.mbtcInVault > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      {selectedMonth === 'all' && monthlyDepositStats.mbtcThisMonthInVault > 0 && (
-                        <button
-                          type="button"
-                          disabled={savingVaultDeposit === 'mbtc'}
-                          onClick={() => handleToggleVaultDepositConfirm('mbtc', true, 'this_month')}
-                          className="px-2 py-0.5 rounded bg-blue-500/15 hover:bg-blue-500/25 text-blue-700 dark:text-blue-300 text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
-                          title={`Confirm only ${MONTH_NAMES[currentCalMonth]} ${currentCalYear} receipts`}
-                        >
-                          Confirm This Month
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        disabled={savingVaultDeposit === 'mbtc'}
-                        onClick={() => handleToggleVaultDepositConfirm('mbtc', true, 'filtered')}
-                        className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
-                      >
-                        {savingVaultDeposit === 'mbtc'
-                          ? 'Confirming...'
-                          : selectedMonth !== 'all'
-                            ? 'Confirm This Month'
-                            : 'Confirm All'}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      disabled={savingVaultDeposit === 'mbtc'}
+                      onClick={() => handleToggleVaultDepositConfirm('mbtc', true, 'filtered')}
+                      className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                    >
+                      {savingVaultDeposit === 'mbtc'
+                        ? 'Confirming...'
+                        : selectedMonth !== 'all'
+                          ? 'Confirm This Month'
+                          : 'Confirm All'}
+                    </button>
                   )
                 )}
               </div>
@@ -3713,31 +3692,18 @@ function CollectionPageContent() {
                   </div>
                 ) : (
                   isAdmin && monthlyDepositStats.bdoInVault > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      {selectedMonth === 'all' && monthlyDepositStats.bdoThisMonthInVault > 0 && (
-                        <button
-                          type="button"
-                          disabled={savingVaultDeposit === 'bdo'}
-                          onClick={() => handleToggleVaultDepositConfirm('bdo', true, 'this_month')}
-                          className="px-2 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
-                          title={`Confirm only ${MONTH_NAMES[currentCalMonth]} ${currentCalYear} receipts`}
-                        >
-                          Confirm This Month
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        disabled={savingVaultDeposit === 'bdo'}
-                        onClick={() => handleToggleVaultDepositConfirm('bdo', true, 'filtered')}
-                        className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
-                      >
-                        {savingVaultDeposit === 'bdo'
-                          ? 'Confirming...'
-                          : selectedMonth !== 'all'
-                            ? 'Confirm This Month'
-                            : 'Confirm All'}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      disabled={savingVaultDeposit === 'bdo'}
+                      onClick={() => handleToggleVaultDepositConfirm('bdo', true, 'filtered')}
+                      className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                    >
+                      {savingVaultDeposit === 'bdo'
+                        ? 'Confirming...'
+                        : selectedMonth !== 'all'
+                          ? 'Confirm This Month'
+                          : 'Confirm All'}
+                    </button>
                   )
                 )}
               </div>
@@ -5041,7 +5007,7 @@ function CollectionPageContent() {
                   <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex flex-wrap items-center justify-between gap-3 text-[11px]">
                     <div className="flex items-center gap-4 text-neutral-600 dark:text-neutral-300">
                       <span>
-                        Merchandise (Profit): <strong className="font-mono text-neutral-900 dark:text-white">₱{formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * ((parseFloat(String(it.selling_price)) || 0) - (parseFloat(String(it.cost_price)) || 0))), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        Merchandise (Revenue): <strong className="font-mono text-neutral-900 dark:text-white">₱{formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                       </span>
                       <span>
                         Services: <strong className="font-mono text-neutral-900 dark:text-white">₱{(formData.service_items || []).reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
@@ -5049,7 +5015,7 @@ function CollectionPageContent() {
                     </div>
                     <div className="font-bold text-emerald-900 dark:text-emerald-300">
                       Grand Total Receipt: <span className="font-mono text-sm font-black ml-1">₱{(
-                        formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * ((parseFloat(String(it.selling_price)) || 0) - (parseFloat(String(it.cost_price)) || 0))), 0) +
+                        formData.items.reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0) +
                         (formData.service_items || []).reduce((acc, it) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0)
                       ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
@@ -6224,7 +6190,7 @@ function CollectionPageContent() {
                   <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex flex-wrap items-center justify-between gap-3 text-[11px]">
                     <div className="flex items-center gap-4 text-neutral-600 dark:text-neutral-300">
                       <span>
-                        Merchandise (Profit): <strong className="font-mono text-neutral-900 dark:text-white">₱{(editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * ((parseFloat(String(it.selling_price)) || 0) - (parseFloat(String(it.cost_price)) || 0))), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        Merchandise (Revenue): <strong className="font-mono text-neutral-900 dark:text-white">₱{(editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                       </span>
                       <span>
                         Services: <strong className="font-mono text-neutral-900 dark:text-white">₱{(editFormData.service_items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
@@ -6232,7 +6198,7 @@ function CollectionPageContent() {
                     </div>
                     <div className="font-bold text-emerald-900 dark:text-emerald-300">
                       Grand Total Receipt: <span className="font-mono text-sm font-black ml-1">₱{(
-                        (editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * ((parseFloat(String(it.selling_price)) || 0) - (parseFloat(String(it.cost_price)) || 0))), 0) +
+                        (editFormData.items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0) +
                         (editFormData.service_items || []).reduce((acc: number, it: any) => acc + ((parseFloat(String(it.quantity)) || 0) * (parseFloat(String(it.selling_price)) || 0)), 0)
                       ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
