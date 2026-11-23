@@ -842,7 +842,7 @@ export default function MembersPage() {
                                 </div>
                                 <div className="flex items-center gap-1.5 min-w-0">
                                   <div className="font-semibold text-on-surface dark:text-white group-hover/cell:text-primary dark:group-hover/cell:text-secondary transition-colors whitespace-nowrap">
-                                    {member.last_name}, {member.first_name} {member.middle_name ? `${member.middle_name}` : ''}
+                                    {member.last_name}, {member.first_name}{member.middle_name?.trim() ? ` ${member.middle_name.trim()[0].toUpperCase()}.` : ''}
                                   </div>
                                   <button
                                     type="button"

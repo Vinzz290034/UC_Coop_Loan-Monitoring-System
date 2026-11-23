@@ -28,36 +28,7 @@ export async function migrateSeedDefaults() {
     // Staff
     await seedUser('22222222-2222-2222-2222-222222222222', 'manager', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'staff');
 
-    // Member User
-    await seedUser('33333333-3333-3333-3333-333333333333', 'member1', '$2a$10$Fs7N3s3b2BWUb4mKBPXENuoVya.LliSmudMkloCn7zavqwJc8miD.', 'member');
-
-    // 2. Seed Member Profile linked to the member user
-    const memberProfileCheck = await client.query(
-      `SELECT id FROM members WHERE id = $1 OR email = $2 OR user_id = $3`,
-      ['44444444-4444-4444-4444-444444444444', 'johndoe@example.com', '33333333-3333-3333-3333-333333333333']
-    );
-    if (memberProfileCheck.rowCount === 0) {
-      await client.query(`
-        INSERT INTO members (id, user_id, first_name, last_name, middle_name, email, phone, address, date_of_birth, gender, civil_status, status)
-        VALUES (
-            '44444444-4444-4444-4444-444444444444', 
-            '33333333-3333-3333-3333-333333333333', 
-            'John', 
-            'Doe', 
-            'Smith', 
-            'johndoe@example.com', 
-            '+639123456789', 
-            '123 Mambaling Street, Cebu City', 
-            '1990-01-15', 
-            'Male',
-            'Single',
-            'active'
-        )
-        ON CONFLICT DO NOTHING;
-      `);
-    }
-
-    // 3. Seed Default Loan Products
+    // 2. Seed Default Loan Products
     await client.query(`
       UPDATE loan_products SET name = 'Regular - Salary Loan' WHERE name IN ('Regular Loan - Salary Loan', 'Regular Loan - Salary Deduction', 'Regular - Salary Deduction');
       UPDATE loan_products SET name = 'Regular - Project Loan' WHERE name = 'Regular Loan - Project Loan';

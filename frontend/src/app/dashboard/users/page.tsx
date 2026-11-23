@@ -674,7 +674,7 @@ export default function UsersPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white truncate">
                           {u.member_profile
-                            ? `${u.member_profile.first_name} ${u.member_profile.last_name}`
+                            ? `${u.member_profile.last_name}, ${u.member_profile.first_name}${u.member_profile.middle_name?.trim() ? ` ${u.member_profile.middle_name.trim()[0].toUpperCase()}.` : ''}`
                             : u.username}
                         </h4>
                         {getRoleBadge(u.role)}
