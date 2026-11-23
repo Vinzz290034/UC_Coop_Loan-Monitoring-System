@@ -3797,7 +3797,7 @@ function DisbursementPageContent() {
       fund_amount: initialFundAmount,
       rf_classification: isTrueRf ? detectedRfClass : '',
       prepared_by: formatSignatoryName(cv.signatories?.prepared_by, 'CHINNETTE A. LAMOSTE'),
-      checked_by: formatSignatoryName(cv.signatories?.checked_by, 'MARILOU LARIOSA'),
+      checked_by: formatSignatoryName(cv.signatories?.checked_by, getReplenishmentType(cv.folder_name, cv) === 'stl' ? 'CHERELYN R. NOVELA' : 'MARILOU LARIOSA'),
       approved_by: formatSignatoryName(cv.signatories?.approved_by, 'MICHELLE M. PABLE'),
       liquidated_by: cv.signatories?.liquidated_by || cv.revolving_fund?.custodian_name || 'MICHELLE M. PABLE',
       liquidated_by_title: cv.signatories?.liquidated_by_title !== undefined ? cv.signatories.liquidated_by_title : (getSignatoryTitle(cv.signatories?.liquidated_by) || 'Manager'),
@@ -4304,7 +4304,7 @@ function DisbursementPageContent() {
     const defaultCat = currentTabConfig.defaultCategory || 'Loan';
     setNewCvCategory(defaultCat);
     setNewCvPreparedBy('CHINNETTE A. LAMOSTE');
-    setNewCvCheckedBy('MARILOU LARIOSA');
+    setNewCvCheckedBy(getReplenishmentType(defaultCat) === 'stl' ? 'CHERELYN R. NOVELA' : 'MARILOU LARIOSA');
     setNewCvApprovedBy('MICHELLE M. PABLE');
     setNewCvLiquidatedBy('MICHELLE M. PABLE');
     setNewCvDetailedApprovedBy('CANDILARIO N. TATOY');
@@ -5137,6 +5137,9 @@ function DisbursementPageContent() {
                         setNewCvCategory(selected);
                         const matched = CATEGORY_TABS.find(t => t.defaultCategory === selected);
                         const isRepl = getReplenishmentType(selected);
+                        if (newCvCheckedBy === 'MARILOU LARIOSA' || newCvCheckedBy === 'CHERELYN R. NOVELA' || !newCvCheckedBy.trim()) {
+                          setNewCvCheckedBy(isRepl === 'stl' ? 'CHERELYN R. NOVELA' : 'MARILOU LARIOSA');
+                        }
                         const isTrueRf = isTrueRevolvingFundVoucher(null, selected);
                         const isPettyCashCat = selected.toLowerCase().includes('petty');
                         if (isRepl === 'rf') {
@@ -6268,7 +6271,7 @@ function DisbursementPageContent() {
                           <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider block">CHECKED BY:</span>
                           <div className="h-4"></div>
                           <p className="text-[10.5px] font-bold text-on-surface dark:text-white mb-1 uppercase tracking-wide">
-                            {selectedCvForModal.signatories?.checked_by || 'MARILOU LARIOSA'}
+                            {selectedCvForModal.signatories?.checked_by || (getReplenishmentType(selectedCvForModal.folder_name, selectedCvForModal) === 'stl' ? 'CHERELYN R. NOVELA' : 'MARILOU LARIOSA')}
                           </p>
                           <div className="border-b border-neutral-300 dark:border-neutral-700"></div>
                         </div>
@@ -7769,7 +7772,7 @@ function DisbursementPageContent() {
                   </span>
                   <div style={{ height: '22px' }}></div>
                   <p style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#111827', margin: '0 0 4px 0', fontSize: '10.5px', letterSpacing: '0.02em' }}>
-                    {printingCvBreakdown.signatories?.checked_by || 'MARILOU LARIOSA'}
+                    {printingCvBreakdown.signatories?.checked_by || (getReplenishmentType(printingCvBreakdown.folder_name, printingCvBreakdown) === 'stl' ? 'CHERELYN R. NOVELA' : 'MARILOU LARIOSA')}
                   </p>
                   <div style={{ borderBottom: '1.5px solid #111827' }}></div>
                 </div>

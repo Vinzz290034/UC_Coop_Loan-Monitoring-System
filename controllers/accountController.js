@@ -1286,9 +1286,10 @@ export const createCheckVoucher = async (req, res, next) => {
       });
     }
 
+    const isStlReplenish = /stl|short\s*term\s*loan/i.test(String(folder_name || ''));
     const defaultSignatories = {
       prepared_by: 'CHINNETTE A. LAMOSTE',
-      checked_by: 'MARILOU LARIOSA',
+      checked_by: isStlReplenish ? 'CHERELYN R. NOVELA' : 'MARILOU LARIOSA',
       approved_by: 'MICHELLE M. PABLE',
       liquidated_by: 'MICHELLE M. PABLE',
       detailed_approved_by: 'CANDILARIO N. TATOY'
