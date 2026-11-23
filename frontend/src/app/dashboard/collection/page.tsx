@@ -321,6 +321,8 @@ const FINES_OPTIONS: SelectOption[] = [
 
 const CREDIT_PARTICULARS_OPTIONS: SelectOption[] = [
   { value: 'Insurance Payment', label: 'Insurance Payment' },
+  { value: 'Insurance Claims Received', label: 'Insurance Claims Received' },
+  { value: 'CTPL Payment', label: 'CTPL Payment' },
   { value: 'Raffle Ticket', label: 'Raffle Ticket' },
   { value: 'Donation & Grants', label: 'Donation & Grants' },
   { value: 'Withdrawal Fee', label: 'Withdrawal Fee' },
@@ -4696,17 +4698,17 @@ function CollectionPageContent() {
                     </div>
                   </div>
 
-                  {/* 7. Particulars */}
+                  {/* 7. OTHERS */}
                   <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50 space-y-1">
                     <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
-                      Particulars
+                      OTHERS
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
                       <AnimatedSelect
                         value={formData.other_category || 'Insurance Payment'}
                         onChange={val => setFormData({ ...formData, other_category: val })}
                         options={CREDIT_PARTICULARS_OPTIONS}
-                        placeholder="Select Particulars..."
+                        placeholder="Select Others..."
                         buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
                       />
                       <div className="relative">
@@ -5817,17 +5819,17 @@ function CollectionPageContent() {
                     </div>
                   </div>
 
-                  {/* Particulars */}
+                  {/* OTHERS */}
                   <div className="pt-2.5 border-t border-emerald-200/80 dark:border-emerald-800/50 space-y-1">
                     <label className="block text-[11px] font-bold text-emerald-950 dark:text-emerald-200">
-                      Particulars
+                      OTHERS
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_130px] gap-2 items-center">
                       <AnimatedSelect
                         value={editFormData.other_category || 'Insurance Payment'}
                         onChange={val => setEditFormData({ ...editFormData, other_category: val })}
                         options={CREDIT_PARTICULARS_OPTIONS}
-                        placeholder="Select Particulars..."
+                        placeholder="Select Others..."
                         disabled={isEditLocked}
                         buttonClassName="bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-800 font-medium py-2"
                       />
