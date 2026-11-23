@@ -2190,6 +2190,16 @@ function DisbursementPageContent() {
   function getCvDisbursedAmount(cv: any): number {
     if (!cv) return 0;
 
+    // 0. For STL / Revolving Fund replenishment vouchers, match the exact Summary Breakdown modal CIB / debit total
+    if (isStlOrRfTabOrVoucher(cv)) {
+      const summary = getSummaryCvRows(cv);
+      const summaryCib = summary.rows.find(r => /^(cib\b|cib[-_\s]|cash\s*in\s*bank)/i.test((r.description || '').trim()));
+      if (summaryCib && summaryCib.credit !== null && summaryCib.credit !== undefined && Number(summaryCib.credit) > 0) {
+        return Number(summaryCib.credit);
+      }
+      if (summary.debitTotal > 0) return summary.debitTotal;
+    }
+
     // 1. Explicit cib_amount field on voucher
     if (cv.cib_amount && parseFloat(String(cv.cib_amount).replace(/,/g, '')) > 0) {
       return parseFloat(String(cv.cib_amount).replace(/,/g, ''));
