@@ -7,7 +7,10 @@ import {
   bulkImportCollections,
   updateCollection,
   deleteCollection,
-  bulkDeleteCollections
+  bulkDeleteCollections,
+  getVaultDeposits,
+  upsertVaultDeposit,
+  bulkConfirmDeposits
 } from '../controllers/collectionController.js';
 import {
   getMerchandiseCatalog,
@@ -30,6 +33,9 @@ router.put('/catalog/:id', restrictTo('admin'), updateMerchandiseCatalogItem);
 router.delete('/catalog/:id', restrictTo('admin'), deleteMerchandiseCatalogItem);
 
 router.get('/next-receipt-no', getNextReceiptNumber);
+router.get('/vault-deposits', getVaultDeposits);
+router.put('/vault-deposits', upsertVaultDeposit);
+router.put('/confirm-deposits', bulkConfirmDeposits);
 
 router.route('/')
   .get(getCollections)

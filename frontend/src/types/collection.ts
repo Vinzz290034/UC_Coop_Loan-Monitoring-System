@@ -111,6 +111,7 @@ export interface CollectionItem {
   reference_no?: string;
   bank_name?: string;
   status?: CollectionStatus;
+  deposit_confirmed?: boolean;
   remarks?: CollectionRemarks;
   collected_by: string;
 }

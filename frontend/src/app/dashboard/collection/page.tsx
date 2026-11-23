@@ -113,6 +113,22 @@ const STATUS_OPTIONS: SelectOption[] = [
   { value: 'Cash in BDO', label: 'Cash in BDO' },
 ];
 
+const CREDIT_STATUS_OPTIONS: SelectOption[] = [
+  { value: 'Cash in vault', label: 'Cash in vault' },
+  { value: 'Cash in BDO', label: 'Cash in BDO' },
+];
+
+const SALES_STATUS_OPTIONS: SelectOption[] = [
+  { value: 'Cash in vault', label: 'Cash in vault' },
+  { value: 'Cash in MBTC', label: 'Cash in MBTC' },
+];
+
+const getStatusOptionsForTab = (tab?: string): SelectOption[] => {
+  if (tab === 'credit') return CREDIT_STATUS_OPTIONS;
+  if (tab === 'sales_services' || tab === 'sales' || tab === 'services') return SALES_STATUS_OPTIONS;
+  return STATUS_OPTIONS;
+};
+
 const REMARKS_OPTIONS: SelectOption[] = [
   { value: 'edit', label: 'edit' },
   { value: 'sealed', label: 'sealed' },
@@ -513,12 +529,26 @@ function CollectionPageContent() {
   const [collections, setCollections] = useState<CollectionItem[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(true);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [vaultDepositsMap, setVaultDepositsMap] = useState<Record<string, { mbtc_from_vault: number; bdo_from_vault: number; mbtc_confirmed?: boolean; bdo_confirmed?: boolean; updated_by?: string | null }>>({});
+  const [savingVaultDeposit, setSavingVaultDeposit] = useState<'mbtc' | 'bdo' | null>(null);
   const rowCounterRef = useRef(0);
+
+  const fetchVaultDeposits = async () => {
+    try {
+      const res = await api.get('/collections/vault-deposits', { params: { _t: Date.now() } });
+      if (res.data?.success && res.data?.data) {
+        setVaultDepositsMap(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load vault deposits:', err);
+    }
+  };
 
   // Fetch collections strictly from server database
   const fetchCollections = async () => {
     try {
       setLoadingCollections(true);
+      fetchVaultDeposits();
       const res = await api.get('/collections', { params: { _t: Date.now() } });
       const serverItems: CollectionItem[] = (res.data?.data || []).map((col: CollectionItem) => {
         let cleanDate = col.date;
@@ -540,7 +570,7 @@ function CollectionPageContent() {
           }
         }
         let stat = col.status;
-        if (cleanDate) {
+        if ((!stat || stat === 'completed' || stat === 'pending') && cleanDate) {
           const parsed = parseCollectionDate(cleanDate);
           if (parsed.year === '2026' && parsed.month !== null && parsed.month <= 9) {
             const tab = (col.tab || '').toLowerCase().trim();
@@ -2124,6 +2154,7 @@ function CollectionPageContent() {
         : undefined,
       bank_name: editFormData.payment_method === 'Cheque' ? editFormData.bank_name?.trim() || undefined : undefined,
       status: editFormData.status || 'Cash in vault',
+      deposit_confirmed: /vault/i.test(editFormData.status || '') ? false : Boolean(editingItem?.deposit_confirmed),
       remarks: unsealToCompleted ? 'edit' : markAsFiled ? 'sealed' : (editFormData.remarks || 'edit'),
       collected_by: editFormData.collected_by?.trim() || 'CHINNETTE A. LAMOSTE',
     };
@@ -2299,23 +2330,182 @@ function CollectionPageContent() {
   }, [collections, activeTab]);
 
   // Monthly Deposit Custody Breakdown (Cash in vault, Cash in MBTC, Cash in BDO)
+  const currentVaultPeriodKey = `${selectedYear}-${selectedMonth}`;
+  const currentVaultDeposit = vaultDepositsMap[currentVaultPeriodKey] || {
+    mbtc_from_vault: 0,
+    bdo_from_vault: 0,
+    mbtc_confirmed: false,
+    bdo_confirmed: false
+  };
+
   const monthlyDepositStats = useMemo(() => {
-    let vaultTotal = 0;
-    let mbtcTotal = 0;
-    let bdoTotal = 0;
+    let rawVaultTotal = 0;
+    let rawMbtcTotal = 0;
+    let rawBdoTotal = 0;
+    let confirmedMbtcTotal = 0;
+    let confirmedBdoTotal = 0;
+    let unconfirmedMbtcTotal = 0;
+    let unconfirmedBdoTotal = 0;
+    const periodMbtcConfirmed = Boolean(currentVaultDeposit.mbtc_confirmed);
+    const periodBdoConfirmed = Boolean(currentVaultDeposit.bdo_confirmed);
+
     filteredCollections.forEach(c => {
       const amt = getDisplayCollectionAmount(c);
       const s = (c.status || 'Cash in vault').toLowerCase();
-      if (s.includes('mbtc') || s.includes('metrobank')) {
-        mbtcTotal += amt;
-      } else if (s.includes('bdo')) {
-        bdoTotal += amt;
+      const t = (c.tab || '').toLowerCase();
+      const isRowConfirmed = Boolean(c.deposit_confirmed);
+      const isSalesTab = t === 'sales' || t === 'services' || t === 'sales_services';
+      const isCreditTab = t === 'credit' || t === 'billing';
+      const isMbtcBucket = s.includes('mbtc') || s.includes('metrobank') || (s.includes('vault') && isSalesTab);
+      const isBdoBucket = !isMbtcBucket && (s.includes('bdo') || (s.includes('vault') && isCreditTab));
+
+      if (isMbtcBucket) {
+        rawMbtcTotal += amt;
+        if (isRowConfirmed || periodMbtcConfirmed) {
+          confirmedMbtcTotal += amt;
+        } else {
+          unconfirmedMbtcTotal += amt;
+        }
+      } else if (isBdoBucket) {
+        rawBdoTotal += amt;
+        if (isRowConfirmed || periodBdoConfirmed) {
+          confirmedBdoTotal += amt;
+        } else {
+          unconfirmedBdoTotal += amt;
+        }
       } else {
-        vaultTotal += amt;
+        rawVaultTotal += amt;
       }
     });
-    return { vaultTotal, mbtcTotal, bdoTotal };
-  }, [filteredCollections]);
+    const mbtcInVault = unconfirmedMbtcTotal;
+    const bdoInVault = unconfirmedBdoTotal;
+    const vaultTotal = rawVaultTotal + mbtcInVault + bdoInVault;
+    const mbtcTotal = confirmedMbtcTotal;
+    const bdoTotal = confirmedBdoTotal;
+    const mbtcConfirmed = rawMbtcTotal > 0 && mbtcInVault === 0;
+    const bdoConfirmed = rawBdoTotal > 0 && bdoInVault === 0;
+    return {
+      vaultTotal,
+      mbtcTotal,
+      bdoTotal,
+      rawVaultTotal,
+      rawMbtcTotal,
+      rawBdoTotal,
+      mbtcInVault,
+      bdoInVault,
+      mbtcConfirmed,
+      bdoConfirmed
+    };
+  }, [filteredCollections, currentVaultDeposit.mbtc_confirmed, currentVaultDeposit.bdo_confirmed]);
+
+  const [confirmingReceiptId, setConfirmingReceiptId] = useState<string | null>(null);
+
+  const handleConfirmSingleDeposit = async (item: CollectionItem, confirmed: boolean) => {
+    try {
+      setConfirmingReceiptId(item.id);
+      const isVaultStatus = /vault/i.test(item.status || 'Cash in vault');
+      const isSalesTab = item.tab === 'sales' || item.tab === 'services' || item.tab === 'sales_services';
+      const nextStatus = confirmed && isVaultStatus
+        ? (isSalesTab ? 'Cash in MBTC' : 'Cash in BDO')
+        : item.status;
+      const res = await api.put(`/collections/${item.id}`, {
+        deposit_confirmed: confirmed,
+        ...(nextStatus ? { status: nextStatus } : {})
+      });
+      const updatedConfirm = res.data?.data?.deposit_confirmed ?? confirmed;
+      const updatedStatus = res.data?.data?.status ?? nextStatus;
+      setCollections(prev => prev.map(c => c.id === item.id ? { ...c, deposit_confirmed: Boolean(updatedConfirm), status: updatedStatus } : c));
+      if (!confirmed) {
+        const s = (updatedStatus || '').toLowerCase();
+        const bankFlag = (s.includes('mbtc') || s.includes('metrobank') || isSalesTab) ? { mbtc_confirmed: false } : { bdo_confirmed: false };
+        if (currentVaultDeposit.mbtc_confirmed || currentVaultDeposit.bdo_confirmed) {
+          await api.put('/collections/vault-deposits', { period_key: currentVaultPeriodKey, ...bankFlag });
+          setVaultDepositsMap(prev => ({
+            ...prev,
+            [currentVaultPeriodKey]: { ...currentVaultDeposit, ...bankFlag }
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update receipt deposit confirmation:', err);
+      setActionFeedback({ type: 'error', message: 'Failed to update deposit confirmation for receipt.' });
+    } finally {
+      setConfirmingReceiptId(null);
+    }
+  };
+
+  const handleToggleVaultDepositConfirm = async (bank: 'mbtc' | 'bdo', confirmed: boolean) => {
+    try {
+      setSavingVaultDeposit(bank);
+      const targetStatus = bank === 'mbtc' ? 'Cash in MBTC' : 'Cash in BDO';
+      const matchingIds = filteredCollections
+        .filter(c => {
+          const s = (c.status || 'Cash in vault').toLowerCase();
+          const t = (c.tab || '').toLowerCase();
+          const isSalesTab = t === 'sales' || t === 'services' || t === 'sales_services';
+          const isCreditTab = t === 'credit' || t === 'billing';
+          return bank === 'mbtc'
+            ? (s.includes('mbtc') || s.includes('metrobank') || (s.includes('vault') && isSalesTab))
+            : (s.includes('bdo') || (s.includes('vault') && isCreditTab));
+        })
+        .map(c => c.id);
+
+      if (matchingIds.length > 0) {
+        const bulkRes = await api.put('/collections/confirm-deposits', {
+          ids: matchingIds,
+          deposit_confirmed: confirmed,
+          target_status: targetStatus
+        });
+        const updatedById = new Map<string, { deposit_confirmed: boolean; status?: string }>();
+        if (Array.isArray(bulkRes.data?.data)) {
+          for (const row of bulkRes.data.data) {
+            updatedById.set(row.id, { deposit_confirmed: Boolean(row.deposit_confirmed), status: row.status });
+          }
+        }
+        const idSet = new Set(matchingIds);
+        setCollections(prev => prev.map(c => {
+          if (!idSet.has(c.id)) return c;
+          const serverRow = updatedById.get(c.id);
+          if (serverRow) {
+            return {
+              ...c,
+              deposit_confirmed: serverRow.deposit_confirmed,
+              status: (serverRow.status as any) || c.status
+            };
+          }
+          const isVault = /vault/i.test(c.status || 'Cash in vault');
+          return {
+            ...c,
+            deposit_confirmed: confirmed,
+            status: confirmed && isVault ? targetStatus : c.status
+          };
+        }));
+      }
+
+      const payload = {
+        period_key: currentVaultPeriodKey,
+        ...(bank === 'mbtc' ? { mbtc_confirmed: confirmed } : { bdo_confirmed: confirmed })
+      };
+      const res = await api.put('/collections/vault-deposits', payload);
+      if (res.data?.success && res.data?.data) {
+        setVaultDepositsMap(prev => ({
+          ...prev,
+          [currentVaultPeriodKey]: {
+            mbtc_from_vault: res.data.data.mbtc_from_vault,
+            bdo_from_vault: res.data.data.bdo_from_vault,
+            mbtc_confirmed: res.data.data.mbtc_confirmed,
+            bdo_confirmed: res.data.data.bdo_confirmed,
+            updated_by: res.data.data.updated_by
+          }
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to update vault deposit confirmation:', err);
+      setActionFeedback({ type: 'error', message: 'Failed to update bank deposit confirmation.' });
+    } finally {
+      setSavingVaultDeposit(null);
+    }
+  };
 
   // Sales Registry Catalog Stats for top 4 KPI cards when on Sales Registry tab
   const salesRegistryStats = useMemo(() => {
@@ -3384,42 +3574,113 @@ function CollectionPageContent() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs">
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20">
-            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
+          <div className="flex items-start gap-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5">
               <Wallet className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">Cash in Vault</span>
               <div className="text-base font-black text-neutral-900 dark:text-white">
                 ₱{monthlyDepositStats.vaultTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <p className="text-[9.5px] text-neutral-500">Physical cash currently held on hand</p>
+              <p className="text-[9.5px] text-neutral-500">Physical cash &amp; unconfirmed bank deposits</p>
+              {(monthlyDepositStats.mbtcInVault > 0 || monthlyDepositStats.bdoInVault > 0) && (
+                <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 mt-1">
+                  Pending bank confirm: ₱{(monthlyDepositStats.mbtcInVault + monthlyDepositStats.bdoInVault).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20">
-            <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-700 dark:text-blue-300 shrink-0">
+          <div className="flex items-start gap-3 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+            <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-700 dark:text-blue-300 shrink-0 mt-0.5">
               <Building2 className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800 dark:text-blue-300">Cash in MBTC</span>
               <div className="text-base font-black text-neutral-900 dark:text-white">
                 ₱{monthlyDepositStats.mbtcTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <p className="text-[9.5px] text-neutral-500">Deposited into Metrobank account</p>
+              <p className="text-[9.5px] text-neutral-500">
+                {monthlyDepositStats.mbtcConfirmed ? 'Confirmed deposited into Metrobank account' : 'Pending deposit into Metrobank account (still in Vault)'}
+              </p>
+              <div className="mt-1.5 pt-1.5 border-t border-blue-500/20 flex flex-wrap items-center justify-between gap-1.5">
+                <span className="text-[10px] font-semibold text-blue-800 dark:text-blue-300">
+                  Cash in Vault (MBTC): <strong className="font-mono">₱{monthlyDepositStats.mbtcInVault.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </span>
+                {monthlyDepositStats.mbtcConfirmed ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">✓ Confirmed</span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        disabled={savingVaultDeposit === 'mbtc'}
+                        onClick={() => handleToggleVaultDepositConfirm('mbtc', false)}
+                        className="px-1.5 py-0.5 rounded bg-neutral-500/15 hover:bg-neutral-500/25 text-neutral-600 dark:text-neutral-300 text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                      >
+                        Undo All
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  isAdmin && monthlyDepositStats.mbtcInVault > 0 && (
+                    <button
+                      type="button"
+                      disabled={savingVaultDeposit === 'mbtc'}
+                      onClick={() => handleToggleVaultDepositConfirm('mbtc', true)}
+                      className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                    >
+                      {savingVaultDeposit === 'mbtc' ? 'Confirming...' : 'Confirm All'}
+                    </button>
+                  )
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-            <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0">
+          <div className="flex items-start gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+            <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0 mt-0.5">
               <Building2 className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">Cash in BDO</span>
               <div className="text-base font-black text-neutral-900 dark:text-white">
                 ₱{monthlyDepositStats.bdoTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <p className="text-[9.5px] text-neutral-500">Deposited into BDO account</p>
+              <p className="text-[9.5px] text-neutral-500">
+                {monthlyDepositStats.bdoConfirmed ? 'Confirmed deposited into BDO account' : 'Pending deposit into BDO account (still in Vault)'}
+              </p>
+              <div className="mt-1.5 pt-1.5 border-t border-emerald-500/20 flex flex-wrap items-center justify-between gap-1.5">
+                <span className="text-[10px] font-semibold text-emerald-800 dark:text-emerald-300">
+                  Cash in Vault (BDO): <strong className="font-mono">₱{monthlyDepositStats.bdoInVault.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </span>
+                {monthlyDepositStats.bdoConfirmed ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">✓ Confirmed</span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        disabled={savingVaultDeposit === 'bdo'}
+                        onClick={() => handleToggleVaultDepositConfirm('bdo', false)}
+                        className="px-1.5 py-0.5 rounded bg-neutral-500/15 hover:bg-neutral-500/25 text-neutral-600 dark:text-neutral-300 text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                      >
+                        Undo All
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  isAdmin && monthlyDepositStats.bdoInVault > 0 && (
+                    <button
+                      type="button"
+                      disabled={savingVaultDeposit === 'bdo'}
+                      onClick={() => handleToggleVaultDepositConfirm('bdo', true)}
+                      className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                    >
+                      {savingVaultDeposit === 'bdo' ? 'Confirming...' : 'Confirm All'}
+                    </button>
+                  )
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -3643,7 +3904,32 @@ function CollectionPageContent() {
                           ₱{getDisplayCollectionAmount(item).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                          {renderStatusBadge(item.status)}
+                          <div className="flex flex-col items-center gap-1">
+                            {renderStatusBadge(item.status)}
+                            {isAdmin && (/mbtc|metrobank|bdo/i.test(item.status || '') || ((/vault/i.test(item.status || 'Cash in vault')) && item.tab !== 'others')) && (
+                              item.deposit_confirmed ? (
+                                <button
+                                  type="button"
+                                  disabled={confirmingReceiptId === item.id}
+                                  onClick={() => handleConfirmSingleDeposit(item, false)}
+                                  className="text-[9.5px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer disabled:opacity-50"
+                                  title="Click to undo deposit confirmation for this receipt"
+                                >
+                                  {confirmingReceiptId === item.id ? 'Updating...' : '✓ Deposited'}
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={confirmingReceiptId === item.id}
+                                  onClick={() => handleConfirmSingleDeposit(item, true)}
+                                  className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                                  title="Confirm deposit for this receipt only"
+                                >
+                                  {confirmingReceiptId === item.id ? 'Confirming...' : 'Confirm'}
+                                </button>
+                              )
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                           {renderRemarksBadge(item.remarks, item.status)}
@@ -4735,7 +5021,7 @@ function CollectionPageContent() {
                     <AnimatedSelect
                       value={formData.status || 'Cash in vault'}
                       onChange={val => setFormData({ ...formData, status: val as any })}
-                      options={STATUS_OPTIONS}
+                      options={getStatusOptionsForTab(formData.tab)}
                       buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2.5 text-xs"
                     />
                   </div>
@@ -5917,7 +6203,7 @@ function CollectionPageContent() {
                     <AnimatedSelect
                       value={editFormData.status || 'Cash in vault'}
                       onChange={val => setEditFormData({ ...editFormData, status: val as any })}
-                      options={STATUS_OPTIONS}
+                      options={getStatusOptionsForTab(editFormData.tab)}
                       placeholder="Select Status..."
                       disabled={isEditLocked}
                       buttonClassName="bg-white dark:bg-neutral-900 border-outline-variant/60 font-semibold py-2 text-xs"
@@ -6155,25 +6441,10 @@ function CollectionPageContent() {
                       <button
                         type="submit"
                         disabled={isSavingEdit}
-                        className="px-4 py-2 rounded-xl text-xs font-bold border border-outline-variant/60 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-900 dark:text-white transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5"
-                      >
-                        {isSavingEdit && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        <span>Save Changes</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isSavingEdit}
-                        onClick={() => setIsSealModalOpen(true)}
                         className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white transition-all shadow-md cursor-pointer flex items-center gap-1.5"
-                        title="Seal and file this collection entry into master registry (Locks editing and deleting)"
                       >
-                        {isSavingEdit ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Lock className="w-3.5 h-3.5" />
-                        )}
-                        <span>Seal &amp; File</span>
+                        {isSavingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        <span>Save Changes</span>
                       </button>
                     </>
                   )}

@@ -4,6 +4,8 @@ let particularsColEnsured = false;
 async function ensureParticularsColumn(db) {
   if (particularsColEnsured) return;
   await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS particulars_amount NUMERIC(15, 2) DEFAULT 0;`);
+  await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS deposit_confirmed BOOLEAN NOT NULL DEFAULT FALSE;`);
+  await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS pre_deposit_status VARCHAR(50);`);
   await db.query(`
     -- Automatically correct all collection receipts with year < 2026 to 2026 (preserving month and day)
     UPDATE collections
@@ -217,7 +219,12 @@ function formatCollectionRow(row) {
     reference_no: row.reference_no || undefined,
     bank_name: row.bank_name || undefined,
     status: (() => {
-      // Check if row date is in January to October 2026
+      const sLower = String(row.status || '').trim().toLowerCase();
+      if (sLower.includes('mbtc') || sLower.includes('metrobank')) return 'Cash in MBTC';
+      if (sLower.includes('bdo')) return 'Cash in BDO';
+      if (sLower.includes('vault')) return 'Cash in vault';
+
+      // Only apply Jan-Oct default when no explicit custody status is stored
       let isJanToOct = false;
       const chkDate = dateStr || row.date;
       if (chkDate) {
@@ -248,11 +255,9 @@ function formatCollectionRow(row) {
         }
       }
 
-      const sLower = String(row.status || '').toLowerCase();
-      if (sLower.includes('mbtc') || sLower.includes('metrobank')) return 'Cash in MBTC';
-      if (sLower.includes('bdo')) return 'Cash in BDO';
       return 'Cash in vault';
     })(),
+    deposit_confirmed: Boolean(row.deposit_confirmed),
     remarks: (() => {
       const rLower = String(row.remarks || '').toLowerCase();
       const sLower = String(row.status || '').toLowerCase();
@@ -815,7 +820,19 @@ export async function updateCollection(req, res) {
     const payment_method = item.payment_method || existing.payment_method;
     const reference_no = item.reference_no !== undefined ? item.reference_no : existing.reference_no;
     const bank_name = item.bank_name !== undefined ? item.bank_name : existing.bank_name;
-    const status = item.status || existing.status;
+    const deposit_confirmed = item.deposit_confirmed !== undefined
+      ? Boolean(item.deposit_confirmed)
+      : (/vault/i.test(String(item.status || existing.status || '')) ? false : Boolean(existing.deposit_confirmed));
+    let status = item.status || existing.status;
+    let pre_deposit_status = existing.pre_deposit_status || null;
+    if (item.deposit_confirmed === true) {
+      pre_deposit_status = existing.pre_deposit_status || existing.status;
+    } else if (item.deposit_confirmed === false) {
+      if (existing.pre_deposit_status) {
+        status = existing.pre_deposit_status;
+      }
+      pre_deposit_status = null;
+    }
     const remarks = item.remarks !== undefined ? item.remarks : existing.remarks;
     const collected_by = item.collected_by || existing.collected_by;
 
@@ -828,8 +845,8 @@ export async function updateCollection(req, res) {
         service_type = $22, service_copies = $23, service_rate = $24,
         particulars = $25, other_category = $26,
         amount = $27, payment_method = $28, reference_no = $29, bank_name = $30,
-        status = $31, remarks = $32, collected_by = $33, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $34
+        status = $31, deposit_confirmed = $32, pre_deposit_status = $33, remarks = $34, collected_by = $35, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $36
       RETURNING *;
     `;
 
@@ -841,7 +858,7 @@ export async function updateCollection(req, res) {
       service_type, service_copies, service_rate,
       particulars, other_category,
       amount, payment_method, reference_no, bank_name,
-      status, remarks, collected_by,
+      status, deposit_confirmed, pre_deposit_status, remarks, collected_by,
       id
     ];
 
@@ -938,6 +955,173 @@ export async function bulkDeleteCollections(req, res) {
     return res.status(500).json({
       success: false,
       error: { message: 'Failed to bulk delete collections' }
+    });
+  }
+}
+
+const ensureVaultDepositsTable = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS collection_vault_deposits (
+      period_key VARCHAR(32) PRIMARY KEY,
+      mbtc_from_vault NUMERIC(15, 2) NOT NULL DEFAULT 0,
+      bdo_from_vault NUMERIC(15, 2) NOT NULL DEFAULT 0,
+      mbtc_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+      bdo_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_by VARCHAR(255),
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    ALTER TABLE collection_vault_deposits
+    ADD COLUMN IF NOT EXISTS mbtc_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS bdo_confirmed BOOLEAN NOT NULL DEFAULT FALSE
+  `);
+};
+
+// @desc    Get confirmed Cash-in-Vault deposits into MBTC / BDO per period
+// @route   GET /api/collections/vault-deposits
+// @access  Protected (Admin, Staff)
+export async function getVaultDeposits(_req, res) {
+  try {
+    await ensureVaultDepositsTable();
+    const result = await pool.query(
+      'SELECT period_key, mbtc_from_vault, bdo_from_vault, mbtc_confirmed, bdo_confirmed, updated_by, updated_at FROM collection_vault_deposits'
+    );
+    const map = {};
+    for (const row of result.rows) {
+      map[row.period_key] = {
+        mbtc_from_vault: parseFloat(row.mbtc_from_vault) || 0,
+        bdo_from_vault: parseFloat(row.bdo_from_vault) || 0,
+        mbtc_confirmed: Boolean(row.mbtc_confirmed),
+        bdo_confirmed: Boolean(row.bdo_confirmed),
+        updated_by: row.updated_by || null,
+        updated_at: row.updated_at || null
+      };
+    }
+    return res.status(200).json({ success: true, data: map });
+  } catch (error) {
+    console.error('Error fetching vault deposits:', error);
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to fetch vault deposit confirmations' }
+    });
+  }
+}
+
+// @desc    Confirm/update Cash-in-Vault deposit status for MBTC or BDO
+// @route   PUT /api/collections/vault-deposits
+// @access  Protected (Admin, Staff)
+export async function upsertVaultDeposit(req, res) {
+  try {
+    await ensureVaultDepositsTable();
+    const periodKey = String(req.body?.period_key || '').trim();
+    if (!periodKey) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'period_key is required' }
+      });
+    }
+    const existingRes = await pool.query(
+      'SELECT mbtc_from_vault, bdo_from_vault, mbtc_confirmed, bdo_confirmed FROM collection_vault_deposits WHERE period_key = $1',
+      [periodKey]
+    );
+    const existing = existingRes.rows[0] || {
+      mbtc_from_vault: 0,
+      bdo_from_vault: 0,
+      mbtc_confirmed: false,
+      bdo_confirmed: false
+    };
+    const mbtc = req.body.mbtc_from_vault !== undefined
+      ? Math.max(0, parseFloat(req.body.mbtc_from_vault) || 0)
+      : (parseFloat(existing.mbtc_from_vault) || 0);
+    const bdo = req.body.bdo_from_vault !== undefined
+      ? Math.max(0, parseFloat(req.body.bdo_from_vault) || 0)
+      : (parseFloat(existing.bdo_from_vault) || 0);
+    const mbtcConfirmed = req.body.mbtc_confirmed !== undefined
+      ? Boolean(req.body.mbtc_confirmed)
+      : Boolean(existing.mbtc_confirmed);
+    const bdoConfirmed = req.body.bdo_confirmed !== undefined
+      ? Boolean(req.body.bdo_confirmed)
+      : Boolean(existing.bdo_confirmed);
+    const updatedBy = req.user?.full_name || req.user?.email || req.user?.role || 'Manager';
+
+    const upsertRes = await pool.query(
+      `INSERT INTO collection_vault_deposits (period_key, mbtc_from_vault, bdo_from_vault, mbtc_confirmed, bdo_confirmed, updated_by, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+       ON CONFLICT (period_key)
+       DO UPDATE SET
+         mbtc_from_vault = EXCLUDED.mbtc_from_vault,
+         bdo_from_vault = EXCLUDED.bdo_from_vault,
+         mbtc_confirmed = EXCLUDED.mbtc_confirmed,
+         bdo_confirmed = EXCLUDED.bdo_confirmed,
+         updated_by = EXCLUDED.updated_by,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING period_key, mbtc_from_vault, bdo_from_vault, mbtc_confirmed, bdo_confirmed, updated_by, updated_at`,
+      [periodKey, mbtc, bdo, mbtcConfirmed, bdoConfirmed, updatedBy]
+    );
+    const row = upsertRes.rows[0];
+    return res.status(200).json({
+      success: true,
+      data: {
+        period_key: row.period_key,
+        mbtc_from_vault: parseFloat(row.mbtc_from_vault) || 0,
+        bdo_from_vault: parseFloat(row.bdo_from_vault) || 0,
+        mbtc_confirmed: Boolean(row.mbtc_confirmed),
+        bdo_confirmed: Boolean(row.bdo_confirmed),
+        updated_by: row.updated_by,
+        updated_at: row.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Error saving vault deposit:', error);
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to save vault deposit confirmation' }
+    });
+  }
+}
+
+// @desc    Bulk confirm or unconfirm bank deposit for specific collection receipts
+// @route   PUT /api/collections/confirm-deposits
+// @access  Protected (Admin, Staff)
+export async function bulkConfirmDeposits(req, res) {
+  try {
+    await ensureParticularsColumn(pool);
+    const { ids, deposit_confirmed, target_status } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No collection IDs provided' }
+      });
+    }
+    const confirmed = Boolean(deposit_confirmed);
+    const targetStatus = String(target_status || '').trim();
+    const result = await pool.query(
+      `UPDATE collections
+       SET pre_deposit_status = CASE
+             WHEN $1 = true THEN COALESCE(pre_deposit_status, status)
+             ELSE NULL
+           END,
+           status = CASE
+             WHEN $1 = true AND LOWER(COALESCE(status, 'Cash in vault')) LIKE '%vault%' AND $3 <> '' THEN $3
+             WHEN $1 = false AND pre_deposit_status IS NOT NULL THEN pre_deposit_status
+             ELSE status
+           END,
+           deposit_confirmed = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ANY($2::text[])
+       RETURNING id, deposit_confirmed, status`,
+      [confirmed, ids, targetStatus]
+    );
+    return res.status(200).json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error bulk confirming deposits:', error);
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to update deposit confirmations' }
     });
   }
 }
