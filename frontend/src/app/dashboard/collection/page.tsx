@@ -2338,6 +2338,10 @@ function CollectionPageContent() {
     bdo_confirmed: false
   };
 
+  const nowDate = new Date();
+  const currentCalMonth = nowDate.getMonth();
+  const currentCalYear = selectedYear === 'all' ? nowDate.getFullYear() : Number(selectedYear);
+
   const monthlyDepositStats = useMemo(() => {
     let rawVaultTotal = 0;
     let rawMbtcTotal = 0;
@@ -2346,6 +2350,8 @@ function CollectionPageContent() {
     let confirmedBdoTotal = 0;
     let unconfirmedMbtcTotal = 0;
     let unconfirmedBdoTotal = 0;
+    let mbtcThisMonthInVault = 0;
+    let bdoThisMonthInVault = 0;
     const periodMbtcConfirmed = Boolean(currentVaultDeposit.mbtc_confirmed);
     const periodBdoConfirmed = Boolean(currentVaultDeposit.bdo_confirmed);
 
@@ -2358,6 +2364,8 @@ function CollectionPageContent() {
       const isCreditTab = t === 'credit' || t === 'billing';
       const isMbtcBucket = s.includes('mbtc') || s.includes('metrobank') || (s.includes('vault') && isSalesTab);
       const isBdoBucket = !isMbtcBucket && (s.includes('bdo') || (s.includes('vault') && isCreditTab));
+      const parsedDate = parseCollectionDate(c.date);
+      const isCurrentCalMonth = parsedDate.month === currentCalMonth && (!parsedDate.year || parsedDate.year === String(currentCalYear));
 
       if (isMbtcBucket) {
         rawMbtcTotal += amt;
@@ -2365,6 +2373,7 @@ function CollectionPageContent() {
           confirmedMbtcTotal += amt;
         } else {
           unconfirmedMbtcTotal += amt;
+          if (isCurrentCalMonth) mbtcThisMonthInVault += amt;
         }
       } else if (isBdoBucket) {
         rawBdoTotal += amt;
@@ -2372,6 +2381,7 @@ function CollectionPageContent() {
           confirmedBdoTotal += amt;
         } else {
           unconfirmedBdoTotal += amt;
+          if (isCurrentCalMonth) bdoThisMonthInVault += amt;
         }
       } else {
         rawVaultTotal += amt;
@@ -2393,10 +2403,12 @@ function CollectionPageContent() {
       rawBdoTotal,
       mbtcInVault,
       bdoInVault,
+      mbtcThisMonthInVault,
+      bdoThisMonthInVault,
       mbtcConfirmed,
       bdoConfirmed
     };
-  }, [filteredCollections, currentVaultDeposit.mbtc_confirmed, currentVaultDeposit.bdo_confirmed]);
+  }, [filteredCollections, currentVaultDeposit.mbtc_confirmed, currentVaultDeposit.bdo_confirmed, currentCalMonth, currentCalYear]);
 
   const [confirmingReceiptId, setConfirmingReceiptId] = useState<string | null>(null);
 
@@ -2434,12 +2446,23 @@ function CollectionPageContent() {
     }
   };
 
-  const handleToggleVaultDepositConfirm = async (bank: 'mbtc' | 'bdo', confirmed: boolean) => {
+  const handleToggleVaultDepositConfirm = async (
+    bank: 'mbtc' | 'bdo',
+    confirmed: boolean,
+    scope: 'filtered' | 'this_month' = 'filtered'
+  ) => {
     try {
       setSavingVaultDeposit(bank);
       const targetStatus = bank === 'mbtc' ? 'Cash in MBTC' : 'Cash in BDO';
+      const isThisMonthOnly = scope === 'this_month' && selectedMonth === 'all';
       const matchingIds = filteredCollections
         .filter(c => {
+          if (isThisMonthOnly) {
+            const parsedDate = parseCollectionDate(c.date);
+            if (parsedDate.month !== currentCalMonth || (parsedDate.year && parsedDate.year !== String(currentCalYear))) {
+              return false;
+            }
+          }
           const s = (c.status || 'Cash in vault').toLowerCase();
           const t = (c.tab || '').toLowerCase();
           const isSalesTab = t === 'sales' || t === 'services' || t === 'sales_services';
@@ -2482,15 +2505,16 @@ function CollectionPageContent() {
         }));
       }
 
+      const periodKey = isThisMonthOnly ? `${currentCalYear}-${currentCalMonth}` : currentVaultPeriodKey;
       const payload = {
-        period_key: currentVaultPeriodKey,
+        period_key: periodKey,
         ...(bank === 'mbtc' ? { mbtc_confirmed: confirmed } : { bdo_confirmed: confirmed })
       };
       const res = await api.put('/collections/vault-deposits', payload);
       if (res.data?.success && res.data?.data) {
         setVaultDepositsMap(prev => ({
           ...prev,
-          [currentVaultPeriodKey]: {
+          [periodKey]: {
             mbtc_from_vault: res.data.data.mbtc_from_vault,
             bdo_from_vault: res.data.data.bdo_from_vault,
             mbtc_confirmed: res.data.data.mbtc_confirmed,
@@ -3618,20 +3642,37 @@ function CollectionPageContent() {
                         onClick={() => handleToggleVaultDepositConfirm('mbtc', false)}
                         className="px-1.5 py-0.5 rounded bg-neutral-500/15 hover:bg-neutral-500/25 text-neutral-600 dark:text-neutral-300 text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
                       >
-                        Undo All
+                        {selectedMonth !== 'all' ? 'Undo This Month' : 'Undo All'}
                       </button>
                     )}
                   </div>
                 ) : (
                   isAdmin && monthlyDepositStats.mbtcInVault > 0 && (
-                    <button
-                      type="button"
-                      disabled={savingVaultDeposit === 'mbtc'}
-                      onClick={() => handleToggleVaultDepositConfirm('mbtc', true)}
-                      className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
-                    >
-                      {savingVaultDeposit === 'mbtc' ? 'Confirming...' : 'Confirm All'}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {selectedMonth === 'all' && monthlyDepositStats.mbtcThisMonthInVault > 0 && (
+                        <button
+                          type="button"
+                          disabled={savingVaultDeposit === 'mbtc'}
+                          onClick={() => handleToggleVaultDepositConfirm('mbtc', true, 'this_month')}
+                          className="px-2 py-0.5 rounded bg-blue-500/15 hover:bg-blue-500/25 text-blue-700 dark:text-blue-300 text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                          title={`Confirm only ${MONTH_NAMES[currentCalMonth]} ${currentCalYear} receipts`}
+                        >
+                          Confirm This Month
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={savingVaultDeposit === 'mbtc'}
+                        onClick={() => handleToggleVaultDepositConfirm('mbtc', true, 'filtered')}
+                        className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                      >
+                        {savingVaultDeposit === 'mbtc'
+                          ? 'Confirming...'
+                          : selectedMonth !== 'all'
+                            ? 'Confirm This Month'
+                            : 'Confirm All'}
+                      </button>
+                    </div>
                   )
                 )}
               </div>
@@ -3664,20 +3705,37 @@ function CollectionPageContent() {
                         onClick={() => handleToggleVaultDepositConfirm('bdo', false)}
                         className="px-1.5 py-0.5 rounded bg-neutral-500/15 hover:bg-neutral-500/25 text-neutral-600 dark:text-neutral-300 text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
                       >
-                        Undo All
+                        {selectedMonth !== 'all' ? 'Undo This Month' : 'Undo All'}
                       </button>
                     )}
                   </div>
                 ) : (
                   isAdmin && monthlyDepositStats.bdoInVault > 0 && (
-                    <button
-                      type="button"
-                      disabled={savingVaultDeposit === 'bdo'}
-                      onClick={() => handleToggleVaultDepositConfirm('bdo', true)}
-                      className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
-                    >
-                      {savingVaultDeposit === 'bdo' ? 'Confirming...' : 'Confirm All'}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {selectedMonth === 'all' && monthlyDepositStats.bdoThisMonthInVault > 0 && (
+                        <button
+                          type="button"
+                          disabled={savingVaultDeposit === 'bdo'}
+                          onClick={() => handleToggleVaultDepositConfirm('bdo', true, 'this_month')}
+                          className="px-2 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                          title={`Confirm only ${MONTH_NAMES[currentCalMonth]} ${currentCalYear} receipts`}
+                        >
+                          Confirm This Month
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={savingVaultDeposit === 'bdo'}
+                        onClick={() => handleToggleVaultDepositConfirm('bdo', true, 'filtered')}
+                        className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50"
+                      >
+                        {savingVaultDeposit === 'bdo'
+                          ? 'Confirming...'
+                          : selectedMonth !== 'all'
+                            ? 'Confirm This Month'
+                            : 'Confirm All'}
+                      </button>
+                    </div>
                   )
                 )}
               </div>
