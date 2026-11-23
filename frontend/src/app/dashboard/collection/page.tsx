@@ -2552,22 +2552,33 @@ function CollectionPageContent() {
         })
         .map(c => c.id);
 
+      let updatedById: Map<string, { deposit_confirmed: boolean; status?: string }> | null = null;
       if (matchingIds.length > 0) {
         const bulkRes = await api.put('/collections/confirm-deposits', {
           ids: matchingIds,
           deposit_confirmed: confirmed,
           target_status: targetStatus
         });
-        const updatedById = new Map<string, { deposit_confirmed: boolean; status?: string }>();
+        updatedById = new Map<string, { deposit_confirmed: boolean; status?: string }>();
         if (Array.isArray(bulkRes.data?.data)) {
           for (const row of bulkRes.data.data) {
-            updatedById.set(row.id, { deposit_confirmed: Boolean(row.deposit_confirmed), status: row.status });
+            updatedById.set(String(row.id), { deposit_confirmed: Boolean(row.deposit_confirmed), status: row.status });
           }
         }
-        const idSet = new Set(matchingIds);
+      }
+
+      const periodKey = isThisMonthOnly ? `${currentCalYear}-${currentCalMonth}` : currentVaultPeriodKey;
+      const payload = {
+        period_key: periodKey,
+        ...(bank === 'mbtc' ? { mbtc_confirmed: confirmed } : { bdo_confirmed: confirmed })
+      };
+      const res = await api.put('/collections/vault-deposits', payload);
+
+      if (matchingIds.length > 0) {
+        const idSet = new Set(matchingIds.map(id => String(id)));
         setCollections(prev => prev.map(c => {
-          if (!idSet.has(c.id)) return c;
-          const serverRow = updatedById.get(c.id);
+          if (!idSet.has(String(c.id))) return c;
+          const serverRow = updatedById?.get(String(c.id));
           if (serverRow) {
             return {
               ...c,
@@ -2584,12 +2595,6 @@ function CollectionPageContent() {
         }));
       }
 
-      const periodKey = isThisMonthOnly ? `${currentCalYear}-${currentCalMonth}` : currentVaultPeriodKey;
-      const payload = {
-        period_key: periodKey,
-        ...(bank === 'mbtc' ? { mbtc_confirmed: confirmed } : { bdo_confirmed: confirmed })
-      };
-      const res = await api.put('/collections/vault-deposits', payload);
       if (res.data?.success && res.data?.data) {
         setVaultDepositsMap(prev => ({
           ...prev,
