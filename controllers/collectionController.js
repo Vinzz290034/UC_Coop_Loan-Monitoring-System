@@ -820,6 +820,15 @@ export async function updateCollection(req, res) {
     const payment_method = item.payment_method || existing.payment_method;
     const reference_no = item.reference_no !== undefined ? item.reference_no : existing.reference_no;
     const bank_name = item.bank_name !== undefined ? item.bank_name : existing.bank_name;
+    if (
+      item.deposit_confirmed !== undefined &&
+      Boolean(item.deposit_confirmed) !== Boolean(existing.deposit_confirmed) &&
+      req.user?.role !== 'admin'
+    ) {
+      return res.status(403).json({
+        error: { message: 'Only admin accounts can confirm or undo deposit confirmations' }
+      });
+    }
     const deposit_confirmed = item.deposit_confirmed !== undefined
       ? Boolean(item.deposit_confirmed)
       : (/vault/i.test(String(item.status || existing.status || '')) ? false : Boolean(existing.deposit_confirmed));

@@ -2413,6 +2413,7 @@ function CollectionPageContent() {
   const [confirmingReceiptId, setConfirmingReceiptId] = useState<string | null>(null);
 
   const handleConfirmSingleDeposit = async (item: CollectionItem, confirmed: boolean) => {
+    if (!isAdmin) return;
     try {
       setConfirmingReceiptId(item.id);
       const isVaultStatus = /vault/i.test(item.status || 'Cash in vault');
@@ -2451,6 +2452,7 @@ function CollectionPageContent() {
     confirmed: boolean,
     scope: 'filtered' | 'this_month' = 'filtered'
   ) => {
+    if (!isAdmin) return;
     try {
       setSavingVaultDeposit(bank);
       const targetStatus = bank === 'mbtc' ? 'Cash in MBTC' : 'Cash in BDO';
