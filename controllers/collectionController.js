@@ -160,14 +160,14 @@ function getDefaultCustodyStatus(date, tab, requestedStatus) {
  * Format collection row from PostgreSQL into CollectionItem shape
  */
 function formatCollectionRow(row) {
-  // Format date to YYYY-MM-DD
+  // Format date to YYYY-MM-DD (using Asia/Manila so UTC midnight/offset never shifts the day backward)
   let dateStr = row.date;
   if (dateStr instanceof Date) {
-    let y = dateStr.getFullYear();
+    const manilaDate = dateStr.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    const [rawY, rawM, rawD] = manilaDate.split('-');
+    let y = Number(rawY);
     if (y < 2026) y = 2026;
-    const m = String(dateStr.getMonth() + 1).padStart(2, '0');
-    const d = String(dateStr.getDate()).padStart(2, '0');
-    dateStr = `${y}-${m}-${d}`;
+    dateStr = `${y}-${rawM}-${rawD}`;
   } else if (typeof dateStr === 'string') {
     if (dateStr.includes('T')) {
       dateStr = dateStr.split('T')[0];

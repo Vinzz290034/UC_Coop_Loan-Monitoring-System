@@ -185,7 +185,11 @@ const MONTH_NAMES = [
 ];
 
 const parseCollectionDate = (rawDate?: string) => {
-  if (!rawDate) return { year: null, month: null };
+  if (!rawDate) return { year: null, month: null, day: null, dateKey: null };
+  const makeDateKey = (y: string, m: number, d: number | null) =>
+    d !== null && !isNaN(d) && !isNaN(m)
+      ? `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      : null;
   const str = String(rawDate).trim();
   if (str.includes('-')) {
     const p = str.split('T')[0].split('-');
@@ -193,7 +197,13 @@ const parseCollectionDate = (rawDate?: string) => {
       let y = p[0];
       if (Number(y) < 2026) y = '2026';
       const m = parseInt(p[1], 10) - 1;
-      return { year: y, month: isNaN(m) ? null : m };
+      const d = parseInt(p[2], 10);
+      return {
+        year: y,
+        month: isNaN(m) ? null : m,
+        day: isNaN(d) ? null : d,
+        dateKey: makeDateKey(y, m, isNaN(d) ? null : d)
+      };
     }
   }
   if (str.includes('/')) {
@@ -204,13 +214,25 @@ const parseCollectionDate = (rawDate?: string) => {
         let y = p[2];
         if (Number(y) < 2026) y = '2026';
         const m = parseInt(p[1], 10) - 1;
-        return { year: y, month: isNaN(m) ? null : m };
+        const d = parseInt(p[0], 10);
+        return {
+          year: y,
+          month: isNaN(m) ? null : m,
+          day: isNaN(d) ? null : d,
+          dateKey: makeDateKey(y, m, isNaN(d) ? null : d)
+        };
       } else if (p[0].length === 4) {
         // YYYY/MM/DD
         let y = p[0];
         if (Number(y) < 2026) y = '2026';
         const m = parseInt(p[1], 10) - 1;
-        return { year: y, month: isNaN(m) ? null : m };
+        const d = parseInt(p[2], 10);
+        return {
+          year: y,
+          month: isNaN(m) ? null : m,
+          day: isNaN(d) ? null : d,
+          dateKey: makeDateKey(y, m, isNaN(d) ? null : d)
+        };
       }
     }
   }
@@ -218,9 +240,16 @@ const parseCollectionDate = (rawDate?: string) => {
   if (!isNaN(d.getTime())) {
     let yr = d.getFullYear();
     if (yr < 2026) yr = 2026;
-    return { year: String(yr), month: d.getMonth() };
+    const m = d.getMonth();
+    const day = d.getDate();
+    return {
+      year: String(yr),
+      month: m,
+      day,
+      dateKey: makeDateKey(String(yr), m, day)
+    };
   }
-  return { year: null, month: null };
+  return { year: null, month: null, day: null, dateKey: null };
 };
 
 const normalizeLoanAccountName = (val?: string | null) => {
@@ -2302,25 +2331,78 @@ function CollectionPageContent() {
     return result;
   }, [collections, activeTab, selectedMethod, selectedStatus, selectedRemarks, selectedYear, selectedMonth, searchQuery, sortBy, sortOrder]);
 
-  // Tab Stats for 4 KPI Cards (Calculated over current tab's scope or all)
+  // Tab Stats for 5 KPI Cards (Calculated over current tab's scope + active month/year filters)
   const tabStats = useMemo(() => {
     const scopeItems = (activeTab === 'all' || activeTab === 'billing')
       ? collections
       : activeTab === 'sales_services'
       ? collections.filter(c => c.tab === 'sales_services' || c.tab === 'sales' || c.tab === 'services')
       : collections.filter(c => c.tab === activeTab);
+
+    const now = new Date();
+    const currentYearStr = String(now.getFullYear());
+    const todayKey = `${currentYearStr}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const targetYear = selectedYear === 'all' ? currentYearStr : String(selectedYear);
+    const targetMonth = selectedMonth === 'all' ? now.getMonth() : Number(selectedMonth);
+
+    let todayTotal = 0;
+    let todayCount = 0;
+    let monthTotal = 0;
+    let ytdTotal = 0;
+    let periodTotalForAvg = 0;
+    const activeDays = new Set<string>();
+
     const count = scopeItems.length;
-    const totalAmount = scopeItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+    let totalAmount = 0;
+    let maxAmount = 0;
+
+    for (const item of scopeItems) {
+      const amt = getDisplayCollectionAmount(item);
+      totalAmount += amt;
+      if (amt > maxAmount) maxAmount = amt;
+
+      const parsed = parseCollectionDate(item.date);
+      if (parsed.dateKey === todayKey) {
+        todayTotal += amt;
+        todayCount += 1;
+      }
+      if (parsed.month === targetMonth && (!parsed.year || parsed.year === targetYear)) {
+        monthTotal += amt;
+      }
+      if (!parsed.year || parsed.year === targetYear) {
+        if (targetYear !== currentYearStr || !parsed.dateKey || parsed.dateKey <= todayKey) {
+          ytdTotal += amt;
+        }
+      }
+
+      const matchesAvgYear = selectedYear === 'all' || !parsed.year || parsed.year === String(selectedYear);
+      const matchesAvgMonth = selectedMonth === 'all' || parsed.month === Number(selectedMonth);
+      if (matchesAvgYear && matchesAvgMonth) {
+        periodTotalForAvg += amt;
+        const dayKey = parsed.dateKey || String(item.date || '').trim();
+        if (dayKey) activeDays.add(dayKey);
+      }
+    }
+
     const avgAmount = count > 0 ? totalAmount / count : 0;
-    const maxAmount = count > 0 ? Math.max(...scopeItems.map(i => i.amount || 0)) : 0;
+    const activeDaysCount = activeDays.size;
+    const avgDailyAmount = activeDaysCount > 0 ? periodTotalForAvg / activeDaysCount : 0;
 
     return {
       count,
       totalAmount,
       avgAmount,
-      maxAmount
+      maxAmount,
+      todayTotal,
+      todayCount,
+      monthTotal,
+      ytdTotal,
+      avgDailyAmount,
+      activeDaysCount,
+      targetMonth,
+      targetYear
     };
-  }, [collections, activeTab]);
+  }, [collections, activeTab, selectedYear, selectedMonth]);
 
   // Monthly Deposit Custody Breakdown (Cash in vault, Cash in MBTC, Cash in BDO)
   const currentVaultPeriodKey = `${selectedYear}-${selectedMonth}`;
@@ -2604,10 +2686,13 @@ function CollectionPageContent() {
     }, 0);
     const initialNo = maxLocalNo > 0 ? String(maxLocalNo + 1) : '1001';
 
+    const nowLocal = new Date();
+    const localTodayStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
+
     setFormData({
       tab: targetCategory,
       sales_service_type: 'merchandise',
-      date: new Date().toISOString().split('T')[0],
+      date: localTodayStr,
       or_no: initialNo,
       payor_name: '',
       member_id: '',
@@ -2866,8 +2951,19 @@ function CollectionPageContent() {
       const savedItem: CollectionItem = res.data?.data || newItem;
       setCollections(prev => [savedItem, ...prev]);
       setIsAddModalOpen(false);
-      setActionFeedback({ type: 'success', message: `Collection receipt ${savedItem.or_no} recorded successfully!` });
-      setTimeout(() => setActionFeedback(null), 4000);
+      // Clear active search/page filters if they would hide the newly created receipt
+      if (searchQuery.trim() && !String(savedItem.or_no || '').toLowerCase().includes(searchQuery.trim().toLowerCase())) {
+        setSearchQuery('');
+      }
+      setCurrentPage(1);
+      const orChanged = newItem.or_no && savedItem.or_no && String(savedItem.or_no) !== String(newItem.or_no);
+      setActionFeedback({
+        type: 'success',
+        message: orChanged
+          ? `Collection receipt recorded as #${savedItem.or_no} (Receipt #${newItem.or_no} already existed).`
+          : `Collection receipt ${savedItem.or_no} recorded successfully!`
+      });
+      setTimeout(() => setActionFeedback(null), 5000);
     } catch (err: any) {
       console.error('Failed to create collection entry:', err);
       setActionFeedback({ type: 'error', message: err?.response?.data?.error?.message || 'Failed to save collection receipt to database.' });
@@ -3224,20 +3320,18 @@ function CollectionPageContent() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
-          {/* Card 1: Total Collections */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch">
+          {/* Card 1: Collection Today */}
           <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                {activeTab === 'all' || activeTab === 'billing' ? 'Total Collections' : `Total ${currentTabConfig.label} Collected`}
+                Collection Today
               </span>
               <p className="text-xl sm:text-2xl font-headline font-black text-primary dark:text-secondary">
-                ₱{tabStats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₱{tabStats.todayTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="text-[10px] text-neutral-500">
-                {activeTab === 'all'
-                  ? `Across ${tabStats.count} total collections in system`
-                  : `Across ${tabStats.count} recorded collection receipts`}
+                Total collected for today
               </p>
             </div>
             <div className="p-3 bg-primary/10 dark:bg-secondary/10 rounded-2xl text-primary dark:text-secondary">
@@ -3245,53 +3339,75 @@ function CollectionPageContent() {
             </div>
           </div>
 
-          {/* Card 2: Total Receipts */}
+          {/* Card 2: Collection This Month */}
           <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Total Receipts
+                {selectedMonth !== 'all' ? `Collection (${MONTH_NAMES[tabStats.targetMonth]})` : 'Collection This Month'}
               </span>
               <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
-                {tabStats.count}
+                ₱{tabStats.monthTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="text-[10px] text-neutral-500">
-                {activeTab === 'all' || activeTab === 'billing' ? 'All collections in master registry' : 'In current category registry'}
+                {MONTH_NAMES[tabStats.targetMonth]} {tabStats.targetYear}
               </p>
             </div>
             <div className="p-3 bg-emerald-700/10 dark:bg-emerald-400/10 rounded-2xl text-emerald-700 dark:text-emerald-400">
+              <Calendar className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 3: Collection YTD */}
+          <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Collection YTD
+              </span>
+              <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
+                ₱{tabStats.ytdTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-[10px] text-neutral-500">
+                Year-to-date ({tabStats.targetYear})
+              </p>
+            </div>
+            <div className="p-3 bg-teal-700/10 dark:bg-teal-400/10 rounded-2xl text-teal-700 dark:text-teal-400">
+              <Sparkles className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 4: Invoices Issued Today */}
+          <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Invoices Issued Today
+              </span>
+              <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
+                {tabStats.todayCount}
+              </p>
+              <p className="text-[10px] text-neutral-500">
+                Receipts issued today
+              </p>
+            </div>
+            <div className="p-3 bg-amber-700/10 dark:bg-amber-400/10 rounded-2xl text-amber-700 dark:text-amber-400">
               <Receipt className="w-5 h-5" />
             </div>
           </div>
 
-          {/* Card 3: Average Release / Collection */}
+          {/* Card 5: Average Daily Collection */}
           <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Average Collection
+                Average Daily Collection
               </span>
               <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
-                ₱{tabStats.avgAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₱{tabStats.avgDailyAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-              <p className="text-[10px] text-neutral-500">Mean collection receipt value</p>
+              <p className="text-[10px] text-neutral-500">
+                Across {tabStats.activeDaysCount} recorded day{tabStats.activeDaysCount === 1 ? '' : 's'}
+              </p>
             </div>
             <div className="p-3 bg-blue-700/10 dark:bg-blue-400/10 rounded-2xl text-blue-700 dark:text-blue-400">
               <Clock className="w-5 h-5" />
-            </div>
-          </div>
-
-          {/* Card 4: Largest Collection */}
-          <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Largest Collection
-              </span>
-              <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
-                ₱{tabStats.maxAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              <p className="text-[10px] text-neutral-500">Peak single collection receipt</p>
-            </div>
-            <div className="p-3 bg-amber-700/10 dark:bg-amber-400/10 rounded-2xl text-amber-700 dark:text-amber-400">
-              <Sparkles className="w-5 h-5" />
             </div>
           </div>
         </div>
