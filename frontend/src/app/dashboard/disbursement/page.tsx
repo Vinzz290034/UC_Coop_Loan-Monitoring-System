@@ -2275,14 +2275,6 @@ function DisbursementPageContent() {
     return parseFloat(String(cv.amount || 0).replace(/,/g, '')) || 0;
   }
 
-  // Tab summary statistics
-  const tabStats = useMemo(() => {
-    const totalAmount = checkVouchers.reduce((sum, cv) => sum + (getCvDisbursedAmount(cv) || parseFloat(cv.amount) || 0), 0);
-    const avgAmount = checkVouchers.length > 0 ? totalAmount / checkVouchers.length : 0;
-    const maxAmount = checkVouchers.reduce((max, cv) => Math.max(max, getCvDisbursedAmount(cv) || parseFloat(cv.amount) || 0), 0);
-    return { totalAmount, avgAmount, maxAmount, count: cvTotalCount };
-  }, [checkVouchers, cvTotalCount]);
-
   // Utility helpers
   const formatDisbursedInWords = (amount: number): string => {
     if (!amount || isNaN(amount) || amount <= 0) return 'ZERO PESOS ONLY';
@@ -3066,6 +3058,14 @@ function DisbursementPageContent() {
     }
     return null;
   };
+
+  // Tab summary statistics
+  const tabStats = useMemo(() => {
+    const totalAmount = checkVouchers.reduce((sum, cv) => sum + (getCvDisbursedAmount(cv) || parseFloat(cv.amount) || 0), 0);
+    const avgAmount = checkVouchers.length > 0 ? totalAmount / checkVouchers.length : 0;
+    const maxAmount = checkVouchers.reduce((max, cv) => Math.max(max, getCvDisbursedAmount(cv) || parseFloat(cv.amount) || 0), 0);
+    return { totalAmount, avgAmount, maxAmount, count: cvTotalCount };
+  }, [checkVouchers, cvTotalCount]);
 
   // Helper for row editing in Check Voucher modals
   const updateCvRowField = (
