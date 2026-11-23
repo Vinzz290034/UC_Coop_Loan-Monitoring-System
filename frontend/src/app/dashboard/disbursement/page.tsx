@@ -2190,6 +2190,12 @@ function DisbursementPageContent() {
   function getCvDisbursedAmount(cv: any): number {
     if (!cv) return 0;
 
+    // Cancelled vouchers (by status or particulars) should always report ₱0.00
+    const isCancelledVoucher =
+      String(cv.status || '').trim().toLowerCase() === 'cancelled' ||
+      /\bcancelled\b/i.test(String(cv.particulars || ''));
+    if (isCancelledVoucher) return 0;
+
     // 0. For STL / Revolving Fund replenishment vouchers, match the exact Summary Breakdown modal CIB / debit total
     if (isStlOrRfTabOrVoucher(cv)) {
       const summary = getSummaryCvRows(cv);
@@ -2256,6 +2262,10 @@ function DisbursementPageContent() {
       if (cibVal > 0) return cibVal;
       if (dSum > 0 && nonCibCSum > 0 && dSum >= nonCibCSum) return dSum - nonCibCSum;
       if (dSum > 0) return dSum;
+      // Explicit detail rows exist with all zero/empty amounts and no attached items -> ₱0.00
+      const hasRfItems = Array.isArray(cv.revolving_fund?.items) && cv.revolving_fund.items.some((it: any) => !it.is_cancelled && (parseFloat(String(it.amount || 0).replace(/,/g, '')) || 0) > 0);
+      const hasStlItems = Array.isArray(cv.stl_liquidation?.items) && cv.stl_liquidation.items.some((it: any) => !it.is_cancelled && (parseFloat(String(it.amount || 0).replace(/,/g, '')) || 0) > 0);
+      if (!hasRfItems && !hasStlItems) return 0;
     }
 
     // Check linked revolving fund items or STL items if details is not yet populated
@@ -3061,9 +3071,9 @@ function DisbursementPageContent() {
 
   // Tab summary statistics
   const tabStats = useMemo(() => {
-    const totalAmount = checkVouchers.reduce((sum, cv) => sum + (getCvDisbursedAmount(cv) || parseFloat(cv.amount) || 0), 0);
+    const totalAmount = checkVouchers.reduce((sum, cv) => sum + getCvDisbursedAmount(cv), 0);
     const avgAmount = checkVouchers.length > 0 ? totalAmount / checkVouchers.length : 0;
-    const maxAmount = checkVouchers.reduce((max, cv) => Math.max(max, getCvDisbursedAmount(cv) || parseFloat(cv.amount) || 0), 0);
+    const maxAmount = checkVouchers.reduce((max, cv) => Math.max(max, getCvDisbursedAmount(cv)), 0);
     return { totalAmount, avgAmount, maxAmount, count: cvTotalCount };
   }, [checkVouchers, cvTotalCount]);
 
