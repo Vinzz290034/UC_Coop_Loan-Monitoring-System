@@ -102,6 +102,13 @@ const getStatusBadge = (status: string) => {
           Withdrawn
         </span>
       );
+    case 'dormant':
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/25 whitespace-nowrap">
+          <Clock className="w-3 h-3" />
+          Dormant
+        </span>
+      );
     case 'suspended':
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-tertiary/10 text-tertiary whitespace-nowrap">
@@ -846,6 +853,7 @@ export default function OverviewPage() {
                   <option value="pending">Pending Review</option>
                   <option value="disapproved">Disapproved</option>
                   <option value="active">Active</option>
+                  <option value="dormant">Dormant</option>
                   <option value="withdrawn">Withdrawn</option>
                 </select>
                 <button
