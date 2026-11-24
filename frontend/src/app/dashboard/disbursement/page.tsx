@@ -4065,6 +4065,9 @@ function DisbursementPageContent() {
         confirmLabel: 'Discard Changes',
         cancelLabel: 'Keep Editing',
         onConfirm: () => {
+          if (editCvFormData?.id) {
+            clearFormDraft(`uc_coop_draft_edit_cv_${editCvFormData.id}`);
+          }
           setModalDialog(null);
           performCloseEditCvModal();
         },

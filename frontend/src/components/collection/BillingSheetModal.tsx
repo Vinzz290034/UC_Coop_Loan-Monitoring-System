@@ -68,6 +68,7 @@ export interface BillingSheetHeader {
   custom_columns?: CustomBillingColumn[];
   column_order?: string[];
   column_labels?: Record<string, string>;
+  hidden_columns?: string[];
 }
 
 type NumericFieldKey = Exclude<keyof BillingSheetRow, 'id' | 'id_no' | 'last_name' | 'first_name' | 'custom'>;
@@ -690,14 +691,15 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
 
   const orderedColumns = useMemo(() => {
     type OrderedCol = { key: string; label: string; group?: string; isCustom: boolean };
+    const hiddenSet = new Set(header.hidden_columns || []);
     const allCols: OrderedCol[] = [
-      ...NUMERIC_COLUMNS.map(c => ({
+      ...NUMERIC_COLUMNS.filter(c => !hiddenSet.has(String(c.key))).map(c => ({
         key: String(c.key),
         label: header.column_labels?.[String(c.key)] || c.label,
         group: c.group,
         isCustom: false,
       })),
-      ...customColumns.map(c => ({
+      ...customColumns.filter(c => !hiddenSet.has(c.key)).map(c => ({
         key: c.key,
         label: header.column_labels?.[c.key] || c.label,
         isCustom: true,
@@ -719,7 +721,7 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
       if (!seen.has(col.key)) result.push(col);
     }
     return result;
-  }, [customColumns, header.column_order, header.column_labels]);
+  }, [customColumns, header.column_order, header.column_labels, header.hidden_columns]);
 
   const commitColumnRename = (colKey: string) => {
     const trimmed = editingColDraft.trim();
@@ -832,19 +834,33 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
     setShowAddColModal(false);
   };
 
-  const handleRemoveCustomColumn = (colKey: string) => {
-    setHeader(h => ({
-      ...h,
-      custom_columns: (h.custom_columns || []).filter(c => c.key !== colKey),
-    }));
-    setRows(prev =>
-      prev.map(r => {
-        if (!r.custom || !(colKey in r.custom)) return r;
-        const nextCustom = { ...r.custom };
-        delete nextCustom[colKey];
-        return { ...r, custom: nextCustom };
-      })
-    );
+  const handleRemoveColumn = (colKey: string, isCustom: boolean) => {
+    if (isCustom) {
+      setHeader(h => ({
+        ...h,
+        custom_columns: (h.custom_columns || []).filter(c => c.key !== colKey),
+        column_order: (h.column_order || []).filter(k => k !== colKey),
+      }));
+      setRows(prev =>
+        prev.map(r => {
+          if (!r.custom || !(colKey in r.custom)) return r;
+          const nextCustom = { ...r.custom };
+          delete nextCustom[colKey];
+          return { ...r, custom: nextCustom };
+        })
+      );
+    } else {
+      setHeader(h => ({
+        ...h,
+        hidden_columns: Array.from(new Set([...(h.hidden_columns || []), colKey])),
+      }));
+      setRows(prev =>
+        prev.map(r => ({
+          ...r,
+          [colKey]: 0,
+        }))
+      );
+    }
   };
 
   const selectMemberForRow = (rowId: string, member: BillingMemberOption) => {
@@ -1549,6 +1565,16 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add Column</span>
                   </button>
+                  {(header.hidden_columns?.length || 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setHeader(h => ({ ...h, hidden_columns: [] }))}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer"
+                      title="Restore all default loan and interest columns"
+                    >
+                      <span>Restore Columns ({header.hidden_columns?.length})</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1648,12 +1674,12 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                             >
                               <ChevronRight className="w-3 h-3" />
                             </button>
-                            {col.isCustom && (
+                            {orderedColumns.length > 1 && (
                               <button
                                 type="button"
                                 onClick={e => {
                                   e.stopPropagation();
-                                  handleRemoveCustomColumn(col.key);
+                                  handleRemoveColumn(col.key, col.isCustom);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-rose-500/15 text-neutral-400 hover:text-rose-600 transition-opacity cursor-pointer"
                                 title={`Remove ${col.label} column`}
