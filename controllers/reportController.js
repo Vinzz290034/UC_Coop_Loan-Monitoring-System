@@ -2407,7 +2407,9 @@ export const getLoanProductsReport = async (req, res, next) => {
       }
       if (particularsAmt > 0) {
         const partCat = String(col.other_category || col.particulars || '').toLowerCase();
-        if (/insurance|climbs|cipl/i.test(partCat)) {
+        if (/insurance\s*claims?\s*received/i.test(partCat)) {
+          // Insurance Claims Received belong to Liabilities (Insurance Payable), not Revenue
+        } else if (/insurance|climbs|cipl/i.test(partCat)) {
           addOtherTrackerAmount('insurance', cDate, particularsAmt);
         } else if (/raffle/i.test(partCat)) {
           addOtherTrackerAmount('raffle_ticket', cDate, particularsAmt);
@@ -2463,7 +2465,7 @@ export const getLoanProductsReport = async (req, res, next) => {
         const effectiveMemFee = commonShareAmt > 0 ? unallocatedAfterShare : (topPrincipal || colAmount);
         addOtherTrackerAmount('membership_fee', cDate, effectiveMemFee > 0 ? (effectiveMemFee <= 500 ? effectiveMemFee : 200) : 200);
       }
-      if (particularsAmt === 0 && (/insurance|climbs|cipl/i.test(combinedDesc))) {
+      if (particularsAmt === 0 && (/insurance|climbs|cipl/i.test(combinedDesc)) && !/insurance\s*claims?\s*received/i.test(combinedDesc)) {
         const effectiveIns = commonShareAmt > 0 ? unallocatedAfterShare : (colAmount || topPrincipal);
         addOtherTrackerAmount('insurance', cDate, effectiveIns);
       }
@@ -3722,7 +3724,14 @@ export const getFinancialStatementReport = async (req, res, next) => {
         stores.common_shares.transactions.push({ ...tx, amount: shAmt, particulars: 'Member Share Capital' });
       }
 
-      const text = `${col.loan_account || ''} ${col.particulars || ''}`.toLowerCase();
+      const text = `${col.loan_account || ''} ${col.particulars || ''} ${col.other_category || ''} ${col.remarks || ''}`.toLowerCase();
+      if (/insurance\s*claims?\s*received/i.test(text)) {
+        stores.insurance_payable.transactions.push(tx);
+        const colMonthIdx = d.getMonth();
+        for (let m = colMonthIdx; m < 12; m++) {
+          stores.insurance_payable.current[m] += amt;
+        }
+      }
       if (text.includes('receivable') || text.includes('member')) {
         stores.rec_members.transactions.push(tx);
       }
@@ -4209,6 +4218,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     // ---------- Service Fees & Loan Insurance (deducted from loan releases in Check Vouchers & Collections) ----------
     const serviceFees = newStore();
     const climbsIncome = newStore();
+    const insuranceClaimsExp = newStore();
     const cispIncome = newStore();
 
     cvResult.rows.forEach(cv => {
@@ -4426,6 +4436,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         bucket(depositInterest, cDate, amt, meta);
         return;
       }
+      if (/insurance\s*claims?\s*received/i.test(text)) {
+        bucket(insuranceClaimsExp, cDate, amt, {
+          ...meta,
+          particulars: col.particulars || 'Insurance Claims Received'
+        });
+        return;
+      }
       if (/insurance/.test(text)) {
         bucket(climbsIncome, cDate, amt, meta);
         return;
@@ -4582,6 +4599,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     ];
     const expenseStores = {};
     EXPENSE_LINES.forEach(l => { expenseStores[l.title] = newStore(); });
+    if (expenseStores['Insurance Expense']) {
+      for (let m = 0; m < 12; m++) {
+        expenseStores['Insurance Expense'].current[m] += insuranceClaimsExp.current[m];
+        expenseStores['Insurance Expense'].previous[m] += insuranceClaimsExp.previous[m];
+      }
+      expenseStores['Insurance Expense'].transactions.push(...insuranceClaimsExp.transactions);
+    }
     const otherAdmin = {};   // dynamically discovered admin accounts
     const costOfSales = {};  // service / merchandise direct costs
     const marketingCost = {
