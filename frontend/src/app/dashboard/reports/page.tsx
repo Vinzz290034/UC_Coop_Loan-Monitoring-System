@@ -573,7 +573,11 @@ function ReportsPageContent() {
     if (chartOfAccounts.length > 0) {
       const typeOrder: string[] = [];
       const byType: Record<string, any[]> = {};
+      const seenTitles = new Set<string>();
       for (const row of chartOfAccounts) {
+        const titleKey = String(row.account_title || '').trim().toLowerCase();
+        if (!titleKey || seenTitles.has(titleKey)) continue;
+        seenTitles.add(titleKey);
         const typeLabel = String(row.account_type || 'Other').trim() || 'Other';
         if (!byType[typeLabel]) {
           byType[typeLabel] = [];
@@ -824,10 +828,20 @@ function ReportsPageContent() {
           rows: [{ account_type: bookTypeToUse, account_title: trimmed, description: '' }],
           replace_existing: false
         });
-        setChartOfAccounts(prev => [
-          ...prev,
-          { id: Date.now(), account_type: bookTypeToUse, account_title: trimmed, description: '', sort_order: prev.length + 1 }
-        ]);
+        setChartOfAccounts(prev => {
+          const exists = prev.some(a => String(a.account_title || '').trim().toLowerCase() === trimmed.toLowerCase());
+          if (exists) {
+            return prev.map(a =>
+              String(a.account_title || '').trim().toLowerCase() === trimmed.toLowerCase()
+                ? { ...a, account_type: bookTypeToUse }
+                : a
+            );
+          }
+          return [
+            ...prev,
+            { id: Date.now(), account_type: bookTypeToUse, account_title: trimmed, description: '', sort_order: prev.length + 1 }
+          ];
+        });
       }
     } catch (err) {
       console.error('Failed to save account to backend:', err);

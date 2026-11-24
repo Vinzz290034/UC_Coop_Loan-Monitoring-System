@@ -1074,6 +1074,7 @@ export const deleteRevolvingFundAccount = async (req, res, next) => {
 
     await query('DELETE FROM rf_custom_accounts WHERE LOWER(name) = LOWER($1)', [cleanName]);
     await query('INSERT INTO rf_deleted_accounts (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [cleanName]).catch(() => {});
+    await query('DELETE FROM chart_of_accounts WHERE LOWER(TRIM(account_title)) = LOWER(TRIM($1))', [cleanName]).catch(() => {});
 
     res.status(200).json({
       success: true,
