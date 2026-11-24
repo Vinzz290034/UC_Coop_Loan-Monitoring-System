@@ -66,6 +66,7 @@ export interface BillingSheetHeader {
   approved_by_title?: string;
   custom_columns?: CustomBillingColumn[];
   column_order?: string[];
+  column_labels?: Record<string, string>;
 }
 
 type NumericFieldKey = Exclude<keyof BillingSheetRow, 'id' | 'id_no' | 'last_name' | 'first_name' | 'custom'>;
@@ -505,6 +506,8 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
   const [includeIntCol, setIncludeIntCol] = useState(false);
   const [draggedColKey, setDraggedColKey] = useState<string | null>(null);
   const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
+  const [editingColKey, setEditingColKey] = useState<string | null>(null);
+  const [editingColDraft, setEditingColDraft] = useState('');
   const [members, setMembers] = useState<BillingMemberOption[]>([]);
 
   useEffect(() => {
@@ -648,8 +651,17 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
   const orderedColumns = useMemo(() => {
     type OrderedCol = { key: string; label: string; group?: string; isCustom: boolean };
     const allCols: OrderedCol[] = [
-      ...NUMERIC_COLUMNS.map(c => ({ key: String(c.key), label: c.label, group: c.group, isCustom: false })),
-      ...customColumns.map(c => ({ key: c.key, label: c.label, isCustom: true })),
+      ...NUMERIC_COLUMNS.map(c => ({
+        key: String(c.key),
+        label: header.column_labels?.[String(c.key)] || c.label,
+        group: c.group,
+        isCustom: false,
+      })),
+      ...customColumns.map(c => ({
+        key: c.key,
+        label: header.column_labels?.[c.key] || c.label,
+        isCustom: true,
+      })),
     ];
     const order = header.column_order;
     if (!Array.isArray(order) || order.length === 0) return allCols;
@@ -667,7 +679,20 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
       if (!seen.has(col.key)) result.push(col);
     }
     return result;
-  }, [customColumns, header.column_order]);
+  }, [customColumns, header.column_order, header.column_labels]);
+
+  const commitColumnRename = (colKey: string) => {
+    const trimmed = editingColDraft.trim();
+    setEditingColKey(null);
+    if (!trimmed) return;
+    setHeader(h => ({
+      ...h,
+      column_labels: { ...(h.column_labels || {}), [colKey]: trimmed },
+      custom_columns: (h.custom_columns || []).map(c =>
+        c.key === colKey ? { ...c, label: trimmed } : c
+      ),
+    }));
+  };
 
   const moveColumnByOffset = (colKey: string, delta: -1 | 1) => {
     const keys = orderedColumns.map(c => c.key);
@@ -1462,14 +1487,14 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
               </div>
 
               {/* Structured Accounting Table */}
-              <div className="rounded-2xl border border-outline-variant/70 overflow-x-auto shadow-xs">
-                <table className="w-full border-collapse text-xs min-w-[1720px]">
-                  <thead className="bg-neutral-100 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-200 sticky top-0 z-10">
+              <div className="rounded-2xl border border-outline-variant/70 overflow-auto max-h-[58vh] shadow-xs">
+                <table className="w-full border-separate border-spacing-0 text-xs min-w-[1720px]">
+                  <thead className="bg-neutral-100 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-200 sticky top-0 z-20">
                     <tr>
-                      <th className="border-b border-r border-outline-variant/60 px-2 py-2.5 w-10 min-w-[40px] text-center font-bold">#</th>
-                      <th className="border-b border-r border-outline-variant/60 px-2 py-2.5 w-24 min-w-[92px] text-center font-bold whitespace-nowrap">ID NO.</th>
-                      <th className="border-b border-r border-outline-variant/60 px-2.5 py-2.5 w-40 min-w-[160px] text-left font-bold whitespace-nowrap">LAST NAME</th>
-                      <th className="border-b border-r border-outline-variant/60 px-2.5 py-2.5 w-40 min-w-[160px] text-left font-bold whitespace-nowrap">FIRST NAME</th>
+                      <th className="border-b border-r border-outline-variant/60 px-2 py-2.5 w-10 min-w-[40px] text-center font-bold bg-neutral-100 dark:bg-neutral-900">#</th>
+                      <th className="border-b border-r border-outline-variant/60 px-2 py-2.5 w-24 min-w-[92px] text-center font-bold whitespace-nowrap bg-neutral-100 dark:bg-neutral-900">ID NO.</th>
+                      <th className="border-b border-r border-outline-variant/60 px-2.5 py-2.5 w-[160px] min-w-[160px] max-w-[160px] text-left font-bold whitespace-nowrap bg-neutral-100 dark:bg-neutral-900 md:sticky md:left-0 md:z-30">LAST NAME</th>
+                      <th className="border-b border-r border-outline-variant/60 px-2.5 py-2.5 w-[160px] min-w-[160px] max-w-[160px] text-left font-bold whitespace-nowrap bg-neutral-100 dark:bg-neutral-900 md:sticky md:left-[160px] md:z-30 md:shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]">FIRST NAME</th>
                       {orderedColumns.map((col, colIdx) => (
                         <th
                           key={col.key}
@@ -1496,10 +1521,10 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                           }}
                           className={`group border-b border-r border-outline-variant/60 px-1.5 py-2 min-w-[84px] text-center font-bold whitespace-nowrap select-none cursor-grab active:cursor-grabbing transition-colors ${
                             dragOverColKey === col.key
-                              ? 'bg-emerald-200/80 dark:bg-emerald-900/60'
+                              ? 'bg-emerald-200 dark:bg-emerald-900'
                               : col.isCustom
-                              ? 'bg-emerald-50/60 dark:bg-emerald-950/30'
-                              : ''
+                              ? 'bg-emerald-50 dark:bg-emerald-950'
+                              : 'bg-neutral-100 dark:bg-neutral-900'
                           }`}
                           title={col.group ? `${col.group} — ${col.label} (Drag or use arrows to move)` : `${col.label} (Drag or use arrows to move)`}
                         >
@@ -1516,7 +1541,35 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                             >
                               <ChevronLeft className="w-3 h-3" />
                             </button>
-                            <span>{col.label}</span>
+                            <span>
+                              {editingColKey === col.key ? (
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={editingColDraft}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => setEditingColDraft(e.target.value)}
+                                  onBlur={() => commitColumnRename(col.key)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') commitColumnRename(col.key);
+                                    if (e.key === 'Escape') setEditingColKey(null);
+                                  }}
+                                  className="w-20 px-1 py-0.5 rounded border border-emerald-500 bg-white dark:bg-neutral-950 text-center text-xs font-bold focus:outline-none"
+                                />
+                              ) : (
+                                <span
+                                  onDoubleClick={e => {
+                                    e.stopPropagation();
+                                    setEditingColKey(col.key);
+                                    setEditingColDraft(col.label);
+                                  }}
+                                  className="cursor-text"
+                                  title="Double-click to rename column"
+                                >
+                                  {col.label}
+                                </span>
+                              )}
+                            </span>
                             <button
                               type="button"
                               onClick={e => {
@@ -1545,10 +1598,10 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                           </div>
                         </th>
                       ))}
-                      <th className="border-b border-r border-outline-variant/60 px-3 py-2.5 min-w-[105px] text-right font-black bg-neutral-200 dark:bg-neutral-800 md:sticky md:right-0 md:z-20 md:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
+                      <th className="border-b border-r border-outline-variant/60 px-3 py-2.5 min-w-[105px] text-right font-black bg-neutral-200 dark:bg-neutral-800 md:sticky md:right-0 md:z-30 md:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                         TOTAL
                       </th>
-                      <th className="border-b border-outline-variant/60 px-2 py-2.5 w-10 min-w-[40px] text-center" />
+                      <th className="border-b border-outline-variant/60 px-2 py-2.5 w-10 min-w-[40px] text-center bg-neutral-100 dark:bg-neutral-900" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/40 bg-white dark:bg-neutral-950">
@@ -1575,10 +1628,10 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                               : 'bg-white dark:bg-neutral-950'
                           } hover:bg-emerald-100/60 dark:hover:bg-emerald-900/30 transition-colors`}
                         >
-                          <td className="border-r border-outline-variant/40 px-1.5 py-1 text-center text-neutral-400 font-medium">
+                          <td className="border-b border-r border-outline-variant/40 px-1.5 py-1 text-center text-neutral-400 font-medium">
                             {idx + 1}
                           </td>
-                          <td className="border-r border-outline-variant/40 p-0.5">
+                          <td className="border-b border-r border-outline-variant/40 p-0.5">
                             <input
                               type="text"
                               inputMode="numeric"
@@ -1588,7 +1641,13 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                               className="w-full px-1.5 py-1 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none text-center font-mono text-[11px]"
                             />
                           </td>
-                          <td className="border-r border-outline-variant/40 p-0.5">
+                          <td
+                            className={`border-b border-r border-outline-variant/40 p-0.5 w-[160px] min-w-[160px] max-w-[160px] md:sticky md:left-0 md:z-10 ${
+                              idx % 2 === 1
+                                ? 'bg-emerald-50 dark:bg-emerald-950'
+                                : 'bg-white dark:bg-neutral-950'
+                            }`}
+                          >
                             <MemberNameDropdownCell
                               value={row.last_name}
                               field="last_name"
@@ -1598,7 +1657,13 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                               onSelectMember={member => selectMemberForRow(row.id, member)}
                             />
                           </td>
-                          <td className="border-r border-outline-variant/40 p-0.5">
+                          <td
+                            className={`border-b border-r border-outline-variant/40 p-0.5 w-[160px] min-w-[160px] max-w-[160px] md:sticky md:left-[160px] md:z-10 md:shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)] ${
+                              idx % 2 === 1
+                                ? 'bg-emerald-50 dark:bg-emerald-950'
+                                : 'bg-white dark:bg-neutral-950'
+                            }`}
+                          >
                             <MemberNameDropdownCell
                               value={row.first_name}
                               field="first_name"
@@ -1608,7 +1673,7 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                             />
                           </td>
                           {orderedColumns.map(col => (
-                            <td key={col.key} className="border-r border-outline-variant/40 p-0.5">
+                            <td key={col.key} className="border-b border-r border-outline-variant/40 p-0.5">
                               <NumericAmountCell
                                 value={getColCellValue(row, col)}
                                 onChangeValue={raw =>
@@ -1619,10 +1684,10 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                               />
                             </td>
                           ))}
-                          <td className="border-r border-outline-variant/40 px-3 py-1.5 text-right font-bold tabular-nums text-emerald-700 dark:text-emerald-400 bg-neutral-50 dark:bg-neutral-900 md:sticky md:right-0 md:z-10 md:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)]">
+                          <td className="border-b border-r border-outline-variant/40 px-3 py-1.5 text-right font-bold tabular-nums text-emerald-700 dark:text-emerald-400 bg-neutral-50 dark:bg-neutral-900 md:sticky md:right-0 md:z-10 md:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)]">
                             {formatMoneyAlways(rowTotal)}
                           </td>
-                          <td className="px-1 py-1 text-center">
+                          <td className="border-b border-outline-variant/40 px-1 py-1 text-center">
                             <button
                               type="button"
                               onClick={() => removeRow(row.id)}
@@ -1636,20 +1701,21 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                       );
                     }))}
                   </tbody>
-                  <tfoot className="bg-neutral-100 dark:bg-neutral-900 font-bold text-neutral-900 dark:text-white border-t-2 border-outline-variant/70">
+                  <tfoot className="bg-neutral-100 dark:bg-neutral-900 font-bold text-neutral-900 dark:text-white sticky bottom-0 z-20">
                     <tr>
-                      <td colSpan={4} className="border-r border-outline-variant/60 px-3 py-2 text-right uppercase tracking-wider text-[10px]">
+                      <td colSpan={2} className="border-t border-r border-outline-variant/60 bg-neutral-100 dark:bg-neutral-900" />
+                      <td colSpan={2} className="border-t border-r border-outline-variant/60 px-3 py-2 text-right uppercase tracking-wider text-[10px] bg-neutral-100 dark:bg-neutral-900 md:sticky md:left-0 md:z-30 md:shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                         Grand Total ({rows.length} row{rows.length === 1 ? '' : 's'})
                       </td>
                       {orderedColumns.map(col => (
-                        <td key={col.key} className="border-r border-outline-variant/60 px-1.5 py-2 text-right tabular-nums">
+                        <td key={col.key} className="border-t border-r border-outline-variant/60 px-1.5 py-2 text-right tabular-nums bg-neutral-100 dark:bg-neutral-900">
                           {formatMoney(getColFooterTotal(col)) || '—'}
                         </td>
                       ))}
-                      <td className="border-r border-outline-variant/60 px-3 py-2.5 text-right tabular-nums font-black text-emerald-700 dark:text-emerald-400 bg-neutral-200 dark:bg-neutral-800 md:sticky md:right-0 md:z-10 md:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
+                      <td className="border-t border-r border-outline-variant/60 px-3 py-2.5 text-right tabular-nums font-black text-emerald-700 dark:text-emerald-400 bg-neutral-200 dark:bg-neutral-800 md:sticky md:right-0 md:z-30 md:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                         ₱{formatMoneyAlways(grandTotal)}
                       </td>
-                      <td />
+                      <td className="border-t border-outline-variant/60 bg-neutral-100 dark:bg-neutral-900" />
                     </tr>
                   </tfoot>
                 </table>
