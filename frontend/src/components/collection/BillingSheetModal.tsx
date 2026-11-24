@@ -132,6 +132,222 @@ function formatDisplayDateFromIso(iso: string): string {
   return dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+interface BillingMemberOption {
+  id: string;
+  last_name: string;
+  first_name: string;
+  member_no: string;
+}
+
+function MemberNameDropdownCell({
+  value,
+  field,
+  members,
+  onChangeText,
+  onSelectMember,
+  bold = false,
+}: {
+  value: string;
+  field: 'last_name' | 'first_name';
+  members: BillingMemberOption[];
+  onChangeText: (val: string) => void;
+  onSelectMember: (member: BillingMemberOption) => void;
+  bold?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({
+    top: 0,
+    left: 0,
+    width: 240,
+  });
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const updateCoords = () => {
+    if (!wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    setCoords({
+      top: rect.bottom + 4,
+      left: Math.min(rect.left, window.innerWidth - 260),
+      width: Math.max(rect.width, 240),
+    });
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    updateCoords();
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(target) &&
+        (!menuRef.current || !menuRef.current.contains(target))
+      ) {
+        setIsOpen(false);
+      }
+    };
+    const handleScrollOrResize = () => updateCoords();
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [isOpen]);
+
+  const filtered = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    if (!q) return members.slice(0, 60);
+    return members
+      .filter(m => {
+        const target = field === 'last_name' ? m.last_name : m.first_name;
+        const full = `${m.last_name} ${m.first_name}`;
+        return (
+          target.toLowerCase().includes(q) ||
+          full.toLowerCase().includes(q) ||
+          m.member_no.toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 60);
+  }, [members, value, field]);
+
+  return (
+    <div ref={wrapperRef} className="relative flex items-center">
+      <input
+        type="text"
+        value={value}
+        onFocus={() => {
+          updateCoords();
+          setIsOpen(true);
+        }}
+        onChange={e => {
+          onChangeText(e.target.value);
+          if (!isOpen) {
+            updateCoords();
+            setIsOpen(true);
+          }
+        }}
+        className={`w-full pl-1.5 pr-5 py-1 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none uppercase text-[11px] ${
+          bold ? 'font-semibold' : ''
+        }`}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => {
+          if (!isOpen) updateCoords();
+          setIsOpen(prev => !prev);
+        }}
+        className="absolute right-0.5 p-0.5 rounded text-neutral-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer"
+        title="Select from Membership list"
+      >
+        <ChevronDown
+          className={`w-3 h-3 transition-transform duration-150 ${isOpen ? 'rotate-180 text-emerald-600' : ''}`}
+        />
+      </button>
+
+      {isOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{ top: coords.top, left: coords.left, width: coords.width }}
+            className="fixed z-1200 max-h-56 overflow-y-auto rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 shadow-2xl py-1 animate-in fade-in zoom-in-95 duration-150"
+          >
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-[11px] text-neutral-400 text-center">
+                No matching members
+              </div>
+            ) : (
+              filtered.map(m => {
+                const isSelected =
+                  m.last_name.toLowerCase() === value.trim().toLowerCase() ||
+                  m.first_name.toLowerCase() === value.trim().toLowerCase();
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onMouseDown={e => {
+                      e.preventDefault();
+                      onSelectMember(m);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-semibold'
+                        : 'text-neutral-800 dark:text-neutral-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                    }`}
+                  >
+                    <span className="truncate uppercase">
+                      <span className="font-bold">{m.last_name}</span>
+                      {m.first_name ? `, ${m.first_name}` : ''}
+                    </span>
+                    {m.member_no && (
+                      <span className="text-[10px] font-mono text-neutral-400 shrink-0">
+                        {m.member_no}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
+
+function NumericAmountCell({
+  value,
+  onChangeValue,
+}: {
+  value: number;
+  onChangeValue: (raw: string) => void;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+  const [draft, setDraft] = useState(() => (value ? String(value) : ''));
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraft(value ? formatMoney(value) : '');
+    }
+  }, [value, isFocused]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={isFocused ? draft : value ? formatMoney(value) : ''}
+      onFocus={() => {
+        setIsFocused(true);
+        setDraft(value ? String(value) : '');
+      }}
+      onBlur={() => {
+        setIsFocused(false);
+      }}
+      onChange={e => {
+        let cleaned = e.target.value.replace(/[^0-9.]/g, '');
+        const firstDot = cleaned.indexOf('.');
+        if (firstDot !== -1) {
+          const dec = cleaned.slice(firstDot + 1).replace(/\./g, '').slice(0, 2);
+          cleaned = cleaned.slice(0, firstDot + 1) + dec;
+        }
+        setDraft(cleaned);
+        onChangeValue(cleaned);
+      }}
+      className="w-16 px-1 py-1 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none text-right tabular-nums text-[11px]"
+    />
+  );
+}
+
 const BILLING_YEAR_OPTIONS = Array.from({ length: 11 }, (_, i) => String(new Date().getFullYear() - 3 + i));
 
 function BillingYearSelect({
@@ -270,10 +486,56 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
+  const [members, setMembers] = useState<BillingMemberOption[]>([]);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setIsEntered(true));
     return () => cancelAnimationFrame(raf);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadMembers = async () => {
+      try {
+        const res = await api.get('/members');
+        if (!active) return;
+        const data = res.data?.data || [];
+        const seen = new Set<string>();
+        const list: BillingMemberOption[] = [];
+        for (const m of data) {
+          const role = String(m.user_role || '').toLowerCase();
+          const memberNo = String(m.member_no || m.member_id || '').trim();
+          if (role === 'admin' || role === 'staff' || role === 'manager') continue;
+          if (memberNo.startsWith('ADM-') || memberNo.startsWith('STF-')) continue;
+
+          const lastName = String(m.last_name || '').trim();
+          const firstName = String(m.first_name || '').trim();
+          if (!lastName && !firstName) continue;
+
+          const key = `${lastName.toLowerCase()}|${firstName.toLowerCase()}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          list.push({
+            id: String(m.id),
+            last_name: lastName.toUpperCase(),
+            first_name: firstName.toUpperCase(),
+            member_no: memberNo,
+          });
+        }
+        list.sort((a, b) => {
+          const cmpLast = a.last_name.localeCompare(b.last_name);
+          return cmpLast !== 0 ? cmpLast : a.first_name.localeCompare(b.first_name);
+        });
+        setMembers(list);
+      } catch (err) {
+        console.error('Failed to load membership list for billing dropdown:', err);
+      }
+    };
+    loadMembers();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -375,6 +637,16 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
         const parsed = cleaned === '' ? 0 : parseFloat(cleaned);
         return { ...r, [field]: Number.isNaN(parsed) ? 0 : parsed };
       })
+    );
+  };
+
+  const selectMemberForRow = (rowId: string, member: BillingMemberOption) => {
+    setRows(prev =>
+      prev.map(r =>
+        r.id === rowId
+          ? { ...r, last_name: member.last_name, first_name: member.first_name }
+          : r
+      )
     );
   };
 
@@ -1101,30 +1373,29 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                             />
                           </td>
                           <td className="border-r border-outline-variant/40 p-0.5">
-                            <input
-                              type="text"
+                            <MemberNameDropdownCell
                               value={row.last_name}
-                              onChange={e => updateRowField(row.id, 'last_name', e.target.value)}
-                              className="w-full px-1.5 py-1 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none uppercase font-semibold text-[11px]"
+                              field="last_name"
+                              members={members}
+                              bold={true}
+                              onChangeText={val => updateRowField(row.id, 'last_name', val)}
+                              onSelectMember={member => selectMemberForRow(row.id, member)}
                             />
                           </td>
                           <td className="border-r border-outline-variant/40 p-0.5">
-                            <input
-                              type="text"
+                            <MemberNameDropdownCell
                               value={row.first_name}
-                              onChange={e => updateRowField(row.id, 'first_name', e.target.value)}
-                              className="w-full px-1.5 py-1 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none uppercase text-[11px]"
+                              field="first_name"
+                              members={members}
+                              onChangeText={val => updateRowField(row.id, 'first_name', val)}
+                              onSelectMember={member => selectMemberForRow(row.id, member)}
                             />
                           </td>
                           {NUMERIC_COLUMNS.map(col => (
                             <td key={col.key} className="border-r border-outline-variant/40 p-0.5">
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={row[col.key] ? String(row[col.key]) : ''}
-                                onChange={e => updateRowField(row.id, col.key, e.target.value)}
-                                placeholder=""
-                                className="w-16 px-1 py-1 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none text-right tabular-nums text-[11px]"
+                              <NumericAmountCell
+                                value={row[col.key]}
+                                onChangeValue={raw => updateRowField(row.id, col.key, raw)}
                               />
                             </td>
                           ))}
