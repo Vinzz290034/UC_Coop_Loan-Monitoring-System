@@ -2042,13 +2042,24 @@ function LoansPageContent() {
     (async () => {
       try {
         const cleanLaf = (loanObj.laf_no || '').replace(/^LAF\s*#?/i, '').trim();
+        const borrowerLast = (loanObj.last_name || '').trim().toLowerCase();
         const res = await api.get('/accounts/check-vouchers', {
           params: { search: cleanLaf || loanObj.last_name || '', limit: 10 }
         });
-        const match = res.data?.data?.find((v: any) =>
-          v.loan_id === loanObj.id ||
-          (cleanLaf && (v.voucher_no === cleanLaf || v.voucher_no === `CV-${cleanLaf}`))
-        );
+        const vouchersList: any[] = res.data?.data || [];
+        const match =
+          vouchersList.find((v: any) => v.loan_id === loanObj.id) ||
+          vouchersList.find((v: any) => {
+            if (!cleanLaf) return false;
+            const part = String(v.particulars || '').toLowerCase();
+            const payee = String(v.payee || '').toLowerCase();
+            const hasLafRef = part.includes(`laf #${cleanLaf.toLowerCase()}`) || part.includes(`laf ${cleanLaf.toLowerCase()}`);
+            const sameVoucherAndBorrower =
+              (v.voucher_no === cleanLaf || v.voucher_no === `CV-${cleanLaf}`) &&
+              Boolean(borrowerLast) &&
+              payee.includes(borrowerLast);
+            return hasLafRef || sameVoucherAndBorrower;
+          });
         if (match) {
           setVoucherId(match.id);
           if (match.voucher_no) setVoucherNo(match.voucher_no);
