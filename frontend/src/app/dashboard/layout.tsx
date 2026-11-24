@@ -167,7 +167,7 @@ function DashboardLayoutContent({
       name: 'Bank Deposit',
       path: '/dashboard/bank-recon',
       icon: Landmark,
-      allowed: user.role === 'admin',
+      allowed: isAdminOrStaff,
     },
     {
       name: 'Support Desk',

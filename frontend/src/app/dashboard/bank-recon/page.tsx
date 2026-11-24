@@ -12,7 +12,7 @@ function BankReconPageContent() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && user.role !== 'admin' && user.role !== 'staff') {
       router.push('/dashboard');
     }
   }, [user, router]);
