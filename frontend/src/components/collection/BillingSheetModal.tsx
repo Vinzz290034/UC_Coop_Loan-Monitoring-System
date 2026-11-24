@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import api from '@/lib/api';
+import { saveFormDraft, loadFormDraft, clearFormDraft } from '@/lib/formDraft';
 import type { CollectionItem } from '@/types/collection';
 import {
   X,
@@ -509,6 +510,11 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
   const [editingColKey, setEditingColKey] = useState<string | null>(null);
   const [editingColDraft, setEditingColDraft] = useState('');
   const [members, setMembers] = useState<BillingMemberOption[]>([]);
+  const [autoSavedAt, setAutoSavedAt] = useState<number | null>(null);
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+  const serverSnapshotRef = useRef<{ header: BillingSheetHeader; rows: BillingSheetRow[] } | null>(null);
+  const draftLoadedRef = useRef(false);
+  const draftKey = `uc_coop_draft_billing_sheet_${item.id}`;
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setIsEntered(true));
@@ -571,42 +577,76 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
 
   useEffect(() => {
     let active = true;
+    draftLoadedRef.current = false;
     const loadSheet = async () => {
       setIsLoading(true);
       try {
         const res = await api.get(`/collections/${item.id}/billing-sheet`);
         if (!active) return;
         const data = res.data?.data;
-        if (data?.header && Object.keys(data.header).length > 0) {
-          setHeader({ ...extractDefaultHeader(item), ...data.header });
-        } else {
-          setHeader(extractDefaultHeader(item));
-        }
-        if (Array.isArray(data?.rows) && data.rows.length > 0) {
+        const serverHeader =
+          data?.header && Object.keys(data.header).length > 0
+            ? { ...extractDefaultHeader(item), ...data.header }
+            : extractDefaultHeader(item);
+        const serverRows: BillingSheetRow[] =
+          Array.isArray(data?.rows) && data.rows.length > 0
+            ? data.rows.map((r: Partial<BillingSheetRow>) => ({
+                ...createEmptyRow(),
+                ...r,
+                id: r.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              }))
+            : [createEmptyRow(), createEmptyRow(), createEmptyRow()];
+
+        serverSnapshotRef.current = { header: serverHeader, rows: serverRows };
+
+        const serverUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+        const localDraft = loadFormDraft<{ header: BillingSheetHeader; rows: BillingSheetRow[] }>(draftKey);
+        if (localDraft && localDraft.savedAt > serverUpdatedAt && localDraft.data) {
+          setHeader({ ...extractDefaultHeader(item), ...localDraft.data.header });
           setRows(
-            data.rows.map((r: Partial<BillingSheetRow>) => ({
-              ...createEmptyRow(),
-              ...r,
-              id: r.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            }))
+            Array.isArray(localDraft.data.rows) && localDraft.data.rows.length > 0
+              ? localDraft.data.rows
+              : serverRows
           );
+          setAutoSavedAt(localDraft.savedAt);
+          setHasRestoredDraft(true);
         } else {
-          setRows([createEmptyRow(), createEmptyRow(), createEmptyRow()]);
+          setHeader(serverHeader);
+          setRows(serverRows);
+          setHasRestoredDraft(false);
         }
       } catch (err) {
         console.error('Failed to load billing sheet:', err);
-        if (active) {
+        const localDraft = loadFormDraft<{ header: BillingSheetHeader; rows: BillingSheetRow[] }>(draftKey);
+        if (active && localDraft?.data) {
+          setHeader({ ...extractDefaultHeader(item), ...localDraft.data.header });
+          setRows(localDraft.data.rows || []);
+          setAutoSavedAt(localDraft.savedAt);
+          setHasRestoredDraft(true);
+        } else if (active) {
           setFeedback({ type: 'error', message: 'Could not load saved billing sheet.' });
         }
       } finally {
-        if (active) setIsLoading(false);
+        if (active) {
+          draftLoadedRef.current = true;
+          setIsLoading(false);
+        }
       }
     };
     loadSheet();
     return () => {
       active = false;
     };
-  }, [item]);
+  }, [item, draftKey]);
+
+  useEffect(() => {
+    if (isLoading || !draftLoadedRef.current) return;
+    const timer = setTimeout(() => {
+      const saved = saveFormDraft(draftKey, { header, rows });
+      if (saved) setAutoSavedAt(saved);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [header, rows, isLoading, draftKey]);
 
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -899,6 +939,10 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
         header,
         rows: cleanedRows,
       });
+      clearFormDraft(draftKey);
+      serverSnapshotRef.current = { header, rows: cleanedRows };
+      setHasRestoredDraft(false);
+      setAutoSavedAt(null);
       setFeedback({ type: 'success', message: 'Billing sheet saved successfully.' });
       setTimeout(() => setFeedback(null), 3500);
     } catch (err: any) {
@@ -1251,9 +1295,31 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                 <span className="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary">
                   OR #{item.or_no}
                 </span>
+                {autoSavedAt && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                    {hasRestoredDraft ? 'Draft restored • Auto-saved' : 'Auto-saved'}
+                  </span>
+                )}
               </h2>
-              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate max-w-md">
-                {item.payor_name}
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate max-w-md flex items-center gap-2">
+                <span>{item.payor_name}</span>
+                {hasRestoredDraft && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearFormDraft(draftKey);
+                      setHasRestoredDraft(false);
+                      setAutoSavedAt(null);
+                      if (serverSnapshotRef.current) {
+                        setHeader(serverSnapshotRef.current.header);
+                        setRows(serverSnapshotRef.current.rows);
+                      }
+                    }}
+                    className="text-amber-600 dark:text-amber-400 hover:underline font-semibold cursor-pointer"
+                  >
+                    Discard Draft
+                  </button>
+                )}
               </p>
             </div>
           </div>

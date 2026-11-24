@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
+import { saveFormDraft, loadFormDraft, clearFormDraft } from '@/lib/formDraft';
 import BackButton from '@/components/BackButton';
 import { dedupeAccountOptions } from '@/lib/accountCategories';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -3945,11 +3946,36 @@ function DisbursementPageContent() {
       }
     }
 
-    setEditCvRows(initialRowsList);
-    setEditCvCibAmount(initialCibVal);
+    const cvEditDraft = initialForm.id
+      ? loadFormDraft<{ formData: typeof initialForm; rows: CvRowItem[]; cibAmount: string }>(`uc_coop_draft_edit_cv_${initialForm.id}`)
+      : null;
+
     setInitialCvEditSnapshot(JSON.stringify({ formData: initialForm, rows: initialRowsList, cibAmount: initialCibVal }));
+    if (cvEditDraft?.data) {
+      setEditCvFormData(cvEditDraft.data.formData);
+      setEditCvRows(cvEditDraft.data.rows);
+      setEditCvCibAmount(cvEditDraft.data.cibAmount);
+      setCvActionFeedback({
+        type: 'success',
+        message: `Restored your unsaved edit draft for CV #${initialForm.voucher_no}.`
+      });
+      setTimeout(() => setCvActionFeedback(null), 4000);
+    } else {
+      setEditCvRows(initialRowsList);
+      setEditCvCibAmount(initialCibVal);
+    }
     setIsEditingCvModal(true);
   };
+
+  useEffect(() => {
+    if (!isEditingCvModal || !editCvFormData?.id) return;
+    const payload = { formData: editCvFormData, rows: editCvRows, cibAmount: editCvCibAmount };
+    if (JSON.stringify(payload) === initialCvEditSnapshot) return;
+    const timer = setTimeout(() => {
+      saveFormDraft(`uc_coop_draft_edit_cv_${editCvFormData.id}`, payload);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [isEditingCvModal, editCvFormData, editCvRows, editCvCibAmount, initialCvEditSnapshot]);
 
   // Start Editing CV - supports overriding filed status check vouchers for authorized users
   const startEditingCv = (cv: any, mode?: 'summary' | 'detailed', passedRows?: any[]) => {
@@ -4191,6 +4217,7 @@ function DisbursementPageContent() {
       };
       setSelectedCvForModal(updatedCv);
       setModalCvViewMode(editCvViewMode);
+      if (editCvFormData.id) clearFormDraft(`uc_coop_draft_edit_cv_${editCvFormData.id}`);
       setIsEditingCvModal(false);
       if (openedFromPrintModal) {
         openUnifiedPrintModalForCv(updatedCv, editCvViewMode);
@@ -4365,9 +4392,74 @@ function DisbursementPageContent() {
         { id: `cib-${row0Id}`, date: today, voucher_no: '', description: 'CIB - BDO', remarks: '', recipient: '', debit: '', credit: '' }
       ]);
     }
+    const cvDraft = loadFormDraft<{
+      newCvDate: string;
+      newCvReleasedDate: string;
+      newCvPayee: string;
+      newCvBankName: string;
+      newCvCheckNo: string;
+      newCvParticulars: string;
+      newCvFundAmount: string;
+      newCvRfClassification: string;
+      newCvCategory: string;
+      newCvRows: CvRowItem[];
+    }>('uc_coop_draft_new_cv');
+    if (cvDraft?.data) {
+      if (cvDraft.data.newCvDate) setNewCvDate(cvDraft.data.newCvDate);
+      if (cvDraft.data.newCvReleasedDate) setNewCvReleasedDate(cvDraft.data.newCvReleasedDate);
+      if (cvDraft.data.newCvPayee) setNewCvPayee(cvDraft.data.newCvPayee);
+      if (cvDraft.data.newCvBankName) setNewCvBankName(cvDraft.data.newCvBankName);
+      if (cvDraft.data.newCvCheckNo) setNewCvCheckNo(cvDraft.data.newCvCheckNo);
+      if (cvDraft.data.newCvParticulars) setNewCvParticulars(cvDraft.data.newCvParticulars);
+      if (cvDraft.data.newCvFundAmount) setNewCvFundAmount(cvDraft.data.newCvFundAmount);
+      if (cvDraft.data.newCvRfClassification) setNewCvRfClassification(cvDraft.data.newCvRfClassification);
+      if (cvDraft.data.newCvCategory) setNewCvCategory(cvDraft.data.newCvCategory);
+      if (Array.isArray(cvDraft.data.newCvRows) && cvDraft.data.newCvRows.length > 0) {
+        setNewCvRows(cvDraft.data.newCvRows);
+      }
+      setCvActionFeedback({ type: 'success', message: 'Restored your unsaved Check Voucher draft.' });
+      setTimeout(() => setCvActionFeedback(null), 4000);
+    }
     setIsCreateCVOpen(true);
     fetchNextVoucherNo(today);
   };
+
+  useEffect(() => {
+    if (!isCreateCVOpen) return;
+    const hasContent =
+      Boolean(newCvPayee.trim()) ||
+      Boolean(newCvParticulars.trim()) ||
+      Boolean(newCvCheckNo.trim()) ||
+      newCvRows.some(r => Boolean(r.debit) || Boolean(r.credit) || Boolean(r.recipient));
+    if (!hasContent) return;
+    const timer = setTimeout(() => {
+      saveFormDraft('uc_coop_draft_new_cv', {
+        newCvDate,
+        newCvReleasedDate,
+        newCvPayee,
+        newCvBankName,
+        newCvCheckNo,
+        newCvParticulars,
+        newCvFundAmount,
+        newCvRfClassification,
+        newCvCategory,
+        newCvRows,
+      });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [
+    isCreateCVOpen,
+    newCvDate,
+    newCvReleasedDate,
+    newCvPayee,
+    newCvBankName,
+    newCvCheckNo,
+    newCvParticulars,
+    newCvFundAmount,
+    newCvRfClassification,
+    newCvCategory,
+    newCvRows,
+  ]);
 
   // Create Check Voucher Submission
   const handleCreateCheckVoucher = async (e: React.FormEvent) => {
@@ -4451,6 +4543,7 @@ function DisbursementPageContent() {
 
       const res = await api.post('/accounts/check-vouchers', payload);
       const issuedVoucherNo = res.data?.data?.voucher_no || newCvVoucherNo;
+      clearFormDraft('uc_coop_draft_new_cv');
       setIsCreateCVOpen(false);
       loadCheckVouchers(1);
       setCvActionFeedback({ type: 'success', message: `Check Voucher #${issuedVoucherNo} issued successfully!` });

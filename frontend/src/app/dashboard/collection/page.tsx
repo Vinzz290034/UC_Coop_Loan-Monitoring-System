@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
+import { saveFormDraft, loadFormDraft, clearFormDraft } from '@/lib/formDraft';
 import BackButton from '@/components/BackButton';
 import InvoiceArExcelImportModal from '@/components/collection/InvoiceArExcelImportModal';
 import CollectionReceiptPrint from '@/components/collection/CollectionReceiptPrint';
@@ -1449,7 +1450,7 @@ function CollectionPageContent() {
     const hasServiceData = initialServiceItems.some(it => it.item.trim().length > 0 || (parseFloat(String(it.selling_price)) || 0) > 0);
     const isService = !hasMerchData && (hasServiceData || item.tab === 'services');
 
-    setEditFormData({
+    const initialEditFormData = {
       id: item.id,
       tab: (item.tab === 'sales' || item.tab === 'services') ? 'sales_services' : item.tab,
       sales_service_type: isService ? 'service' : 'merchandise',
@@ -1487,11 +1488,31 @@ function CollectionPageContent() {
       status: item.status || 'Cash in vault',
       remarks: item.remarks || (isCollectionSealed(item) ? 'sealed' : 'edit'),
       collected_by: item.collected_by || 'CHINNETTE A. LAMOSTE',
-    });
+    };
+    const editDraftKey = `uc_coop_draft_edit_collection_${item.id}`;
+    const savedEditDraft = loadFormDraft<any>(editDraftKey);
+    if (savedEditDraft?.data) {
+      setEditFormData(savedEditDraft.data);
+      setActionFeedback({
+        type: 'success',
+        message: `Restored your unsaved edit draft for Receipt #${item.or_no}.`
+      });
+      setTimeout(() => setActionFeedback(null), 4000);
+    } else {
+      setEditFormData(initialEditFormData);
+    }
 
     setIsEditOverride(false);
     setEditingItem(item);
   };
+
+  useEffect(() => {
+    if (!editingItem || !editFormData) return;
+    const timer = setTimeout(() => {
+      saveFormDraft(`uc_coop_draft_edit_collection_${editingItem.id}`, editFormData);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [editingItem, editFormData]);
 
   // Merchandise Item Handlers for Edit Modal
   const handleEditAddItem = () => {
@@ -2197,6 +2218,7 @@ function CollectionPageContent() {
       const res = await api.put(`/collections/${editFormData.id}`, payload);
       const updated: CollectionItem = res.data?.data || { ...editingItem, ...payload };
       setCollections(prev => prev.map(c => c.id === updated.id ? updated : c));
+      clearFormDraft(`uc_coop_draft_edit_collection_${updated.id}`);
       setEditingItem(null);
       setEditFormData(null);
       setIsEditOverride(false);
@@ -2793,18 +2815,41 @@ function CollectionPageContent() {
       collected_by: 'CHINNETTE A. LAMOSTE'
     });
     setIsCustomBank(false);
+    const savedDraft = loadFormDraft<typeof formData>('uc_coop_draft_record_collection');
+    if (savedDraft?.data) {
+      setFormData(savedDraft.data);
+      setActionFeedback({ type: 'success', message: 'Restored your unsaved Record Collection draft.' });
+      setTimeout(() => setActionFeedback(null), 4000);
+    }
     setIsAddModalOpen(true);
 
     // Fetch authoritative sequence from server to guarantee sync with other staff
     try {
       const res = await api.get('/collections/next-receipt-no');
-      if (res.data?.data?.next_receipt_no) {
+      if (res.data?.data?.next_receipt_no && !savedDraft?.data?.or_no) {
         setFormData(prev => ({ ...prev, or_no: String(res.data.data.next_receipt_no) }));
       }
     } catch (err) {
       console.warn('Failed to fetch authoritative next receipt number:', err);
     }
   };
+
+  useEffect(() => {
+    if (!isAddModalOpen) return;
+    const hasContent =
+      Boolean(formData.payor_name?.trim()) ||
+      Boolean(formData.amount) ||
+      Boolean(formData.principal_amount) ||
+      Boolean(formData.common_share_amount) ||
+      Boolean(formData.membership_fee) ||
+      Boolean(formData.billing_amount) ||
+      Boolean(formData.particulars_amount);
+    if (!hasContent) return;
+    const timer = setTimeout(() => {
+      saveFormDraft('uc_coop_draft_record_collection', formData);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [isAddModalOpen, formData]);
 
   // Save new collection
   const handleSaveCollection = async (e: React.FormEvent) => {
@@ -2982,6 +3027,7 @@ function CollectionPageContent() {
       const res = await api.post('/collections', newItem);
       const savedItem: CollectionItem = res.data?.data || newItem;
       setCollections(prev => [savedItem, ...prev]);
+      clearFormDraft('uc_coop_draft_record_collection');
       setIsAddModalOpen(false);
       // Clear active search/page filters if they would hide the newly created receipt
       if (searchQuery.trim() && !String(savedItem.or_no || '').toLowerCase().includes(searchQuery.trim().toLowerCase())) {
