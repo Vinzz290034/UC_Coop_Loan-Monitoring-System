@@ -21,6 +21,7 @@ import {
   getChartOfAccounts,
   getBookOfAccountsEntries,
   importChartOfAccounts,
+  updateChartOfAccountItem,
   deleteChartOfAccountItem,
   clearChartOfAccounts
 } from '../controllers/reportController.js';
@@ -76,6 +77,7 @@ router.delete('/bank-recon/:id', deleteBankReconEntry);
 router.get('/chart-of-accounts', getChartOfAccounts);
 router.get('/book-of-accounts-entries', getBookOfAccountsEntries);
 router.post('/chart-of-accounts/import', importChartOfAccounts);
+router.put('/chart-of-accounts/item/:title', updateChartOfAccountItem);
 router.delete('/chart-of-accounts/item/:title', deleteChartOfAccountItem);
 router.delete('/chart-of-accounts', clearChartOfAccounts);
 

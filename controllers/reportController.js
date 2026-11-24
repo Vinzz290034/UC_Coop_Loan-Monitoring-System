@@ -5704,6 +5704,63 @@ export const importChartOfAccounts = async (req, res, next) => {
   }
 };
 
+// @desc    Update a single Chart of Accounts item (name, description, and optional type)
+// @route   PUT /api/reports/chart-of-accounts/item/:title
+// @access  Protected (Admin, Staff)
+export const updateChartOfAccountItem = async (req, res, next) => {
+  try {
+    await ensureChartOfAccountsTable();
+    const oldTitle = decodeURIComponent(req.params.title || '').trim();
+    const newTitle = String(req.body?.account_title ?? '').trim();
+    const description = String(req.body?.description ?? '').trim();
+    const accountType = req.body?.account_type ? String(req.body.account_type).trim() : null;
+
+    if (!oldTitle) {
+      return res.status(400).json({ success: false, message: 'Original account title is required.' });
+    }
+    if (!newTitle) {
+      return res.status(400).json({ success: false, message: 'New account title is required.' });
+    }
+
+    if (newTitle.toLowerCase() !== oldTitle.toLowerCase()) {
+      const dupCheck = await pool.query(
+        'SELECT id FROM chart_of_accounts WHERE LOWER(TRIM(account_title)) = LOWER(TRIM($1)) LIMIT 1',
+        [newTitle]
+      );
+      if (dupCheck.rowCount > 0) {
+        return res.status(409).json({
+          success: false,
+          message: `An account named "${newTitle}" already exists.`
+        });
+      }
+    }
+
+    const result = await pool.query(
+      `UPDATE chart_of_accounts
+       SET account_title = $1,
+           description = $2,
+           account_type = COALESCE($3, account_type)
+       WHERE LOWER(TRIM(account_title)) = LOWER(TRIM($4))
+       RETURNING id, account_type, account_title, description, sort_order`,
+      [newTitle, description, accountType, oldTitle]
+    );
+
+    await pool.query(
+      'UPDATE rf_custom_accounts SET name = $1 WHERE LOWER(TRIM(name)) = LOWER(TRIM($2))',
+      [newTitle, oldTitle]
+    ).catch(() => {});
+
+    return res.status(200).json({
+      success: true,
+      updated: result.rowCount || 0,
+      data: result.rows[0] || null,
+      message: `Updated "${newTitle}" successfully.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Delete a single Chart of Accounts item by title
 // @route   DELETE /api/reports/chart-of-accounts/item/:title
 // @access  Protected (Admin, Staff)

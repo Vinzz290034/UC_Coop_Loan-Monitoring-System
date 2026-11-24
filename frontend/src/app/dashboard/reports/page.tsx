@@ -36,6 +36,7 @@ import {
   FolderTree,
   ChevronRight,
   Plus,
+  Pencil,
   Trash2,
   Check,
   Scale,
@@ -216,6 +217,50 @@ function ReportsPageContent() {
   const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<{ name: string; count: number } | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [accountToEdit, setAccountToEdit] = useState<{
+    originalName: string;
+    name: string;
+    description: string;
+    accountType: string;
+  } | null>(null);
+  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
+  const [editAccountError, setEditAccountError] = useState<string | null>(null);
+
+  const handleSaveEditAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountToEdit) return;
+    const newName = accountToEdit.name.trim();
+    if (!newName) {
+      setEditAccountError('Book of Account name is required.');
+      return;
+    }
+    setIsUpdatingAccount(true);
+    setEditAccountError(null);
+    try {
+      await api.put(`/reports/chart-of-accounts/item/${encodeURIComponent(accountToEdit.originalName)}`, {
+        account_title: newName,
+        description: accountToEdit.description.trim(),
+        account_type: accountToEdit.accountType,
+      });
+      setChartOfAccounts(prev =>
+        prev.map(row =>
+          String(row.account_title || '').trim().toLowerCase() === accountToEdit.originalName.trim().toLowerCase()
+            ? {
+                ...row,
+                account_title: newName,
+                description: accountToEdit.description.trim(),
+                account_type: accountToEdit.accountType || row.account_type,
+              }
+            : row
+        )
+      );
+      setAccountToEdit(null);
+    } catch (err: any) {
+      setEditAccountError(err?.response?.data?.message || 'Failed to update Book of Account.');
+    } finally {
+      setIsUpdatingAccount(false);
+    }
+  };
 
   // Official Chart of Accounts (Excel Import) States
   const [chartOfAccounts, setChartOfAccounts] = useState<
@@ -2739,6 +2784,23 @@ function ReportsPageContent() {
                                               type="button"
                                               onClick={(e) => {
                                                 e.stopPropagation();
+                                                setEditAccountError(null);
+                                                setAccountToEdit({
+                                                  originalName: acc.account_name,
+                                                  name: acc.account_name,
+                                                  description: acc.description || '',
+                                                  accountType: acc.account_type || '',
+                                                });
+                                              }}
+                                              className="p-1.5 rounded-lg text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
+                                              title={`Edit ${acc.account_name}`}
+                                            >
+                                              <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
                                                 setAccountToDelete({ name: acc.account_name, count: acc.count });
                                               }}
                                               className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
@@ -5038,6 +5100,106 @@ function ReportsPageContent() {
               </button>
             </div>
           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Edit Book of Account Modal */}
+      {accountToEdit && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/75 backdrop-blur-md p-3 sm:p-6 overflow-y-auto animate-modal-backdrop"
+          onClick={() => !isUpdatingAccount && setAccountToEdit(null)}
+        >
+          <form
+            onSubmit={handleSaveEditAccount}
+            className="relative w-full max-w-md bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-6 shadow-2xl space-y-4 animate-modal-pop"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white font-bold flex items-center justify-center shadow-xs shrink-0">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-neutral-900 dark:text-white">
+                    Edit Book of Account
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Updates both Reports &amp; Disbursement dropdown
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isUpdatingAccount && setAccountToEdit(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editAccountError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-700 dark:text-rose-300">
+                {editAccountError}
+              </div>
+            )}
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                  Book of Accounts Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={accountToEdit.name}
+                  onChange={e => setAccountToEdit(prev => prev ? { ...prev, name: e.target.value } : null)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-900 dark:text-white font-semibold focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                  Description
+                </label>
+                <textarea
+                  rows={3}
+                  value={accountToEdit.description}
+                  onChange={e => setAccountToEdit(prev => prev ? { ...prev, description: e.target.value } : null)}
+                  placeholder="Enter account description..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-200 dark:border-neutral-800">
+              <button
+                type="button"
+                disabled={isUpdatingAccount}
+                onClick={() => setAccountToEdit(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isUpdatingAccount || !accountToEdit.name.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white shadow-xs transition-all cursor-pointer"
+              >
+                {isUpdatingAccount ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Changes</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>,
         document.body
       )}
