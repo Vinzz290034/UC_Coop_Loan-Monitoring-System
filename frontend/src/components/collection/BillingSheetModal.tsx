@@ -17,6 +17,8 @@ import {
   Search,
   ClipboardPaste,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Check
 } from 'lucide-react';
 
@@ -41,6 +43,12 @@ export interface BillingSheetRow {
   reg: number;
   fines: number;
   fixed_deposit: number;
+  custom?: Record<string, number>;
+}
+
+export interface CustomBillingColumn {
+  key: string;
+  label: string;
 }
 
 export interface BillingSheetHeader {
@@ -56,9 +64,11 @@ export interface BillingSheetHeader {
   prepared_by_title?: string;
   approved_by_name?: string;
   approved_by_title?: string;
+  custom_columns?: CustomBillingColumn[];
+  column_order?: string[];
 }
 
-type NumericFieldKey = Exclude<keyof BillingSheetRow, 'id' | 'id_no' | 'last_name' | 'first_name'>;
+type NumericFieldKey = Exclude<keyof BillingSheetRow, 'id' | 'id_no' | 'last_name' | 'first_name' | 'custom'>;
 
 const NUMERIC_COLUMNS: { key: NumericFieldKey; label: string; group?: string }[] = [
   { key: 'int_calamity', label: 'Int', group: 'Calamity' },
@@ -71,8 +81,8 @@ const NUMERIC_COLUMNS: { key: NumericFieldKey; label: string; group?: string }[]
   { key: 'so', label: 'SO', group: 'SO' },
   { key: 'int_utility', label: 'Int', group: 'Utility' },
   { key: 'utility', label: 'Utility', group: 'Utility' },
-  { key: 'petty_cash', label: 'Petty cash', group: 'Petty Cash' },
   { key: 'int_petty_cash', label: 'Int', group: 'Petty Cash' },
+  { key: 'petty_cash', label: 'Petty cash', group: 'Petty Cash' },
   { key: 'int_reg', label: 'Int', group: 'Reg' },
   { key: 'reg', label: 'Reg', group: 'Reg' },
   { key: 'fines', label: 'FINES' },
@@ -102,8 +112,11 @@ const createEmptyRow = (): BillingSheetRow => ({
   fixed_deposit: 0,
 });
 
-const getRowTotal = (row: BillingSheetRow): number =>
-  NUMERIC_COLUMNS.reduce((sum, col) => sum + (Number(row[col.key]) || 0), 0);
+const getRowTotal = (row: BillingSheetRow): number => {
+  const baseSum = NUMERIC_COLUMNS.reduce((sum, col) => sum + (Number(row[col.key]) || 0), 0);
+  const customSum = Object.values(row.custom || {}).reduce((sum, v) => sum + (Number(v) || 0), 0);
+  return baseSum + customSum;
+};
 
 const formatMoney = (val: number): string => {
   if (!val || Math.abs(val) < 0.005) return '';
@@ -234,7 +247,7 @@ function MemberNameDropdownCell({
             setIsOpen(true);
           }
         }}
-        className={`w-full pl-1.5 pr-5 py-1 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none uppercase text-[11px] ${
+        className={`w-full pl-2 pr-6 py-1.5 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none uppercase text-xs ${
           bold ? 'font-semibold' : ''
         }`}
       />
@@ -343,7 +356,7 @@ function NumericAmountCell({
         setDraft(cleaned);
         onChangeValue(cleaned);
       }}
-      className="w-16 px-1 py-1 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none text-right tabular-nums text-[11px]"
+      className="w-full min-w-[78px] px-2 py-1.5 rounded bg-transparent focus:bg-primary/5 dark:focus:bg-secondary/10 focus:outline-none text-right tabular-nums text-xs"
     />
   );
 }
@@ -486,12 +499,27 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [pasteText, setPasteText] = useState('');
+  const [showAddColModal, setShowAddColModal] = useState(false);
+  const [addColEntered, setAddColEntered] = useState(false);
+  const [newColName, setNewColName] = useState('');
+  const [includeIntCol, setIncludeIntCol] = useState(false);
+  const [draggedColKey, setDraggedColKey] = useState<string | null>(null);
+  const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
   const [members, setMembers] = useState<BillingMemberOption[]>([]);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setIsEntered(true));
     return () => cancelAnimationFrame(raf);
   }, []);
+
+  useEffect(() => {
+    if (!showAddColModal) {
+      setAddColEntered(false);
+      return;
+    }
+    const raf = requestAnimationFrame(() => setAddColEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, [showAddColModal]);
 
   useEffect(() => {
     let active = true;
@@ -615,6 +643,75 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
     return totals;
   }, [rows]);
 
+  const customColumns = useMemo(() => header.custom_columns || [], [header.custom_columns]);
+
+  const orderedColumns = useMemo(() => {
+    type OrderedCol = { key: string; label: string; group?: string; isCustom: boolean };
+    const allCols: OrderedCol[] = [
+      ...NUMERIC_COLUMNS.map(c => ({ key: String(c.key), label: c.label, group: c.group, isCustom: false })),
+      ...customColumns.map(c => ({ key: c.key, label: c.label, isCustom: true })),
+    ];
+    const order = header.column_order;
+    if (!Array.isArray(order) || order.length === 0) return allCols;
+    const byKey = new Map(allCols.map(c => [c.key, c]));
+    const result: OrderedCol[] = [];
+    const seen = new Set<string>();
+    for (const k of order) {
+      const col = byKey.get(k);
+      if (col && !seen.has(k)) {
+        result.push(col);
+        seen.add(k);
+      }
+    }
+    for (const col of allCols) {
+      if (!seen.has(col.key)) result.push(col);
+    }
+    return result;
+  }, [customColumns, header.column_order]);
+
+  const moveColumnByOffset = (colKey: string, delta: -1 | 1) => {
+    const keys = orderedColumns.map(c => c.key);
+    const idx = keys.indexOf(colKey);
+    const targetIdx = idx + delta;
+    if (idx === -1 || targetIdx < 0 || targetIdx >= keys.length) return;
+    const next = [...keys];
+    [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+    setHeader(h => ({ ...h, column_order: next }));
+  };
+
+  const reorderColumns = (sourceKey: string, targetKey: string) => {
+    if (!sourceKey || !targetKey || sourceKey === targetKey) return;
+    const keys = orderedColumns.map(c => c.key);
+    const fromIdx = keys.indexOf(sourceKey);
+    const toIdx = keys.indexOf(targetKey);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const next = [...keys];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    setHeader(h => ({ ...h, column_order: next }));
+  };
+
+  const getColCellValue = (row: BillingSheetRow, col: { key: string; isCustom: boolean }): number =>
+    col.isCustom ? Number(row.custom?.[col.key]) || 0 : Number(row[col.key as NumericFieldKey]) || 0;
+
+  const getColFooterTotal = (col: { key: string; isCustom: boolean }): number =>
+    col.isCustom
+      ? customColumnTotals[col.key] || 0
+      : columnTotals[col.key as NumericFieldKey] || 0;
+
+  const customColumnTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const col of customColumns) {
+      totals[col.key] = 0;
+    }
+    for (const r of rows) {
+      for (const col of customColumns) {
+        totals[col.key] = (totals[col.key] || 0) + (Number(r.custom?.[col.key]) || 0);
+      }
+    }
+    return totals;
+  }, [rows, customColumns]);
+
   const grandTotal = useMemo(
     () => rows.reduce((sum, r) => sum + getRowTotal(r), 0),
     [rows]
@@ -636,6 +733,51 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
         const cleaned = value.replace(/[^0-9.]/g, '');
         const parsed = cleaned === '' ? 0 : parseFloat(cleaned);
         return { ...r, [field]: Number.isNaN(parsed) ? 0 : parsed };
+      })
+    );
+  };
+
+  const updateCustomField = (rowId: string, colKey: string, value: string) => {
+    const cleaned = value.replace(/[^0-9.]/g, '');
+    const parsed = cleaned === '' ? 0 : parseFloat(cleaned);
+    const num = Number.isNaN(parsed) ? 0 : parsed;
+    setRows(prev =>
+      prev.map(r =>
+        r.id === rowId ? { ...r, custom: { ...(r.custom || {}), [colKey]: num } } : r
+      )
+    );
+  };
+
+  const handleAddCustomColumn = () => {
+    const label = newColName.trim();
+    if (!label) return;
+    const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'col';
+    const stamp = Date.now().toString(36).slice(-4);
+    const colsToAdd: CustomBillingColumn[] = [];
+    if (includeIntCol) {
+      colsToAdd.push({ key: `custom_int_${slug}_${stamp}`, label: 'Int' });
+    }
+    colsToAdd.push({ key: `custom_${slug}_${stamp}`, label });
+    setHeader(h => ({
+      ...h,
+      custom_columns: [...(h.custom_columns || []), ...colsToAdd],
+    }));
+    setNewColName('');
+    setIncludeIntCol(false);
+    setShowAddColModal(false);
+  };
+
+  const handleRemoveCustomColumn = (colKey: string) => {
+    setHeader(h => ({
+      ...h,
+      custom_columns: (h.custom_columns || []).filter(c => c.key !== colKey),
+    }));
+    setRows(prev =>
+      prev.map(r => {
+        if (!r.custom || !(colKey in r.custom)) return r;
+        const nextCustom = { ...r.custom };
+        delete nextCustom[colKey];
+        return { ...r, custom: nextCustom };
       })
     );
   };
@@ -766,7 +908,7 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
             <td class="center mono">${escapeHtml(r.id_no)}</td>
             <td class="name-cell">${escapeHtml(r.last_name.toUpperCase())}</td>
             <td class="name-cell">${escapeHtml(r.first_name.toUpperCase())}</td>
-            ${NUMERIC_COLUMNS.map(c => `<td class="num">${formatMoney(r[c.key])}</td>`).join('')}
+            ${orderedColumns.map(c => `<td class="num">${formatMoney(getColCellValue(r, c))}</td>`).join('')}
             <td class="num bold total-col">${formatMoneyAlways(total)}</td>
           </tr>
         `;
@@ -975,17 +1117,17 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                   <th style="width:2.3%;">#</th>
                   <th style="width:4.8%;">ID NO.</th>
                   <th colspan="2" style="width:15.5%;">NAME</th>
-                  ${NUMERIC_COLUMNS.map(c => `<th style="width:4.45%;">${escapeHtml(c.label)}</th>`).join('')}
+                  ${orderedColumns.map(c => `<th style="width:4.45%;">${escapeHtml(c.label)}</th>`).join('')}
                   <th class="total-col" style="width:6.2%;">TOTAL</th>
                 </tr>
               </thead>
               <tbody>
-                ${rowsHtml || `<tr><td colspan="${NUMERIC_COLUMNS.length + 5}" class="center" style="padding:12px;color:#6b7280;">No billing entries</td></tr>`}
+                ${rowsHtml || `<tr><td colspan="${orderedColumns.length + 5}" class="center" style="padding:12px;color:#6b7280;">No billing entries</td></tr>`}
               </tbody>
               <tfoot>
                 <tr>
                   <td colspan="4" class="center">TOTAL (${nonEmptyRows.length} Employee${nonEmptyRows.length === 1 ? '' : 's'})</td>
-                  ${NUMERIC_COLUMNS.map(c => `<td class="num">${formatMoney(columnTotals[c.key])}</td>`).join('')}
+                  ${orderedColumns.map(c => `<td class="num">${formatMoney(getColFooterTotal(c))}</td>`).join('')}
                   <td class="num bold">${formatMoneyAlways(grandTotal)}</td>
                 </tr>
               </tfoot>
@@ -1308,38 +1450,112 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                     <Plus className="w-3.5 h-3.5" />
                     <span>Add 5 Rows</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddColModal(true)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-emerald-600/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Column</span>
+                  </button>
                 </div>
               </div>
 
               {/* Structured Accounting Table */}
               <div className="rounded-2xl border border-outline-variant/70 overflow-x-auto shadow-xs">
-                <table className="w-full border-collapse text-[11px] min-w-[1320px]">
+                <table className="w-full border-collapse text-xs min-w-[1720px]">
                   <thead className="bg-neutral-100 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-200 sticky top-0 z-10">
                     <tr>
-                      <th className="border-b border-r border-outline-variant/60 px-2 py-2 w-9 text-center font-bold">#</th>
-                      <th className="border-b border-r border-outline-variant/60 px-2 py-2 w-24 text-center font-bold">ID NO.</th>
-                      <th className="border-b border-r border-outline-variant/60 px-2 py-2 w-32 text-left font-bold">LAST NAME</th>
-                      <th className="border-b border-r border-outline-variant/60 px-2 py-2 w-32 text-left font-bold">FIRST NAME</th>
-                      {NUMERIC_COLUMNS.map(col => (
+                      <th className="border-b border-r border-outline-variant/60 px-2 py-2.5 w-10 min-w-[40px] text-center font-bold">#</th>
+                      <th className="border-b border-r border-outline-variant/60 px-2 py-2.5 w-24 min-w-[92px] text-center font-bold whitespace-nowrap">ID NO.</th>
+                      <th className="border-b border-r border-outline-variant/60 px-2.5 py-2.5 w-40 min-w-[160px] text-left font-bold whitespace-nowrap">LAST NAME</th>
+                      <th className="border-b border-r border-outline-variant/60 px-2.5 py-2.5 w-40 min-w-[160px] text-left font-bold whitespace-nowrap">FIRST NAME</th>
+                      {orderedColumns.map((col, colIdx) => (
                         <th
                           key={col.key}
-                          className="border-b border-r border-outline-variant/60 px-1.5 py-2 text-center font-bold whitespace-nowrap"
-                          title={col.group ? `${col.group} — ${col.label}` : col.label}
+                          draggable
+                          onDragStart={() => setDraggedColKey(col.key)}
+                          onDragOver={e => {
+                            e.preventDefault();
+                            if (draggedColKey && draggedColKey !== col.key) {
+                              setDragOverColKey(col.key);
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverColKey === col.key) setDragOverColKey(null);
+                          }}
+                          onDrop={e => {
+                            e.preventDefault();
+                            if (draggedColKey) reorderColumns(draggedColKey, col.key);
+                            setDraggedColKey(null);
+                            setDragOverColKey(null);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedColKey(null);
+                            setDragOverColKey(null);
+                          }}
+                          className={`group border-b border-r border-outline-variant/60 px-1.5 py-2 min-w-[84px] text-center font-bold whitespace-nowrap select-none cursor-grab active:cursor-grabbing transition-colors ${
+                            dragOverColKey === col.key
+                              ? 'bg-emerald-200/80 dark:bg-emerald-900/60'
+                              : col.isCustom
+                              ? 'bg-emerald-50/60 dark:bg-emerald-950/30'
+                              : ''
+                          }`}
+                          title={col.group ? `${col.group} — ${col.label} (Drag or use arrows to move)` : `${col.label} (Drag or use arrows to move)`}
                         >
-                          {col.label}
+                          <div className="flex items-center justify-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                moveColumnByOffset(col.key, -1);
+                              }}
+                              disabled={colIdx === 0}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 disabled:opacity-0 cursor-pointer transition-opacity"
+                              title="Move left"
+                            >
+                              <ChevronLeft className="w-3 h-3" />
+                            </button>
+                            <span>{col.label}</span>
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                moveColumnByOffset(col.key, 1);
+                              }}
+                              disabled={colIdx === orderedColumns.length - 1}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 disabled:opacity-0 cursor-pointer transition-opacity"
+                              title="Move right"
+                            >
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                            {col.isCustom && (
+                              <button
+                                type="button"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handleRemoveCustomColumn(col.key);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-rose-500/15 text-neutral-400 hover:text-rose-600 transition-opacity cursor-pointer"
+                                title={`Remove ${col.label} column`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </th>
                       ))}
-                      <th className="border-b border-r border-outline-variant/60 px-2 py-2 w-24 text-right font-black bg-neutral-200/70 dark:bg-neutral-800">
+                      <th className="border-b border-r border-outline-variant/60 px-3 py-2.5 min-w-[105px] text-right font-black bg-neutral-200 dark:bg-neutral-800 md:sticky md:right-0 md:z-20 md:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                         TOTAL
                       </th>
-                      <th className="border-b border-outline-variant/60 px-1.5 py-2 w-9 text-center" />
+                      <th className="border-b border-outline-variant/60 px-2 py-2.5 w-10 min-w-[40px] text-center" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/40 bg-white dark:bg-neutral-950">
                     {filteredRows.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={NUMERIC_COLUMNS.length + 6}
+                          colSpan={orderedColumns.length + 6}
                           className="py-10 text-center text-xs text-neutral-400 dark:text-neutral-500"
                         >
                           {rows.length === 0
@@ -1391,15 +1607,19 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                               onSelectMember={member => selectMemberForRow(row.id, member)}
                             />
                           </td>
-                          {NUMERIC_COLUMNS.map(col => (
+                          {orderedColumns.map(col => (
                             <td key={col.key} className="border-r border-outline-variant/40 p-0.5">
                               <NumericAmountCell
-                                value={row[col.key]}
-                                onChangeValue={raw => updateRowField(row.id, col.key, raw)}
+                                value={getColCellValue(row, col)}
+                                onChangeValue={raw =>
+                                  col.isCustom
+                                    ? updateCustomField(row.id, col.key, raw)
+                                    : updateRowField(row.id, col.key as NumericFieldKey, raw)
+                                }
                               />
                             </td>
                           ))}
-                          <td className="border-r border-outline-variant/40 px-2 py-1 text-right font-bold tabular-nums text-emerald-700 dark:text-emerald-400 bg-neutral-50/70 dark:bg-neutral-900/40">
+                          <td className="border-r border-outline-variant/40 px-3 py-1.5 text-right font-bold tabular-nums text-emerald-700 dark:text-emerald-400 bg-neutral-50 dark:bg-neutral-900 md:sticky md:right-0 md:z-10 md:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)]">
                             {formatMoneyAlways(rowTotal)}
                           </td>
                           <td className="px-1 py-1 text-center">
@@ -1421,12 +1641,12 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                       <td colSpan={4} className="border-r border-outline-variant/60 px-3 py-2 text-right uppercase tracking-wider text-[10px]">
                         Grand Total ({rows.length} row{rows.length === 1 ? '' : 's'})
                       </td>
-                      {NUMERIC_COLUMNS.map(col => (
+                      {orderedColumns.map(col => (
                         <td key={col.key} className="border-r border-outline-variant/60 px-1.5 py-2 text-right tabular-nums">
-                          {formatMoney(columnTotals[col.key]) || '—'}
+                          {formatMoney(getColFooterTotal(col)) || '—'}
                         </td>
                       ))}
-                      <td className="border-r border-outline-variant/60 px-2 py-2 text-right tabular-nums font-black text-emerald-700 dark:text-emerald-400 bg-neutral-200/70 dark:bg-neutral-800">
+                      <td className="border-r border-outline-variant/60 px-3 py-2.5 text-right tabular-nums font-black text-emerald-700 dark:text-emerald-400 bg-neutral-200 dark:bg-neutral-800 md:sticky md:right-0 md:z-10 md:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                         ₱{formatMoneyAlways(grandTotal)}
                       </td>
                       <td />
@@ -1530,6 +1750,91 @@ export default function BillingSheetModal({ item, receiptAmount, onClose }: Bill
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-primary text-white dark:bg-secondary dark:text-neutral-950 cursor-pointer"
               >
                 Import Rows
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Custom Column Modal */}
+      {showAddColModal && (
+        <div
+          className={`fixed inset-0 z-1100 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-opacity duration-200 ease-out ${
+            addColEntered ? 'opacity-100' : 'opacity-0'
+          }`}
+          onClick={() => setShowAddColModal(false)}
+        >
+          <div
+            className={`w-full max-w-md rounded-2xl bg-white dark:bg-neutral-950 border border-outline-variant/60 p-5 shadow-2xl space-y-4 transition-all duration-200 ease-out ${
+              addColEntered ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'
+            }`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-headline font-black text-neutral-900 dark:text-white">
+                Add Custom Billing Column
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddColModal(false)}
+                className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-neutral-600 dark:text-neutral-300 mb-1">
+                  Column Name
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={newColName}
+                  onChange={e => setNewColName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleAddCustomColumn();
+                  }}
+                  placeholder="e.g. Rice, Uniform, Locker, Membership"
+                  className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-neutral-50 dark:bg-neutral-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setIncludeIntCol(prev => !prev)}
+                className="flex items-center gap-2.5 cursor-pointer text-neutral-700 dark:text-neutral-300 select-none group"
+              >
+                <span
+                  className={`w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-all duration-150 active:scale-90 ${
+                    includeIntCol
+                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs scale-100'
+                      : 'border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 group-hover:border-emerald-500'
+                  }`}
+                >
+                  <Check
+                    className={`w-3 h-3 stroke-[3] transition-all duration-150 ${
+                      includeIntCol ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
+                    }`}
+                  />
+                </span>
+                <span>Include an <strong>Int</strong> column before it</span>
+              </button>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddColModal(false)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddCustomColumn}
+                disabled={!newColName.trim()}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer disabled:opacity-50"
+              >
+                Add Column
               </button>
             </div>
           </div>

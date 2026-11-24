@@ -1244,6 +1244,11 @@ export async function getBillingSheetsSummary(req, res) {
         for (const k of numKeys) {
           sheetTotal += Number(r?.[k]) || 0;
         }
+        if (r?.custom && typeof r.custom === 'object') {
+          for (const v of Object.values(r.custom)) {
+            sheetTotal += Number(v) || 0;
+          }
+        }
       }
       return {
         collection_id: row.collection_id,
