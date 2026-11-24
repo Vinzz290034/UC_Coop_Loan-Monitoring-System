@@ -3421,6 +3421,22 @@ export const getFinancialStatementReport = async (req, res, next) => {
     const isBaselineYear = targetYear === 2026;
     const isPrevBaselineYear = targetYear === 2025;
 
+    // Merchandise Inventory begins in October (months 0..8 / Jan..Sep are 0)
+    const INVENTORY_LABELS = {
+      inv_type_c: 'Merchandise Inventory - Type C',
+      inv_rice: 'Merchandise Inventory - Rice',
+      inv_pe: 'Merchandise Inventory - PE Uniform',
+      inv_ppe: 'Merchandise Inventory - PPE',
+      inv_accessories: 'Merchandise Inventory - Accessories',
+      inv_soap: 'Merchandise Inventory - Laundry Soap',
+      inv_type_ab: 'Merchandise Inventory - Type A&B',
+      inv_rotc: 'Merchandise Inventory - ROTC Manual',
+      inv_gala: 'Merchandise Inventory - GALA',
+      inv_hardbound: 'Merchandise Inventory - Hardbound',
+      inv_plotting: 'Merchandise Inventory - Plotting Sheet',
+      inv_bsname: 'Merchandise Inventory - BSNAME',
+    };
+
     const newCumulativeStore = (key) => {
       const b = BASELINE[key] || { cur: 0, prev: 0 };
       let initCur = 0;
@@ -3434,10 +3450,27 @@ export const getFinancialStatementReport = async (req, res, next) => {
         initPrev = 0;
       }
 
+      const isInventoryKey = Object.prototype.hasOwnProperty.call(INVENTORY_LABELS, key);
+      const currentArr = isInventoryKey
+        ? Array.from({ length: 12 }, (_, m) => (m >= 9 ? initCur : 0))
+        : Array(12).fill(initCur);
+      const initialTxs = (isBaselineYear && isInventoryKey && initCur > 0)
+        ? [{
+            date: `${targetYear}-10-01`,
+            month: 10,
+            year: targetYear,
+            payee: 'Opening Inventory Stock (Oct 2026)',
+            particulars: `${INVENTORY_LABELS[key]} — Beginning Balance`,
+            voucher_no: 'INV-OCT',
+            source: 'inventory_baseline',
+            amount: initCur
+          }]
+        : [];
+
       return {
-        current: Array(12).fill(initCur),
+        current: currentArr,
         previous: Array(12).fill(initPrev),
-        transactions: []
+        transactions: initialTxs
       };
     };
 
@@ -3612,15 +3645,33 @@ export const getFinancialStatementReport = async (req, res, next) => {
         stores.furnitures_fixtures.transactions.push(tx);
       }
 
-      // Merchandise inventory purchases
-      if (text.includes('uniform') || text.includes('gala')) {
-        stores.inv_gala.transactions.push(tx);
-      } else if (text.includes('pe')) {
-        stores.inv_pe.transactions.push(tx);
-      } else if (text.includes('rice')) {
-        stores.inv_rice.transactions.push(tx);
-      } else if (text.includes('soap')) {
-        stores.inv_soap.transactions.push(tx);
+      // Merchandise inventory purchases (starting October / month index >= 9)
+      if (d.getMonth() >= 9) {
+        if (text.includes('type c')) {
+          stores.inv_type_c.transactions.push(tx);
+        } else if (text.includes('type a&b') || text.includes('type a & b') || text.includes('type a') || text.includes('type b')) {
+          stores.inv_type_ab.transactions.push(tx);
+        } else if (text.includes('gala')) {
+          stores.inv_gala.transactions.push(tx);
+        } else if (text.includes('pe uniform') || /\bpe\b/.test(text)) {
+          stores.inv_pe.transactions.push(tx);
+        } else if (text.includes('ppe')) {
+          stores.inv_ppe.transactions.push(tx);
+        } else if (text.includes('rice')) {
+          stores.inv_rice.transactions.push(tx);
+        } else if (text.includes('soap') || text.includes('detergent')) {
+          stores.inv_soap.transactions.push(tx);
+        } else if (text.includes('accessor') || text.includes('belt') || text.includes('buckle') || text.includes('insignia')) {
+          stores.inv_accessories.transactions.push(tx);
+        } else if (text.includes('rotc')) {
+          stores.inv_rotc.transactions.push(tx);
+        } else if (text.includes('hardbound')) {
+          stores.inv_hardbound.transactions.push(tx);
+        } else if (text.includes('plotting')) {
+          stores.inv_plotting.transactions.push(tx);
+        } else if (text.includes('bsname')) {
+          stores.inv_bsname.transactions.push(tx);
+        }
       }
     });
 
@@ -5391,6 +5442,13 @@ const ensureChartOfAccountsTable = async () => {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // Remove any historical duplicate account titles (keep lowest id)
+  await pool.query(`
+    DELETE FROM chart_of_accounts a
+    USING chart_of_accounts b
+    WHERE a.id > b.id
+      AND LOWER(TRIM(a.account_title)) = LOWER(TRIM(b.account_title))
+  `).catch(() => {});
 };
 
 // @desc    Get all recorded entries across Check Vouchers (debits & credits), Revolving Funds, and Collections grouped by Book of Account
@@ -5598,12 +5656,35 @@ export const importChartOfAccounts = async (req, res, next) => {
     }
 
     let inserted = 0;
+    const seenBatch = new Set();
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i] || {};
       const accountType = String(r.account_type || 'Other').trim();
       const accountTitle = String(r.account_title || '').trim();
       const description = String(r.description || '').trim();
       if (!accountTitle) continue;
+
+      const normKey = accountTitle.toLowerCase();
+      if (seenBatch.has(normKey)) continue;
+      seenBatch.add(normKey);
+
+      if (!replaceExisting) {
+        const existing = await pool.query(
+          'SELECT id FROM chart_of_accounts WHERE LOWER(TRIM(account_title)) = LOWER(TRIM($1)) LIMIT 1',
+          [accountTitle]
+        );
+        if (existing.rowCount > 0) {
+          await pool.query(
+            `UPDATE chart_of_accounts
+             SET account_type = $1,
+                 description = CASE WHEN $2 <> '' THEN $2 ELSE description END
+             WHERE id = $3`,
+            [accountType || 'Other', description, existing.rows[0].id]
+          );
+          inserted++;
+          continue;
+        }
+      }
 
       await pool.query(
         `INSERT INTO chart_of_accounts (account_type, account_title, description, sort_order)
@@ -5637,6 +5718,8 @@ export const deleteChartOfAccountItem = async (req, res, next) => {
       'DELETE FROM chart_of_accounts WHERE LOWER(TRIM(account_title)) = LOWER(TRIM($1))',
       [rawTitle]
     );
+    await pool.query('DELETE FROM rf_custom_accounts WHERE LOWER(TRIM(name)) = LOWER(TRIM($1))', [rawTitle]).catch(() => {});
+    await pool.query('INSERT INTO rf_deleted_accounts (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [rawTitle]).catch(() => {});
     return res.status(200).json({
       success: true,
       deleted: result.rowCount || 0,
