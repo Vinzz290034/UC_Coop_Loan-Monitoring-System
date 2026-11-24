@@ -587,7 +587,7 @@ function ReportsPageContent() {
       s = s.replace(/^cib\s*[-–—]?\s*mbtc\b/, 'cash in bank mbtc');
       s = s.replace(/^cib\s*[-–—]?\s*metrobank\b/, 'cash in bank mbtc');
       s = s.replace(/\bloans\s+receivable\b/g, 'loan receivable');
-      s = s.replace(/\bloans\s+payable\b/g, 'loan receivable');
+      s = s.replace(/\bloans\s+payable\b/g, 'loan payable');
       return s.replace(/[^a-z0-9]+/g, ' ').trim();
     };
     const accountsByName = new Map<string, any>();

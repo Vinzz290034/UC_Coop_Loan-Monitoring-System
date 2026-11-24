@@ -5538,7 +5538,10 @@ export const getBookOfAccountsEntries = async (req, res, next) => {
       if (Array.isArray(details) && details.length > 0) {
         details.forEach((d, idx) => {
           const accName = String(d.book_of_account || d.description || '').trim();
-          const rawVal = parseFloat(String(d.amount ?? d.debit ?? d.credit ?? 0)) || 0;
+          const amtFromAmount = parseFloat(String(d.amount ?? 0)) || 0;
+          const amtFromDebit = parseFloat(String(d.debit ?? 0)) || 0;
+          const amtFromCredit = parseFloat(String(d.credit ?? 0)) || 0;
+          const rawVal = amtFromAmount !== 0 ? amtFromAmount : (amtFromDebit !== 0 ? amtFromDebit : amtFromCredit);
           const amt = Math.abs(rawVal);
           if (!accName || amt <= 0) return;
           recordEntry(accName, amt, {
@@ -5773,6 +5776,44 @@ export const updateChartOfAccountItem = async (req, res, next) => {
       'UPDATE rf_custom_accounts SET name = $1 WHERE LOWER(TRIM(name)) = LOWER(TRIM($2))',
       [newTitle, oldTitle]
     ).catch(() => {});
+
+    if (newTitle.toLowerCase() !== oldTitle.toLowerCase()) {
+      await pool.query(
+        'UPDATE revolving_fund_entries SET account_name = $1 WHERE LOWER(TRIM(account_name)) = LOWER(TRIM($2))',
+        [newTitle, oldTitle]
+      ).catch(() => {});
+
+      const cvRows = await pool.query(
+        `SELECT id, details FROM check_vouchers WHERE CAST(details AS TEXT) ILIKE $1`,
+        [`%${oldTitle}%`]
+      ).catch(() => ({ rows: [] }));
+      for (const cvRow of cvRows.rows) {
+        let dets = cvRow.details;
+        if (typeof dets === 'string') {
+          try { dets = JSON.parse(dets); } catch { dets = []; }
+        }
+        if (!Array.isArray(dets)) continue;
+        let changed = false;
+        const updatedDets = dets.map((d) => {
+          const updated = { ...d };
+          if (typeof updated.book_of_account === 'string' && updated.book_of_account.trim().toLowerCase() === oldTitle.toLowerCase()) {
+            updated.book_of_account = newTitle;
+            changed = true;
+          }
+          if (typeof updated.description === 'string' && updated.description.trim().toLowerCase() === oldTitle.toLowerCase()) {
+            updated.description = newTitle;
+            changed = true;
+          }
+          return updated;
+        });
+        if (changed) {
+          await pool.query(
+            'UPDATE check_vouchers SET details = $1::jsonb WHERE id = $2',
+            [JSON.stringify(updatedDets), cvRow.id]
+          ).catch(() => {});
+        }
+      }
+    }
 
     return res.status(200).json({
       success: true,
