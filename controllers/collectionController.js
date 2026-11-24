@@ -1134,3 +1134,130 @@ export async function bulkConfirmDeposits(req, res) {
     });
   }
 }
+
+let billingSheetTableEnsured = false;
+async function ensureBillingSheetTable(db) {
+  if (billingSheetTableEnsured) return;
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS collection_billing_sheets (
+      collection_id TEXT PRIMARY KEY REFERENCES collections(id) ON DELETE CASCADE,
+      header JSONB NOT NULL DEFAULT '{}'::jsonb,
+      rows JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  billingSheetTableEnsured = true;
+}
+
+// @desc    Get manual UC Billing / Collection endorsement sheet for a receipt
+// @route   GET /api/collections/:id/billing-sheet
+// @access  Protected (Admin, Staff)
+export async function getCollectionBillingSheet(req, res) {
+  try {
+    await ensureBillingSheetTable(pool);
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT collection_id, header, rows, updated_at
+       FROM collection_billing_sheets
+       WHERE collection_id = $1`,
+      [id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(200).json({
+        success: true,
+        data: { collection_id: id, header: {}, rows: [], updated_at: null }
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error fetching collection billing sheet:', error);
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to load billing sheet' }
+    });
+  }
+}
+
+// @desc    Save manual UC Billing / Collection endorsement sheet for a receipt
+// @route   PUT /api/collections/:id/billing-sheet
+// @access  Protected (Admin, Staff)
+export async function saveCollectionBillingSheet(req, res) {
+  try {
+    await ensureBillingSheetTable(pool);
+    const { id } = req.params;
+    const { header = {}, rows = [] } = req.body || {};
+
+    const colCheck = await pool.query(`SELECT id FROM collections WHERE id = $1`, [id]);
+    if (colCheck.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Collection receipt not found' }
+      });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO collection_billing_sheets (collection_id, header, rows, updated_at)
+       VALUES ($1, $2::jsonb, $3::jsonb, CURRENT_TIMESTAMP)
+       ON CONFLICT (collection_id)
+       DO UPDATE SET
+         header = EXCLUDED.header,
+         rows = EXCLUDED.rows,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING collection_id, header, rows, updated_at`,
+      [id, JSON.stringify(header || {}), JSON.stringify(Array.isArray(rows) ? rows : [])]
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error saving collection billing sheet:', error);
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to save billing sheet' }
+    });
+  }
+}
+
+// @desc    Get summary (row count & sheet total) for all saved UC Billing sheets
+// @route   GET /api/collections/billing-sheets/summary
+// @access  Protected (Admin, Staff)
+export async function getBillingSheetsSummary(req, res) {
+  try {
+    await ensureBillingSheetTable(pool);
+    const result = await pool.query(
+      `SELECT collection_id, rows, updated_at FROM collection_billing_sheets`
+    );
+    const numKeys = [
+      'int_calamity', 'calamity', 'int_emer', 'emer', 'int_ce', 'ce',
+      'int_so', 'so', 'int_utility', 'utility', 'petty_cash', 'int_petty_cash',
+      'int_reg', 'reg', 'fines', 'fixed_deposit'
+    ];
+    const summary = result.rows.map(row => {
+      const sheetRows = Array.isArray(row.rows) ? row.rows : [];
+      let sheetTotal = 0;
+      for (const r of sheetRows) {
+        for (const k of numKeys) {
+          sheetTotal += Number(r?.[k]) || 0;
+        }
+      }
+      return {
+        collection_id: row.collection_id,
+        row_count: sheetRows.length,
+        sheet_total: Math.round(sheetTotal * 100) / 100,
+        updated_at: row.updated_at
+      };
+    });
+    return res.status(200).json({ success: true, data: summary });
+  } catch (error) {
+    console.error('Error fetching billing sheets summary:', error);
+    return res.status(500).json({
+      success: false,
+      error: { message: 'Failed to load billing sheets summary' }
+    });
+  }
+}

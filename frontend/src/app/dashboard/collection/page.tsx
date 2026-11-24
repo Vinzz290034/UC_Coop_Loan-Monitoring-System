@@ -8,7 +8,8 @@ import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import InvoiceArExcelImportModal from '@/components/collection/InvoiceArExcelImportModal';
 import CollectionReceiptPrint from '@/components/collection/CollectionReceiptPrint';
-import PayrollCollectionTab from '@/components/billing/PayrollCollectionTab';
+import BillingSheetModal from '@/components/collection/BillingSheetModal';
+import BillingTab from '@/components/collection/BillingTab';
 import SalesRegistryTab from '@/components/collection/SalesRegistryTab';
 import { SalesRegistryItemCombobox } from '@/components/collection/SalesRegistryItemCombobox';
 import { ServiceSuggestionCombobox } from '@/components/collection/ServiceSuggestionCombobox';
@@ -72,7 +73,7 @@ const COLLECTION_TABS: TabConfig[] = [
   { id: 'credit', label: 'Credit', description: 'Daily member loan amortizations, credit repayments, share capital & deposits' },
   { id: 'sales_services', label: 'Sales & Services', description: 'Itemized merchandise sales, uniforms, store inventory, photocopying, and printing services' },
   { id: 'sales_registry', label: 'Sales Registry', description: 'Master catalog of store merchandise, uniform sizes, services, official cost and selling prices' },
-  { id: 'billing', label: 'Billing', description: 'Official METC Coop Salary Deduction List for Accounting (Payroll Collection)' },
+  { id: 'billing', label: 'Billing', description: 'University of Cebu total billing receipts' },
 ];
 
 const BANK_OPTIONS: SelectOption[] = [
@@ -525,14 +526,7 @@ function CollectionPageContent() {
   // Active Tab: Defaults to 'all' for consolidated overview, identical to Disbursement
   const [activeTab, setActiveTab] = useState<CollectionTab>('all');
   const currentTabConfig = COLLECTION_TABS.find(t => t.id === activeTab) || COLLECTION_TABS[0];
-
-  // Billing cutoff dates for Billing (Payroll Collection) tab
-  const [billingStartDate, setBillingStartDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [billingEndDate, setBillingEndDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 30);
-    return d.toISOString().split('T')[0];
-  });
+  const [billingSheetItem, setBillingSheetItem] = useState<CollectionItem | null>(null);
 
   // Support ?tab= and ?search= URL query param (e.g. ?tab=billing or ?search=OR#2499)
   useEffect(() => {
@@ -2233,12 +2227,26 @@ function CollectionPageContent() {
     }
   };
 
+  const isUniversityOfCebuBilling = (item: CollectionItem): boolean => {
+    if (item.billing_amount && Number(item.billing_amount) > 0) return true;
+    const fields = [
+      item.payor_name,
+      item.particulars,
+      item.other_category,
+      item.loan_account,
+      item.remarks,
+    ];
+    return fields.some(f => typeof f === 'string' && /university\s+of\s+cebu/i.test(f));
+  };
+
   // Filtered and Sorted Collections
   const filteredCollections = useMemo(() => {
     const result = collections.filter(item => {
       // Tab filter
       if (activeTab !== 'all') {
-        if (activeTab === 'sales_services') {
+        if (activeTab === 'billing') {
+          if (!isUniversityOfCebuBilling(item)) return false;
+        } else if (activeTab === 'sales_services') {
           if (item.tab !== 'sales_services' && item.tab !== 'sales' && item.tab !== 'services') return false;
         } else if (item.tab !== activeTab) {
           return false;
@@ -2350,8 +2358,10 @@ function CollectionPageContent() {
 
   // Tab Stats for 5 KPI Cards (Calculated over current tab's scope + active month/year filters)
   const tabStats = useMemo(() => {
-    const scopeItems = (activeTab === 'all' || activeTab === 'billing')
+    const scopeItems = activeTab === 'all'
       ? collections
+      : activeTab === 'billing'
+      ? collections.filter(isUniversityOfCebuBilling)
       : activeTab === 'sales_services'
       ? collections.filter(c => c.tab === 'sales_services' || c.tab === 'sales' || c.tab === 'services')
       : collections.filter(c => c.tab === activeTab);
@@ -3258,16 +3268,18 @@ function CollectionPageContent() {
           )}
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap self-end sm:self-auto">
-          <button
-            type="button"
-            onClick={openRecordModal}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-headline font-bold text-xs rounded-xl shadow-xs hover:shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Record Collection</span>
-          </button>
-        </div>
+        {activeTab !== 'billing' && (
+          <div className="flex items-center gap-2.5 flex-wrap self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={openRecordModal}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary dark:bg-secondary text-white dark:text-neutral-950 font-headline font-bold text-xs rounded-xl shadow-xs hover:shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Record Collection</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Action Feedback Toast */}
@@ -3297,7 +3309,7 @@ function CollectionPageContent() {
       )}
 
       {/* 3 KPI Overview Cards (Rendered above tabs for sales registry) */}
-      {activeTab === 'sales_registry' ? (
+      {activeTab === 'billing' ? null : activeTab === 'sales_registry' ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 items-stretch">
           {/* Card 1: Total Catalog Items */}
           <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
@@ -3470,12 +3482,40 @@ function CollectionPageContent() {
 
       {/* Table Filters & Toolbar */}
       {activeTab === 'billing' ? (
-        <PayrollCollectionTab
-          startDate={billingStartDate}
-          endDate={billingEndDate}
-          onDateChange={(start, end) => {
-            setBillingStartDate(start);
-            setBillingEndDate(end);
+        <BillingTab
+          collections={collections.filter(isUniversityOfCebuBilling)}
+          getDisplayAmount={getDisplayCollectionAmount}
+          parseDate={parseCollectionDate}
+          formatDetails={item => {
+            if (item.tab === 'credit') {
+              const parts: string[] = [];
+              if (item.loans && item.loans.length > 0) {
+                for (const l of item.loans) {
+                  if (l.principal_amount && l.principal_amount > 0) parts.push(normalizeLoanAccountName(l.loan_account) || 'Principal');
+                  if (l.interest_amount && l.interest_amount > 0) parts.push(l.interest_account || 'Interest');
+                  if (l.fines_amount && l.fines_amount > 0) parts.push(l.fines_account || 'Fines & Late Charges');
+                }
+              } else {
+                if (item.principal_amount && item.principal_amount > 0) parts.push(normalizeLoanAccountName(item.loan_account) || 'Principal');
+                if (item.interest_amount && item.interest_amount > 0) parts.push(item.interest_account || 'Interest');
+                if (item.fines_amount && item.fines_amount > 0) parts.push(item.fines_account || 'Fines & Late Charges');
+              }
+              if (item.common_share_amount && item.common_share_amount > 0) parts.push('Common Share');
+              if (item.membership_fee && item.membership_fee > 0) parts.push('Membership Fee');
+              if (item.billing_amount && item.billing_amount > 0) parts.push('University of Cebu Inc. (Billing)');
+              if (item.particulars_amount && item.particulars_amount > 0) parts.push(item.other_category || 'Particulars');
+              return parts.length > 0 ? parts.join(' + ') : (normalizeLoanAccountName(item.loan_account) || item.particulars || 'Loan Repayment');
+            }
+            if (item.items && item.items.length > 1) {
+              return `${item.items.length} items (${item.item_name || item.items[0]?.item || 'Item'} + ${item.items.length - 1} more)`;
+            }
+            if (item.tab === 'sales' || (item.tab === 'sales_services' && item.item_name)) {
+              return `${item.item_name || 'Store Item'}${item.quantity ? ` (${item.quantity} pcs)` : ''}`;
+            }
+            if (item.tab === 'services' || (item.tab === 'sales_services' && item.service_type)) {
+              return `${item.service_type || 'Service'}${item.service_copies ? ` (${item.service_copies} units)` : ''}`;
+            }
+            return item.particulars || item.item_name || item.service_type || 'Billing Collection';
           }}
         />
       ) : activeTab === 'sales_registry' ? (
@@ -3944,7 +3984,7 @@ function CollectionPageContent() {
                     </td>
                   </tr>
                 ) : (
-                  paginatedCollections.map(item => {
+                  paginatedCollections.map((item, idx) => {
                     const isSelected = selectedIds.includes(item.id);
 
                     // Formulate primary description (prioritize remarks if provided)
@@ -7213,6 +7253,15 @@ function CollectionPageContent() {
           onClose={() => setIsImportModalOpen(false)}
           onImportComplete={handleImportComplete}
           currentUser={currentUserDisplayName}
+        />
+      )}
+
+      {/* UC Billing Endorsement Sheet Modal */}
+      {billingSheetItem && (
+        <BillingSheetModal
+          item={billingSheetItem}
+          receiptAmount={getDisplayCollectionAmount(billingSheetItem)}
+          onClose={() => setBillingSheetItem(null)}
         />
       )}
     </div>
