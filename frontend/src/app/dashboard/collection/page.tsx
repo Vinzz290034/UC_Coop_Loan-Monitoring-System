@@ -3472,7 +3472,7 @@ function CollectionPageContent() {
       </div>
 
       {/* Tab Context Subtitle */}
-      {currentTabConfig.id !== 'all' && (
+      {currentTabConfig.id !== 'all' && currentTabConfig.id !== 'billing' && (
         <div className="pt-1">
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
             {currentTabConfig.description}

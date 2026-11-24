@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '@/lib/api';
 import type { CollectionItem } from '@/types/collection';
 import BillingSheetModal from './BillingSheetModal';
@@ -12,7 +12,9 @@ import {
   CheckCircle2,
   ArrowUpDown,
   RefreshCw,
-  FolderOpen
+  FolderOpen,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 
 interface BillingSheetSummary {
@@ -30,6 +32,95 @@ interface BillingTabProps {
 }
 
 const MONTH_LABELS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+function AnimatedYearSelect({
+  value,
+  years,
+  onChange,
+}: {
+  value: string;
+  years: string[];
+  onChange: (val: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const options = useMemo(
+    () => [{ value: 'all', label: 'All Years' }, ...years.map(yr => ({ value: yr, label: yr }))],
+    [years]
+  );
+
+  const selectedLabel = options.find(o => o.value === value)?.label || value;
+
+  return (
+    <div ref={containerRef} className={`relative ${isOpen ? 'z-50' : 'z-10'}`}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(prev => !prev)}
+        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all duration-150 cursor-pointer min-w-[96px] ${
+          isOpen
+            ? 'border-primary ring-2 ring-primary/20 bg-surface-container-lowest dark:bg-neutral-800 text-neutral-900 dark:text-white'
+            : 'border-outline-variant/60 bg-surface-container-low dark:bg-surface-container hover:border-outline-variant text-neutral-800 dark:text-neutral-200'
+        }`}
+      >
+        <span>{selectedLabel}</span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-neutral-500 transition-transform duration-150 ${
+            isOpen ? 'rotate-180 text-primary dark:text-secondary' : ''
+          }`}
+        />
+      </button>
+
+      <div
+        className={`absolute right-0 mt-1.5 w-32 max-h-56 overflow-y-auto rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 shadow-xl py-1 transition-all duration-150 origin-top-right ${
+          isOpen
+            ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 scale-95 -translate-y-1 pointer-events-none'
+        }`}
+      >
+        {options.map(opt => {
+          const selected = opt.value === value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setIsOpen(false);
+              }}
+              className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                selected
+                  ? 'bg-primary/10 text-primary dark:bg-secondary/15 dark:text-secondary font-bold'
+                  : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              }`}
+            >
+              <span>{opt.label}</span>
+              {selected && <Check className="w-3.5 h-3.5" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function BillingTab({
   collections,
@@ -199,16 +290,11 @@ export default function BillingTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <AnimatedYearSelect
               value={selectedYear}
-              onChange={e => setSelectedYear(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container text-xs font-bold text-neutral-800 dark:text-neutral-200 cursor-pointer"
-            >
-              <option value="all">All Years</option>
-              {availableYears.map(yr => (
-                <option key={yr} value={yr}>{yr}</option>
-              ))}
-            </select>
+              years={availableYears}
+              onChange={setSelectedYear}
+            />
 
             <button
               type="button"
