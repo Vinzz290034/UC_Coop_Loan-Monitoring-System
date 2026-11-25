@@ -4075,7 +4075,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       runReportInternally(getMerchandiseSalesReport, { period: 'annual', year: String(targetYear) }),
       runReportInternally(getMerchandiseSalesReport, { period: 'annual', year: String(prevYear) }),
       pool.query(`
-        SELECT id, or_no, payor_name, date, created_at, tab, items, item_name, service_type, particulars, other_category, remarks, amount, common_share_amount, membership_fee, particulars_amount, loan_account
+        SELECT id, or_no, payor_name, date, created_at, tab, items, item_name, service_type, particulars, other_category, remarks, amount, common_share_amount, membership_fee, billing_amount, particulars_amount, loan_account
         FROM collections
         WHERE COALESCE(status, 'completed') != 'cancelled'
       `),
@@ -4421,6 +4421,10 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       const cDate = col.date || col.created_at;
       const amt = parseFloat(col.amount) || 0;
       const text = `${col.item_name || ''} ${col.service_type || ''} ${col.particulars || ''} ${col.other_category || ''} ${col.remarks || ''}`.toLowerCase();
+      const isUcBilling =
+        (parseFloat(col.billing_amount) || 0) > 0 ||
+        /university\s+of\s+cebu/i.test(`${col.payor_name || ''} ${text} ${col.loan_account || ''}`);
+      if (isUcBilling) return;
       const hasItemsArray = Array.isArray(col.items) && col.items.length > 0;
       const meta = {
         payee: col.payor_name || 'Member',
