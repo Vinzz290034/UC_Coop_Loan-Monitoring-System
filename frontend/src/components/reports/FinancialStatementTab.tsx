@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
-import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import {
   ChevronDown,
@@ -456,102 +455,304 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
   const varianceColumnLabel = isYtd ? 'Variance' : 'TM-SMLY Variance';
 
   // ---- Excel export -------------------------------------------------------
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!data) return;
 
-    const rows: Array<Record<string, string | number>> = [];
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'University of Cebu-METC Multipurpose Cooperative';
+    wb.created = new Date();
 
-    const addSectionToRows = (secTitle: string, sections: FsSection[], totalLabel: string, totalFig: Figures) => {
-      rows.push({
-        'Account Title': `=== ${secTitle.toUpperCase()} ===`,
-        [currentColumnLabel]: '',
-        [previousColumnLabel]: '',
-        [varianceColumnLabel]: ''
-      });
+    const ws = wb.addWorksheet('Balance Sheet', {
+      views: [{ state: 'frozen', ySplit: 5, showGridLines: false }],
+      pageSetup: {
+        paperSize: 9, // A4
+        orientation: 'portrait',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: { left: 0.45, right: 0.45, top: 0.55, bottom: 0.55, header: 0.25, footer: 0.25 }
+      }
+    });
 
+    ws.columns = [
+      { width: 54 },
+      { width: 22 },
+      { width: 22 },
+      { width: 20 }
+    ];
+
+    const FONT_NAME = 'Calibri';
+    const NUM_FMT = '#,##0.00;(#,##0.00);"-"';
+    const VAR_FMT = '+#,##0.00;(#,##0.00);"-"';
+    const CURRENCY_FMT = '₱#,##0.00;(₱#,##0.00);"₱0.00"';
+
+    // Title block
+    const r1 = ws.addRow(['UNIVERSITY OF CEBU-METC MULTIPURPOSE COOPERATIVE']);
+    ws.mergeCells('A1:D1');
+    r1.height = 24;
+    r1.getCell(1).font = { name: FONT_NAME, size: 14, bold: true, color: { argb: 'FF064E3B' } };
+    r1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const r2 = ws.addRow(['BALANCE SHEET (STATEMENT OF FINANCIAL CONDITION)']);
+    ws.mergeCells('A2:D2');
+    r2.height = 20;
+    r2.getCell(1).font = { name: FONT_NAME, size: 12, bold: true, color: { argb: 'FF111827' } };
+    r2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const r3 = ws.addRow([`As of ${periodEndLabel}`]);
+    ws.mergeCells('A3:D3');
+    r3.height = 18;
+    r3.getCell(1).font = { name: FONT_NAME, size: 10, italic: true, color: { argb: 'FF4B5563' } };
+    r3.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    for (let c = 1; c <= 4; c++) {
+      r3.getCell(c).border = { bottom: { style: 'medium', color: { argb: 'FF064E3B' } } };
+    }
+
+    const r4 = ws.addRow([]);
+    r4.height = 8;
+
+    // Table header row (Row 5)
+    const hdr = ws.addRow(['Account Title', currentColumnLabel, previousColumnLabel, varianceColumnLabel]);
+    hdr.height = 26;
+    hdr.eachCell((cell, colNumber) => {
+      cell.font = { name: FONT_NAME, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF064E3B' } };
+      cell.alignment = {
+        horizontal: colNumber === 1 ? 'left' : 'right',
+        vertical: 'middle',
+        wrapText: true,
+        indent: colNumber === 1 ? 1 : 0
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF064E3B' } },
+        bottom: { style: 'medium', color: { argb: 'FF064E3B' } }
+      };
+    });
+
+    const styleNumericCell = (
+      cell: import('exceljs').Cell,
+      val: number,
+      opts: { bold?: boolean; currency?: boolean; isVariance?: boolean; color?: string } = {}
+    ) => {
+      let fgColor = opts.color || 'FF1F2937';
+      if (opts.isVariance && Math.abs(val) >= 0.005) {
+        fgColor = val > 0 ? 'FF047857' : 'FFBE123C';
+      } else if (opts.isVariance) {
+        fgColor = 'FF9CA3AF';
+      }
+      cell.font = { name: FONT_NAME, size: opts.bold ? 10 : 9.5, bold: !!opts.bold, color: { argb: fgColor } };
+      cell.numFmt = opts.currency ? CURRENCY_FMT : opts.isVariance ? VAR_FMT : NUM_FMT;
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
+    };
+
+    const addPartBanner = (label: string, fillHex: string, textHex: string) => {
+      const row = ws.addRow([label]);
+      ws.mergeCells(row.number, 1, row.number, 4);
+      row.height = 22;
+      for (let c = 1; c <= 4; c++) {
+        const cell = row.getCell(c);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillHex } };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+        };
+      }
+      row.getCell(1).font = { name: FONT_NAME, size: 10.5, bold: true, color: { argb: textHex } };
+      row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    };
+
+    const addSectionHeader = (label: string, fillHex: string, textHex: string) => {
+      const row = ws.addRow([label]);
+      ws.mergeCells(row.number, 1, row.number, 4);
+      row.height = 19;
+      for (let c = 1; c <= 4; c++) {
+        row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillHex } };
+      }
+      row.getCell(1).font = { name: FONT_NAME, size: 10, bold: true, color: { argb: textHex } };
+      row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    };
+
+    const addGroupHeader = (label: string) => {
+      const row = ws.addRow([label]);
+      ws.mergeCells(row.number, 1, row.number, 4);
+      row.height = 17;
+      row.getCell(1).font = { name: FONT_NAME, size: 9.5, bold: true, italic: true, color: { argb: 'FF374151' } };
+      row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 2 };
+    };
+
+    const addDataRow = (
+      title: string,
+      f: Figures,
+      opts: {
+        indent?: number;
+        bold?: boolean;
+        fillHex?: string;
+        topBorder?: 'thin';
+        bottomBorder?: 'thin' | 'double' | 'hair';
+        borderHex?: string;
+        currency?: boolean;
+        textHex?: string;
+        height?: number;
+      } = {}
+    ) => {
+      const row = ws.addRow([title, f.thisMonth, f.sameMonthLastYear, f.variance]);
+      row.height = opts.height || 18;
+      const bHex = opts.borderHex || 'FFE5E7EB';
+      for (let c = 1; c <= 4; c++) {
+        const cell = row.getCell(c);
+        if (opts.fillHex) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.fillHex } };
+        }
+        cell.border = {
+          ...(opts.topBorder ? { top: { style: opts.topBorder, color: { argb: bHex } } } : {}),
+          ...(opts.bottomBorder ? { bottom: { style: opts.bottomBorder, color: { argb: bHex } } } : {})
+        };
+      }
+      row.getCell(1).font = {
+        name: FONT_NAME,
+        size: opts.bold ? 10 : 9.5,
+        bold: !!opts.bold,
+        color: { argb: opts.textHex || 'FF1F2937' }
+      };
+      row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: opts.indent ?? 2 };
+
+      styleNumericCell(row.getCell(2), f.thisMonth, { bold: opts.bold, currency: opts.currency, color: opts.textHex });
+      styleNumericCell(row.getCell(3), f.sameMonthLastYear, { bold: opts.bold, currency: opts.currency, color: opts.textHex });
+      styleNumericCell(row.getCell(4), f.variance, { bold: opts.bold, currency: opts.currency, isVariance: true });
+    };
+
+    const addPartToSheet = (
+      partTitle: string,
+      sections: FsSection[],
+      totalLabel: string,
+      totalFig: Figures,
+      theme: { bannerFill: string; bannerText: string; secFill: string; secText: string; totalFill: string; totalBorder: string }
+    ) => {
+      addPartBanner(partTitle, theme.bannerFill, theme.bannerText);
       sections.forEach(sec => {
-        rows.push({
-          'Account Title': `  [${sec.title.toUpperCase()}]`,
-          [currentColumnLabel]: '',
-          [previousColumnLabel]: '',
-          [varianceColumnLabel]: ''
-        });
-
+        addSectionHeader(sec.title.toUpperCase(), theme.secFill, theme.secText);
         sec.groups.forEach(g => {
-          if (g.title) {
-            rows.push({
-              'Account Title': `    ${g.title.toUpperCase()}`,
-              [currentColumnLabel]: '',
-              [previousColumnLabel]: '',
-              [varianceColumnLabel]: ''
-            });
-          }
-
+          const hasGroupTitle = Boolean(g.title);
+          if (hasGroupTitle) addGroupHeader(g.title);
           g.lines.forEach(l => {
             if (!isLineVisible(l, true)) return;
-            const f = lineFigures(l);
-            rows.push({
-              'Account Title': `      ${l.title}`,
-              [currentColumnLabel]: f.thisMonth,
-              [previousColumnLabel]: f.sameMonthLastYear,
-              [varianceColumnLabel]: f.variance
+            addDataRow(l.title, lineFigures(l), {
+              indent: hasGroupTitle ? 3 : 2,
+              bottomBorder: 'hair',
+              borderHex: 'FFE5E7EB'
             });
           });
-
           if (g.total_label) {
-            const gf = groupFigures(g);
-            rows.push({
-              'Account Title': `    ${g.total_label}`,
-              [currentColumnLabel]: gf.thisMonth,
-              [previousColumnLabel]: gf.sameMonthLastYear,
-              [varianceColumnLabel]: gf.variance
+            addDataRow(g.total_label, groupFigures(g), {
+              indent: 2,
+              bold: true,
+              fillHex: 'FFF9FAFB',
+              topBorder: 'thin',
+              bottomBorder: 'thin',
+              borderHex: 'FF9CA3AF'
             });
           }
         });
-
-        const sf = sectionFigures(sec);
-        rows.push({
-          'Account Title': `  ${sec.total_label}`,
-          [currentColumnLabel]: sf.thisMonth,
-          [previousColumnLabel]: sf.sameMonthLastYear,
-          [varianceColumnLabel]: sf.variance
+        addDataRow(sec.total_label, sectionFigures(sec), {
+          indent: 1,
+          bold: true,
+          fillHex: 'FFF3F4F6',
+          topBorder: 'thin',
+          bottomBorder: 'thin',
+          borderHex: 'FF6B7280',
+          height: 20
         });
+        ws.addRow([]).height = 6;
       });
 
-      rows.push({
-        'Account Title': totalLabel,
-        [currentColumnLabel]: totalFig.thisMonth,
-        [previousColumnLabel]: totalFig.sameMonthLastYear,
-        [varianceColumnLabel]: totalFig.variance
+      addDataRow(totalLabel, totalFig, {
+        indent: 1,
+        bold: true,
+        fillHex: theme.totalFill,
+        topBorder: 'thin',
+        bottomBorder: 'double',
+        borderHex: theme.totalBorder,
+        currency: true,
+        textHex: theme.bannerText,
+        height: 22
       });
-      rows.push({ 'Account Title': '', [currentColumnLabel]: '', [previousColumnLabel]: '', [varianceColumnLabel]: '' });
+      ws.addRow([]).height = 10;
     };
 
     if (totals) {
-      addSectionToRows('PART A: ASSETS', data.statement.assets, 'TOTAL : ASSETS', totals.assets);
-      addSectionToRows('PART B: LIABILITIES', data.statement.liabilities, 'TOTAL : LIABILITIES', totals.liabilities);
-      addSectionToRows('PART C: EQUITY', data.statement.equity, 'TOTAL : EQUITY', totals.equity);
-
-      rows.push({
-        'Account Title': 'TOTAL : LIABILITIES & EQUITY',
-        [currentColumnLabel]: totals.liabAndEquity.thisMonth,
-        [previousColumnLabel]: totals.liabAndEquity.sameMonthLastYear,
-        [varianceColumnLabel]: totals.liabAndEquity.variance
+      addPartToSheet('PART A — ASSETS', data.statement.assets, 'TOTAL: ASSETS', totals.assets, {
+        bannerFill: 'FFD1FAE5',
+        bannerText: 'FF064E3B',
+        secFill: 'FFECFDF5',
+        secText: 'FF065F46',
+        totalFill: 'FFECFDF5',
+        totalBorder: 'FF064E3B'
       });
 
-      rows.push({
-        'Account Title': 'VARIANCE ASSETS VS LIABILITIES',
-        [currentColumnLabel]: totals.balanceVariance.thisMonth,
-        [previousColumnLabel]: totals.balanceVariance.sameMonthLastYear,
-        [varianceColumnLabel]: totals.balanceVariance.variance
+      addPartToSheet('PART B — LIABILITIES', data.statement.liabilities, 'TOTAL: LIABILITIES', totals.liabilities, {
+        bannerFill: 'FFFEF3C7',
+        bannerText: 'FF92400E',
+        secFill: 'FFFFFBEB',
+        secText: 'FF92400E',
+        totalFill: 'FFFEF3C7',
+        totalBorder: 'FF92400E'
+      });
+
+      addPartToSheet('PART C — EQUITY', data.statement.equity, 'TOTAL: EQUITY', totals.equity, {
+        bannerFill: 'FFDBEAFE',
+        bannerText: 'FF1E40AF',
+        secFill: 'FFEFF6FF',
+        secText: 'FF1E3A8A',
+        totalFill: 'FFEFF6FF',
+        totalBorder: 'FF1E40AF'
+      });
+
+      addDataRow('TOTAL: LIABILITIES & EQUITY', totals.liabAndEquity, {
+        indent: 1,
+        bold: true,
+        fillHex: 'FFD1FAE5',
+        topBorder: 'thin',
+        bottomBorder: 'double',
+        borderHex: 'FF064E3B',
+        currency: true,
+        textHex: 'FF064E3B',
+        height: 24
+      });
+
+      const isBalanced = Math.abs(totals.balanceVariance.thisMonth) < 0.01;
+      addDataRow('ACCOUNTING BALANCE VARIANCE (ASSETS − LIABILITIES & EQUITY)', totals.balanceVariance, {
+        indent: 1,
+        bold: true,
+        fillHex: isBalanced ? 'FFECFDF5' : 'FFFFF1F2',
+        topBorder: 'thin',
+        bottomBorder: 'thin',
+        borderHex: isBalanced ? 'FF047857' : 'FFBE123C',
+        currency: true,
+        textHex: isBalanced ? 'FF047857' : 'FFBE123C',
+        height: 20
       });
     }
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Balance Sheet');
-    const filename = `Coop_Balance_Sheet_${year}_${isYtd ? 'YTD' : MONTHS_SHORT[selectedPeriod as number]}.xlsx`;
-    XLSX.writeFile(wb, filename);
+    // Footer
+    ws.addRow([]).height = 10;
+    const footer = ws.addRow([
+      `Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}  •  University of Cebu-METC Multipurpose Cooperative`
+    ]);
+    ws.mergeCells(footer.number, 1, footer.number, 4);
+    footer.getCell(1).font = { name: FONT_NAME, size: 8.5, italic: true, color: { argb: 'FF6B7280' } };
+    footer.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Balance_Sheet_${year}_${isYtd ? 'YTD' : MONTHS_SHORT[selectedPeriod as number]}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handlePrint = () => {
