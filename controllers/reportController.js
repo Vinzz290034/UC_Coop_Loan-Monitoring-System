@@ -4693,11 +4693,10 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       return null;
     };
 
-    // Made-to-order uniforms (Type A & B, Gala, BSNAME) are treated as Services when not store merchandise accessories/shoes or explicit Merchandise Inventory stock
+    // Made-to-order uniforms (Type A & B, Gala, BSNAME) are treated as Services when not store merchandise accessories/shoes
     const getMadeToOrderServiceCostAccount = (acc, particulars = '', _cat = '', _mIdx = 0) => {
       const combined = `${acc} ${particulars || ''}`;
       if (/shoe|accessor|accesor|pe\s*short|pe\s*shirt|pe\s*pant|trunk|lanyard|id\s*case|glove/i.test(combined)) return null;
-      if (/^merchandise\s*inventory/i.test(acc)) return null;
       const matchTarget = (s) => {
         if (/bsname/i.test(s)) return 'COS - BSNAME';
         if (/\bgala\b/i.test(s)) return 'COS - Gala';
