@@ -2052,6 +2052,69 @@ export const updateCalamityStatus = async (req, res, next) => {
   }
 };
 
+// @desc    Get Loan Tracker table editing lock status
+// @route   GET /api/loans/table-edit-status
+// @access  Protected (All logged in users)
+export const getTableEditStatus = async (req, res, next) => {
+  try {
+    const result = await query(
+      "SELECT setting_value FROM system_settings WHERE setting_key = 'loan_tracker_table_edit_unlocked'"
+    );
+    const isUnlocked = result.rowCount > 0 && result.rows[0].setting_value === 'true';
+    res.status(200).json({
+      success: true,
+      is_table_edit_unlocked: isUnlocked
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update Loan Tracker table editing lock status (shared across Admin & Staff)
+// @route   PATCH /api/loans/table-edit-status
+// @access  Protected (Admin only)
+export const updateTableEditStatus = async (req, res, next) => {
+  try {
+    const { is_table_edit_unlocked } = req.body;
+    const valueStr = is_table_edit_unlocked ? 'true' : 'false';
+
+    await query(
+      `INSERT INTO system_settings (setting_key, setting_value, updated_at)
+       VALUES ('loan_tracker_table_edit_unlocked', $1, CURRENT_TIMESTAMP)
+       ON CONFLICT (setting_key) DO UPDATE SET setting_value = $1, updated_at = CURRENT_TIMESTAMP`,
+      [valueStr]
+    );
+
+    if (req.user) {
+      await query(
+        `INSERT INTO audit_logs (user_id, username, action, module, method, endpoint, status_code, status, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          req.user.id,
+          req.user.username || req.user.email || 'system_user',
+          'UPDATE_TABLE_EDIT_STATUS',
+          'LOANS',
+          'PATCH',
+          '/api/loans/table-edit-status',
+          200,
+          'success',
+          JSON.stringify({ is_table_edit_unlocked: Boolean(is_table_edit_unlocked) })
+        ]
+      ).catch((auditErr) => {
+        console.warn('Failed to insert table edit status audit log:', auditErr.message);
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      is_table_edit_unlocked: Boolean(is_table_edit_unlocked),
+      message: `Loan Tracker table editing ${is_table_edit_unlocked ? 'enabled' : 'locked'} for Admin and Staff.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Update or assign LAF number for a loan (Admin/Staff only)
 // @route   PATCH /api/loans/:id/laf-no
 // @access  Protected (Admin, Staff)

@@ -1643,8 +1643,8 @@ function LoansPageContent() {
   }, [tableDropdownState]);
 
   const handleQuickUpdateLoan = async (loanId: number | string, fields: { account_classification?: string; purpose?: string; payment_mode?: string; remarks?: string }) => {
-    if (!isAdmin) {
-      console.warn('Unauthorized: In-table editing is restricted to administrators.');
+    if (!isAdminOrManager) {
+      console.warn('Unauthorized: In-table editing is restricted to administrators and staff.');
       return;
     }
     try {
@@ -1670,7 +1670,7 @@ function LoansPageContent() {
   const [remarksSubmitting, setRemarksSubmitting] = useState<boolean>(false);
 
   const handleOpenRemarksModal = (loan: Loan, e?: React.MouseEvent) => {
-    if (!isAdmin) return;
+    if (!isAdminOrManager) return;
     if (e) e.stopPropagation();
     setRemarksModalLoan(loan);
     setRemarksInputVal(loan.remarks || '');
@@ -2655,6 +2655,27 @@ function LoansPageContent() {
     }
   }, []);
 
+  const fetchTableEditStatus = useCallback(async () => {
+    try {
+      const response = await api.get('/loans/table-edit-status');
+      setIsTableEditLocked(!Boolean(response.data?.is_table_edit_unlocked));
+    } catch (err) {
+      console.error('Error fetching table edit status:', err);
+    }
+  }, []);
+
+  const handleToggleTableEditLock = async () => {
+    if (!isAdmin) return;
+    const nextUnlocked = isTableEditLocked;
+    setIsTableEditLocked(!nextUnlocked);
+    try {
+      await api.patch('/loans/table-edit-status', { is_table_edit_unlocked: nextUnlocked });
+    } catch (err: any) {
+      setIsTableEditLocked(nextUnlocked);
+      showDialog('Update Failed', err.response?.data?.message || 'Failed to update table editing status.', 'error');
+    }
+  };
+
   const handleToggleCalamityStatus = async (newStatus: boolean) => {
     try {
       await api.patch('/loans/calamity-status', { is_calamity_declared: newStatus });
@@ -2678,8 +2699,9 @@ function LoansPageContent() {
     fetchCalamityStatus();
     if (isAdminOrManager) {
       fetchMembersList();
+      fetchTableEditStatus();
     }
-  }, [fetchLoans, fetchProducts, fetchMetrics, fetchCalamityStatus, isAdminOrManager]);
+  }, [fetchLoans, fetchProducts, fetchMetrics, fetchCalamityStatus, fetchTableEditStatus, isAdminOrManager]);
 
   // Load selected member's CBU / financial summary reactively to enforce progressive limit & co-maker triggers
   useEffect(() => {
@@ -3184,7 +3206,7 @@ function LoansPageContent() {
   };
 
   const handleOpenLafModal = async (loan: any, e?: React.MouseEvent) => {
-    if (!isAdmin) return;
+    if (!isAdminOrManager) return;
     if (e) e.stopPropagation();
     setLafModalLoan(loan);
     setLafModalError(null);
@@ -3902,16 +3924,16 @@ function LoansPageContent() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {isAdmin && (
+                        {isAdmin ? (
                           <button
                             type="button"
-                            onClick={() => setIsTableEditLocked(prev => !prev)}
+                            onClick={handleToggleTableEditLock}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-2xl border transition-all cursor-pointer shadow-2xs active:scale-95 ${
                               isTableEditLocked
                                 ? 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 border-outline-variant/60'
                                 : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 dark:text-amber-200 border-amber-500/40 ring-1 ring-amber-500/30'
                             }`}
-                            title={isTableEditLocked ? 'Click to unlock in-table quick editing for Account, Purpose, Mode, LAF No, and Remarks' : 'Click to lock table and prevent accidental edits'}
+                            title={isTableEditLocked ? 'Click to unlock in-table quick editing for Admin and Staff' : 'Click to lock table and prevent accidental edits'}
                           >
                             {isTableEditLocked ? (
                               <>
@@ -3925,7 +3947,12 @@ function LoansPageContent() {
                               </>
                             )}
                           </button>
-                        )}
+                        ) : isAdminOrManager && !isTableEditLocked ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-2xl border bg-amber-500/15 text-amber-900 dark:text-amber-200 border-amber-500/40 ring-1 ring-amber-500/30">
+                            <Unlock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            <span>Editing Enabled</span>
+                          </span>
+                        ) : null}
 
                         <button
                           type="button"
@@ -4089,7 +4116,7 @@ function LoansPageContent() {
                                           ) : (
                                             <span className="text-neutral-400 dark:text-neutral-500 font-sans text-[10px]">—</span>
                                           )}
-                                          {isAdmin && !isTableEditLocked && (
+                                          {isAdminOrManager && !isTableEditLocked && (
                                             <button
                                               type="button"
                                               onClick={(e) => handleOpenLafModal(loan, e)}
@@ -4109,7 +4136,7 @@ function LoansPageContent() {
 
                                       {/* 3. Account */}
                                       <td className="px-1 py-2 text-center whitespace-nowrap">
-                                        {isAdmin && !isTableEditLocked ? (
+                                        {isAdminOrManager && !isTableEditLocked ? (
                                           <div className="relative inline-flex items-center justify-center">
                                             <button
                                               type="button"
@@ -4156,7 +4183,7 @@ function LoansPageContent() {
 
                                       {/* 5. Purpose */}
                                       <td className="px-1 py-2 text-center whitespace-nowrap">
-                                        {isAdmin && !isTableEditLocked ? (
+                                        {isAdminOrManager && !isTableEditLocked ? (
                                           <div className="relative inline-flex items-center justify-center max-w-[110px]">
                                             <button
                                               type="button"
@@ -4213,7 +4240,7 @@ function LoansPageContent() {
 
                                       {/* 9. Mode */}
                                       <td className="px-1 py-2 text-center whitespace-nowrap">
-                                        {isAdmin && !isTableEditLocked ? (
+                                        {isAdminOrManager && !isTableEditLocked ? (
                                           <div className="relative inline-flex items-center justify-center">
                                             <button
                                               type="button"
@@ -4304,7 +4331,7 @@ function LoansPageContent() {
                                               <span className="text-neutral-400 dark:text-neutral-500 italic">—</span>
                                             )}
                                           </span>
-                                          {isAdmin && !isTableEditLocked && (
+                                          {isAdminOrManager && !isTableEditLocked && (
                                             <button
                                               type="button"
                                               onClick={(e) => handleOpenRemarksModal(loan, e)}
@@ -4544,7 +4571,7 @@ function LoansPageContent() {
                     </div>
 
                     {/* Quick Edit Confirmation Dialog */}
-                    {pendingLoanFieldUpdate && isAdmin && typeof document !== 'undefined' && createPortal(
+                    {pendingLoanFieldUpdate && isAdminOrManager && typeof document !== 'undefined' && createPortal(
                       <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-neutral-950/60 backdrop-blur-xs p-4 animate-modal-backdrop">
                         <div className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl shadow-2xl p-6 max-w-sm w-full space-y-4 animate-modal-pop">
                           <div className="flex items-center gap-3">
@@ -4597,7 +4624,7 @@ function LoansPageContent() {
                     )}
 
                     {/* Animated Floating Dropdown Popover for Table Rows */}
-                    {tableDropdownState && isAdmin && typeof document !== 'undefined' && (() => {
+                    {tableDropdownState && isAdminOrManager && typeof document !== 'undefined' && (() => {
                       const targetLoan = loans.find(l => String(l.id) === String(tableDropdownState.loanId));
                       if (!targetLoan) return null;
 
@@ -4748,7 +4775,7 @@ function LoansPageContent() {
                     })()}
 
                     {/* Custom Purpose Modal (Portaled to document.body for true viewport centering matching other modals) */}
-                    {customPurposeModalLoan && isAdmin && typeof document !== 'undefined' && createPortal(
+                    {customPurposeModalLoan && isAdminOrManager && typeof document !== 'undefined' && createPortal(
                       <div
                         className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop"
                         onClick={() => setCustomPurposeModalLoan(null)}

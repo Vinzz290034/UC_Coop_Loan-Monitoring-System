@@ -16,6 +16,8 @@ import {
   getMyLoanHistory,
   getCalamityStatus,
   updateCalamityStatus,
+  getTableEditStatus,
+  updateTableEditStatus,
   getNextLafNumber,
   updateLoanLafNo,
   updateLoanDetails,
@@ -34,6 +36,10 @@ router.use(protect);
 router.route('/calamity-status')
   .get(getCalamityStatus)
   .patch(restrictTo('admin', 'staff'), updateCalamityStatus);
+
+router.route('/table-edit-status')
+  .get(getTableEditStatus)
+  .patch(restrictTo('admin'), updateTableEditStatus);
 
 router.route('/products')
   .post(restrictTo('admin', 'staff'), createLoanProduct)
@@ -82,7 +88,7 @@ router.route('/')
 
 router.route('/:id')
   .get(getLoanById)
-  .put(restrictTo('admin'), updateLoanDetails)
+  .put(restrictTo('admin', 'staff'), updateLoanDetails)
   .delete(restrictTo('admin'), deleteLoan);
 
 // ==========================================
@@ -95,6 +101,6 @@ router.route('/:id/reject')
   .patch(restrictTo('admin', 'staff'), rejectLoanApplication);
 
 router.route('/:id/laf-no')
-  .patch(restrictTo('admin'), updateLoanLafNo);
+  .patch(restrictTo('admin', 'staff'), updateLoanLafNo);
 
 export default router;
