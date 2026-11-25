@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
-import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 import {
   ChevronDown,
@@ -515,57 +514,324 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
   const toggleSection = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
   // ---- Excel export -------------------------------------------------------
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!data || !totals) return;
-    const rows: (string | number)[][] = [
-      ['UNIVERSITY OF CEBU-METC MULTIPURPOSE COOPERATIVE'],
-      ['INCOME STATEMENT'],
-      [`For the period ended ${periodEndLabel}`],
-      [],
-      ['Account Title', isYtd ? 'Full Year Total' : 'This Month', isYtd ? `Full Year ${year}` : 'YTD This Month', isYtd ? `Full Year ${data.previous_year}` : 'YTD Same Month Last Year', 'YTD Variance']
-    ];
-    const push = (title: string, f: Figures) =>
-      rows.push([title, f.thisMonth, f.ytd, f.lastYtd, f.variance]);
 
-    const exportSections = (sections: SooSection[]) => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'University of Cebu-METC Multipurpose Cooperative';
+    wb.created = new Date();
+
+    const ws = wb.addWorksheet('Income Statement', {
+      views: [{ state: 'frozen', ySplit: 5, showGridLines: false }],
+      pageSetup: {
+        paperSize: 9, // A4
+        orientation: 'portrait',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: { left: 0.45, right: 0.45, top: 0.55, bottom: 0.55, header: 0.25, footer: 0.25 }
+      }
+    });
+
+    ws.columns = [
+      { width: 52 },
+      { width: 19 },
+      { width: 19 },
+      { width: 22 },
+      { width: 19 }
+    ];
+
+    const FONT_NAME = 'Calibri';
+    const NUM_FMT = '#,##0.00;(#,##0.00);"-"';
+    const VAR_FMT = '+#,##0.00;(#,##0.00);"-"';
+    const CURRENCY_FMT = '₱#,##0.00;(₱#,##0.00);"₱0.00"';
+
+    const colHeaders = [
+      'Account Title',
+      isYtd ? 'Full Year Total' : 'This Month',
+      isYtd ? `Full Year ${year}` : 'YTD This Month',
+      isYtd ? `Full Year ${data.previous_year}` : 'YTD Same Month Last Year',
+      'YTD Variance'
+    ];
+
+    // Title block
+    const r1 = ws.addRow(['UNIVERSITY OF CEBU-METC MULTIPURPOSE COOPERATIVE']);
+    ws.mergeCells('A1:E1');
+    r1.height = 24;
+    r1.getCell(1).font = { name: FONT_NAME, size: 14, bold: true, color: { argb: 'FF064E3B' } };
+    r1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const r2 = ws.addRow(['INCOME STATEMENT']);
+    ws.mergeCells('A2:E2');
+    r2.height = 20;
+    r2.getCell(1).font = { name: FONT_NAME, size: 12, bold: true, color: { argb: 'FF111827' } };
+    r2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const r3 = ws.addRow([`For the period ended ${periodEndLabel}`]);
+    ws.mergeCells('A3:E3');
+    r3.height = 18;
+    r3.getCell(1).font = { name: FONT_NAME, size: 10, italic: true, color: { argb: 'FF4B5563' } };
+    r3.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    for (let c = 1; c <= 5; c++) {
+      r3.getCell(c).border = { bottom: { style: 'medium', color: { argb: 'FF064E3B' } } };
+    }
+
+    const r4 = ws.addRow([]);
+    r4.height = 8;
+
+    // Table header row (Row 5)
+    const hdr = ws.addRow(colHeaders);
+    hdr.height = 26;
+    hdr.eachCell((cell, colNumber) => {
+      cell.font = { name: FONT_NAME, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF064E3B' } };
+      cell.alignment = {
+        horizontal: colNumber === 1 ? 'left' : 'right',
+        vertical: 'middle',
+        wrapText: true,
+        indent: colNumber === 1 ? 1 : 0
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF064E3B' } },
+        bottom: { style: 'medium', color: { argb: 'FF064E3B' } }
+      };
+    });
+
+    const styleNumericCell = (
+      cell: import('exceljs').Cell,
+      val: number,
+      opts: { bold?: boolean; currency?: boolean; isVariance?: boolean; isExpense?: boolean; color?: string } = {}
+    ) => {
+      let fgColor = opts.color || 'FF1F2937';
+      if (opts.isVariance && Math.abs(val) >= 0.005) {
+        const good = opts.isExpense ? val < 0 : val > 0;
+        fgColor = good ? 'FF047857' : 'FFBE123C';
+      } else if (opts.isVariance) {
+        fgColor = 'FF9CA3AF';
+      }
+      cell.font = { name: FONT_NAME, size: opts.bold ? 10 : 9.5, bold: !!opts.bold, color: { argb: fgColor } };
+      cell.numFmt = opts.currency ? CURRENCY_FMT : opts.isVariance ? VAR_FMT : NUM_FMT;
+      cell.alignment = { horizontal: 'right', vertical: 'middle' };
+    };
+
+    const addPartBanner = (label: string, fillHex: string, textHex: string) => {
+      const row = ws.addRow([label]);
+      ws.mergeCells(row.number, 1, row.number, 5);
+      row.height = 22;
+      for (let c = 1; c <= 5; c++) {
+        const cell = row.getCell(c);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillHex } };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+        };
+      }
+      row.getCell(1).font = { name: FONT_NAME, size: 10.5, bold: true, color: { argb: textHex } };
+      row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    };
+
+    const addSectionHeader = (label: string, fillHex: string, textHex: string) => {
+      const row = ws.addRow([label]);
+      ws.mergeCells(row.number, 1, row.number, 5);
+      row.height = 19;
+      for (let c = 1; c <= 5; c++) {
+        row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillHex } };
+      }
+      row.getCell(1).font = { name: FONT_NAME, size: 10, bold: true, color: { argb: textHex } };
+      row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    };
+
+    const addGroupHeader = (label: string) => {
+      const row = ws.addRow([label]);
+      ws.mergeCells(row.number, 1, row.number, 5);
+      row.height = 17;
+      row.getCell(1).font = { name: FONT_NAME, size: 9.5, bold: true, italic: true, color: { argb: 'FF374151' } };
+      row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: 2 };
+    };
+
+    const addDataRow = (
+      title: string,
+      f: Figures,
+      opts: {
+        indent?: number;
+        bold?: boolean;
+        fillHex?: string;
+        topBorder?: 'thin';
+        bottomBorder?: 'thin' | 'double' | 'hair';
+        borderHex?: string;
+        currency?: boolean;
+        isExpense?: boolean;
+        textHex?: string;
+        height?: number;
+      } = {}
+    ) => {
+      const row = ws.addRow([title, f.thisMonth, f.ytd, f.lastYtd, f.variance]);
+      row.height = opts.height || 18;
+      const bHex = opts.borderHex || 'FFE5E7EB';
+      for (let c = 1; c <= 5; c++) {
+        const cell = row.getCell(c);
+        if (opts.fillHex) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.fillHex } };
+        }
+        cell.border = {
+          ...(opts.topBorder ? { top: { style: opts.topBorder, color: { argb: bHex } } } : {}),
+          ...(opts.bottomBorder ? { bottom: { style: opts.bottomBorder, color: { argb: bHex } } } : {})
+        };
+      }
+      row.getCell(1).font = {
+        name: FONT_NAME,
+        size: opts.bold ? 10 : 9.5,
+        bold: !!opts.bold,
+        color: { argb: opts.textHex || 'FF1F2937' }
+      };
+      row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle', indent: opts.indent ?? 2 };
+
+      styleNumericCell(row.getCell(2), f.thisMonth, { bold: opts.bold, currency: opts.currency, color: opts.textHex });
+      styleNumericCell(row.getCell(3), f.ytd, { bold: opts.bold, currency: opts.currency, color: opts.textHex });
+      styleNumericCell(row.getCell(4), f.lastYtd, { bold: opts.bold, currency: opts.currency, color: opts.textHex });
+      styleNumericCell(row.getCell(5), f.variance, { bold: opts.bold, currency: opts.currency, isVariance: true, isExpense: opts.isExpense });
+    };
+
+    const exportSections = (
+      sections: SooSection[],
+      theme: { secFill: string; secText: string; isExpense?: boolean }
+    ) => {
       sections.forEach(s => {
-        rows.push([s.title.toUpperCase()]);
+        addSectionHeader(s.title.toUpperCase(), theme.secFill, theme.secText);
         s.groups.forEach(g => {
-          if (s.groups.length > 1) rows.push([g.title]);
-          g.lines.filter(l => isLineVisible(l, true)).forEach(l => push(l.title, lineFigures(l)));
-          if (g.total_label) push(g.total_label, groupFigures(g));
+          const multiGroup = s.groups.length > 1;
+          if (multiGroup) addGroupHeader(g.title);
+          g.lines
+            .filter(l => isLineVisible(l, true))
+            .forEach(l =>
+              addDataRow(l.title, lineFigures(l), {
+                indent: multiGroup ? 3 : 2,
+                bottomBorder: 'hair',
+                borderHex: 'FFE5E7EB',
+                isExpense: theme.isExpense
+              })
+            );
+          if (g.total_label) {
+            addDataRow(g.total_label, groupFigures(g), {
+              indent: 2,
+              bold: true,
+              fillHex: 'FFF9FAFB',
+              topBorder: 'thin',
+              bottomBorder: 'thin',
+              borderHex: 'FF9CA3AF',
+              isExpense: theme.isExpense
+            });
+          }
         });
-        push(s.total_label, sectionFigures(s));
-        rows.push([]);
+        addDataRow(s.total_label, sectionFigures(s), {
+          indent: 1,
+          bold: true,
+          fillHex: 'FFF3F4F6',
+          topBorder: 'thin',
+          bottomBorder: 'thin',
+          borderHex: 'FF6B7280',
+          isExpense: theme.isExpense,
+          height: 20
+        });
+        ws.addRow([]).height = 6;
       });
     };
 
-    rows.push(['REVENUES']);
-    exportSections(data.statement.revenues);
-    push('TOTAL: REVENUES', totals.revenue);
-    rows.push([]);
-    rows.push(['EXPENSES']);
-    exportSections(data.statement.expenses);
-    push('TOTAL: EXPENSES', totals.expenses);
-    rows.push([]);
-    push('NET SURPLUS BEFORE OTHER ITEMS', totals.net);
-    push('TOTAL NET SURPLUS', totals.net);
+    // Part A: Revenues
+    addPartBanner('PART A — REVENUES', 'FFD1FAE5', 'FF064E3B');
+    exportSections(data.statement.revenues, { secFill: 'FFECFDF5', secText: 'FF065F46', isExpense: false });
+    addDataRow('TOTAL: REVENUES', totals.revenue, {
+      indent: 1,
+      bold: true,
+      fillHex: 'FFECFDF5',
+      topBorder: 'thin',
+      bottomBorder: 'double',
+      borderHex: 'FF064E3B',
+      currency: true,
+      textHex: 'FF064E3B',
+      height: 22
+    });
+    ws.addRow([]).height = 10;
+
+    // Part B: Expenses
+    addPartBanner('PART B — EXPENSES', 'FFFEF3C7', 'FF92400E');
+    exportSections(data.statement.expenses, { secFill: 'FFFFFBEB', secText: 'FF92400E', isExpense: true });
+    addDataRow('TOTAL: EXPENSES', totals.expenses, {
+      indent: 1,
+      bold: true,
+      fillHex: 'FFFEF3C7',
+      topBorder: 'thin',
+      bottomBorder: 'double',
+      borderHex: 'FF92400E',
+      currency: true,
+      isExpense: true,
+      textHex: 'FF92400E',
+      height: 22
+    });
+    ws.addRow([]).height = 10;
+
+    // Net Surplus
+    addDataRow('NET SURPLUS BEFORE OTHER ITEMS', totals.net, {
+      indent: 1,
+      bold: true,
+      fillHex: 'FFF9FAFB',
+      topBorder: 'thin',
+      bottomBorder: 'thin',
+      borderHex: 'FF9CA3AF',
+      currency: true,
+      height: 20
+    });
+    addDataRow('TOTAL NET SURPLUS', totals.net, {
+      indent: 1,
+      bold: true,
+      fillHex: 'FFD1FAE5',
+      topBorder: 'thin',
+      bottomBorder: 'double',
+      borderHex: 'FF064E3B',
+      currency: true,
+      textHex: 'FF064E3B',
+      height: 24
+    });
 
     if (data.statement.loan_repayments && data.statement.loan_repayments.length > 0) {
-      rows.push([]);
-      rows.push(['LOAN PRINCIPAL REPAYMENTS (NON-REVENUE CASH INFLOWS)']);
-      exportSections(data.statement.loan_repayments);
-      push('TOTAL: LOAN PRINCIPAL REPAYMENTS', repaymentTotals);
+      ws.addRow([]).height = 10;
+      addPartBanner('LOAN PRINCIPAL REPAYMENTS (NON-REVENUE CASH INFLOWS)', 'FFE2E8F0', 'FF1E293B');
+      exportSections(data.statement.loan_repayments, { secFill: 'FFF8FAFC', secText: 'FF334155', isExpense: false });
+      addDataRow('TOTAL: LOAN PRINCIPAL REPAYMENTS', repaymentTotals, {
+        indent: 1,
+        bold: true,
+        fillHex: 'FFF1F5F9',
+        topBorder: 'thin',
+        bottomBorder: 'double',
+        borderHex: 'FF334155',
+        currency: true,
+        textHex: 'FF1E293B',
+        height: 22
+      });
     }
 
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch: 50 }, { wch: 18 }, { wch: 18 }, { wch: 26 }, { wch: 18 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Income Statement');
-    const fileName = isYtd
-      ? `Statement_of_Operations_Full_Year_${year}.xlsx`
-      : `Statement_of_Operations_${MONTHS[selectedPeriod as number]}_${year}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    // Footer
+    ws.addRow([]).height = 10;
+    const footer = ws.addRow([
+      `Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}  •  University of Cebu-METC Multipurpose Cooperative`
+    ]);
+    ws.mergeCells(footer.number, 1, footer.number, 5);
+    footer.getCell(1).font = { name: FONT_NAME, size: 8.5, italic: true, color: { argb: 'FF6B7280' } };
+    footer.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = isYtd
+      ? `Income_Statement_Full_Year_${year}.xlsx`
+      : `Income_Statement_${MONTHS[selectedPeriod as number]}_${year}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // ---- Small render helpers ----------------------------------------------
