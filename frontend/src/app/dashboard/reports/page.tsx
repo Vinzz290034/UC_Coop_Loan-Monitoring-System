@@ -1532,7 +1532,7 @@ function ReportsPageContent() {
           { id: 'categories', label: 'Book of Accounts', icon: FolderTree },
           { id: 'loans', label: 'Loan Products', icon: CreditCard },
           { id: 'membership', label: 'Membership Updates', icon: Users },
-          { id: 'statement_of_operations', label: 'Statement of Operations', icon: FileText },
+          { id: 'statement_of_operations', label: 'Income Statement', icon: FileText },
           { id: 'financial_statement', label: 'Balance Sheet', icon: Scale },
         ].map((tab) => {
           const Icon = tab.icon;

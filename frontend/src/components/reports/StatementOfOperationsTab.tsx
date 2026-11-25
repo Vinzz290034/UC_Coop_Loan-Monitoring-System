@@ -410,7 +410,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
       setData(res.data);
     } catch (err: any) {
       console.error('Failed to load Statement of Operations:', err);
-      setError(err.response?.data?.message || 'Failed to load the Statement of Operations.');
+      setError(err.response?.data?.message || 'Failed to load the Income Statement.');
     } finally {
       setLoading(false);
     }
@@ -519,7 +519,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     if (!data || !totals) return;
     const rows: (string | number)[][] = [
       ['UNIVERSITY OF CEBU-METC MULTIPURPOSE COOPERATIVE'],
-      ['STATEMENT OF OPERATIONS'],
+      ['INCOME STATEMENT'],
       [`For the period ended ${periodEndLabel}`],
       [],
       ['Account Title', isYtd ? 'Full Year Total' : 'This Month', isYtd ? `Full Year ${year}` : 'YTD This Month', isYtd ? `Full Year ${data.previous_year}` : 'YTD Same Month Last Year', 'YTD Variance']
@@ -561,7 +561,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [{ wch: 50 }, { wch: 18 }, { wch: 18 }, { wch: 26 }, { wch: 18 }];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Statement of Operations');
+    XLSX.utils.book_append_sheet(wb, ws, 'Income Statement');
     const fileName = isYtd
       ? `Statement_of_Operations_Full_Year_${year}.xlsx`
       : `Statement_of_Operations_${MONTHS[selectedPeriod as number]}_${year}.xlsx`;
@@ -800,7 +800,7 @@ export default function StatementOfOperationsTab({ initialYear, initialMonth }: 
             <div className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
               University of Cebu-METC Multipurpose Cooperative
             </div>
-            <h2 className="text-xl font-black text-neutral-900 dark:text-white">Statement of Operations</h2>
+            <h2 className="text-xl font-black text-neutral-900 dark:text-white">Income Statement</h2>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
               For the period ended <span className="font-bold text-neutral-800 dark:text-neutral-200">{periodEndLabel}</span>
               {' '}— shows how much the cooperative <b>earned</b>, how much it <b>spent</b>, and what was <b>left over</b>.

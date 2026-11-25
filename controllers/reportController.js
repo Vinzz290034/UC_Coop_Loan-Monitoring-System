@@ -4067,7 +4067,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     const prevYear = targetYear - 1;
     const zeros = () => Array(12).fill(0);
 
-    const [loanCur, loanPrev, expCur, expPrev, merchCur, merchPrev, colResult, cvResult] = await Promise.all([
+    const [loanCur, loanPrev, expCur, expPrev, merchCur, merchPrev, colResult, cvResult, catalogResult] = await Promise.all([
       runReportInternally(getLoanProductsReport, { period: 'annual', year: String(targetYear) }),
       runReportInternally(getLoanProductsReport, { period: 'annual', year: String(prevYear) }),
       runReportInternally(getExpensesBreakdownReport, { period: 'annual', year: String(targetYear) }),
@@ -4090,8 +4090,36 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           OR CAST(details AS TEXT) ILIKE '%cisp%'
           OR CAST(details AS TEXT) ILIKE '%insurance%'
         )
-      `)
+      `),
+      pool.query(`
+        SELECT item_name, description, size, cost_price, selling_price
+        FROM merchandise_catalog
+        WHERE COALESCE(cost_price, 0) > 0
+      `).catch(() => ({ rows: [] }))
     ]);
+
+    const catalogCostMap = new Map();
+    (catalogResult?.rows || []).forEach(c => {
+      const cpVal = parseFloat(c.cost_price) || 0;
+      if (cpVal <= 0) return;
+      const n = String(c.item_name || '').trim().toLowerCase();
+      const d = String(c.description || '').trim().toLowerCase();
+      const s = String(c.size || '').trim().toLowerCase();
+      if (n && d && s) catalogCostMap.set(`${n}|${d}|${s}`, cpVal);
+      if (n && s && !catalogCostMap.has(`${n}||${s}`)) catalogCostMap.set(`${n}||${s}`, cpVal);
+      if (n && !catalogCostMap.has(`${n}||`)) catalogCostMap.set(`${n}||`, cpVal);
+    });
+    const lookupCatalogCost = (name, desc, size) => {
+      const n = String(name || '').trim().toLowerCase();
+      const d = String(desc || '').trim().toLowerCase();
+      const s = String(size || '').trim().toLowerCase();
+      return (
+        catalogCostMap.get(`${n}|${d}|${s}`) ||
+        catalogCostMap.get(`${n}||${s}`) ||
+        catalogCostMap.get(`${n}||`) ||
+        0
+      );
+    };
 
     // Helper: put an amount in the right [year][month] bucket and collect transaction records
     const newStore = () => ({ current: zeros(), previous: zeros(), transactions: [] });
@@ -4313,7 +4341,7 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
         [/^cap\s*devices?$/i, 'Cap Device'],
         [/^class\s*bars?$/i, 'Class Bar'],
         [/^buckles?\s*(&|and)\s*belts?$/i, 'Buckle & Belt'],
-        [/^type\s*a\s*(&|and)\s*b$/i, 'Type A & B'],
+        [/^t\s*y\s*[o]?e\s*a\s*(&|and)\s*b$/i, 'Type A & B'],
         [/^type\s*c$/i, 'Type C'],
         [/^p\.?\s*e\.?(\s*uniforms?)?$/i, 'PE Uniform'],
         [/^lanyards?$/i, 'Lanyard'],
@@ -4517,15 +4545,17 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
           const isSvc =
             String(it.item_type || '').toLowerCase() === 'service' ||
             (!hasPositiveCost &&
-              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|printing|hardbound|gnomonic(\s*chart)?|lamination|id\s*photo|notarial|scoresheet|toga|alteration|service)/i.test(itName));
+              /^(wifi|water|gcash|bonggo|locker(\s*deposit)?|key\s*duplicate|photocopy|print(?:ing)?|hardbound|gnomonic(\s*chart)?|lamination|(?:id\s*photo|photo\s*id)(?:\s*2x2)?|2x2|notarial|scoresheet|toga|alteration|service)/i.test(itName));
           const q = parseFloat(String(it.quantity)) || 1;
           const sp = parseFloat(String(it.selling_price || it.unit_price || 0)) || 0;
-          const cp = parseFloat(String(it.cost_price || 0)) || 0;
+          const rawCp = parseFloat(String(it.cost_price || 0)) || 0;
+          const cp = rawCp > 0 ? rawCp : lookupCatalogCost(itName, it.description, it.size);
           const rev = parseFloat(String(it.revenue)) || (q * sp) || 0;
+          const savedProfit = parseFloat(String(it.gross_profit));
           const profit =
-            it.gross_profit !== undefined && it.gross_profit !== null && it.gross_profit !== ''
-              ? (parseFloat(String(it.gross_profit)) || 0)
-              : (rev - (q * cp));
+            rawCp > 0 && it.gross_profit !== undefined && it.gross_profit !== null && it.gross_profit !== '' && !Number.isNaN(savedProfit)
+              ? savedProfit
+              : Math.max(0, rev - (q * cp));
           if (isSvc) {
             if (rev > 0) {
               hasSvc = true;
