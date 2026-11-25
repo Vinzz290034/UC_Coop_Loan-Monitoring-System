@@ -4898,11 +4898,15 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               total_label: null,
               lines: [
                 ...Array.from(merchItemMap.values())
+                  .filter(m =>
+                    m.store.current.some(v => Math.abs(v) > 0.004) ||
+                    m.store.previous.some(v => Math.abs(v) > 0.004)
+                  )
                   .sort((a, b) => a.label.localeCompare(b.label))
                   .map(m =>
-                    line('', `Income from ${m.label}`, `${m.category} — net profit (selling price minus cost) from ${m.label} sales.`, m.store, true)
+                    line('', `Income from ${m.label}`, `${m.category} — net profit (selling price minus cost) from ${m.label} sales.`, m.store, false)
                   ),
-                line('', 'Store Merchandise / Uniform Sales (General / Daily Batches)', 'Daily over-the-counter store merchandise & uniform batch sales.', merchSales, true),
+                line('', 'Store Merchandise / Uniform Sales (General / Daily Batches)', 'Daily over-the-counter store merchandise & uniform batch sales.', merchSales, false),
                 line('', 'Rice Sales', 'Rice sold to members.', riceSales, true),
                 line('', 'Laundry Soap Sales', 'Laundry soap sold to members.', soapSales, true)
               ]
