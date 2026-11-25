@@ -4693,11 +4693,11 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
       return null;
     };
 
-    // Made-to-order uniforms (Type A & B, Gala, BSNAME) are treated as Services when not store merchandise accessories/shoes or bulk Merchandise Inventory restocking
-    const getMadeToOrderServiceCostAccount = (acc, particulars = '', cat = '', mIdx = 0) => {
+    // Made-to-order uniforms (Type A & B, Gala, BSNAME) are treated as Services when not store merchandise accessories/shoes or explicit Merchandise Inventory stock
+    const getMadeToOrderServiceCostAccount = (acc, particulars = '', _cat = '', _mIdx = 0) => {
       const combined = `${acc} ${particulars || ''}`;
       if (/shoe|accessor|accesor|pe\s*short|pe\s*shirt|pe\s*pant|trunk|lanyard|id\s*case|glove/i.test(combined)) return null;
-      if (mIdx >= 2 && (cat === 'Merchandise Expense' || /merchandise\s*inventory|\bpayment\s*(for|of|or)\b/i.test(acc))) return null;
+      if (/^merchandise\s*inventory/i.test(acc)) return null;
       const matchTarget = (s) => {
         if (/bsname/i.test(s)) return 'COS - BSNAME';
         if (/\bgala\b/i.test(s)) return 'COS - Gala';
@@ -4976,12 +4976,13 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
               total_label: null,
               lines: [
                 ...Object.entries({
+                  'COS - BSNAME': newStore(),
                   'COS - Key Duplicate': newStore(),
                   'COS - Locker': newStore(),
                   ...costOfSales
                 })
                   .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, acc === 'COS - Locker' || acc === 'COS - Key Duplicate'))
+                  .map(([acc, store]) => line('', acc, 'Direct cost recorded in Disbursements.', store, acc === 'COS - Locker' || acc === 'COS - Key Duplicate' || acc === 'COS - BSNAME'))
               ]
             }
           ]
