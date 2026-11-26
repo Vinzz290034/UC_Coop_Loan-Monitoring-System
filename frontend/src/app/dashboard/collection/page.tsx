@@ -2550,8 +2550,9 @@ function CollectionPageContent() {
         ...(nextStatus ? { status: nextStatus } : {})
       });
       const updatedConfirm = res.data?.data?.deposit_confirmed ?? confirmed;
+      const updatedConfirmAt = res.data?.data?.deposit_confirmed_at ?? (confirmed ? new Date().toISOString() : null);
       const updatedStatus = res.data?.data?.status ?? nextStatus;
-      setCollections(prev => prev.map(c => c.id === item.id ? { ...c, deposit_confirmed: Boolean(updatedConfirm), status: updatedStatus } : c));
+      setCollections(prev => prev.map(c => c.id === item.id ? { ...c, deposit_confirmed: Boolean(updatedConfirm), deposit_confirmed_at: updatedConfirmAt, status: updatedStatus } : c));
       if (!confirmed) {
         const s = (updatedStatus || '').toLowerCase();
         const bankFlag = (s.includes('mbtc') || s.includes('metrobank') || isSalesTab) ? { mbtc_confirmed: false } : { bdo_confirmed: false };
@@ -2599,17 +2600,21 @@ function CollectionPageContent() {
         })
         .map(c => c.id);
 
-      let updatedById: Map<string, { deposit_confirmed: boolean; status?: string }> | null = null;
+      let updatedById: Map<string, { deposit_confirmed: boolean; deposit_confirmed_at?: string | null; status?: string }> | null = null;
       if (matchingIds.length > 0) {
         const bulkRes = await api.put('/collections/confirm-deposits', {
           ids: matchingIds,
           deposit_confirmed: confirmed,
           target_status: targetStatus
         });
-        updatedById = new Map<string, { deposit_confirmed: boolean; status?: string }>();
+        updatedById = new Map<string, { deposit_confirmed: boolean; deposit_confirmed_at?: string | null; status?: string }>();
         if (Array.isArray(bulkRes.data?.data)) {
           for (const row of bulkRes.data.data) {
-            updatedById.set(String(row.id), { deposit_confirmed: Boolean(row.deposit_confirmed), status: row.status });
+            updatedById.set(String(row.id), {
+              deposit_confirmed: Boolean(row.deposit_confirmed),
+              deposit_confirmed_at: row.deposit_confirmed_at || null,
+              status: row.status
+            });
           }
         }
       }
@@ -2630,6 +2635,7 @@ function CollectionPageContent() {
             return {
               ...c,
               deposit_confirmed: serverRow.deposit_confirmed,
+              deposit_confirmed_at: serverRow.deposit_confirmed_at ?? (confirmed ? new Date().toISOString() : null),
               status: (serverRow.status as any) || c.status
             };
           }
@@ -2637,6 +2643,7 @@ function CollectionPageContent() {
           return {
             ...c,
             deposit_confirmed: confirmed,
+            deposit_confirmed_at: confirmed ? new Date().toISOString() : null,
             status: confirmed && isVault ? targetStatus : c.status
           };
         }));
@@ -4158,15 +4165,28 @@ function CollectionPageContent() {
                             {renderStatusBadge(item.status)}
                             {isAdmin && (/mbtc|metrobank|bdo/i.test(item.status || '') || ((/vault/i.test(item.status || 'Cash in vault')) && item.tab !== 'others')) && (
                               item.deposit_confirmed ? (
-                                <button
-                                  type="button"
-                                  disabled={confirmingReceiptId === item.id}
-                                  onClick={() => handleConfirmSingleDeposit(item, false)}
-                                  className="text-[9.5px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer disabled:opacity-50"
-                                  title="Click to undo deposit confirmation for this receipt"
-                                >
-                                  {confirmingReceiptId === item.id ? 'Updating...' : '✓ Deposited'}
-                                </button>
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <button
+                                    type="button"
+                                    disabled={confirmingReceiptId === item.id}
+                                    onClick={() => handleConfirmSingleDeposit(item, false)}
+                                    className="text-[9.5px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer disabled:opacity-50"
+                                    title="Click to undo deposit confirmation for this receipt"
+                                  >
+                                    {confirmingReceiptId === item.id ? 'Updating...' : '✓ Deposited'}
+                                  </button>
+                                  {item.deposit_confirmed_at && (
+                                    <span className="text-[8.5px] font-mono text-neutral-500 dark:text-neutral-400">
+                                      {new Date(item.deposit_confirmed_at).toLocaleString('en-US', {
+                                        month: '2-digit',
+                                        day: '2-digit',
+                                        year: 'numeric',
+                                        hour: 'numeric',
+                                        minute: '2-digit'
+                                      })}
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <button
                                   type="button"

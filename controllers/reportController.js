@@ -5067,6 +5067,7 @@ const BANK_DEFAULT_BEGINNING_BALANCE = {
 
 const normalizeBankCode = (raw) => {
   const s = String(raw || '').trim().toUpperCase();
+  if (s.includes('VAULT') || s === 'CIV') return 'VAULT';
   if (s.includes('MBTC') || s.includes('METRO')) return 'MBTC';
   if (s.includes('BDO')) return 'BDO';
   return null;
@@ -5079,6 +5080,10 @@ export const getBankReconReport = async (req, res, next) => {
   try {
     const targetYear = Number(req.query.year) || new Date().getFullYear();
     await ensureBankReconTable();
+    await Promise.all([
+      pool.query(`ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS date_encashed DATE;`).catch(() => {}),
+      pool.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS deposit_confirmed_at TIMESTAMPTZ;`).catch(() => {})
+    ]);
 
     const [reconRes, cvRes, colRes] = await Promise.all([
       pool.query(
@@ -5089,15 +5094,15 @@ export const getBankReconReport = async (req, res, next) => {
         [targetYear]
       ),
       pool.query(
-        `SELECT id, voucher_no, voucher_date, date_released, bank, check_no, payee, particulars, amount, folder_name, status
+        `SELECT id, voucher_no, voucher_date, date_released, date_encashed, bank, check_no, payee, particulars, amount, folder_name, details, status
          FROM check_vouchers
          WHERE COALESCE(status, '') != 'cancelled'
-           AND EXTRACT(YEAR FROM voucher_date) IN ($1, $2)
-         ORDER BY voucher_date ASC, voucher_no ASC`,
+           AND EXTRACT(YEAR FROM COALESCE(date_encashed, date_released, voucher_date)) IN ($1, $2)
+         ORDER BY COALESCE(date_encashed, date_released, voucher_date) ASC, voucher_no ASC`,
         [targetYear, targetYear - 1]
       ),
       pool.query(
-        `SELECT id, or_no, date, created_at, tab, status, payor_name, particulars, item_name, service_type, amount
+        `SELECT id, or_no, date, created_at, tab, status, deposit_confirmed, deposit_confirmed_at, payor_name, particulars, item_name, service_type, amount
          FROM collections
          WHERE COALESCE(status, 'completed') != 'cancelled'
            AND EXTRACT(YEAR FROM COALESCE(date, created_at)) = $1
@@ -5181,6 +5186,42 @@ export const getBankReconReport = async (req, res, next) => {
       return null;
     };
 
+    const extractCvAccountTitle = (cv) => {
+      if (!cv) return 'Check Voucher Disbursement';
+      const detailAccounts = Array.isArray(cv.details)
+        ? [...new Set(
+            cv.details
+              .filter(d => !d?.is_credit)
+              .map(d => String(d?.book_of_account || '').trim())
+              .filter(a => a && !/^cash\s*in\s*bank|^bdo\b|^mbtc\b|^metrobank\b/i.test(a))
+          )]
+        : [];
+      return detailAccounts.length > 0
+        ? detailAccounts.join(', ')
+        : (String(cv.folder_name || '').trim() || 'Check Voucher Disbursement');
+    };
+
+    const detectCvBankCode = (cv) => {
+      const direct = normalizeBankCode(cv?.bank);
+      if (direct === 'BDO' || direct === 'MBTC') return direct;
+      if (Array.isArray(cv?.details)) {
+        for (const d of cv.details) {
+          if (!d?.is_credit) continue;
+          const b = normalizeBankCode(d?.book_of_account);
+          if (b === 'BDO' || b === 'MBTC') return b;
+        }
+      }
+      return null;
+    };
+
+    const toIsoDateStr = (raw) => {
+      if (!raw) return null;
+      if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+      const dt = raw instanceof Date ? raw : new Date(raw);
+      if (isNaN(dt.getTime())) return null;
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    };
+
     const buildBankLedger = (bankCode) => {
       const bankManualRows = reconRes.rows.filter(r => normalizeBankCode(r.bank) === bankCode);
       const begRow = bankManualRows.find(r => r.entry_type === 'beginning_balance');
@@ -5189,25 +5230,21 @@ export const getBankReconReport = async (req, res, next) => {
         : 0;
 
       const entries = [];
+      const importedMonths = new Set();
+      const matchedCvIds = new Set();
 
       // 1. Imported / Manual entries (excluding beginning_balance)
       bankManualRows
         .filter(r => r.entry_type !== 'beginning_balance')
         .forEach(r => {
-          let dStr = `${targetYear}-01-01`;
-          if (typeof r.tx_date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(r.tx_date)) {
-            dStr = r.tx_date.slice(0, 10);
-          } else if (r.tx_date instanceof Date && !isNaN(r.tx_date.getTime())) {
-            const yy = r.tx_date.getFullYear();
-            const mm = String(r.tx_date.getMonth() + 1).padStart(2, '0');
-            const dd = String(r.tx_date.getDate()).padStart(2, '0');
-            dStr = `${yy}-${mm}-${dd}`;
-          }
+          const dStr = toIsoDateStr(r.tx_date) || `${targetYear}-01-01`;
           const matchedCv = findMatchingCheckVoucher(r.voucher_no);
+          if (matchedCv) matchedCvIds.add(String(matchedCv.id));
           const rawPayee = String(r.depositor_payee || '').trim();
           const isGenericPayee = !rawPayee || /^(check voucher withdrawal|withholding tax)$/i.test(rawPayee);
+          const isWt = /^w\/?t$/i.test(String(r.voucher_no || '').trim());
           const enrichedPayee =
-            /^w\/?t$/i.test(String(r.voucher_no || '').trim()) && isGenericPayee
+            isWt && isGenericPayee
               ? 'WITHHOLDING TAX'
               : matchedCv && isGenericPayee
               ? (matchedCv.payee || rawPayee)
@@ -5216,18 +5253,47 @@ export const getBankReconReport = async (req, res, next) => {
             r.particulars ||
             (matchedCv?.particulars ? matchedCv.particulars : (r.entry_type === 'import' ? 'Imported Bank Recon Entry' : 'Manual Entry'));
 
+          let accountTitle = '';
+          if (bankCode === 'VAULT') {
+            const descText = `${enrichedPayee} ${enrichedParticulars}`.toLowerCase();
+            if ((parseFloat(r.withdrawal) || 0) > 0) {
+              if (/\bbdo\b/.test(descText)) accountTitle = 'Bank Deposit — BDO';
+              else if (/\bmbtc\b|\bmetro|\bmtro\b/.test(descText)) accountTitle = 'Bank Deposit — MBTC';
+              else accountTitle = 'Bank Deposit / Vault Outflow';
+            } else if ((parseFloat(r.deposit) || 0) > 0) {
+              accountTitle = 'Cash Collection / Vault Inflow';
+            } else {
+              accountTitle = 'Vault Adjustment';
+            }
+          } else if (isWt) {
+            accountTitle = 'Withholding Tax';
+          } else if (matchedCv) {
+            accountTitle = extractCvAccountTitle(matchedCv);
+          } else if ((parseFloat(r.deposit) || 0) > 0) {
+            accountTitle = 'Bank Deposit / Collection';
+          } else if ((parseFloat(r.withdrawal) || 0) > 0) {
+            accountTitle = 'Unmatched Bank Withdrawal';
+          } else {
+            accountTitle = 'Bank Entry';
+          }
+
           const sheetMonthIdx = r.entry_type === 'import' ? detectReconSheetMonthIdx(r.particulars) : null;
           const entryMonth = sheetMonthIdx !== null ? sheetMonthIdx : (Number(dStr.slice(5, 7)) - 1);
+          if (r.entry_type === 'import' && entryMonth >= 0 && entryMonth <= 11) {
+            importedMonths.add(entryMonth);
+          }
 
           entries.push({
             id: `recon-${r.id}`,
             db_id: r.id,
             date: dStr,
+            date_encashed: matchedCv ? toIsoDateStr(matchedCv.date_encashed) : null,
             month: entryMonth,
             voucher_no: r.voucher_no || '',
             raw_voucher_no: matchedCv?.voucher_no || r.voucher_no || null,
             depositor_payee: enrichedPayee,
             particulars: enrichedParticulars,
+            account_title: accountTitle,
             withdrawal: Math.round((parseFloat(r.withdrawal) || 0) * 100) / 100,
             deposit: Math.round((parseFloat(r.deposit) || 0) * 100) / 100,
             source: r.entry_type === 'import' ? 'imported' : 'manual',
@@ -5236,8 +5302,82 @@ export const getBankReconReport = async (req, res, next) => {
           });
         });
 
-      // Sort by recon month, then insertion order (db_id) to preserve exact spreadsheet row order
-      entries.sort((a, b) => (a.month - b.month) || ((a.db_id || 0) - (b.db_id || 0)));
+      // 2. Live Collections (confirmed Bank Deposits -> BDO / MBTC, or un-deposited -> VAULT) for months without imported sheets
+      colRes.rows.forEach(col => {
+        const dStr = toIsoDateStr(col.date || col.created_at);
+        if (!dStr || Number(dStr.slice(0, 4)) !== targetYear) return;
+        const entryMonth = Number(dStr.slice(5, 7)) - 1;
+        if (entryMonth < 0 || entryMonth > 11 || importedMonths.has(entryMonth)) return;
+
+        const amt = parseFloat(col.amount) || 0;
+        if (amt <= 0) return;
+
+        const colStatus = String(col.status || '').toLowerCase();
+        const isConfirmedDeposit = Boolean(col.deposit_confirmed);
+        const colBank = isConfirmedDeposit && colStatus.includes('bdo')
+          ? 'BDO'
+          : isConfirmedDeposit && (colStatus.includes('mbtc') || colStatus.includes('metro'))
+          ? 'MBTC'
+          : 'VAULT';
+        if (colBank !== bankCode) return;
+
+        entries.push({
+          id: `col-${col.id}`,
+          db_id: null,
+          date: dStr,
+          date_encashed: null,
+          month: entryMonth,
+          voucher_no: col.or_no ? `OR #${col.or_no}` : 'Collection',
+          raw_voucher_no: null,
+          depositor_payee: col.payor_name || 'Member',
+          particulars: col.particulars || col.item_name || col.service_type || 'Collection Receipt',
+          account_title: bankCode === 'VAULT' ? 'Cash Collection — Vault' : `Confirmed Bank Deposit (${bankCode})`,
+          confirmed_at: isConfirmedDeposit && col.deposit_confirmed_at ? new Date(col.deposit_confirmed_at).toISOString() : null,
+          withdrawal: 0,
+          deposit: Math.round(amt * 100) / 100,
+          source: 'collection',
+          voucher_id: null,
+          or_no: col.or_no || null
+        });
+      });
+
+      // 3. Live Check Vouchers from Disbursement (BDO / MBTC) for months without imported sheets
+      if (bankCode === 'BDO' || bankCode === 'MBTC') {
+        cvRes.rows.forEach(cv => {
+          if (matchedCvIds.has(String(cv.id))) return;
+          if (detectCvBankCode(cv) !== bankCode) return;
+          const encashedStr = toIsoDateStr(cv.date_encashed);
+          const releasedStr = toIsoDateStr(cv.date_released || cv.voucher_date);
+          const effectiveStr = encashedStr || releasedStr;
+          if (!effectiveStr || Number(effectiveStr.slice(0, 4)) !== targetYear) return;
+          const entryMonth = Number(effectiveStr.slice(5, 7)) - 1;
+          if (entryMonth < 0 || entryMonth > 11 || importedMonths.has(entryMonth)) return;
+
+          const amt = parseFloat(cv.amount) || 0;
+          if (amt <= 0) return;
+
+          entries.push({
+            id: `cv-${cv.id}`,
+            db_id: null,
+            date: releasedStr || effectiveStr,
+            date_encashed: encashedStr || null,
+            month: entryMonth,
+            voucher_no: cv.voucher_no || '',
+            raw_voucher_no: cv.voucher_no || null,
+            depositor_payee: cv.payee || 'Payee',
+            particulars: cv.particulars || 'Check Voucher Disbursement',
+            account_title: extractCvAccountTitle(cv),
+            withdrawal: Math.round(amt * 100) / 100,
+            deposit: 0,
+            source: 'check_voucher',
+            voucher_id: String(cv.id),
+            or_no: null
+          });
+        });
+      }
+
+      // Sort by recon month, then insertion order (db_id) for imported rows or date for live rows
+      entries.sort((a, b) => (a.month - b.month) || (a.db_id && b.db_id ? a.db_id - b.db_id : a.date.localeCompare(b.date)));
 
       let running = Math.round(beginningBalance * 100) / 100;
       let totalDeposits = 0;
@@ -5280,7 +5420,8 @@ export const getBankReconReport = async (req, res, next) => {
 
     const banks = {
       BDO: buildBankLedger('BDO'),
-      MBTC: buildBankLedger('MBTC')
+      MBTC: buildBankLedger('MBTC'),
+      VAULT: buildBankLedger('VAULT')
     };
 
     if (typeof res?.set === 'function') res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -5304,7 +5445,7 @@ export const upsertBankReconEntry = async (req, res, next) => {
     const year = Number(req.body.year) || new Date().getFullYear();
     const entryType = String(req.body.entry_type || 'manual').trim();
     if (!bank) {
-      return res.status(400).json({ success: false, message: 'Valid bank (BDO or MBTC) is required.' });
+      return res.status(400).json({ success: false, message: 'Valid account (BDO, MBTC, or VAULT) is required.' });
     }
 
     if (entryType === 'beginning_balance') {
@@ -5368,7 +5509,7 @@ export const importBankReconEntries = async (req, res, next) => {
     const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
 
     if (!bank) {
-      return res.status(400).json({ success: false, message: 'Valid bank (BDO or MBTC) is required.' });
+      return res.status(400).json({ success: false, message: 'Valid account (BDO, MBTC, or VAULT) is required.' });
     }
     if (rows.length === 0 && req.body.beginning_balance === undefined) {
       return res.status(400).json({ success: false, message: 'No rows provided for import.' });

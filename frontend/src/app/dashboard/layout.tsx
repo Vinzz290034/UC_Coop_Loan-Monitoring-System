@@ -35,7 +35,7 @@ import {
   ReceiptText,
   TrendingUp,
   HandCoins,
-  Landmark,
+  BookText,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
@@ -164,9 +164,9 @@ function DashboardLayoutContent({
       allowed: user.role === 'admin',
     },
     {
-      name: 'Bank Deposit',
+      name: 'General Ledger',
       path: '/dashboard/bank-recon',
-      icon: Landmark,
+      icon: BookText,
       allowed: isAdminOrStaff,
     },
     {
@@ -492,7 +492,7 @@ function DashboardLayoutContent({
                         appointments: 'Schedule',
                         messages: 'Inbox',
                         notifications: isMember ? 'Notification' : 'Inbox',
-                        'bank-recon': 'Bank Deposit',
+                        'bank-recon': 'General Ledger',
                       };
                       return breadcrumbLabels[segment] || staticOverrides[segment] || segment;
                     })

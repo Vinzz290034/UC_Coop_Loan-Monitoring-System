@@ -1002,6 +1002,7 @@ export const updateCheckVoucher = async (req, res, next) => {
       amount,
       fund_amount,
       date_released,
+      date_encashed,
       managers_approval_date,
       folder_name,
       status,
@@ -1009,6 +1010,7 @@ export const updateCheckVoucher = async (req, res, next) => {
       signatories
     } = req.body;
 
+    await query(`ALTER TABLE check_vouchers ADD COLUMN IF NOT EXISTS date_encashed DATE;`).catch(() => {});
     const currentCvRes = await query('SELECT * FROM check_vouchers WHERE id = $1', [id]);
     if (currentCvRes.rowCount === 0) {
       return res.status(404).json({
@@ -1049,6 +1051,7 @@ export const updateCheckVoucher = async (req, res, next) => {
     // Auto-set lifecycle dates
     let resolvedApprovalDate = managers_approval_date !== undefined ? (managers_approval_date || null) : currentCv.managers_approval_date;
     let resolvedDateReleased = date_released !== undefined ? (date_released || null) : currentCv.date_released;
+    const resolvedDateEncashed = date_encashed !== undefined ? (date_encashed || null) : currentCv.date_encashed;
 
     if (status === 'for release' && !resolvedApprovalDate) {
       resolvedApprovalDate = new Date().toISOString().split('T')[0];
@@ -1089,14 +1092,15 @@ export const updateCheckVoucher = async (req, res, next) => {
            amount = $7,
            fund_amount = $8,
            date_released = $9,
-           managers_approval_date = $10,
-           folder_name = $11,
-           status = $12,
-           details = $13,
-           signatories = $14,
-           loan_id = $15,
+           date_encashed = $10,
+           managers_approval_date = $11,
+           folder_name = $12,
+           status = $13,
+           details = $14,
+           signatories = $15,
+           loan_id = $16,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $16
+       WHERE id = $17
        RETURNING *`,
       [
         resolvedVoucherNo,
@@ -1108,6 +1112,7 @@ export const updateCheckVoucher = async (req, res, next) => {
         resolvedAmount,
         resolvedFundAmount,
         resolvedDateReleased,
+        resolvedDateEncashed,
         resolvedApprovalDate,
         resolvedFolderName,
         resolvedStatus,

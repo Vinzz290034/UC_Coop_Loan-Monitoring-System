@@ -27,10 +27,10 @@ function BankReconPageContent() {
           <BackButton href="/dashboard">Back to Overview</BackButton>
           <div className="mt-2">
             <h1 className="text-2xl font-black tracking-tight text-neutral-900 dark:text-white">
-              Bank Deposit
+              General Ledger
             </h1>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Cash-in-Bank Ledger &amp; Bank Statement Reconciliation for BDO and Metrobank (MBTC).
+              Cash-in-Bank General Ledger &amp; Bank Reconciliation for BDO and Metrobank (MBTC).
             </p>
           </div>
         </div>

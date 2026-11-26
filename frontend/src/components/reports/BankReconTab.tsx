@@ -31,12 +31,15 @@ export interface BankReconEntry {
   id: string;
   db_id?: number | null;
   date: string;
+  date_encashed?: string | null;
   month: number;
   voucher_no: string;
   raw_voucher_no?: string;
   check_no?: string | null;
   depositor_payee: string;
   particulars: string;
+  account_title?: string;
+  confirmed_at?: string | null;
   withdrawal: number;
   deposit: number;
   balance: number;
@@ -46,7 +49,7 @@ export interface BankReconEntry {
 }
 
 export interface BankLedgerData {
-  bank: 'BDO' | 'MBTC';
+  bank: 'BDO' | 'MBTC' | 'VAULT';
   beginning_balance: number;
   beginning_balance_id: number | null;
   total_deposits: number;
@@ -56,12 +59,13 @@ export interface BankLedgerData {
   entries: BankReconEntry[];
 }
 
-interface BankReconResponse {
+export interface BankReconResponse {
   success: boolean;
   year: number;
   banks: {
     BDO: BankLedgerData;
     MBTC: BankLedgerData;
+    VAULT?: BankLedgerData;
   };
 }
 
@@ -70,6 +74,8 @@ interface ParsedImportRow {
   voucher_no: string;
   depositor_payee: string;
   particulars: string;
+  account_title?: string;
+  confirmed_at?: string | null;
   withdrawal: number;
   deposit: number;
 }
@@ -89,6 +95,11 @@ const peso = (n: number) => {
   const abs = Math.abs(n || 0);
   const str = `₱${abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return isNeg ? `(${str})` : str;
+};
+
+const formatDisplayDate = (isoDate: string) => {
+  const m = String(isoDate || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : (isoDate || '—');
 };
 
 const detectSheetMonth = (sheetName: string): string | null => {
@@ -230,9 +241,11 @@ function AnimatedSelect({
 export default function BankReconTab({ initialYear }: Props) {
   const router = useRouter();
   const [year, setYear] = useState<number>(() => Math.max(2025, initialYear));
-  const [activeBank, setActiveBank] = useState<'BDO' | 'MBTC'>('BDO');
+  const [activeBank, setActiveBank] = useState<'BDO' | 'MBTC' | 'VAULT'>('BDO');
   const [selectedMonth, setSelectedMonth] = useState<number | 'ytd'>('ytd');
   const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'deposit' | 'withdrawal'>('all');
+  const [viewMode, setViewMode] = useState<'ledger' | 'by_account'>('ledger');
+  const [selectedAccountFilter, setSelectedAccountFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number | 'all'>(25);
@@ -246,7 +259,7 @@ export default function BankReconTab({ initialYear }: Props) {
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [selectedSheet, setSelectedSheet] = useState<string>('');
-  const [importBank, setImportBank] = useState<'BDO' | 'MBTC'>('BDO');
+  const [importBank, setImportBank] = useState<'BDO' | 'MBTC' | 'VAULT'>('BDO');
   const [importBegBal, setImportBegBal] = useState<string>('');
   const [importRows, setImportRows] = useState<ParsedImportRow[]>([]);
   const [replaceExisting, setReplaceExisting] = useState(false);
@@ -316,22 +329,43 @@ export default function BankReconTab({ initialYear }: Props) {
       if (!q) return true;
       return (
         e.date.toLowerCase().includes(q) ||
+        formatDisplayDate(e.date).toLowerCase().includes(q) ||
         e.voucher_no.toLowerCase().includes(q) ||
         e.depositor_payee.toLowerCase().includes(q) ||
-        e.particulars.toLowerCase().includes(q)
+        e.particulars.toLowerCase().includes(q) ||
+        (e.account_title || '').toLowerCase().includes(q)
       );
     });
   }, [currentLedger, selectedMonth, searchQuery, year]);
 
   const filteredEntries = useMemo(() => {
-    if (txTypeFilter === 'deposit') return periodEntries.filter(e => e.deposit > 0);
-    if (txTypeFilter === 'withdrawal') return periodEntries.filter(e => e.withdrawal > 0);
-    return periodEntries;
+    let base = periodEntries;
+    if (txTypeFilter === 'deposit') base = base.filter(e => e.deposit > 0);
+    else if (txTypeFilter === 'withdrawal') base = base.filter(e => e.withdrawal > 0);
+    if (selectedAccountFilter) {
+      base = base.filter(e => (e.account_title || 'Unclassified') === selectedAccountFilter);
+    }
+    return base;
+  }, [periodEntries, txTypeFilter, selectedAccountFilter]);
+
+  const accountSummary = useMemo(() => {
+    const map = new Map<string, { account: string; count: number; withdrawals: number; deposits: number }>();
+    periodEntries.forEach(e => {
+      if (txTypeFilter === 'deposit' && e.deposit <= 0) return;
+      if (txTypeFilter === 'withdrawal' && e.withdrawal <= 0) return;
+      const key = e.account_title || 'Unclassified';
+      const cur = map.get(key) || { account: key, count: 0, withdrawals: 0, deposits: 0 };
+      cur.count += 1;
+      cur.withdrawals += e.withdrawal || 0;
+      cur.deposits += e.deposit || 0;
+      map.set(key, cur);
+    });
+    return Array.from(map.values()).sort((a, b) => (b.withdrawals - a.withdrawals) || (b.deposits - a.deposits));
   }, [periodEntries, txTypeFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeBank, selectedMonth, txTypeFilter, searchQuery, year, pageSize]);
+  }, [activeBank, selectedMonth, txTypeFilter, selectedAccountFilter, searchQuery, year, pageSize]);
 
   const isFullYearPaginated = selectedMonth === 'ytd';
   const totalPages = useMemo(() => {
@@ -357,7 +391,7 @@ export default function BankReconTab({ initialYear }: Props) {
     return { deposits, withdrawals, ending };
   }, [periodEntries, selectedMonth, currentLedger, openingBalanceForView]);
 
-  const parseSheetIntoRows = useCallback((wb: XLSX.WorkBook, sheetName: string, targetBank: 'BDO' | 'MBTC') => {
+  const parseSheetIntoRows = useCallback((wb: XLSX.WorkBook, sheetName: string, targetBank: 'BDO' | 'MBTC' | 'VAULT') => {
     const ws = wb.Sheets[sheetName];
     if (!ws) return;
     const rawGrid = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: '' });
@@ -489,7 +523,11 @@ export default function BankReconTab({ initialYear }: Props) {
     setSheetNames(wb.SheetNames);
     const defaultSheet = wb.SheetNames.find(s => /recon/i.test(s)) || wb.SheetNames[0];
     setSelectedSheet(defaultSheet);
-    const nextBank: 'BDO' | 'MBTC' = /mbtc|metro/i.test(file.name) ? 'MBTC' : importBank;
+    const nextBank: 'BDO' | 'MBTC' | 'VAULT' = /vault|civ/i.test(file.name)
+      ? 'VAULT'
+      : /mbtc|metro/i.test(file.name)
+      ? 'MBTC'
+      : importBank;
     setImportBank(nextBank);
     parseSheetIntoRows(wb, defaultSheet, nextBank);
   };
@@ -645,13 +683,15 @@ export default function BankReconTab({ initialYear }: Props) {
     if (!currentLedger) return;
     const rows = [
       [`UNIVERSITY OF CEBU-METC MULTIPURPOSE COOPERATIVE`],
-      [`BANK RECONCILIATION LEDGER — ${activeBank === 'BDO' ? 'BDO Current Account' : 'Metrobank (MBTC) Current Account'} (${year})`],
+      [`GENERAL LEDGER — ${activeBank === 'BDO' ? 'BDO Current Account' : activeBank === 'MBTC' ? 'Metrobank (MBTC) Current Account' : 'Cash in Vault'} (${year})`],
       [],
-      ['Date', 'Voucher / Ref #', 'Depositor / Payee', 'Particulars / Source', 'Withdrawal', 'Deposit', 'Running Balance'],
-      ['', 'BEG-BAL', 'Beginning Balance', selectedMonth === 'ytd' ? 'January 1 Balance' : `Opening Balance (${MONTHS[selectedMonth]})`, '', '', openingBalanceForView],
+      ['Date', 'Encashed Date', 'Voucher / Ref #', 'Account / Destination', 'Depositor / Payee', 'Particulars', 'Withdrawal', 'Deposit', 'Running Balance'],
+      [selectedMonth === 'ytd' ? `01/01/${year}` : `${String(selectedMonth + 1).padStart(2, '0')}/01/${year}`, '', 'BEG-BAL', 'Beginning Balance', 'Beginning Balance', selectedMonth === 'ytd' ? 'January 1 Balance' : `Opening Balance (${MONTHS[selectedMonth]})`, '', '', openingBalanceForView],
       ...filteredEntries.map(e => [
-        e.date,
+        formatDisplayDate(e.date),
+        e.date_encashed ? formatDisplayDate(e.date_encashed) : '',
         e.voucher_no,
+        e.account_title || '',
         e.depositor_payee,
         e.particulars,
         e.withdrawal || '',
@@ -659,12 +699,12 @@ export default function BankReconTab({ initialYear }: Props) {
         e.balance
       ]),
       [],
-      ['TOTALS', '', '', '', viewTotals.withdrawals, viewTotals.deposits, viewTotals.ending]
+      ['TOTALS', '', '', '', '', '', viewTotals.withdrawals, viewTotals.deposits, viewTotals.ending]
     ];
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `${activeBank}_Recon_${year}`);
-    XLSX.writeFile(wb, `UC_METC_Bank_Recon_${activeBank}_${year}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, `${activeBank}_GL_${year}`);
+    XLSX.writeFile(wb, `UC_METC_General_Ledger_${activeBank}_${year}.xlsx`);
   };
 
   return (
@@ -678,10 +718,10 @@ export default function BankReconTab({ initialYear }: Props) {
             </span>
             <h2 className="text-lg font-black text-neutral-900 dark:text-white flex items-center gap-2">
               <Landmark className="w-5 h-5 text-emerald-600" />
-              <span>Bank Reconciliation &amp; Cash-in-Bank Ledger</span>
+              <span>General Ledger &amp; Cash-in-Bank Tracker</span>
             </h2>
             <p className="text-xs text-neutral-500">
-              Tracks BDO and Metrobank (MBTC) deposits from Collections, withdrawals from Check Vouchers, and imported bank recon entries.
+              Tracks BDO and Metrobank (MBTC) deposits, check voucher destinations (where money goes), and running balances.
             </p>
           </div>
 
@@ -772,12 +812,27 @@ export default function BankReconTab({ initialYear }: Props) {
           </div>
         </div>
 
-        {/* Bank Switcher Cards */}
+        {/* Bank & Cash-in-Vault Switcher Cards */}
         {data && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 print:hidden">
-            {(['BDO', 'MBTC'] as const).map(code => {
-              const b = data.banks[code];
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 print:hidden">
+            {(['BDO', 'MBTC', 'VAULT'] as const).map(code => {
+              const b = data.banks[code] || {
+                bank: code,
+                beginning_balance: 0,
+                beginning_balance_id: null,
+                total_deposits: 0,
+                total_withdrawals: 0,
+                ending_balance: 0,
+                monthly: [],
+                entries: []
+              };
               const isSelected = activeBank === code;
+              const label =
+                code === 'BDO'
+                  ? 'BDO Current Account • Loans'
+                  : code === 'MBTC'
+                  ? 'Metrobank (MBTC) • Merchandise & Services'
+                  : 'Cash in Vault';
               return (
                 <button
                   key={code}
@@ -792,7 +847,7 @@ export default function BankReconTab({ initialYear }: Props) {
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                        {code === 'BDO' ? 'BDO Current Account • Loans' : 'Metrobank (MBTC) • Merchandise & Services'}
+                        {label}
                       </span>
                       <div className="text-xl font-black font-mono text-neutral-900 dark:text-white mt-0.5">
                         {peso(b.ending_balance)}
@@ -855,11 +910,48 @@ export default function BankReconTab({ initialYear }: Props) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/80 p-0.5 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setViewMode('ledger')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === 'ledger'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white'
+                }`}
+              >
+                Running Ledger
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('by_account')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === 'by_account'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white'
+                }`}
+              >
+                Where Money Went (By Account)
+              </button>
+            </div>
+
+            {selectedAccountFilter && (
+              <button
+                type="button"
+                onClick={() => setSelectedAccountFilter(null)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-xs font-bold cursor-pointer"
+                title="Clear account filter"
+              >
+                <span>Account: {selectedAccountFilter}</span>
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+
             <div className="relative group w-56 focus-within:w-72 transition-all duration-200">
               <Search className="w-3.5 h-3.5 text-neutral-400 group-focus-within:text-emerald-600 group-focus-within:scale-110 transition-all duration-200 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search voucher, SI #, depositor..."
+                placeholder="Search voucher, account, payee..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-7 py-2 rounded-xl border border-outline-variant/60 bg-white dark:bg-neutral-900 text-xs outline-none transition-all duration-200 hover:border-emerald-400/70 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:shadow-xs"
@@ -985,15 +1077,73 @@ export default function BankReconTab({ initialYear }: Props) {
         </div>
       )}
 
-      {/* Bank Recon Running Ledger Table */}
+      {/* General Ledger Table (Running Ledger or Account Summary) */}
       <div className="rounded-2xl bg-white dark:bg-neutral-900 border border-outline-variant/60 shadow-2xs">
         <div className="overflow-x-auto rounded-t-2xl">
+          {viewMode === 'by_account' ? (
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-[#064e3b] text-white text-[10px] font-black uppercase tracking-wider">
+                <tr>
+                  <th className="p-3 text-left">Account / Destination</th>
+                  <th className="p-3 text-center whitespace-nowrap">Txns</th>
+                  <th className="p-3 text-right whitespace-nowrap">Total Withdrawals (−)</th>
+                  <th className="p-3 text-right whitespace-nowrap">% of Outflows</th>
+                  <th className="p-3 text-right whitespace-nowrap">Total Deposits (+)</th>
+                  <th className="p-3 text-center whitespace-nowrap print:hidden">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                {accountSummary.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-neutral-500">
+                      No transactions match this filter.
+                    </td>
+                  </tr>
+                ) : (
+                  accountSummary.map(row => {
+                    const pct = viewTotals.withdrawals > 0 && row.withdrawals > 0
+                      ? ((row.withdrawals / viewTotals.withdrawals) * 100).toFixed(1)
+                      : '0.0';
+                    return (
+                      <tr key={row.account} className="hover:bg-emerald-50/30 dark:hover:bg-neutral-800/40 transition-colors">
+                        <td className="p-3 font-bold text-neutral-900 dark:text-white">{row.account}</td>
+                        <td className="p-3 text-center font-mono text-neutral-600 dark:text-neutral-300">{row.count}</td>
+                        <td className="p-3 text-right font-mono font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap">
+                          {row.withdrawals > 0 ? peso(row.withdrawals) : <span className="text-neutral-300 dark:text-neutral-600">—</span>}
+                        </td>
+                        <td className="p-3 text-right font-mono text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
+                          {row.withdrawals > 0 ? `${pct}%` : '—'}
+                        </td>
+                        <td className="p-3 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                          {row.deposits > 0 ? peso(row.deposits) : <span className="text-neutral-300 dark:text-neutral-600">—</span>}
+                        </td>
+                        <td className="p-3 text-center whitespace-nowrap print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedAccountFilter(row.account);
+                              setViewMode('ledger');
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 text-emerald-800 dark:text-emerald-300 text-[10.5px] font-bold border border-emerald-300/70 dark:border-emerald-700 cursor-pointer"
+                          >
+                            <span>View Entries</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          ) : (
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-[#064e3b] text-white text-[10px] font-black uppercase tracking-wider">
               <tr>
                 <th className="p-3 text-center whitespace-nowrap">Date</th>
+                <th className="p-3 text-center whitespace-nowrap">Encashed Date</th>
                 <th className="p-3 text-center whitespace-nowrap">Voucher / Ref #</th>
-                <th className="p-3 text-center">Depositor / Payee</th>
+                <th className="p-3 text-left whitespace-nowrap">Account / Destination</th>
+                <th className="p-3 text-left">Depositor / Payee &amp; Particulars</th>
                 <th className="p-3 text-right whitespace-nowrap">Withdrawal (−)</th>
                 <th className="p-3 text-right whitespace-nowrap">Deposit (+)</th>
                 <th className="p-3 text-right whitespace-nowrap">Running Balance</th>
@@ -1001,11 +1151,13 @@ export default function BankReconTab({ initialYear }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-              {(!isFullYearPaginated || pageSize === 'all' || safeCurrentPage === 1) && (
+              {(!isFullYearPaginated || pageSize === 'all' || safeCurrentPage === 1) && !selectedAccountFilter && (
                 <tr className="bg-emerald-50/50 dark:bg-emerald-950/20 font-bold">
-                  <td className="p-3 text-center font-mono text-neutral-500">{selectedMonth === 'ytd' ? `${year}-01-01` : `${year}-${String(selectedMonth + 1).padStart(2, '0')}-01`}</td>
+                  <td className="p-3 text-center font-mono text-neutral-500">{selectedMonth === 'ytd' ? `01/01/${year}` : `${String(selectedMonth + 1).padStart(2, '0')}/01/${year}`}</td>
+                  <td className="p-3 text-center font-mono text-neutral-400">—</td>
                   <td className="p-3 text-center font-mono text-emerald-800 dark:text-emerald-300">BEG-BAL</td>
-                  <td className="p-3 text-center">Beginning Balance</td>
+                  <td className="p-3 text-left text-neutral-500">Opening Balance</td>
+                  <td className="p-3 text-left">Beginning Balance</td>
                   <td className="p-3 text-right font-mono text-neutral-400">—</td>
                   <td className="p-3 text-right font-mono text-neutral-400">—</td>
                   <td className="p-3 text-right font-mono font-black text-neutral-900 dark:text-white">{peso(openingBalanceForView)}</td>
@@ -1015,18 +1167,27 @@ export default function BankReconTab({ initialYear }: Props) {
 
               {loading && !currentLedger ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-neutral-500">Loading {activeBank} Bank Recon ledger...</td>
+                  <td colSpan={9} className="p-8 text-center text-neutral-500">Loading {activeBank} General Ledger...</td>
                 </tr>
               ) : filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-neutral-500">
+                  <td colSpan={9} className="p-8 text-center text-neutral-500">
                     No transactions match this filter. Import your Bank Recon Excel/CSV or switch months.
                   </td>
                 </tr>
               ) : (
                 displayedEntries.map(e => (
                   <tr key={e.id} className="hover:bg-emerald-50/30 dark:hover:bg-neutral-800/40 transition-colors">
-                    <td className="p-3 text-center font-mono text-[11px] whitespace-nowrap text-neutral-600 dark:text-neutral-400">{e.date}</td>
+                    <td className="p-3 text-center font-mono text-[11px] whitespace-nowrap text-neutral-600 dark:text-neutral-400">{formatDisplayDate(e.date)}</td>
+                    <td className="p-3 text-center font-mono text-[11px] whitespace-nowrap text-neutral-600 dark:text-neutral-400">
+                      {e.date_encashed ? (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-800 dark:text-amber-300 font-bold">
+                          {formatDisplayDate(e.date_encashed)}
+                        </span>
+                      ) : (
+                        <span className="text-neutral-300 dark:text-neutral-600">—</span>
+                      )}
+                    </td>
                     <td className="p-3 text-center font-mono font-bold whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded-md text-[10.5px] ${
                         e.source === 'check_voucher'
@@ -1038,7 +1199,41 @@ export default function BankReconTab({ initialYear }: Props) {
                         {e.voucher_no || '—'}
                       </span>
                     </td>
-                    <td className="p-3 text-center font-semibold text-neutral-900 dark:text-white">{e.depositor_payee || '—'}</td>
+                    <td className="p-3 text-left whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAccountFilter(prev => prev === (e.account_title || 'Unclassified') ? null : (e.account_title || 'Unclassified'))}
+                        title="Click to filter by this account"
+                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-bold border transition-colors cursor-pointer ${
+                          e.withdrawal > 0
+                            ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/25 hover:bg-amber-500/20'
+                            : 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/20'
+                        }`}
+                      >
+                        {e.account_title || 'Unclassified'}
+                      </button>
+                      {e.confirmed_at && (
+                        <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 font-mono">
+                          Confirmed {new Date(e.confirmed_at).toLocaleString('en-US', {
+                            month: '2-digit',
+                            day: '2-digit',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-3 text-left max-w-[260px]">
+                      <div className="font-semibold text-neutral-900 dark:text-white truncate" title={e.depositor_payee || '—'}>
+                        {e.depositor_payee || '—'}
+                      </div>
+                      {e.particulars && e.particulars !== e.depositor_payee && (
+                        <div className="text-[10.5px] text-neutral-500 dark:text-neutral-400 truncate" title={e.particulars}>
+                          {e.particulars}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-3 text-right font-mono font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap">
                       {e.withdrawal > 0 ? peso(e.withdrawal) : <span className="text-neutral-300 dark:text-neutral-600">—</span>}
                     </td>
@@ -1090,9 +1285,10 @@ export default function BankReconTab({ initialYear }: Props) {
               )}
             </tbody>
           </table>
+          )}
         </div>
 
-        {isFullYearPaginated && filteredEntries.length > 0 && (
+        {viewMode === 'ledger' && isFullYearPaginated && filteredEntries.length > 0 && (
           <div className="px-4 py-3 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-950/40 rounded-b-2xl flex flex-wrap items-center justify-between gap-3 text-xs print:hidden">
             <div className="flex items-center gap-3 text-neutral-600 dark:text-neutral-400">
               <span>
@@ -1190,15 +1386,16 @@ export default function BankReconTab({ initialYear }: Props) {
             <div className="p-5 overflow-y-auto space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Target Bank</label>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Target Account</label>
                   <AnimatedSelect
                     value={importBank}
                     options={[
                       { value: 'BDO', label: 'BDO Current Account (Loans)' },
-                      { value: 'MBTC', label: 'Metrobank (MBTC) Current Account (Merchandise)' }
+                      { value: 'MBTC', label: 'Metrobank (MBTC) Current Account (Merchandise)' },
+                      { value: 'VAULT', label: 'Cash in Vault' }
                     ]}
                     onChange={val => {
-                      const nextBank = val as 'BDO' | 'MBTC';
+                      const nextBank = val as 'BDO' | 'MBTC' | 'VAULT';
                       setImportBank(nextBank);
                       if (workbook && selectedSheet) {
                         parseSheetIntoRows(workbook, selectedSheet, nextBank);

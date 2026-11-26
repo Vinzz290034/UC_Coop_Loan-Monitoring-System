@@ -6,6 +6,7 @@ async function ensureParticularsColumn(db) {
   await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS particulars_amount NUMERIC(15, 2) DEFAULT 0;`);
   await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS deposit_confirmed BOOLEAN NOT NULL DEFAULT FALSE;`);
   await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS pre_deposit_status VARCHAR(50);`);
+  await db.query(`ALTER TABLE collections ADD COLUMN IF NOT EXISTS deposit_confirmed_at TIMESTAMPTZ;`);
   await db.query(`
     -- Automatically correct all collection receipts with year < 2026 to 2026 (preserving month and day)
     UPDATE collections
@@ -258,6 +259,7 @@ function formatCollectionRow(row) {
       return 'Cash in vault';
     })(),
     deposit_confirmed: Boolean(row.deposit_confirmed),
+    deposit_confirmed_at: row.deposit_confirmed_at ? new Date(row.deposit_confirmed_at).toISOString() : null,
     remarks: (() => {
       const rLower = String(row.remarks || '').toLowerCase();
       const sLower = String(row.status || '').toLowerCase();
@@ -834,13 +836,16 @@ export async function updateCollection(req, res) {
       : (/vault/i.test(String(item.status || existing.status || '')) ? false : Boolean(existing.deposit_confirmed));
     let status = item.status || existing.status;
     let pre_deposit_status = existing.pre_deposit_status || null;
+    let deposit_confirmed_at = existing.deposit_confirmed_at || null;
     if (item.deposit_confirmed === true) {
       pre_deposit_status = existing.pre_deposit_status || existing.status;
+      deposit_confirmed_at = existing.deposit_confirmed_at || new Date();
     } else if (item.deposit_confirmed === false) {
       if (existing.pre_deposit_status) {
         status = existing.pre_deposit_status;
       }
       pre_deposit_status = null;
+      deposit_confirmed_at = null;
     }
     const remarks = item.remarks !== undefined ? item.remarks : existing.remarks;
     const collected_by = item.collected_by || existing.collected_by;
@@ -854,8 +859,8 @@ export async function updateCollection(req, res) {
         service_type = $22, service_copies = $23, service_rate = $24,
         particulars = $25, other_category = $26,
         amount = $27, payment_method = $28, reference_no = $29, bank_name = $30,
-        status = $31, deposit_confirmed = $32, pre_deposit_status = $33, remarks = $34, collected_by = $35, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $36
+        status = $31, deposit_confirmed = $32, pre_deposit_status = $33, deposit_confirmed_at = $34, remarks = $35, collected_by = $36, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $37
       RETURNING *;
     `;
 
@@ -867,7 +872,7 @@ export async function updateCollection(req, res) {
       service_type, service_copies, service_rate,
       particulars, other_category,
       amount, payment_method, reference_no, bank_name,
-      status, deposit_confirmed, pre_deposit_status, remarks, collected_by,
+      status, deposit_confirmed, pre_deposit_status, deposit_confirmed_at, remarks, collected_by,
       id
     ];
 
@@ -1117,9 +1122,13 @@ export async function bulkConfirmDeposits(req, res) {
              ELSE status
            END,
            deposit_confirmed = $1,
+           deposit_confirmed_at = CASE
+             WHEN $1 = true THEN COALESCE(deposit_confirmed_at, CURRENT_TIMESTAMP)
+             ELSE NULL
+           END,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ANY($2::text[])
-       RETURNING id, deposit_confirmed, status`,
+       RETURNING id, deposit_confirmed, deposit_confirmed_at, status`,
       [confirmed, ids, targetStatus]
     );
     return res.status(200).json({

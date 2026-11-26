@@ -1654,6 +1654,7 @@ function DisbursementPageContent() {
     voucher_no: '',
     voucher_date: '',
     date_released: '',
+    date_encashed: '',
     status: 'edit',
     check_no: '',
     payee: '',
@@ -3789,6 +3790,7 @@ function DisbursementPageContent() {
       voucher_no: cv.voucher_no || '',
       voucher_date: cv.voucher_date ? cv.voucher_date.split('T')[0] : '',
       date_released: cv.date_released ? cv.date_released.split('T')[0] : '',
+      date_encashed: cv.date_encashed ? cv.date_encashed.split('T')[0] : '',
       status: (cv.status || 'edit').toLowerCase(),
       check_no: cv.check_no || '',
       payee: cv.payee || cv.payee_name || '',
@@ -4183,6 +4185,7 @@ function DisbursementPageContent() {
         voucher_no: editCvFormData.voucher_no.trim(),
         voucher_date: editCvFormData.voucher_date || null,
         date_released: editCvFormData.date_released || null,
+        date_encashed: editCvFormData.date_encashed || null,
         status: editCvFormData.status || undefined,
         check_no: editCvFormData.check_no.trim() || null,
         payee: formatPayeeName(editCvFormData.payee),
@@ -6758,6 +6761,19 @@ function DisbursementPageContent() {
                     value={editCvFormData.date_released}
                     onChange={e => setEditCvFormData({ ...editCvFormData, date_released: e.target.value })}
                     className={`w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60 ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase mb-1 flex items-center justify-between">
+                    <span>Date Encashed / Cleared</span>
+                    <span className="text-[10px] text-neutral-400 font-normal lowercase tracking-normal">optional</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={editCvFormData.date_encashed}
+                    onChange={e => setEditCvFormData({ ...editCvFormData, date_encashed: e.target.value })}
+                    title="Actual date the cheque was claimed and encashed at the bank (used by General Ledger)"
+                    className="w-full px-3 py-2 rounded-xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/60"
                   />
                 </div>
               </div>

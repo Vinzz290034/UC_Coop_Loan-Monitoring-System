@@ -112,6 +112,7 @@ export interface CollectionItem {
   bank_name?: string;
   status?: CollectionStatus;
   deposit_confirmed?: boolean;
+  deposit_confirmed_at?: string | null;
   remarks?: CollectionRemarks;
   collected_by: string;
 }
