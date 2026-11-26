@@ -675,8 +675,24 @@ export const getAllMembers = async (req, res, next) => {
         break;
       case 'name_asc':
       case 'name_a_z':
-      default:
         queryText += ' ORDER BY m.last_name ASC, m.first_name ASC';
+        break;
+      case 'member_no_desc':
+        queryText += ` ORDER BY
+          CASE WHEN m.member_no ~ '^[0-9]+-[0-9]+$' THEN 0 ELSE 1 END ASC,
+          CASE WHEN m.member_no ~ '^[0-9]+-[0-9]+$' THEN SPLIT_PART(m.member_no, '-', 1)::INT ELSE 0 END DESC,
+          CASE WHEN m.member_no ~ '^[0-9]+-[0-9]+$' THEN SPLIT_PART(m.member_no, '-', 2)::INT ELSE 0 END DESC,
+          m.member_no DESC NULLS LAST,
+          m.last_name ASC`;
+        break;
+      case 'member_no_asc':
+      default:
+        queryText += ` ORDER BY
+          CASE WHEN m.member_no ~ '^[0-9]+-[0-9]+$' THEN 0 ELSE 1 END ASC,
+          CASE WHEN m.member_no ~ '^[0-9]+-[0-9]+$' THEN SPLIT_PART(m.member_no, '-', 1)::INT ELSE 9999 END ASC,
+          CASE WHEN m.member_no ~ '^[0-9]+-[0-9]+$' THEN SPLIT_PART(m.member_no, '-', 2)::INT ELSE 999999 END ASC,
+          m.member_no ASC NULLS LAST,
+          m.last_name ASC`;
         break;
     }
 

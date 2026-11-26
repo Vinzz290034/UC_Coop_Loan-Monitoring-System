@@ -29,6 +29,7 @@ import {
   ChevronDown,
   Clock,
   Shield,
+  ArrowUpDown,
 } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
@@ -181,7 +182,7 @@ export default function MembersPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [membershipFilter, setMembershipFilter] = useState('');
-  const [sortBy, setSortBy] = useState('name_asc');
+  const [sortBy, setSortBy] = useState('member_no_asc');
 
   // Pagination & Expand state
   const [currentPage, setCurrentPage] = useState(1);
@@ -687,8 +688,10 @@ export default function MembersPage() {
               <AnimatedSelect
                 value={sortBy}
                 onChange={(val) => setSortBy(val)}
-                className="py-2 bg-white dark:bg-surface-container-low border-outline-variant min-w-[185px]"
+                className="py-2 bg-white dark:bg-surface-container-low border-outline-variant min-w-[205px]"
                 options={[
+                  { value: 'member_no_asc', label: 'Member ID (Oldest → Newest)' },
+                  { value: 'member_no_desc', label: 'Member ID (Newest → Oldest)' },
                   { value: 'name_asc', label: 'Name (A → Z)' },
                   { value: 'name_desc', label: 'Name (Z → A)' },
                   { value: 'age_asc', label: 'Age (Youngest → Oldest)' },
@@ -699,6 +702,23 @@ export default function MembersPage() {
                   { value: 'updated', label: 'Recently Updated' },
                 ]}
               />
+              <button
+                type="button"
+                onClick={() => {
+                  if (sortBy.endsWith('_asc')) {
+                    setSortBy(sortBy.replace(/_asc$/, '_desc'));
+                  } else if (sortBy.endsWith('_desc')) {
+                    setSortBy(sortBy.replace(/_desc$/, '_asc'));
+                  } else {
+                    setSortBy('member_no_desc');
+                  }
+                }}
+                title="Reverse sort order"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-outline-variant bg-white dark:bg-surface-container-low text-xs font-bold text-neutral-700 dark:text-neutral-200 hover:bg-neutral/5 transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5 text-primary dark:text-secondary" />
+                <span>Reverse</span>
+              </button>
             </div>
 
             <div className="flex items-center gap-2">

@@ -5,7 +5,7 @@ async function resolveMemberUuidForCollection(db, collectionRow) {
   const rawMemberId = collectionRow.member_id ? String(collectionRow.member_id).trim() : '';
   if (rawMemberId) {
     const mRes = await db.query(
-      `SELECT id FROM members WHERE id::text = $1 OR member_id::text = $1 LIMIT 1`,
+      `SELECT id FROM members WHERE id::text = $1 OR member_no::text = $1 LIMIT 1`,
       [rawMemberId]
     );
     if (mRes.rowCount > 0) return mRes.rows[0].id;
