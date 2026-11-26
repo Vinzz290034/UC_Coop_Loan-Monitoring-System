@@ -615,6 +615,7 @@ function ReportsPageContent() {
       }
     }
 
+    let coaGroups: any[] = [];
     if (chartOfAccounts.length > 0) {
       const typeOrder: string[] = [];
       const byType: Record<string, any[]> = {};
@@ -656,7 +657,7 @@ function ReportsPageContent() {
       };
 
       const q = categorySearch.trim().toLowerCase();
-      return typeOrder.map(typeLabel => {
+      coaGroups = typeOrder.map(typeLabel => {
         const allAccts = byType[typeLabel] || [];
         const totalSpent = allAccts.reduce((sum, a) => sum + (Number(a.total_amount) || 0), 0);
         const totalEntries = allAccts.reduce((sum, a) => sum + (Number(a.count) || 0), 0);
@@ -743,7 +744,7 @@ function ReportsPageContent() {
       });
     }
 
-    return ACCOUNT_CATEGORIES.map(cat => {
+    const defaultCategoryGroups = ACCOUNT_CATEGORIES.map(cat => {
       const allAccts = (groups[cat.value] || []).sort((a, b) =>
         a.account_name.localeCompare(b.account_name, undefined, { sensitivity: 'base' })
       );
@@ -771,6 +772,15 @@ function ReportsPageContent() {
         isMatch: q ? (cat.label.toLowerCase().includes(q) || filteredAccts.length > 0) : true
       };
     });
+
+    if (coaGroups.length > 0) {
+      const coaCategoryKeys = new Set(coaGroups.map(g => g.category.toLowerCase()));
+      return [
+        ...coaGroups,
+        ...defaultCategoryGroups.filter(g => !coaCategoryKeys.has(g.category.toLowerCase()))
+      ];
+    }
+    return defaultCategoryGroups;
   }, [reportData?.accounts, customAccounts, accountCategoryMap, categorySearch, accountsVersion, chartOfAccounts]);
 
   const visibleCategoryGroups = useMemo(() => {
@@ -801,12 +811,14 @@ function ReportsPageContent() {
 
   const handleExpandAll = () => {
     const next: Record<string, boolean> = {};
+    categoryGroupsData.forEach(g => { next[g.category] = false; });
     ACCOUNT_CATEGORIES.forEach(c => { next[c.value] = false; });
     setCollapsedCategories(next);
   };
 
   const handleCollapseAll = () => {
     const next: Record<string, boolean> = {};
+    categoryGroupsData.forEach(g => { next[g.category] = true; });
     ACCOUNT_CATEGORIES.forEach(c => { next[c.value] = true; });
     setCollapsedCategories(next);
   };
@@ -2487,7 +2499,7 @@ function ReportsPageContent() {
                     {categoryGroupsData.length}
                   </div>
                   <div className="text-[10px] text-neutral-400 mt-0.5">
-                    {chartOfAccounts.length > 0 ? 'Asset, Liability, Equity, Income, Expense' : 'Operation, Merchandise, Service, etc.'}
+                    {chartOfAccounts.length > 0 ? 'Asset, Liability, Equity, Operation, Merchandise, Service, etc.' : 'Operation, Merchandise, Service, etc.'}
                   </div>
                 </div>
 
@@ -2609,7 +2621,7 @@ function ReportsPageContent() {
                         : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
                     }`}
                   >
-                    All {chartOfAccounts.length > 0 ? 'Types' : 'Categories'} ({categoryGroupsData.length})
+                    All {chartOfAccounts.length > 0 ? 'Types & Categories' : 'Categories'} ({categoryGroupsData.length})
                   </button>
                   {categoryGroupsData.map(grp => {
                     const isSel = selectedCategoryFilter === grp.category;
@@ -2730,7 +2742,7 @@ function ReportsPageContent() {
                                     </td>
                                   </tr>
                                 ) : (
-                                  grp.accounts.map((acc, aIdx) => {
+                                  grp.accounts.map((acc: any, aIdx: number) => {
                                     return (
                                       <tr
                                         key={`${grp.category}-${acc.account_name}-${aIdx}`}
