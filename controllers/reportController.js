@@ -3439,6 +3439,56 @@ export const getFinancialStatementReport = async (req, res, next) => {
       inv_bsname: 'Merchandise Inventory - BSNAME',
     };
 
+    const BASELINE_LABELS = {
+      cash_in_vault: 'Cash in Vault',
+      cib_bdo: 'CIB - BDO',
+      cib_metrobank: 'CIB - METROBANK',
+      victo: 'Cash in Coop Federation - VICTO',
+      climbs_federation: 'Cash in Coop Federation - CLIMBS',
+      other_funds: 'Other Funds and Deposits',
+      nafe: 'Cash in Federation - NAFE',
+      rf_stl: 'Revolving Fund - STL',
+      rf_haw: 'Revolving Fund - HAW',
+      rf_operation: 'Revolving Fund - Operation',
+      rf_rice: 'Revolving Fund - Rice',
+      petty_cash: 'Petty Cash Fund',
+      petty_cash_loan: 'Petty Cash Loan',
+      reg_loans: 'Regular Loans Receivable',
+      cash_express: 'Cash Express Receivable',
+      special_loans: 'Special Loans Receivable',
+      emergency_loans: 'Emergency Loans Receivable',
+      calamity_loans: 'Calamity Loans Receivable',
+      unearned_interest: 'Unearned Interest and Discounts',
+      ar_insurance: 'A/R - Insurance',
+      ar_uc: 'A/R - UC',
+      rec_members: 'Receivables from Members',
+      unused_supplies: 'Office Supplies - Unused',
+      prepaid_expenses: 'Prepaid Expenses',
+      office_equipment: 'Office Equipment',
+      depr_office_equipment: 'Accum. Depr. - Office Equipment',
+      furnitures_fixtures: 'Furnitures & Fixtures',
+      depr_furnitures_fixtures: 'Accum. Depr. - Furniture & Fixture',
+      deposit_container: 'Deposit on Returnable Container',
+      ap_trade: 'Accounts Payable - Trade',
+      ap_others: 'Accounts Payable - Others',
+      loans_payable: 'Loans Payable - Current',
+      accrued_expenses: 'Accrued Expenses',
+      due_cetf_apex: 'Due to CETF - Apex Organization',
+      clpp_premium: 'CLPP Premium Payable',
+      insurance_payable: 'Insurance Payable',
+      locker_deposit_payable: 'Customer Deposit Payable',
+      other_payables: 'Other Payables',
+      dividend_payable: 'Dividend and Patronage refund Payable',
+      other_noncurrent_liabs: 'Other Non-Current Liabilities',
+      common_shares: 'Common Shares - Subscribed & Paid-Up',
+      undivided_surplus: 'Undivided Net Surplus',
+      donations_grants: 'Donations/Grants',
+      reserve_fund: 'Reserve Fund',
+      cetf_fund: 'Cooperative Education and Training Fund',
+      optional_fund: 'Optional Fund',
+      community_dev_fund: 'Community Development Fund',
+    };
+
     const newCumulativeStore = (key) => {
       const b = BASELINE[key] || { cur: 0, prev: 0 };
       let initCur = 0;
@@ -3466,6 +3516,17 @@ export const getFinancialStatementReport = async (req, res, next) => {
             voucher_no: 'INV-OCT',
             source: 'inventory_baseline',
             amount: initCur
+          }]
+        : ((isBaselineYear || isPrevBaselineYear) && Math.abs(initCur) > 0.004)
+        ? [{
+            date: `${targetYear}-01-01`,
+            month: 1,
+            year: targetYear,
+            payee: `Audited Opening Balance (Jan 1, ${targetYear})`,
+            particulars: `${BASELINE_LABELS[key] || key} — Beginning Balance`,
+            voucher_no: 'BEG-BAL',
+            source: 'baseline',
+            amount: Math.round(initCur * 100) / 100
           }]
         : [];
 
@@ -3502,11 +3563,25 @@ export const getFinancialStatementReport = async (req, res, next) => {
         const rcAt = (key, m) => (rc[key] || [])[m] || 0;
         const cum = { purchases: 0, cogs: 0, capexOE: 0, capexFF: 0, repay: 0, withdraw: 0, ee: 0, cetf: 0, refund: 0, lockerDep: 0 };
         // The cooperative's active operations for 2026 run from January to November (months 0 to 10).
+        const MONTH_NAMES_FS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         for (let m = 0; m <= 10; m++) {
           const mRev = revLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
           const mExp = expLines.reduce((sum, l) => sum + ((l.current || [])[m] || 0), 0);
-          cumNetCur += (mRev - mExp);
+          const mNet = Math.round((mRev - mExp) * 100) / 100;
+          cumNetCur += mNet;
           stores.net_surplus_period.current[m] = cumNetCur;
+          if (Math.abs(mNet) > 0.004) {
+            stores.net_surplus_period.transactions.push({
+              date: `${targetYear}-${String(m + 1).padStart(2, '0')}-01`,
+              month: m + 1,
+              year: targetYear,
+              payee: `Income Statement — ${MONTH_NAMES_FS[m]} ${targetYear}`,
+              particulars: `Revenues ₱${mRev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} − Expenses ₱${mExp.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              voucher_no: `IS-${MONTH_NAMES_FS[m].slice(0, 3).toUpperCase()}`,
+              source: 'income_statement',
+              amount: mNet
+            });
+          }
 
           cum.purchases += rcAt('inventory_purchases', m);
           cum.cogs += rcAt('cogs', m);
