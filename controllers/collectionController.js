@@ -1,4 +1,102 @@
 import pool from '../config/db.js';
+import { recalculateShareCapitalBalances } from './accountController.js';
+
+async function resolveMemberUuidForCollection(db, collectionRow) {
+  const rawMemberId = collectionRow.member_id ? String(collectionRow.member_id).trim() : '';
+  if (rawMemberId) {
+    const mRes = await db.query(
+      `SELECT id FROM members WHERE id::text = $1 OR member_id::text = $1 LIMIT 1`,
+      [rawMemberId]
+    );
+    if (mRes.rowCount > 0) return mRes.rows[0].id;
+  }
+  const rawName = collectionRow.payor_name ? String(collectionRow.payor_name).trim() : '';
+  if (rawName) {
+    const nRes = await db.query(
+      `SELECT id FROM members
+       WHERE LOWER(TRIM(CONCAT_WS(' ', first_name, middle_name, last_name))) = LOWER($1)
+          OR LOWER(TRIM(CONCAT_WS(' ', first_name, last_name))) = LOWER($1)
+          OR LOWER(TRIM(CONCAT(last_name, ', ', first_name))) = LOWER($1)
+          OR LOWER(TRIM(CONCAT(last_name, ', ', first_name, ' ', COALESCE(middle_name, '')))) = LOWER($1)
+       LIMIT 2`,
+      [rawName]
+    );
+    if (nRes.rowCount === 1) return nRes.rows[0].id;
+  }
+  return null;
+}
+
+async function syncCollectionCommonShareToMember(db, collectionRow) {
+  if (!collectionRow || !collectionRow.id) return;
+  const isCancelled = String(collectionRow.status || '').toLowerCase() === 'cancelled';
+  const csAmt = isCancelled ? 0 : (parseFloat(collectionRow.common_share_amount) || 0);
+  const memberUuid = csAmt > 0 ? await resolveMemberUuidForCollection(db, collectionRow) : null;
+
+  let existingTx = await db.query(
+    'SELECT id, member_id FROM share_capital_transactions WHERE collection_id = $1 LIMIT 1',
+    [collectionRow.id]
+  );
+
+  if (existingTx.rowCount === 0 && csAmt > 0 && memberUuid && collectionRow.or_no) {
+    existingTx = await db.query(
+      `SELECT id, member_id FROM share_capital_transactions
+       WHERE member_id = $1 AND invoice_no = $2 AND amount = $3 AND collection_id IS NULL
+       LIMIT 1`,
+      [memberUuid, String(collectionRow.or_no).trim(), csAmt]
+    );
+  }
+
+  if (csAmt <= 0 || !memberUuid) {
+    if (existingTx.rowCount > 0) {
+      const oldMemberId = existingTx.rows[0].member_id;
+      await db.query('DELETE FROM share_capital_transactions WHERE id = $1', [existingTx.rows[0].id]);
+      await recalculateShareCapitalBalances(db, oldMemberId);
+    }
+    return;
+  }
+
+  const channel = collectionRow.payment_method ? String(collectionRow.payment_method).trim() : '';
+  const ref = collectionRow.reference_no ? String(collectionRow.reference_no).trim() : '';
+  const detail = channel ? ` (${channel}${ref ? ` • Ref: ${ref}` : ''})` : '';
+  const scRemarks = `Collection OR #${collectionRow.or_no || collectionRow.id}${detail}`;
+  const txDate = collectionRow.date || new Date().toISOString().slice(0, 10);
+  const invoiceNo = collectionRow.or_no ? String(collectionRow.or_no).trim() : null;
+
+  if (existingTx.rowCount > 0) {
+    const oldMemberId = existingTx.rows[0].member_id;
+    await db.query(
+      `UPDATE share_capital_transactions
+       SET member_id = $1, amount = $2, transaction_date = $3::timestamptz, invoice_no = $4, remarks = $5, collection_id = $6
+       WHERE id = $7`,
+      [memberUuid, csAmt, txDate, invoiceNo, scRemarks, collectionRow.id, existingTx.rows[0].id]
+    );
+    if (oldMemberId && oldMemberId !== memberUuid) {
+      await recalculateShareCapitalBalances(db, oldMemberId);
+    }
+    await recalculateShareCapitalBalances(db, memberUuid);
+  } else {
+    await db.query(
+      `INSERT INTO share_capital_transactions
+         (member_id, transaction_type, amount, balance_after, remarks, status, transaction_date, invoice_no, collection_id)
+       VALUES ($1, 'credit', $2, 0, $3, 'completed', $4::timestamptz, $5, $6)`,
+      [memberUuid, csAmt, scRemarks, txDate, invoiceNo, collectionRow.id]
+    );
+    await recalculateShareCapitalBalances(db, memberUuid);
+  }
+}
+
+async function unlinkCollectionCommonShare(db, collectionIds) {
+  const ids = Array.isArray(collectionIds) ? collectionIds : [collectionIds];
+  if (ids.length === 0) return;
+  const affected = await db.query(
+    'DELETE FROM share_capital_transactions WHERE collection_id = ANY($1::text[]) RETURNING member_id',
+    [ids]
+  );
+  const uniqueMembers = [...new Set(affected.rows.map(r => r.member_id).filter(Boolean))];
+  for (const mId of uniqueMembers) {
+    await recalculateShareCapitalBalances(db, mId);
+  }
+}
 
 let particularsColEnsured = false;
 async function ensureParticularsColumn(db) {
@@ -115,6 +213,23 @@ async function ensureParticularsColumn(db) {
         OR (EXTRACT(YEAR FROM date) = 2026 AND EXTRACT(MONTH FROM date) <= 10)
       );
   `);
+
+  await db.query(`ALTER TABLE share_capital_transactions ADD COLUMN IF NOT EXISTS invoice_no VARCHAR(100);`).catch(() => {});
+  await db.query(`ALTER TABLE share_capital_transactions ADD COLUMN IF NOT EXISTS collection_id VARCHAR(120);`).catch(() => {});
+  const unlinkedCommonShare = await db.query(`
+    SELECT id, member_id, payor_name, common_share_amount, date, or_no, payment_method, reference_no, status
+    FROM collections c
+    WHERE COALESCE(c.common_share_amount, 0) > 0
+      AND COALESCE(c.status, 'completed') != 'cancelled'
+      AND NOT EXISTS (
+        SELECT 1 FROM share_capital_transactions s WHERE s.collection_id = c.id
+      )
+    ORDER BY c.date ASC, c.id ASC
+  `);
+  for (const row of unlinkedCommonShare.rows) {
+    await syncCollectionCommonShareToMember(db, row);
+  }
+
   particularsColEnsured = true;
 }
 
@@ -506,6 +621,7 @@ export async function createCollection(req, res) {
     ];
 
     const result = await client.query(insertQuery, values);
+    await syncCollectionCommonShareToMember(client, result.rows[0]);
     await client.query('COMMIT');
 
     const createdItem = formatCollectionRow(result.rows[0]);
@@ -702,6 +818,7 @@ export async function bulkImportCollections(req, res) {
       ];
 
       const resRow = await client.query(upsertSql, values);
+      await syncCollectionCommonShareToMember(client, resRow.rows[0]);
       processedRows.push(formatCollectionRow(resRow.rows[0]));
 
       if (isExisting) {
@@ -877,6 +994,7 @@ export async function updateCollection(req, res) {
     ];
 
     const result = await pool.query(updateQuery, values);
+    await syncCollectionCommonShareToMember(pool, result.rows[0]);
     const updated = formatCollectionRow(result.rows[0]);
 
     return res.status(200).json({
@@ -922,6 +1040,7 @@ export async function deleteCollection(req, res) {
     }
 
     await pool.query('DELETE FROM collections WHERE id = $1', [id]);
+    await unlinkCollectionCommonShare(pool, [id]);
 
     return res.status(200).json({
       success: true,
@@ -958,6 +1077,7 @@ export async function bulkDeleteCollections(req, res) {
         : "DELETE FROM collections WHERE id = ANY($1::text[]) AND status != 'filed' AND LOWER(COALESCE(remarks, '')) != 'sealed' RETURNING id",
       [ids]
     );
+    await unlinkCollectionCommonShare(pool, result.rows.map(r => r.id));
 
     return res.status(200).json({
       success: true,

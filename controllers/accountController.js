@@ -21,13 +21,40 @@ export function formatPayeeName(name) {
 // 1. SHARE CAPITAL LEDGER
 // ==========================================
 
+// Helper: recalculate chronological balance_after for all Share Capital transactions of a member
+export const recalculateShareCapitalBalances = async (client, memberId) => {
+  const rowsRes = await client.query(
+    `SELECT id, transaction_type, amount, status
+     FROM share_capital_transactions
+     WHERE member_id = $1
+     ORDER BY transaction_date ASC, id ASC
+     FOR UPDATE`,
+    [memberId]
+  );
+  let running = 0;
+  for (const row of rowsRes.rows) {
+    const amt = parseFloat(row.amount) || 0;
+    const isCompleted = !row.status || row.status === 'completed';
+    if (isCompleted) {
+      running = row.transaction_type === 'debit'
+        ? Math.round((running - amt) * 100) / 100
+        : Math.round((running + amt) * 100) / 100;
+    }
+    await client.query(
+      'UPDATE share_capital_transactions SET balance_after = $1 WHERE id = $2',
+      [running, row.id]
+    );
+  }
+  return running;
+};
+
 // @desc    Post a share capital transaction (debit or credit)
 // @route   POST /api/accounts/share-capital
 // @access  Protected (Admin, Manager)
 export const postShareCapitalTransaction = async (req, res, next) => {
   const client = await pool.connect();
   try {
-    let { member_id, transaction_type, amount, remarks } = req.body;
+    let { member_id, transaction_type, amount, remarks, transaction_date, invoice_no, payment_method, reference_no } = req.body;
 
     if (req.user.role === 'member') {
       member_id = req.user.profile?.id;
@@ -72,9 +99,11 @@ export const postShareCapitalTransaction = async (req, res, next) => {
     }
 
     await client.query('BEGIN');
+    await client.query(`ALTER TABLE share_capital_transactions ADD COLUMN IF NOT EXISTS invoice_no VARCHAR(100);`).catch(() => {});
+    await client.query(`ALTER TABLE share_capital_transactions ADD COLUMN IF NOT EXISTS collection_id VARCHAR(120);`).catch(() => {});
 
     // Check if member exists
-    const memberCheck = await client.query('SELECT id FROM members WHERE id = $1 FOR UPDATE', [member_id]);
+    const memberCheck = await client.query('SELECT id, first_name, middle_name, last_name FROM members WHERE id = $1 FOR UPDATE', [member_id]);
     if (memberCheck.rowCount === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({
@@ -85,7 +114,7 @@ export const postShareCapitalTransaction = async (req, res, next) => {
 
     // Get latest transaction to calculate cumulative balance
     const latestTx = await client.query(
-      'SELECT balance_after FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC LIMIT 1',
+      'SELECT balance_after FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC, id DESC LIMIT 1',
       [member_id]
     );
 
@@ -112,9 +141,15 @@ export const postShareCapitalTransaction = async (req, res, next) => {
     const postBalance = initialStatus === 'completed' ? newBalance : currentBalance;
 
     // Write transaction record
+    const parsedTxDate = transaction_date ? new Date(transaction_date) : null;
+    const validTxDate = parsedTxDate && !isNaN(parsedTxDate.getTime()) ? parsedTxDate : null;
+
+    const linkedCollectionId = null;
+    const resolvedInvoiceNo = invoice_no ? String(invoice_no).trim() : null;
+
     const insertTx = `
-      INSERT INTO share_capital_transactions (member_id, transaction_type, amount, balance_after, remarks, status)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO share_capital_transactions (member_id, transaction_type, amount, balance_after, remarks, status, transaction_date, invoice_no, collection_id)
+      VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, CURRENT_TIMESTAMP), $8, $9)
       RETURNING *
     `;
     const result = await client.query(insertTx, [
@@ -123,14 +158,21 @@ export const postShareCapitalTransaction = async (req, res, next) => {
       amount,
       postBalance,
       remarks || `${transaction_type === 'credit' ? 'Equity contribution' : 'Equity withdrawal'}`,
-      initialStatus
+      initialStatus,
+      validTxDate,
+      resolvedInvoiceNo,
+      linkedCollectionId
     ]);
+
+    await recalculateShareCapitalBalances(client, member_id);
+
+    const updatedRowRes = await client.query('SELECT * FROM share_capital_transactions WHERE id = $1', [result.rows[0].id]);
 
     await client.query('COMMIT');
 
     res.status(201).json({
       success: true,
-      data: result.rows[0]
+      data: updatedRowRes.rows[0] || result.rows[0]
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -181,6 +223,89 @@ export const getShareCapital = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+// @desc    Update an existing share capital transaction and recalculate running balances
+// @route   PUT /api/accounts/share-capital/tx/:id
+// @access  Protected (Admin, Staff)
+export const updateShareCapitalTransaction = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { amount, transaction_date } = req.body;
+    const parsedAmt = parseFloat(amount);
+    if (!parsedAmt || parsedAmt <= 0) {
+      return res.status(400).json({ success: false, error: { message: 'Amount must be greater than zero.' } });
+    }
+
+    await client.query('BEGIN');
+    const existingRes = await client.query('SELECT * FROM share_capital_transactions WHERE id = $1 FOR UPDATE', [id]);
+    if (existingRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: { message: 'Share capital transaction not found.' } });
+    }
+    const existing = existingRes.rows[0];
+    const parsedDate = transaction_date ? new Date(transaction_date) : null;
+    const nextDate = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate : existing.transaction_date;
+
+    await client.query(
+      `UPDATE share_capital_transactions
+       SET amount = $1, transaction_date = $2
+       WHERE id = $3`,
+      [parsedAmt, nextDate, id]
+    );
+
+    const balance = await recalculateShareCapitalBalances(client, existing.member_id);
+    const updatedRes = await client.query('SELECT * FROM share_capital_transactions WHERE id = $1', [id]);
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      balance,
+      data: updatedRes.rows[0]
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
+// @desc    Delete a share capital transaction and recalculate running balances
+// @route   DELETE /api/accounts/share-capital/tx/:id
+// @access  Protected (Admin, Staff)
+export const deleteShareCapitalTransaction = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    await client.query('BEGIN');
+    const existingRes = await client.query('SELECT * FROM share_capital_transactions WHERE id = $1 FOR UPDATE', [id]);
+    if (existingRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: { message: 'Share capital transaction not found.' } });
+    }
+    const memberId = existingRes.rows[0].member_id;
+    const linkedCollectionId = existingRes.rows[0].collection_id;
+
+    await client.query('DELETE FROM share_capital_transactions WHERE id = $1', [id]);
+    if (linkedCollectionId) {
+      await client.query('DELETE FROM collections WHERE id = $1', [linkedCollectionId]);
+    }
+    const balance = await recalculateShareCapitalBalances(client, memberId);
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      balance,
+      message: 'Share capital entry deleted.'
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    next(error);
+  } finally {
+    client.release();
   }
 };
 

@@ -41,7 +41,9 @@ import {
   WalletCards,
   Banknote,
   AlertCircle,
-  CircleDollarSign
+  CircleDollarSign,
+  Plus,
+  Users
 } from 'lucide-react';
 
 interface MemberProfileProps {
@@ -207,6 +209,18 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   const [shareCapital, setShareCapital] = useState<any>(null);
   const [selectedLoanIdForLedger, setSelectedLoanIdForLedger] = useState<string | null>(null);
 
+  // Add / Edit / Delete Share Capital Entry Modal state
+  const [isAddScModalOpen, setIsAddScModalOpen] = useState(false);
+  const [editingScTx, setEditingScTx] = useState<any | null>(null);
+  const [deletingScTx, setDeletingScTx] = useState<any | null>(null);
+  const [scDate, setScDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [scAmount, setScAmount] = useState('');
+  const [scPaymentMethod, setScPaymentMethod] = useState<'otc' | 'gcash' | 'bank_transfer' | 'payroll'>('otc');
+  const [scPaymentRefNo, setScPaymentRefNo] = useState('');
+  const [scSalaryDeductionMode, setScSalaryDeductionMode] = useState<'SD' | 'SD30' | 'SD2'>('SD');
+  const [scSubmitting, setScSubmitting] = useState(false);
+  const [scError, setScError] = useState<string | null>(null);
+
   const getAvatarUrl = (path?: string | null) => {
     if (!path) return null;
     if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) return path;
@@ -278,6 +292,80 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
   useEffect(() => {
     fetchProfileAndBalances();
   }, [memberId]);
+
+  const handleAddShareCapitalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const numericAmt = parseFloat(scAmount);
+    if (!numericAmt || numericAmt <= 0) {
+      setScError('Please enter a valid amount greater than zero.');
+      return;
+    }
+    setScError(null);
+    setScSubmitting(true);
+    try {
+      if (editingScTx) {
+        await api.put(`/accounts/share-capital/tx/${editingScTx.id}`, {
+          amount: numericAmt,
+          transaction_date: scDate || undefined
+        });
+      } else {
+        if ((scPaymentMethod === 'gcash' || scPaymentMethod === 'bank_transfer') && !scPaymentRefNo.trim()) {
+          setScError('Please enter the payment reference number.');
+          setScSubmitting(false);
+          return;
+        }
+        const channelLabel = scPaymentMethod === 'gcash'
+          ? 'GCash'
+          : scPaymentMethod === 'bank_transfer'
+            ? 'Bank Transfer'
+            : scPaymentMethod === 'payroll'
+              ? `Salary Deduction (${scSalaryDeductionMode})`
+              : 'Hand-in';
+        const collectionPaymentMethod = scPaymentMethod === 'gcash'
+          ? 'Gcash'
+          : scPaymentMethod === 'bank_transfer'
+            ? 'Bank transfer'
+            : scPaymentMethod === 'payroll'
+              ? 'salary deduction'
+              : 'Hand in';
+        const refPart = scPaymentRefNo.trim() ? ` • Ref: ${scPaymentRefNo.trim()}` : '';
+        await api.post('/accounts/share-capital', {
+          member_id: memberId,
+          transaction_type: 'credit',
+          amount: numericAmt,
+          transaction_date: scDate || undefined,
+          payment_method: collectionPaymentMethod,
+          reference_no: scPaymentRefNo.trim() || undefined,
+          remarks: `Manual Entry (${channelLabel}${refPart})`
+        });
+      }
+      setIsAddScModalOpen(false);
+      setEditingScTx(null);
+      setScAmount('');
+      setScPaymentRefNo('');
+      setScPaymentMethod('otc');
+      await fetchProfileAndBalances();
+    } catch (err: any) {
+      setScError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to save share capital entry.');
+    } finally {
+      setScSubmitting(false);
+    }
+  };
+
+  const handleDeleteShareCapitalConfirm = async () => {
+    if (!deletingScTx) return;
+    setScError(null);
+    setScSubmitting(true);
+    try {
+      await api.delete(`/accounts/share-capital/tx/${deletingScTx.id}`);
+      setDeletingScTx(null);
+      await fetchProfileAndBalances();
+    } catch (err: any) {
+      setScError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to delete share capital entry.');
+    } finally {
+      setScSubmitting(false);
+    }
+  };
 
   const handleEditProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -911,11 +999,36 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                   </div>
                   <div className="p-4 bg-surface-container-low dark:bg-surface-container-high/40 border border-outline-variant/40 rounded-2xl">
                     <span className="text-[10px] uppercase font-bold text-neutral-400 font-label">Total Withdrawals</span>
-                    <div className="font-headline text-lg font-extrabold text-neutral-500 mt-1">
-                      ₱0.00
+                    <div className="font-headline text-lg font-extrabold text-rose-600 dark:text-rose-400 mt-1">
+                      {formatCurrency(
+                        shareCapital?.transactions
+                          ?.filter((t: any) => t.transaction_type === 'debit' && (!t.status || t.status === 'completed'))
+                          ?.reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0) ?? 0
+                      )}
                     </div>
                   </div>
                 </div>
+
+                {(user?.role === 'admin' || user?.role === 'staff') && (
+                  <div className="flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingScTx(null);
+                        setScDate(new Date().toISOString().split('T')[0]);
+                        setScAmount('');
+                        setScPaymentMethod('otc');
+                        setScPaymentRefNo('');
+                        setScError(null);
+                        setIsAddScModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Entry</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Share Capital Transactions Table */}
                 <div className="border border-outline-variant/50 rounded-2xl overflow-hidden bg-white dark:bg-surface-container-low shadow-sm">
@@ -926,10 +1039,12 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                           <th className="px-3.5 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">#</th>
                           <th className="px-3.5 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Transaction Date</th>
                           <th className="px-3.5 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Invoice / Mode</th>
-                          <th className="px-3.5 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Type</th>
                           <th className="px-3.5 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Amount</th>
                           <th className="px-3.5 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Running Balance</th>
                           <th className="px-3.5 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Remarks / Source</th>
+                          {(user?.role === 'admin' || user?.role === 'staff') && (
+                            <th className="px-3.5 py-3 font-headline text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-center whitespace-nowrap">Actions</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline-variant/30 font-body text-xs text-on-surface dark:text-white/90">
@@ -941,7 +1056,7 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                           if (postedTxs.length === 0) {
                             return (
                               <tr>
-                                <td colSpan={7} className="px-4 py-8 text-center text-neutral-400 text-xs italic">
+                                <td colSpan={(user?.role === 'admin' || user?.role === 'staff') ? 7 : 6} className="px-4 py-8 text-center text-neutral-400 text-xs italic">
                                   No share capital transactions recorded.
                                 </td>
                               </tr>
@@ -963,17 +1078,12 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                                   {tx.invoice_no || tx.mode || 'SD'}
                                 </span>
                               </td>
-                              <td className="px-3.5 py-3 whitespace-nowrap">
-                                <span className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  tx.transaction_type === 'credit'
-                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                    : 'bg-red-500/10 text-red-600 dark:text-red-400'
-                                }`}>
-                                  {tx.transaction_type?.toUpperCase()}
-                                </span>
-                              </td>
-                              <td className="px-3.5 py-3 font-mono font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                                +{formatCurrency(tx.amount)}
+                              <td className={`px-3.5 py-3 font-mono font-bold whitespace-nowrap ${
+                                tx.transaction_type === 'debit'
+                                  ? 'text-rose-600 dark:text-rose-400'
+                                  : 'text-emerald-600 dark:text-emerald-400'
+                              }`}>
+                                {tx.transaction_type === 'debit' ? '-' : '+'}{formatCurrency(tx.amount)}
                               </td>
                               <td className="px-3.5 py-3 font-mono font-extrabold text-on-surface dark:text-white whitespace-nowrap">
                                 {formatCurrency(tx.balance_after)}
@@ -981,6 +1091,38 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
                               <td className="px-3.5 py-3 text-neutral-500 text-xs truncate max-w-xs">
                                 {tx.remarks || 'Share capital placement'}
                               </td>
+                              {(user?.role === 'admin' || user?.role === 'staff') && (
+                                <td className="px-3.5 py-3 text-center whitespace-nowrap">
+                                  <div className="inline-flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingScTx(tx);
+                                        const d = tx.transaction_date ? new Date(tx.transaction_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+                                        setScDate(d);
+                                        setScAmount(String(tx.amount ?? ''));
+                                        setScError(null);
+                                        setIsAddScModalOpen(true);
+                                      }}
+                                      title="Edit entry"
+                                      className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setScError(null);
+                                        setDeletingScTx(tx);
+                                      }}
+                                      title="Delete entry"
+                                      className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-neutral-600 dark:text-neutral-300 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
                             </tr>
                           ));
                         })()}
@@ -1453,6 +1595,286 @@ export default function MemberProfilePage({ params }: MemberProfileProps) {
           loanId={selectedLoanIdForLedger}
           onClose={() => setSelectedLoanIdForLedger(null)}
         />
+      )}
+
+      {/* Add Share Capital Entry Modal */}
+      {isAddScModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 animate-modal-pop">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <PiggyBank className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h2 className="font-headline text-base font-bold text-on-surface dark:text-white">
+                    {editingScTx ? 'Edit Share Capital Entry' : 'Add Share Capital Entry'}
+                  </h2>
+                  <p className="text-[11px] text-neutral-500">{member.first_name} {member.last_name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsAddScModalOpen(false); setEditingScTx(null); }}
+                className="p-1.5 rounded-full hover:bg-neutral/10 text-neutral-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {scError && (
+              <div className="p-3 mb-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-2xl text-xs flex gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{scError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddShareCapitalSubmit} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Transaction Date</label>
+                  <input
+                    type="date"
+                    value={scDate}
+                    onChange={(e) => setScDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container text-on-surface dark:text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Amount (₱) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    placeholder="0.00"
+                    value={scAmount}
+                    onChange={(e) => setScAmount(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container font-mono font-bold text-on-surface dark:text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {!editingScTx && (
+                <>
+                  <div className="space-y-2 pt-1">
+                    <label className="block text-[10px] font-bold uppercase text-neutral-500">Select Deposit Channel:</label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => { setScPaymentMethod('gcash'); setScPaymentRefNo(''); }}
+                        className={`p-3 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${
+                          scPaymentMethod === 'gcash'
+                            ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                            : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                        }`}
+                      >
+                        <WalletCards className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-xs block text-on-surface dark:text-white">GCash</span>
+                          <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Instant online GCash mobile wallet transfer</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setScPaymentMethod('bank_transfer'); setScPaymentRefNo(''); }}
+                        className={`p-3 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${
+                          scPaymentMethod === 'bank_transfer'
+                            ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                            : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                        }`}
+                      >
+                        <Building className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-xs block text-on-surface dark:text-white">Bank Transfer</span>
+                          <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Direct deposit to BDO Account</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setScPaymentMethod('payroll'); setScPaymentRefNo(''); }}
+                        className={`p-3 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${
+                          scPaymentMethod === 'payroll'
+                            ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                            : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                        }`}
+                      >
+                        <Lock className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-xs block text-on-surface dark:text-white">Salary Deduction</span>
+                          <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Deduct from upcoming payslip</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setScPaymentMethod('otc'); setScPaymentRefNo(''); }}
+                        className={`p-3 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${
+                          scPaymentMethod === 'otc'
+                            ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                            : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                        }`}
+                      >
+                        <Users className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-xs block text-on-surface dark:text-white">Hand-in</span>
+                          <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Hand-in cash to the co-op cashier</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {scPaymentMethod === 'payroll' && (
+                    <div className="p-3 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-neutral-700 dark:text-neutral-300">Select Payroll Cutoff:</span>
+                        <span className="text-[10px] font-mono uppercase bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary px-2 py-0.5 rounded-full font-extrabold">
+                          {scSalaryDeductionMode === 'SD' ? '15th Cutoff' : scSalaryDeductionMode === 'SD30' ? '30th Cutoff' : '15th & 30th Cutoffs'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['SD', 'SD30', 'SD2'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setScSalaryDeductionMode(mode)}
+                            className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                              scSalaryDeductionMode === mode
+                                ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20'
+                                : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                            }`}
+                          >
+                            <span className="font-extrabold text-xs block text-on-surface dark:text-white">{mode}</span>
+                            <span className="text-[9px] text-neutral-500">
+                              {mode === 'SD' ? '15th' : mode === 'SD30' ? '30th' : '15th & 30th'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {scPaymentMethod === 'gcash' && (
+                    <div className="p-3 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
+                      <div className="flex justify-between items-center font-bold">
+                        <span className="text-neutral-600 dark:text-neutral-400">GCash Account Name:</span>
+                        <span className="text-on-surface dark:text-white font-extrabold">Michelle Pable</span>
+                      </div>
+                      <div className="flex justify-between items-center font-bold">
+                        <span className="text-neutral-600 dark:text-neutral-400">Co-op GCash Number:</span>
+                        <span className="font-mono text-primary dark:text-secondary font-extrabold">09498664041</span>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter GCash Reference No. (e.g. 10029384)"
+                        value={scPaymentRefNo}
+                        onChange={(e) => setScPaymentRefNo(e.target.value)}
+                        className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary text-on-surface dark:text-white"
+                      />
+                    </div>
+                  )}
+
+                  {scPaymentMethod === 'bank_transfer' && (
+                    <div className="p-3 border border-outline-variant/65 rounded-xl bg-neutral/5 dark:bg-surface-container space-y-2 text-xs">
+                      <div className="space-y-0.5 pb-1 border-b border-outline-variant/30">
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-neutral-500 dark:text-neutral-400">Account Name:</div>
+                        <div className="font-semibold text-on-surface dark:text-white text-xs">
+                          UNIVERSITY OF CEBU - METC MULTIPURPOSE COOPERATIVE (UC-METC MPC)
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center font-bold">
+                        <span className="text-neutral-600 dark:text-neutral-400">BDO Account No:</span>
+                        <span className="font-mono text-primary dark:text-secondary font-extrabold tracking-wider">007050082810</span>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter Bank Deposit/Ref No. (e.g. BDO-98213)"
+                        value={scPaymentRefNo}
+                        onChange={(e) => setScPaymentRefNo(e.target.value)}
+                        className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary text-on-surface dark:text-white"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsAddScModalOpen(false); setEditingScTx(null); }}
+                  disabled={scSubmitting}
+                  className="px-5 py-2 rounded-full border border-outline-variant text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={scSubmitting}
+                  className="px-5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-60"
+                >
+                  {scSubmitting ? 'Saving...' : editingScTx ? 'Update Entry' : 'Save Entry'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Share Capital Entry Confirmation Modal */}
+      {deletingScTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl w-full max-w-sm shadow-2xl p-6 animate-modal-pop">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                <Trash2 className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <h2 className="font-headline text-base font-bold text-on-surface dark:text-white">Delete Share Capital Entry</h2>
+                <p className="text-[11px] text-neutral-500">{member.first_name} {member.last_name}</p>
+              </div>
+            </div>
+
+            {scError && (
+              <div className="p-3 mb-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-2xl text-xs flex gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{scError}</span>
+              </div>
+            )}
+
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 mb-5">
+              Remove entry of <strong>{formatCurrency(deletingScTx.amount)}</strong> dated{' '}
+              <strong>
+                {deletingScTx.transaction_date
+                  ? new Date(deletingScTx.transaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  : 'N/A'}
+              </strong>
+              ? Running balances will recalculate automatically.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeletingScTx(null)}
+                disabled={scSubmitting}
+                className="px-5 py-2 rounded-full border border-outline-variant text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteShareCapitalConfirm}
+                disabled={scSubmitting}
+                className="px-5 py-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-60"
+              >
+                {scSubmitting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

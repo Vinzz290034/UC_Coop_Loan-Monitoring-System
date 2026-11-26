@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -38,7 +38,11 @@ import {
   ArrowLeft,
   Eye,
   Filter,
-  RotateCcw
+  RotateCcw,
+  Edit2,
+  Trash2,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 
 export default function AccountingPage() {
@@ -86,6 +90,41 @@ export default function AccountingPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isFDModalOpen, setIsFDModalOpen] = useState(false);
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
+
+  // Add / Edit / Delete Share Capital Entry state
+  const [isAddScModalOpen, setIsAddScModalOpen] = useState(false);
+  const [editingScTx, setEditingScTx] = useState<any | null>(null);
+  const [deletingScTx, setDeletingScTx] = useState<any | null>(null);
+  const [scEditDate, setScEditDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [scEditAmount, setScEditAmount] = useState('');
+  const [scEditSubmitting, setScEditSubmitting] = useState(false);
+  const [scEditError, setScEditError] = useState<string | null>(null);
+
+  // Searchable Animated Member Profile Dropdown state
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const memberDropdownRef = useRef<HTMLDivElement>(null);
+  const memberSearchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isMemberDropdownOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (memberDropdownRef.current && !memberDropdownRef.current.contains(e.target as Node)) {
+        setIsMemberDropdownOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMemberDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    const t = setTimeout(() => memberSearchInputRef.current?.focus(), 40);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [isMemberDropdownOpen]);
 
   // Form Fields: Savings Deposit & Withdrawal
   const [savingsDepositAmount, setSavingsDepositAmount] = useState('');
@@ -398,11 +437,21 @@ export default function AccountingPage() {
       const customRemarks = shareRemarks.trim() ? ` - ${shareRemarks.trim()}` : '';
       const finalRemarks = `Capital build-up deposit via ${methodLabel}${refPart}${customRemarks}`;
 
+      const collectionPaymentMethod = sharePaymentMethod === 'gcash'
+        ? 'Gcash'
+        : sharePaymentMethod === 'bank_transfer'
+          ? 'Bank transfer'
+          : sharePaymentMethod === 'payroll'
+            ? 'salary deduction'
+            : 'Hand in';
+
       await api.post('/accounts/share-capital', {
         member_id: selectedMemberId,
         transaction_type: 'credit',
         amount: numAmount,
-        remarks: finalRemarks
+        remarks: finalRemarks,
+        payment_method: collectionPaymentMethod,
+        reference_no: sharePaymentRefNo.trim() || undefined
       });
 
       setShareAmount('');
@@ -415,6 +464,75 @@ export default function AccountingPage() {
       setShareError(err.response?.data?.error?.message || err.response?.data?.message || 'Share transaction failed.');
     } finally {
       setShareSubmitting(false);
+    }
+  };
+
+  const handleUpdateShareTx = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const numAmount = parseFloat(scEditAmount);
+    if (!numAmount || numAmount <= 0) {
+      setScEditError('Amount must be greater than zero.');
+      return;
+    }
+    setScEditError(null);
+    setScEditSubmitting(true);
+    try {
+      if (editingScTx) {
+        await api.put(`/accounts/share-capital/tx/${editingScTx.id}`, {
+          amount: numAmount,
+          transaction_date: scEditDate || undefined
+        });
+      } else {
+        const channelLabel = sharePaymentMethod === 'gcash'
+          ? 'GCash'
+          : sharePaymentMethod === 'bank_transfer'
+            ? 'Bank Transfer'
+            : sharePaymentMethod === 'payroll'
+              ? `Salary Deduction (${shareSalaryDeductionMode})`
+              : 'Hand-in';
+        const collectionPaymentMethod = sharePaymentMethod === 'gcash'
+          ? 'Gcash'
+          : sharePaymentMethod === 'bank_transfer'
+            ? 'Bank transfer'
+            : sharePaymentMethod === 'payroll'
+              ? 'salary deduction'
+              : 'Hand in';
+        const refPart = sharePaymentRefNo.trim() ? ` • Ref: ${sharePaymentRefNo.trim()}` : '';
+        await api.post('/accounts/share-capital', {
+          member_id: selectedMemberId,
+          transaction_type: 'credit',
+          amount: numAmount,
+          transaction_date: scEditDate || undefined,
+          payment_method: collectionPaymentMethod,
+          reference_no: sharePaymentRefNo.trim() || undefined,
+          remarks: `Manual Entry (${channelLabel}${refPart})`
+        });
+      }
+      setIsAddScModalOpen(false);
+      setEditingScTx(null);
+      setScEditAmount('');
+      setSharePaymentRefNo('');
+      setSharePaymentMethod('otc');
+      loadLedgerData();
+    } catch (err: any) {
+      setScEditError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to save share capital entry.');
+    } finally {
+      setScEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteShareTx = async () => {
+    if (!deletingScTx) return;
+    setScEditError(null);
+    setScEditSubmitting(true);
+    try {
+      await api.delete(`/accounts/share-capital/tx/${deletingScTx.id}`);
+      setDeletingScTx(null);
+      loadLedgerData();
+    } catch (err: any) {
+      setScEditError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to delete share capital entry.');
+    } finally {
+      setScEditSubmitting(false);
     }
   };
 
@@ -719,16 +837,6 @@ export default function AccountingPage() {
             </>
           )}
 
-          {activeTab === 'share_capital' && (
-            <button
-              onClick={() => setIsShareModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-primary dark:bg-secondary text-white dark:text-neutral-950 rounded-full hover:shadow-lg transition-all active:scale-95 cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4" />
-              Add Share Capital
-            </button>
-          )}
-
           {activeTab === 'fixed_deposits' && (
             <button
               onClick={() => setIsFDModalOpen(true)}
@@ -740,25 +848,6 @@ export default function AccountingPage() {
           )}
         </div>
       </div>
-
-      {/* Member Selection for Admins/Staff - only for share capital */}
-      {isAdminOrManager && activeTab === 'share_capital' && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm max-w-md">
-          <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 whitespace-nowrap font-label">Auditing Member Profile:</label>
-          <select
-            value={selectedMemberId}
-            onChange={(e) => setSelectedMemberId(e.target.value)}
-            className="w-full px-3 py-2 text-xs border border-outline-variant rounded-xl bg-white dark:bg-surface-container-low focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all text-on-surface dark:text-white"
-          >
-            <option value="">-- Choose Member Profile --</option>
-            {members.map((m: any) => (
-              <option key={m.id} value={m.id}>
-                {m.last_name}, {m.first_name} (Member ID: {m.member_no || 'N/A'})
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {/* Nav Tabs Bar - Standardized underline tab design matching Loans page */}
       <div className="flex border-b border-outline-variant/50 overflow-x-auto">
@@ -800,6 +889,113 @@ export default function AccountingPage() {
           <span>Share Capital Ledger</span>
         </button>
       </div>
+
+      {/* Member Selection for Admins/Staff - only for share capital */}
+      {isAdminOrManager && activeTab === 'share_capital' && (() => {
+        const selectedMemberObj = members.find((m: any) => String(m.id) === String(selectedMemberId));
+        const mq = memberSearchQuery.toLowerCase().trim();
+        const filteredMemberOptions = members.filter((m: any) => {
+          if (!mq) return true;
+          const full = `${m.last_name || ''} ${m.first_name || ''} ${m.middle_name || ''} ${m.member_no || ''}`.toLowerCase();
+          const rev = `${m.first_name || ''} ${m.last_name || ''}`.toLowerCase();
+          return full.includes(mq) || rev.includes(mq);
+        });
+
+        return (
+          <div
+            ref={memberDropdownRef}
+            className="relative flex flex-col sm:flex-row sm:items-center gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm max-w-lg"
+          >
+            <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 whitespace-nowrap font-label">
+              Auditing Member Profile:
+            </label>
+            <div className="relative w-full">
+              <button
+                type="button"
+                onClick={() => setIsMemberDropdownOpen(prev => !prev)}
+                className={`w-full flex items-center justify-between gap-2 px-3.5 py-2 text-xs font-semibold border rounded-xl bg-white dark:bg-surface-container-low text-on-surface dark:text-white transition-all cursor-pointer ${
+                  isMemberDropdownOpen
+                    ? 'border-emerald-500 ring-2 ring-emerald-500/20'
+                    : 'border-outline-variant hover:border-emerald-400'
+                }`}
+              >
+                <span className="truncate">
+                  {selectedMemberObj
+                    ? `${selectedMemberObj.last_name}, ${selectedMemberObj.first_name} (Member ID: ${selectedMemberObj.member_no || 'N/A'})`
+                    : '-- Choose Member Profile --'}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 text-emerald-600 shrink-0 transition-transform duration-200 ${
+                    isMemberDropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {isMemberDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-2 z-40 rounded-2xl bg-white dark:bg-surface-container-high border border-outline-variant/80 shadow-xl overflow-hidden animate-modal-pop origin-top">
+                  <div className="p-2 border-b border-outline-variant/40 bg-neutral-50/70 dark:bg-neutral-900/50">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        ref={memberSearchInputRef}
+                        type="text"
+                        placeholder="Search member name or ID..."
+                        value={memberSearchQuery}
+                        onChange={(e) => setMemberSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl border border-outline-variant/60 bg-white dark:bg-surface-container-low text-on-surface dark:text-white outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
+                      />
+                      {memberSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setMemberSearchQuery('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto custom-scrollbar divide-y divide-outline-variant/20">
+                    {filteredMemberOptions.length === 0 ? (
+                      <div className="px-4 py-5 text-center text-xs text-neutral-500 italic">
+                        No matching members found.
+                      </div>
+                    ) : (
+                      filteredMemberOptions.map((m: any) => {
+                        const isSel = String(m.id) === String(selectedMemberId);
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedMemberId(m.id);
+                              setIsMemberDropdownOpen(false);
+                              setMemberSearchQuery('');
+                            }}
+                            className={`w-full px-3.5 py-2 text-left text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                              isSel
+                                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-bold'
+                                : 'text-on-surface dark:text-white hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60'
+                            }`}
+                          >
+                            <span className="truncate">
+                              {m.last_name}, {m.first_name}{' '}
+                              <span className="text-[10.5px] font-mono text-neutral-500 dark:text-neutral-400">
+                                ({m.member_no || 'N/A'})
+                              </span>
+                            </span>
+                            {isSel && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Pending Office Cash Payment Queue for Admins/Staff - only for share capital */}
       {activeTab === 'share_capital' && <PendingPlacementsSection onConfirmed={loadLedgerData} />}
@@ -1471,97 +1667,177 @@ export default function AccountingPage() {
           )}
 
           {/* TAB 1: SHARE CAPITAL LEDGER */}
-          {activeTab === 'share_capital' && shareData && (
+          {activeTab === 'share_capital' && shareData && (() => {
+            const postedTransactions = (shareData.transactions || []).filter(
+              (tx: any) => !tx.status || tx.status === 'completed'
+            );
+            const totalCredits = postedTransactions
+              .filter((tx: any) => tx.transaction_type === 'credit')
+              .reduce((sum: number, tx: any) => sum + (parseFloat(tx.amount) || 0), 0);
+            const totalDebits = postedTransactions
+              .filter((tx: any) => tx.transaction_type === 'debit')
+              .reduce((sum: number, tx: any) => sum + (parseFloat(tx.amount) || 0), 0);
+
+            return (
             <div className="space-y-6">
-              <div className="p-6 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm max-w-sm">
-                <span className="text-[10px] uppercase font-bold text-neutral-600 dark:text-neutral-400 font-label">Cumulative Valuation Balance</span>
-                <h3 className="font-headline text-2xl font-extrabold text-primary dark:text-secondary mt-1">
-                  {formatCurrency(shareData.balance)}
-                </h3>
-                <p className="text-[11px] text-neutral-600 dark:text-neutral-400 mt-2">Locked member equity value contributions</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
+                  <span className="text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-400 font-label">Current Share Capital</span>
+                  <h3 className="font-headline text-2xl font-extrabold text-primary dark:text-secondary mt-1">
+                    {formatCurrency(shareData.balance)}
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1">Cumulative member equity balance</p>
+                </div>
+
+                <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
+                  <span className="text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-400 font-label">Total Deposits / Credits</span>
+                  <h3 className="font-headline text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+                    {formatCurrency(totalCredits)}
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1">All completed equity deposits</p>
+                </div>
+
+                <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
+                  <span className="text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-400 font-label">Total Withdrawals</span>
+                  <h3 className="font-headline text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-1">
+                    {formatCurrency(totalDebits)}
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1">All completed equity withdrawals</p>
+                </div>
               </div>
 
+              {(user?.role === 'admin' || user?.role === 'staff') && (
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingScTx(null);
+                      setScEditDate(new Date().toISOString().split('T')[0]);
+                      setScEditAmount('');
+                      setSharePaymentMethod('otc');
+                      setSharePaymentRefNo('');
+                      setScEditError(null);
+                      setIsAddScModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Entry</span>
+                  </button>
+                </div>
+              )}
+
               <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl overflow-hidden shadow-sm p-1.5">
-                <h4 className="px-6 py-4 font-headline text-sm font-bold text-on-surface dark:text-white border-b border-outline-variant/40 flex items-center gap-2">
-                  <History className="w-4 h-4 text-primary" /> Share Capital Postings
-                </h4>
+                <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between gap-3 flex-wrap">
+                  <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
+                    <History className="w-4 h-4 text-primary" /> Share Capital Ledger
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300">
+                      {postedTransactions.length} {postedTransactions.length === 1 ? 'entry' : 'entries'}
+                    </span>
+                  </h4>
+                </div>
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Tx Date</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Tx Type</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase">Amount</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden sm:table-cell">Valuation After</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase hidden md:table-cell">Remarks</th>
-                        <th className="px-4 sm:px-6 py-3 font-headline text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase text-right">Receipt</th>
+                        <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">#</th>
+                        <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Transaction Date</th>
+                        <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Invoice / Mode</th>
+                        <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Amount</th>
+                        <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap hidden sm:table-cell">Running Balance</th>
+                        <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider hidden md:table-cell">Remarks / Source</th>
+                        <th className="px-4 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
-                      {(() => {
-                        const postedTransactions = (shareData.transactions || []).filter(
-                          (tx: any) => !tx.status || tx.status === 'completed'
-                        );
-
-                        if (postedTransactions.length === 0) {
-                          return (
-                            <tr>
-                              <td colSpan={6} className="px-6 py-6 text-center text-neutral-600 dark:text-neutral-400 italic">No transactions booked.</td>
-                            </tr>
-                          );
-                        }
-
-                        return postedTransactions.map((tx: any) => (
-                          <tr key={tx.id} className="hover:bg-neutral/5">
-                            <td className="px-4 sm:px-6 py-3 font-mono">{new Date(tx.transaction_date).toLocaleDateString()}</td>
-                            <td className="px-4 sm:px-6 py-3">
-                              {tx.transaction_type === 'credit' ? (
-                                <span className="inline-flex items-center gap-1 text-primary font-bold">
-                                  <TrendingUp className="w-3.5 h-3.5" /> Deposit
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-tertiary font-bold">
-                                  <TrendingDown className="w-3.5 h-3.5" /> Withdrawal
-                                </span>
-                              )}
+                      {postedTransactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-6 py-8 text-center text-neutral-500 dark:text-neutral-400 italic">No share capital transactions recorded.</td>
+                        </tr>
+                      ) : (
+                        postedTransactions.map((tx: any, idx: number) => (
+                          <tr key={tx.id || idx} className="hover:bg-neutral/5 transition-colors">
+                            <td className="px-4 py-3 font-mono text-[11px] text-neutral-400">{idx + 1}</td>
+                            <td className="px-4 py-3 font-mono text-[11px] whitespace-nowrap">
+                              {new Date(tx.transaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </td>
-                            <td className="px-4 sm:px-6 py-3 font-bold">{formatCurrency(parseFloat(tx.amount))}</td>
-                            <td className="px-4 sm:px-6 py-3 font-mono font-bold text-neutral-600 dark:text-neutral-400 hidden sm:table-cell">{formatCurrency(parseFloat(tx.balance_after))}</td>
-                            <td className="px-4 sm:px-6 py-3 text-neutral-600 dark:text-neutral-400 hidden md:table-cell">{tx.remarks}</td>
-                            <td className="px-4 sm:px-6 py-3 text-right">
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-neutral/10 text-neutral-600 dark:text-neutral-300">
+                                {tx.invoice_no || tx.mode || 'SD'}
+                              </span>
+                            </td>
+                            <td className={`px-4 py-3 font-mono font-bold whitespace-nowrap ${
+                              tx.transaction_type === 'debit'
+                                ? 'text-rose-600 dark:text-rose-400'
+                                : 'text-emerald-600 dark:text-emerald-400'
+                            }`}>
+                              {tx.transaction_type === 'debit' ? '-' : '+'}{formatCurrency(parseFloat(tx.amount))}
+                            </td>
+                            <td className="px-4 py-3 font-mono font-extrabold text-on-surface dark:text-white hidden sm:table-cell whitespace-nowrap">
+                              {formatCurrency(parseFloat(tx.balance_after))}
+                            </td>
+                            <td className="px-4 py-3 text-neutral-500 dark:text-neutral-400 hidden md:table-cell truncate max-w-xs">
+                              {tx.remarks || 'Share capital placement'}
+                            </td>
+                            <td className="px-4 py-3 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   onClick={() => downloadContributionReceipt(tx)}
                                   disabled={downloadingTxId === tx.id}
-                                  className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 hover:bg-emerald-100 rounded-lg text-[10px] font-bold transition-all active:scale-95 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  title="Download receipt"
                                 >
-                                  {downloadingTxId === tx.id ? (
-                                    <>
-                                      <Loader2 className="w-2.5 h-2.5 animate-spin" /> Saving...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Download className="w-2.5 h-2.5" /> Download
-                                    </>
-                                  )}
+                                  {downloadingTxId === tx.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                                  <span className="hidden lg:inline">Download</span>
                                 </button>
                                 <button
                                   onClick={() => openContributionReceiptModal(tx)}
-                                  className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-750 dark:text-emerald-300 border border-emerald-250/30 hover:bg-emerald-100 hover:border-emerald-300 rounded-lg text-[9px] font-bold tracking-wide transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
+                                  className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 hover:bg-emerald-100 rounded-lg text-[10px] font-bold transition-all active:scale-95 flex items-center gap-1 cursor-pointer"
+                                  title="Print receipt"
                                 >
-                                  <Printer className="w-2.5 h-2.5" /> Print
+                                  <Printer className="w-3 h-3" />
+                                  <span className="hidden lg:inline">Print</span>
                                 </button>
+                                {(user?.role === 'admin' || user?.role === 'staff') && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingScTx(tx);
+                                        setScEditDate(tx.transaction_date ? new Date(tx.transaction_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+                                        setScEditAmount(String(tx.amount ?? ''));
+                                        setScEditError(null);
+                                      }}
+                                      title="Edit entry"
+                                      className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setScEditError(null);
+                                        setDeletingScTx(tx);
+                                      }}
+                                      title="Delete entry"
+                                      className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-neutral-600 dark:text-neutral-300 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </td>
                           </tr>
-                        ));
-                      })()}
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* TAB 2: FIXED DEPOSITS REGISTRY */}
           {activeTab === 'fixed_deposits' && (
@@ -3103,6 +3379,286 @@ export default function AccountingPage() {
           }
         }
       `}} />
+
+      {/* Add / Edit Share Capital Entry Modal */}
+      {(isAddScModalOpen || editingScTx) && mounted && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl w-full max-w-lg shadow-2xl p-6 animate-modal-pop max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <PiggyBank className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h2 className="font-headline text-base font-bold text-on-surface dark:text-white">
+                    {editingScTx ? 'Edit Share Capital Entry' : 'Add Share Capital Entry'}
+                  </h2>
+                  <p className="text-[11px] text-neutral-500">{auditedMember?.first_name} {auditedMember?.last_name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsAddScModalOpen(false); setEditingScTx(null); }}
+                className="p-1.5 rounded-full hover:bg-neutral/10 text-neutral-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {scEditError && (
+              <div className="p-3 mb-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-2xl text-xs">
+                {scEditError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateShareTx} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Transaction Date</label>
+                  <input
+                    type="date"
+                    value={scEditDate}
+                    onChange={(e) => setScEditDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container text-on-surface dark:text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Amount (₱) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    placeholder="0.00"
+                    value={scEditAmount}
+                    onChange={(e) => setScEditAmount(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container font-mono font-bold text-on-surface dark:text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {!editingScTx && (
+                <>
+                  <div className="space-y-2 pt-1">
+                    <label className="block text-[10px] font-bold uppercase text-neutral-500">Select Deposit Channel:</label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => { setSharePaymentMethod('gcash'); setSharePaymentRefNo(''); }}
+                        className={`p-3 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${
+                          sharePaymentMethod === 'gcash'
+                            ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                            : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                        }`}
+                      >
+                        <WalletCards className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-xs block text-on-surface dark:text-white">GCash</span>
+                          <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Instant online GCash mobile wallet transfer</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setSharePaymentMethod('bank_transfer'); setSharePaymentRefNo(''); }}
+                        className={`p-3 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${
+                          sharePaymentMethod === 'bank_transfer'
+                            ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                            : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                        }`}
+                      >
+                        <Building className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-xs block text-on-surface dark:text-white">Bank Transfer</span>
+                          <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Direct deposit to BDO Account</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setSharePaymentMethod('payroll'); setSharePaymentRefNo(''); }}
+                        className={`p-3 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${
+                          sharePaymentMethod === 'payroll'
+                            ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                            : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                        }`}
+                      >
+                        <Lock className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-xs block text-on-surface dark:text-white">Salary Deduction</span>
+                          <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Deduct from upcoming payslip</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setSharePaymentMethod('otc'); setSharePaymentRefNo(''); }}
+                        className={`p-3 rounded-xl border transition-all text-left flex items-start gap-2 cursor-pointer ${
+                          sharePaymentMethod === 'otc'
+                            ? 'bg-primary/5 dark:bg-secondary/5 border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                            : 'border-outline-variant/65 bg-transparent hover:border-neutral/30'
+                        }`}
+                      >
+                        <Users className="w-4 h-4 mt-0.5 text-primary dark:text-secondary flex-shrink-0" />
+                        <div>
+                          <span className="font-bold text-xs block text-on-surface dark:text-white">Hand-in</span>
+                          <span className="text-[9px] text-neutral-500 block leading-tight mt-0.5">Hand-in cash to the co-op cashier</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {sharePaymentMethod === 'payroll' && (
+                    <div className="p-3 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-neutral-700 dark:text-neutral-300">Select Payroll Cutoff:</span>
+                        <span className="text-[10px] font-mono uppercase bg-primary/10 dark:bg-secondary/10 text-primary dark:text-secondary px-2 py-0.5 rounded-full font-extrabold">
+                          {shareSalaryDeductionMode === 'SD' ? '15th Cutoff' : shareSalaryDeductionMode === 'SD30' ? '30th Cutoff' : '15th & 30th Cutoffs'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['SD', 'SD30', 'SD2'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setShareSalaryDeductionMode(mode)}
+                            className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                              shareSalaryDeductionMode === mode
+                                ? 'bg-primary/10 dark:bg-secondary/10 border-primary dark:border-secondary ring-2 ring-primary/20'
+                                : 'border-outline-variant/65 bg-white dark:bg-surface-container-high hover:border-neutral/40'
+                            }`}
+                          >
+                            <span className="font-extrabold text-xs block text-on-surface dark:text-white">{mode}</span>
+                            <span className="text-[9px] text-neutral-500">
+                              {mode === 'SD' ? '15th' : mode === 'SD30' ? '30th' : '15th & 30th'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {sharePaymentMethod === 'gcash' && (
+                    <div className="p-3 border border-outline-variant/65 rounded-xl bg-neutral/5 space-y-2 text-xs">
+                      <div className="flex justify-between items-center font-bold">
+                        <span className="text-neutral-600 dark:text-neutral-400">GCash Account Name:</span>
+                        <span className="text-on-surface dark:text-white font-extrabold">Michelle Pable</span>
+                      </div>
+                      <div className="flex justify-between items-center font-bold">
+                        <span className="text-neutral-600 dark:text-neutral-400">Co-op GCash Number:</span>
+                        <span className="font-mono text-primary dark:text-secondary font-extrabold">09498664041</span>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter GCash Reference No. (e.g. 10029384)"
+                        value={sharePaymentRefNo}
+                        onChange={(e) => setSharePaymentRefNo(e.target.value)}
+                        className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary text-on-surface dark:text-white"
+                      />
+                    </div>
+                  )}
+
+                  {sharePaymentMethod === 'bank_transfer' && (
+                    <div className="p-3 border border-outline-variant/65 rounded-xl bg-neutral/5 dark:bg-surface-container space-y-2 text-xs">
+                      <div className="space-y-0.5 pb-1 border-b border-outline-variant/30">
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-neutral-500 dark:text-neutral-400">Account Name:</div>
+                        <div className="font-semibold text-on-surface dark:text-white text-xs">
+                          UNIVERSITY OF CEBU - METC MULTIPURPOSE COOPERATIVE (UC-METC MPC)
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center font-bold">
+                        <span className="text-neutral-600 dark:text-neutral-400">BDO Account No:</span>
+                        <span className="font-mono text-primary dark:text-secondary font-extrabold tracking-wider">007050082810</span>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Enter Bank Deposit/Ref No. (e.g. BDO-98213)"
+                        value={sharePaymentRefNo}
+                        onChange={(e) => setSharePaymentRefNo(e.target.value)}
+                        className="w-full px-3 py-2 border border-outline-variant/65 rounded-lg bg-white dark:bg-surface-container-high text-xs font-mono font-bold focus:outline-none focus:border-primary text-on-surface dark:text-white"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsAddScModalOpen(false); setEditingScTx(null); }}
+                  disabled={scEditSubmitting}
+                  className="px-5 py-2 rounded-full border border-outline-variant text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={scEditSubmitting}
+                  className="px-5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-60"
+                >
+                  {scEditSubmitting ? 'Saving...' : editingScTx ? 'Update Entry' : 'Save Entry'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Delete Share Capital Entry Modal */}
+      {deletingScTx && mounted && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+          <div className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl w-full max-w-sm shadow-2xl p-6 animate-modal-pop">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                <Trash2 className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <h2 className="font-headline text-base font-bold text-on-surface dark:text-white">Delete Share Capital Entry</h2>
+                <p className="text-[11px] text-neutral-500">{auditedMember?.first_name} {auditedMember?.last_name}</p>
+              </div>
+            </div>
+
+            {scEditError && (
+              <div className="p-3 mb-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-2xl text-xs">
+                {scEditError}
+              </div>
+            )}
+
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 mb-5">
+              Remove entry of <strong>{formatCurrency(parseFloat(deletingScTx.amount || 0))}</strong> dated{' '}
+              <strong>
+                {deletingScTx.transaction_date
+                  ? new Date(deletingScTx.transaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  : 'N/A'}
+              </strong>
+              ? Running balances will recalculate automatically.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeletingScTx(null)}
+                disabled={scEditSubmitting}
+                className="px-5 py-2 rounded-full border border-outline-variant text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral/5 cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteShareTx}
+                disabled={scEditSubmitting}
+                className="px-5 py-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-60"
+              >
+                {scEditSubmitting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

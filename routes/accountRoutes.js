@@ -2,6 +2,8 @@ import express from 'express';
 import {
   postShareCapitalTransaction,
   getShareCapital,
+  updateShareCapitalTransaction,
+  deleteShareCapitalTransaction,
   createFixedDeposit,
   getFixedDeposits,
   createInvestment,
@@ -50,6 +52,10 @@ router.route('/share-capital')
 
 router.route('/share-capital/:memberId')
   .get(getShareCapital);
+
+router.route('/share-capital/tx/:id')
+  .put(restrictTo('admin', 'staff'), updateShareCapitalTransaction)
+  .delete(restrictTo('admin', 'staff'), deleteShareCapitalTransaction);
 
 // 2. Fixed Deposit placements
 router.route('/fixed-deposits')
