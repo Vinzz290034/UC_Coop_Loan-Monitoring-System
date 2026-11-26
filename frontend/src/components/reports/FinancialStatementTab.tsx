@@ -257,6 +257,15 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
 
   // Navigate to transaction source
   const handleNavigateToSource = useCallback((t: FsTransaction) => {
+    if (t.source === 'baseline' || t.source === 'inventory_baseline' || (!t.voucher_id && /^(BEG-BAL|INV-OCT)$/i.test(String(t.voucher_no || '')))) {
+      return;
+    }
+
+    if (t.source === 'income_statement') {
+      router.push(`/dashboard/reports?tab=statement_of_operations&year=${year}`);
+      return;
+    }
+
     if (t.source === 'check_voucher' || t.voucher_no || t.voucher_id) {
       const params = new URLSearchParams();
       params.set('tab', 'summary');
@@ -1514,15 +1523,21 @@ export default function FinancialStatementTab({ initialYear, initialMonth }: Pro
                                   {peso(t.amount)}
                                 </td>
                                 <td className="p-2.5 text-center pr-4 whitespace-nowrap">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleNavigateToSource(t)}
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold transition-all cursor-pointer"
-                                    title="Open transaction detail in accounting module"
-                                  >
-                                    <span>Inspect</span>
-                                    <ExternalLink className="w-2.5 h-2.5" />
-                                  </button>
+                                  {(t.source === 'baseline' || t.source === 'inventory_baseline' || (!t.voucher_id && /^(BEG-BAL|INV-OCT)$/i.test(String(t.voucher_no || '')))) ? (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 text-[10px] font-semibold">
+                                      Opening Balance
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleNavigateToSource(t)}
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold transition-all cursor-pointer"
+                                      title={t.source === 'income_statement' ? 'Open Income Statement' : 'Open transaction detail in accounting module'}
+                                    >
+                                      <span>{t.source === 'income_statement' ? 'Income Stmt' : 'Inspect'}</span>
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             ))}
