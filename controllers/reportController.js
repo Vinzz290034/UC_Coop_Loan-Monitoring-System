@@ -3333,9 +3333,14 @@ export const getFinancialStatementReport = async (req, res, next) => {
         ORDER BY date DESC
       `),
       pool.query(`
-        SELECT id, member_id, amount, transaction_type, transaction_date
-        FROM share_capital_transactions
-        WHERE transaction_type = 'credit'
+        SELECT sct.id, sct.member_id, sct.amount, sct.transaction_type, sct.transaction_date,
+               sct.remarks, sct.status, sct.invoice_no, sct.collection_id,
+               m.first_name, m.middle_name, m.last_name
+        FROM share_capital_transactions sct
+        LEFT JOIN members m ON m.id = sct.member_id
+        WHERE sct.transaction_type = 'credit'
+          AND COALESCE(sct.status, 'completed') = 'completed'
+          AND sct.collection_id IS NULL
       `)
     ]);
 
@@ -3812,6 +3817,34 @@ export const getFinancialStatementReport = async (req, res, next) => {
       }
       if (text.includes('petty cash loan') || (text.includes('petty cash') && text.includes('loan'))) {
         stores.petty_cash_loan.transactions.push(tx);
+      }
+    });
+
+    // Attach manually inputed Share Capital entries (not linked to collections) ONLY to Common Shares (Equity)
+    (scResult?.rows || []).forEach(sc => {
+      const rawDate = sc.transaction_date;
+      if (!rawDate) return;
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return;
+      if (d.getFullYear() !== targetYear) return;
+
+      const amt = parseFloat(sc.amount) || 0;
+      if (amt <= 0) return;
+
+      const txMonthIdx = d.getMonth();
+      const memberName = [sc.first_name, sc.middle_name, sc.last_name].filter(Boolean).join(' ').trim() || 'Member';
+      stores.common_shares.transactions.push({
+        date: d.toISOString().split('T')[0],
+        month: txMonthIdx + 1,
+        year: targetYear,
+        payee: memberName,
+        particulars: sc.remarks || 'Member Share Capital (Manual Entry)',
+        or_no: sc.invoice_no || null,
+        source: 'share_capital',
+        amount: amt
+      });
+      for (let m = txMonthIdx; m < 12; m++) {
+        stores.common_shares.current[m] += amt;
       }
     });
 

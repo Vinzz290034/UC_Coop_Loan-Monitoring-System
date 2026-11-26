@@ -616,14 +616,18 @@ function ReportsPageContent() {
     }
 
     let coaGroups: any[] = [];
+    const seenCoaTitles = new Set<string>();
+    const seenCoaCanonical = new Set<string>();
     if (chartOfAccounts.length > 0) {
       const typeOrder: string[] = [];
       const byType: Record<string, any[]> = {};
-      const seenTitles = new Set<string>();
       for (const row of chartOfAccounts) {
         const titleKey = String(row.account_title || '').trim().toLowerCase();
-        if (!titleKey || seenTitles.has(titleKey)) continue;
-        seenTitles.add(titleKey);
+        if (!titleKey || seenCoaTitles.has(titleKey)) continue;
+        seenCoaTitles.add(titleKey);
+        seenCoaTitles.add(normalizeAccountName(row.account_title).toLowerCase());
+        const canonKey = canonicalAccountMatchKey(row.account_title);
+        if (canonKey) seenCoaCanonical.add(canonKey);
         const typeLabel = String(row.account_type || 'Other').trim() || 'Other';
         if (!byType[typeLabel]) {
           byType[typeLabel] = [];
@@ -731,6 +735,11 @@ function ReportsPageContent() {
     }
 
     for (const name of allKnownNames) {
+      const nameLower = name.trim().toLowerCase();
+      const canon = canonicalAccountMatchKey(name);
+      if (seenCoaTitles.has(nameLower) || (canon && seenCoaCanonical.has(canon))) {
+        continue;
+      }
       const cat = getCategoryForAccount(name, mergedCatMap);
       const targetCat = groups[cat] ? cat : 'Operation';
       const existingReport = accountsByName.get(name.toLowerCase());
