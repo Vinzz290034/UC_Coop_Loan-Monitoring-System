@@ -662,7 +662,7 @@ function ReportsPageContent() {
 
       const q = categorySearch.trim().toLowerCase();
       coaGroups = typeOrder.map(typeLabel => {
-        const allAccts = byType[typeLabel] || [];
+        const allAccts = (byType[typeLabel] || []).filter(a => (Number(a.count) || 0) > 0);
         const totalSpent = allAccts.reduce((sum, a) => sum + (Number(a.total_amount) || 0), 0);
         const totalEntries = allAccts.reduce((sum, a) => sum + (Number(a.count) || 0), 0);
         const filteredAccts = q
@@ -685,7 +685,7 @@ function ReportsPageContent() {
           total_entries: totalEntries,
           isMatch: q ? (typeLabel.toLowerCase().includes(q) || filteredAccts.length > 0) : true
         };
-      });
+      }).filter(g => g.totalAccountsCount > 0);
     }
 
     // Combine all known accounts
@@ -754,9 +754,11 @@ function ReportsPageContent() {
     }
 
     const defaultCategoryGroups = ACCOUNT_CATEGORIES.map(cat => {
-      const allAccts = (groups[cat.value] || []).sort((a, b) =>
-        a.account_name.localeCompare(b.account_name, undefined, { sensitivity: 'base' })
-      );
+      const allAccts = (groups[cat.value] || [])
+        .filter(a => (Number(a.count) || 0) > 0)
+        .sort((a, b) =>
+          a.account_name.localeCompare(b.account_name, undefined, { sensitivity: 'base' })
+        );
       const totalSpent = allAccts.reduce((sum, a) => sum + (Number(a.total_amount) || 0), 0);
       const totalEntries = allAccts.reduce((sum, a) => sum + (Number(a.count) || 0), 0);
 
@@ -780,7 +782,7 @@ function ReportsPageContent() {
         total_entries: totalEntries,
         isMatch: q ? (cat.label.toLowerCase().includes(q) || filteredAccts.length > 0) : true
       };
-    });
+    }).filter(g => g.totalAccountsCount > 0);
 
     if (coaGroups.length > 0) {
       const coaCategoryKeys = new Set(coaGroups.map(g => g.category.toLowerCase()));
