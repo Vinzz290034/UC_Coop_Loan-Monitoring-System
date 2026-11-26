@@ -4720,8 +4720,10 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
 
     // ---------- Expenses (from the Expense Breakdown report) ----------
     const EXPENSE_LINES = [
-      { code: '503.01', title: 'Salaries and Wages', match: /salar|wage|payroll|labor/i, description: 'Pay given to cooperative staff and workers.' },
-      { code: '503.05', title: 'Honorarium and Allowances', match: /honorari|allowance/i, description: 'Honoraria and allowances of officers and committee members.' },
+      { code: '503.01', title: 'Salaries', match: /salar|payroll/i, description: 'Salaries paid to cooperative staff.' },
+      { code: '503.02', title: 'Wages', match: /wage|labor/i, description: 'Wages and labor paid to cooperative workers.' },
+      { code: '503.05', title: 'Honorarium', match: /honorari/i, description: 'Honoraria of officers and committee members.' },
+      { code: '503.06', title: 'Allowances', match: /^(?!.*representation).*allowance/i, description: 'Allowances of officers, staff, and committee members.' },
       { code: '503.08', title: 'Office Supplies Expenses', match: /office\s*suppl|office\s*use|supplies|hygiene|medical|key\s*locker|locker\s*duplicate/i, description: 'Paper, ink, office supplies, sanitation and minor office upkeep.' },
       { code: '503.09', title: 'Communication', match: /communication|telephone|internet|cell\s*load|mobile\s*load/i, description: 'Telephone, mobile load, internet, and postage for office operations.' },
       { code: '503.12', title: 'Representation Expense', match: /representation/i, description: 'Representation allowances and official cooperative representation expenses.' },
