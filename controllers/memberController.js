@@ -236,6 +236,71 @@ import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
       }
     }
 
+    // One-time safe migration: shift 2026-302+ member IDs backwards by 1 after Carnalna Constantino's duplicate 2026-301 was merged into 2021-136
+    const shift301Mig = await query(
+      `INSERT INTO system_one_time_migrations (name)
+       VALUES ('shift_member_ids_after_2026_301_20261127')
+       ON CONFLICT (name) DO NOTHING
+       RETURNING name`
+    );
+    if (shift301Mig.rowCount > 0) {
+      const sClient = await pool.connect();
+      try {
+        await sClient.query('BEGIN');
+        const dup301 = await sClient.query(
+          `SELECT id, user_id, first_name, last_name FROM members WHERE member_no = '2026-301' LIMIT 1`
+        );
+        const orig136 = await sClient.query(
+          `SELECT id FROM members WHERE member_no = '2021-136' LIMIT 1`
+        );
+        if (
+          dup301.rowCount === 1 &&
+          orig136.rowCount === 1 &&
+          dup301.rows[0].id !== orig136.rows[0].id &&
+          /carnalna|constantino/i.test(`${dup301.rows[0].last_name || ''} ${dup301.rows[0].first_name || ''}`)
+        ) {
+          const dupId = dup301.rows[0].id;
+          const dupUserId = dup301.rows[0].user_id;
+          const targetId = orig136.rows[0].id;
+          await sClient.query('UPDATE loans SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await sClient.query('UPDATE share_capital_transactions SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await sClient.query('UPDATE collections SET member_id = $1::text WHERE member_id = $2::text', [targetId, dupId]);
+          await sClient.query('UPDATE fixed_deposits SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await sClient.query('UPDATE investments SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await sClient.query('UPDATE appointments SET member_id = $1 WHERE member_id = $2', [targetId, dupId]);
+          await sClient.query('DELETE FROM members WHERE id = $1', [dupId]);
+          if (dupUserId) {
+            await sClient.query(
+              "DELETE FROM users WHERE id = $1 AND role = 'member' AND id NOT IN (SELECT user_id FROM members WHERE user_id IS NOT NULL)",
+              [dupUserId]
+            );
+          }
+        }
+
+        const still301 = await sClient.query(`SELECT id FROM members WHERE member_no = '2026-301' LIMIT 1`);
+        if (still301.rowCount === 0) {
+          const toShift = await sClient.query(`
+            SELECT id, member_no, SPLIT_PART(member_no, '-', 2)::INT AS seq
+            FROM members
+            WHERE member_no ~ '^2026-[0-9]+$'
+              AND SPLIT_PART(member_no, '-', 2)::INT >= 302
+            ORDER BY SPLIT_PART(member_no, '-', 2)::INT ASC
+            FOR UPDATE
+          `);
+          for (const row of toShift.rows) {
+            const nextNo = `2026-${String(row.seq - 1).padStart(3, '0')}`;
+            await sClient.query('UPDATE members SET member_no = $1 WHERE id = $2', [nextNo, row.id]);
+          }
+        }
+        await sClient.query('COMMIT');
+      } catch (shiftErr) {
+        await sClient.query('ROLLBACK');
+        console.error('Shift member_no after 2026-301 migration error:', shiftErr);
+      } finally {
+        sClient.release();
+      }
+    }
+
     // One-time safe migration: unlink official cooperative member profiles from staff/admin logins
     // so they receive a dedicated 'member' login account while keeping the staff/admin account separate
     const staffMemberMig = await query(
