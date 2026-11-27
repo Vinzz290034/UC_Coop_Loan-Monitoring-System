@@ -23,7 +23,12 @@ import {
   importChartOfAccounts,
   updateChartOfAccountItem,
   deleteChartOfAccountItem,
-  clearChartOfAccounts
+  clearChartOfAccounts,
+  getGeneralJournalReport,
+  getTAccountsReport,
+  getTrialBalanceReport,
+  createManualJournalEntry,
+  deleteManualJournalEntry
 } from '../controllers/reportController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
@@ -80,5 +85,12 @@ router.post('/chart-of-accounts/import', importChartOfAccounts);
 router.put('/chart-of-accounts/item/:title', updateChartOfAccountItem);
 router.delete('/chart-of-accounts/item/:title', deleteChartOfAccountItem);
 router.delete('/chart-of-accounts', clearChartOfAccounts);
+
+// Double-entry General Journal, T-Accounts & Trial Balance
+router.get('/general-journal', getGeneralJournalReport);
+router.get('/t-accounts', getTAccountsReport);
+router.get('/trial-balance', getTrialBalanceReport);
+router.post('/journal-entries', createManualJournalEntry);
+router.delete('/journal-entries/:id', deleteManualJournalEntry);
 
 export default router;

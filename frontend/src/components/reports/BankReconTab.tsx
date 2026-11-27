@@ -1203,14 +1203,14 @@ export default function BankReconTab({ initialYear }: Props) {
                       <button
                         type="button"
                         onClick={() => setSelectedAccountFilter(prev => prev === (e.account_title || 'Unclassified') ? null : (e.account_title || 'Unclassified'))}
-                        title="Click to filter by this account"
-                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-bold border transition-colors cursor-pointer ${
+                        title={`${e.account_title || 'Unclassified'} — click to filter by this account`}
+                        className={`inline-flex items-center max-w-[240px] px-2 py-0.5 rounded-md text-[10.5px] font-bold border transition-colors cursor-pointer ${
                           e.withdrawal > 0
                             ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/25 hover:bg-amber-500/20'
                             : 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/20'
                         }`}
                       >
-                        {e.account_title || 'Unclassified'}
+                        <span className="truncate">{e.account_title || 'Unclassified'}</span>
                       </button>
                       {e.confirmed_at && (
                         <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 font-mono">

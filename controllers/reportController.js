@@ -4,6 +4,7 @@ import { exportToExcel } from '../services/reportExporter.js';
 import XLSX from 'xlsx';
 import fs from 'fs';
 import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
+import { buildAccountingLedger, ensureManualJournalTables } from '../services/accountingLedgerService.js';
 
 // ==========================================
 // 1. CASH DISBURSEMENT REFERENCE REPORT
@@ -3848,6 +3849,37 @@ export const getFinancialStatementReport = async (req, res, next) => {
       }
     });
 
+    // Apply General Ledger Manual Adjusting JEVs to matching Balance Sheet accounts
+    const glLedger = await buildAccountingLedger({ year: targetYear }).catch(() => null);
+    if (glLedger && Array.isArray(glLedger.manual_adjustments)) {
+      const labelToStoreKey = {};
+      Object.entries(BASELINE_LABELS).forEach(([k, lbl]) => {
+        labelToStoreKey[String(lbl).trim().toLowerCase()] = k;
+      });
+      labelToStoreKey['cash in bank - bdo'] = 'cib_bdo';
+      labelToStoreKey['cash in bank - mbtc'] = 'cib_metrobank';
+      labelToStoreKey['common shares - subscribed & paid-up'] = 'common_shares';
+      labelToStoreKey['undivided net surplus'] = 'undivided_surplus';
+      labelToStoreKey['accounts payable - trade'] = 'ap_trade';
+      labelToStoreKey['accounts payable - others'] = 'ap_others';
+
+      glLedger.manual_adjustments.forEach((adj) => {
+        if (!['Asset', 'Liabilities', 'Equity'].includes(adj.account_type)) return;
+        const k = labelToStoreKey[String(adj.account_name || '').trim().toLowerCase()];
+        if (!k || !stores[k]) return;
+        for (let m = 0; m < 12; m++) {
+          const delta = Number(adj.months[m]) || 0;
+          if (delta === 0) continue;
+          for (let cm = m; cm < 12; cm++) {
+            stores[k].current[cm] += delta;
+          }
+        }
+        if (Array.isArray(adj.transactions)) {
+          stores[k].transactions.push(...adj.transactions);
+        }
+      });
+    }
+
     // Attach Loan portfolio transactions from Loan Products report
     const attachLoanTxs = (pName, storeKey) => {
       const p = (loanCur?.products || []).find(prod => prod.product_name === pName);
@@ -4917,6 +4949,37 @@ export const getStatementOfOperationsReport = async (req, res, next) => {
     addExpenses(expCur, 'current');
     addExpenses(expPrev, 'previous');
 
+    // Apply General Ledger Manual Adjusting JEVs to Revenue & Expense lines
+    const glOpsLedger = await buildAccountingLedger({ year: targetYear }).catch(() => null);
+    if (glOpsLedger && Array.isArray(glOpsLedger.manual_adjustments)) {
+      glOpsLedger.manual_adjustments.forEach((adj) => {
+        if (adj.account_type === 'Revenue') {
+          const matchedRev = /membership/i.test(adj.account_name)
+            ? membershipFees
+            : /service\s*(fee|charge)/i.test(adj.account_name)
+              ? serviceFees
+              : /donation|grant/i.test(adj.account_name)
+                ? donationsGrants
+                : /deposit|bank\s*interest/i.test(adj.account_name)
+                  ? depositInterest
+                  : donationsGrants;
+          for (let m = 0; m < 12; m++) {
+            matchedRev.current[m] += Number(adj.months[m]) || 0;
+          }
+          if (Array.isArray(adj.transactions)) matchedRev.transactions.push(...adj.transactions);
+        } else if (adj.account_type === 'Expense') {
+          const matchedExp = EXPENSE_LINES.find((l) => l.match.test(adj.account_name));
+          const targetStore = matchedExp
+            ? expenseStores[matchedExp.title]
+            : (otherAdmin[adj.account_name] || (otherAdmin[adj.account_name] = newStore()));
+          for (let m = 0; m < 12; m++) {
+            targetStore.current[m] += Number(adj.months[m]) || 0;
+          }
+          if (Array.isArray(adj.transactions)) targetStore.transactions.push(...adj.transactions);
+        }
+      });
+    }
+
     // ---------- Assemble the statement ----------
     const line = (code, title, description, store, alwaysShow = true, customTransactions = null) => {
       const txs = customTransactions !== null ? customTransactions : (store.transactions || []);
@@ -5303,12 +5366,16 @@ export const getBankReconReport = async (req, res, next) => {
             cv.details
               .filter(d => !d?.is_credit)
               .map(d => String(d?.book_of_account || '').trim())
-              .filter(a => a && !/^cash\s*in\s*bank|^bdo\b|^mbtc\b|^metrobank\b/i.test(a))
+              .filter(a => a && !/^cash\s*in\s*bank|^cib\b|^bdo\b|^mbtc\b|^metrobank\b/i.test(a))
           )]
         : [];
-      return detailAccounts.length > 0
-        ? detailAccounts.join(', ')
-        : (String(cv.folder_name || '').trim() || 'Check Voucher Disbursement');
+      if (detailAccounts.length === 0) {
+        return String(cv.folder_name || '').trim() || 'Check Voucher Disbursement';
+      }
+      if (detailAccounts.length === 1) {
+        return detailAccounts[0];
+      }
+      return `${detailAccounts[0]} (+${detailAccounts.length - 1} more)`;
     };
 
     const detectCvBankCode = (cv) => {
@@ -5412,81 +5479,7 @@ export const getBankReconReport = async (req, res, next) => {
           });
         });
 
-      // 2. Live Collections (confirmed Bank Deposits -> BDO / MBTC, or un-deposited -> VAULT) for months without imported sheets
-      colRes.rows.forEach(col => {
-        const dStr = toIsoDateStr(col.date || col.created_at);
-        if (!dStr || Number(dStr.slice(0, 4)) !== targetYear) return;
-        const entryMonth = Number(dStr.slice(5, 7)) - 1;
-        if (entryMonth < 0 || entryMonth > 11 || importedMonths.has(entryMonth)) return;
-
-        const amt = parseFloat(col.amount) || 0;
-        if (amt <= 0) return;
-
-        const colStatus = String(col.status || '').toLowerCase();
-        const isConfirmedDeposit = Boolean(col.deposit_confirmed);
-        const colBank = isConfirmedDeposit && colStatus.includes('bdo')
-          ? 'BDO'
-          : isConfirmedDeposit && (colStatus.includes('mbtc') || colStatus.includes('metro'))
-          ? 'MBTC'
-          : 'VAULT';
-        if (colBank !== bankCode) return;
-
-        entries.push({
-          id: `col-${col.id}`,
-          db_id: null,
-          date: dStr,
-          date_encashed: null,
-          month: entryMonth,
-          voucher_no: col.or_no ? `OR #${col.or_no}` : 'Collection',
-          raw_voucher_no: null,
-          depositor_payee: col.payor_name || 'Member',
-          particulars: col.particulars || col.item_name || col.service_type || 'Collection Receipt',
-          account_title: bankCode === 'VAULT' ? 'Cash Collection — Vault' : `Confirmed Bank Deposit (${bankCode})`,
-          confirmed_at: isConfirmedDeposit && col.deposit_confirmed_at ? new Date(col.deposit_confirmed_at).toISOString() : null,
-          withdrawal: 0,
-          deposit: Math.round(amt * 100) / 100,
-          source: 'collection',
-          voucher_id: null,
-          or_no: col.or_no || null
-        });
-      });
-
-      // 3. Live Check Vouchers from Disbursement (BDO / MBTC) for months without imported sheets
-      if (bankCode === 'BDO' || bankCode === 'MBTC') {
-        cvRes.rows.forEach(cv => {
-          if (matchedCvIds.has(String(cv.id))) return;
-          if (detectCvBankCode(cv) !== bankCode) return;
-          const encashedStr = toIsoDateStr(cv.date_encashed);
-          const releasedStr = toIsoDateStr(cv.date_released || cv.voucher_date);
-          const effectiveStr = encashedStr || releasedStr;
-          if (!effectiveStr || Number(effectiveStr.slice(0, 4)) !== targetYear) return;
-          const entryMonth = Number(effectiveStr.slice(5, 7)) - 1;
-          if (entryMonth < 0 || entryMonth > 11 || importedMonths.has(entryMonth)) return;
-
-          const amt = parseFloat(cv.amount) || 0;
-          if (amt <= 0) return;
-
-          entries.push({
-            id: `cv-${cv.id}`,
-            db_id: null,
-            date: releasedStr || effectiveStr,
-            date_encashed: encashedStr || null,
-            month: entryMonth,
-            voucher_no: cv.voucher_no || '',
-            raw_voucher_no: cv.voucher_no || null,
-            depositor_payee: cv.payee || 'Payee',
-            particulars: cv.particulars || 'Check Voucher Disbursement',
-            account_title: extractCvAccountTitle(cv),
-            withdrawal: Math.round(amt * 100) / 100,
-            deposit: 0,
-            source: 'check_voucher',
-            voucher_id: String(cv.id),
-            or_no: null
-          });
-        });
-      }
-
-      // Sort by recon month, then insertion order (db_id) for imported rows or date for live rows
+      // Sort by recon month, then insertion order (db_id) for imported/manual rows
       entries.sort((a, b) => (a.month - b.month) || (a.db_id && b.db_id ? a.db_id - b.db_id : a.date.localeCompare(b.date)));
 
       let running = Math.round(beginningBalance * 100) / 100;
@@ -6155,6 +6148,150 @@ export const clearChartOfAccounts = async (_req, res, next) => {
       deleted: result.rowCount || 0,
       message: 'Cleared imported Chart of Accounts and restored default view.'
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// =========================================================================
+// 14. DOUBLE-ENTRY GENERAL JOURNAL, T-ACCOUNTS & TRIAL BALANCE
+// =========================================================================
+
+// @desc    Get chronological balanced General Journal entries
+// @route   GET /api/reports/general-journal
+// @access  Protected (Admin, Staff)
+export const getGeneralJournalReport = async (req, res, next) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const month = req.query.month ? Number(req.query.month) : null;
+    const ledger = await buildAccountingLedger({ year, month });
+    return res.status(200).json({
+      success: true,
+      year: ledger.year,
+      month: ledger.month,
+      summary: ledger.journal_summary,
+      entries: ledger.general_journal,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get T-Accounts & General Ledger account balances
+// @route   GET /api/reports/t-accounts
+// @access  Protected (Admin, Staff)
+export const getTAccountsReport = async (req, res, next) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const month = req.query.month ? Number(req.query.month) : null;
+    const ledger = await buildAccountingLedger({ year, month });
+    return res.status(200).json({
+      success: true,
+      year: ledger.year,
+      month: ledger.month,
+      accounts: ledger.t_accounts,
+      trial_balance: ledger.trial_balance,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get Trial Balance from General Ledger
+// @route   GET /api/reports/trial-balance
+// @access  Protected (Admin, Staff)
+export const getTrialBalanceReport = async (req, res, next) => {
+  try {
+    const year = Number(req.query.year) || new Date().getFullYear();
+    const month = req.query.month ? Number(req.query.month) : null;
+    const ledger = await buildAccountingLedger({ year, month });
+    return res.status(200).json({
+      success: true,
+      year: ledger.year,
+      month: ledger.month,
+      ...ledger.trial_balance,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Create a Manual Adjusting Journal Entry (JEV)
+// @route   POST /api/reports/journal-entries
+// @access  Protected (Admin, Staff)
+export const createManualJournalEntry = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await ensureManualJournalTables();
+    const { jev_no, entry_date, description, lines } = req.body;
+    if (!entry_date || !Array.isArray(lines) || lines.length < 2) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide an entry date and at least 2 balanced debit/credit lines.' }
+      });
+    }
+
+    const cleanLines = lines
+      .map((l) => ({
+        account_name: String(l.account_name || '').trim(),
+        account_type: String(l.account_type || 'Expense').trim(),
+        debit: Math.round((parseFloat(l.debit) || 0) * 100) / 100,
+        credit: Math.round((parseFloat(l.credit) || 0) * 100) / 100,
+      }))
+      .filter((l) => l.account_name && (l.debit > 0 || l.credit > 0));
+
+    const totalDebit = Math.round(cleanLines.reduce((s, l) => s + l.debit, 0) * 100) / 100;
+    const totalCredit = Math.round(cleanLines.reduce((s, l) => s + l.credit, 0) * 100) / 100;
+
+    if (cleanLines.length < 2 || totalDebit <= 0 || Math.abs(totalDebit - totalCredit) >= 0.01) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Journal entry must be balanced (Debit ₱${totalDebit.toFixed(2)} vs Credit ₱${totalCredit.toFixed(2)}).` }
+      });
+    }
+
+    const finalJevNo = String(jev_no || '').trim() || `JEV-${Date.now().toString().slice(-6)}`;
+    await client.query('BEGIN');
+    const headerRes = await client.query(
+      `INSERT INTO manual_journal_entries (jev_no, entry_date, description, created_by)
+       VALUES ($1, $2::date, $3, $4)
+       RETURNING *`,
+      [finalJevNo, entry_date, String(description || '').trim(), req.user?.username || 'Admin']
+    );
+    const entryId = headerRes.rows[0].id;
+    for (const l of cleanLines) {
+      await client.query(
+        `INSERT INTO manual_journal_lines (entry_id, account_name, account_type, debit, credit)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [entryId, l.account_name, l.account_type, l.debit, l.credit]
+      );
+    }
+    await client.query('COMMIT');
+    return res.status(201).json({
+      success: true,
+      data: headerRes.rows[0],
+      message: `Journal Entry ${finalJevNo} posted.`
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
+// @desc    Delete a Manual Adjusting Journal Entry (JEV)
+// @route   DELETE /api/reports/journal-entries/:id
+// @access  Protected (Admin, Staff)
+export const deleteManualJournalEntry = async (req, res, next) => {
+  try {
+    await ensureManualJournalTables();
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM manual_journal_entries WHERE id = $1', [Number(id)]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, error: { message: 'Manual journal entry not found.' } });
+    }
+    return res.status(200).json({ success: true, message: 'Manual journal entry deleted.' });
   } catch (error) {
     next(error);
   }
