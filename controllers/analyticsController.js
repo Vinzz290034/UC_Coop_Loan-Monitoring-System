@@ -34,13 +34,29 @@ export const getDashboardSummary = async (req, res, next) => {
         (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status IN ('disbursed', 'approved', 'active')) as total_active_loan_principal,
         (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status IN ('disbursed', 'approved', 'active', 'fully_paid', 'defaulted')) as total_capital_ever_deployed,
         
-        -- Share capital totals
+        -- Share capital totals (total, Regular Shared Capital, Associate Preferred Share)
         (SELECT COALESCE(SUM(b.bal), 0) FROM (
-           SELECT DISTINCT ON (member_id) balance_after as bal 
-           FROM share_capital_transactions 
-           WHERE status = 'completed' 
-           ORDER BY member_id, transaction_date DESC
+           SELECT DISTINCT ON (sct.member_id) sct.balance_after as bal 
+           FROM share_capital_transactions sct
+           WHERE COALESCE(sct.status, 'completed') = 'completed' 
+           ORDER BY sct.member_id, sct.transaction_date DESC, sct.id DESC
         ) b) as total_share_capital,
+        (SELECT COALESCE(SUM(b.bal), 0) FROM (
+           SELECT DISTINCT ON (sct.member_id) sct.balance_after as bal 
+           FROM share_capital_transactions sct
+           JOIN members m ON m.id = sct.member_id
+           WHERE COALESCE(sct.status, 'completed') = 'completed'
+             AND COALESCE(m.membership_type, 'Regular') != 'Associate'
+           ORDER BY sct.member_id, sct.transaction_date DESC, sct.id DESC
+        ) b) as regular_share_capital,
+        (SELECT COALESCE(SUM(b.bal), 0) FROM (
+           SELECT DISTINCT ON (sct.member_id) sct.balance_after as bal 
+           FROM share_capital_transactions sct
+           JOIN members m ON m.id = sct.member_id
+           WHERE COALESCE(sct.status, 'completed') = 'completed'
+             AND m.membership_type = 'Associate'
+           ORDER BY sct.member_id, sct.transaction_date DESC, sct.id DESC
+        ) b) as associate_preferred_share,
 
         -- Fixed deposit totals
         (SELECT COALESCE(SUM(principal_amount), 0) FROM fixed_deposits WHERE status = 'active') as total_active_fixed_deposits,

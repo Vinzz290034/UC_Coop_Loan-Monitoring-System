@@ -4096,12 +4096,20 @@ export default function OverviewPage() {
           </div>
 
           {/* Financial Assets */}
-          <div className="grid grid-cols-1 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <KpiCard
-              label="Total Share Capital"
-              value={formatCurrency(ds.total_share_capital)}
+              label="Shared Capital (Regular)"
+              value={formatCurrency(ds.regular_share_capital ?? ds.total_share_capital)}
               icon={Building}
-              description="Combined member equity contributions"
+              description="Common share equity of Regular members"
+              href="/dashboard/members?membership=Regular"
+            />
+            <KpiCard
+              label="Preferred Share (Associate)"
+              value={formatCurrency(ds.associate_preferred_share ?? 0)}
+              icon={WalletCards}
+              description="Preferred share equity of Associate members"
+              href="/dashboard/members?membership=Associate"
             />
           </div>
 

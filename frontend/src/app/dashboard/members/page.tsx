@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import SearchInput from '@/components/SearchInput';
@@ -141,8 +141,10 @@ function AnimatedSelect({
   );
 }
 
-export default function MembersPage() {
+function MembersPageContent() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const urlMembership = searchParams?.get('membership');
   const isAdminOrManager = user ? (user.role === 'admin' || user.role === 'staff') : true;
   const [members, setMembers] = useState<Member[]>([]);
   const [allMembersSummary, setAllMembersSummary] = useState<Member[]>([]);
@@ -181,8 +183,16 @@ export default function MembersPage() {
   // Search, filter, and sort state
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [membershipFilter, setMembershipFilter] = useState('');
+  const [membershipFilter, setMembershipFilter] = useState(
+    urlMembership === 'Regular' || urlMembership === 'Associate' ? urlMembership : ''
+  );
   const [sortBy, setSortBy] = useState('member_no_asc');
+
+  useEffect(() => {
+    if (urlMembership === 'Regular' || urlMembership === 'Associate') {
+      setMembershipFilter(urlMembership);
+    }
+  }, [urlMembership]);
 
   // Pagination & Expand state
   const [currentPage, setCurrentPage] = useState(1);
@@ -1858,5 +1868,13 @@ export default function MembersPage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function MembersPage() {
+  return (
+    <Suspense fallback={<div className="p-6"><SkeletonTable rows={8} /></div>}>
+      <MembersPageContent />
+    </Suspense>
   );
 }

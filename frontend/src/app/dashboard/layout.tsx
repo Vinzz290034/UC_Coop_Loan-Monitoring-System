@@ -36,6 +36,7 @@ import {
   TrendingUp,
   HandCoins,
   BookText,
+  BookOpen,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
@@ -106,6 +107,12 @@ function DashboardLayoutContent({
       path: '/dashboard',
       icon: LayoutDashboard,
       allowed: true,
+    },
+    {
+      name: 'General Journal',
+      path: '/dashboard/general-journal',
+      icon: BookOpen,
+      allowed: isAdminOrStaff,
     },
     {
       name: 'Membership',
@@ -492,6 +499,7 @@ function DashboardLayoutContent({
                         appointments: 'Schedule',
                         messages: 'Inbox',
                         notifications: isMember ? 'Notification' : 'Inbox',
+                        'general-journal': 'General Journal',
                         'bank-recon': 'General Ledger',
                       };
                       return breadcrumbLabels[segment] || staticOverrides[segment] || segment;
