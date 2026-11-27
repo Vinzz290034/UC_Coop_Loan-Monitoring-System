@@ -165,14 +165,14 @@ function MembersPageContent() {
       } else if (mt.includes('regular')) {
         regular += 1;
       }
-      const st = String(m.status || '').toLowerCase();
+      const st = String(m.status || '').trim().toLowerCase();
       if (st === 'active' || st === 'approved') {
         active += 1;
       } else if (st === 'withdrawn') {
         withdrawn += 1;
       } else if (st === 'dormant' || st === 'inactive') {
         dormant += 1;
-      } else if (st === 'pending') {
+      } else if (st === 'pending' || st === 'pending_review' || st === 'pending review' || !st) {
         pending += 1;
       }
     }
@@ -642,7 +642,7 @@ function MembersPageContent() {
             </div>
           </div>
 
-          {/* Box 2: Active, Withdrawn, Dormant */}
+          {/* Box 2: Active, Withdrawn, Dormant, Pending Review */}
           <div className="p-5 rounded-3xl bg-white dark:bg-surface-container-low border border-outline-variant/60 shadow-sm flex flex-col justify-between gap-3">
             <div className="flex items-center justify-between">
               <div>
@@ -650,38 +650,70 @@ function MembersPageContent() {
                   Members by Status
                 </span>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                  {memberStats.pending > 0 ? `${memberStats.pending} pending review` : 'Roster status breakdown'}
+                  {memberStats.active + memberStats.withdrawn + memberStats.dormant + memberStats.pending} accounted of {memberStats.total} members
                 </p>
               </div>
               <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
                 <Shield className="w-5 h-5" />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-outline-variant/40">
-              <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-outline-variant/40">
+              <button
+                type="button"
+                onClick={() => setStatusFilter((prev) => (prev === 'active' ? '' : 'active'))}
+                className={`p-2.5 rounded-2xl bg-emerald-500/10 border text-left transition-all cursor-pointer ${
+                  statusFilter === 'active' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-emerald-500/20 hover:border-emerald-500/40'
+                }`}
+              >
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 block">
                   Active
                 </span>
                 <span className="text-lg font-black text-neutral-900 dark:text-white">
                   {memberStats.active}
                 </span>
-              </div>
-              <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter((prev) => (prev === 'withdrawn' ? '' : 'withdrawn'))}
+                className={`p-2.5 rounded-2xl bg-amber-500/10 border text-left transition-all cursor-pointer ${
+                  statusFilter === 'withdrawn' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-amber-500/20 hover:border-amber-500/40'
+                }`}
+              >
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 block">
                   Withdrawn
                 </span>
                 <span className="text-lg font-black text-neutral-900 dark:text-white">
                   {memberStats.withdrawn}
                 </span>
-              </div>
-              <div className="p-2.5 rounded-2xl bg-slate-500/10 border border-slate-500/25">
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter((prev) => (prev === 'dormant' ? '' : 'dormant'))}
+                className={`p-2.5 rounded-2xl bg-slate-500/10 border text-left transition-all cursor-pointer ${
+                  statusFilter === 'dormant' ? 'border-slate-500 ring-2 ring-slate-500/20' : 'border-slate-500/25 hover:border-slate-500/50'
+                }`}
+              >
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
                   Dormant
                 </span>
                 <span className="text-lg font-black text-neutral-900 dark:text-white">
                   {memberStats.dormant}
                 </span>
-              </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter((prev) => (prev === 'pending' ? '' : 'pending'))}
+                className={`p-2.5 rounded-2xl bg-orange-500/10 border text-left transition-all cursor-pointer ${
+                  statusFilter === 'pending' ? 'border-orange-500 ring-2 ring-orange-500/20' : 'border-orange-500/20 hover:border-orange-500/40'
+                }`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 block">
+                  Pending Review
+                </span>
+                <span className="text-lg font-black text-neutral-900 dark:text-white">
+                  {memberStats.pending}
+                </span>
+              </button>
             </div>
           </div>
         </div>
