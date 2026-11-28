@@ -226,6 +226,87 @@ export const getShareCapital = async (req, res, next) => {
   }
 };
 
+// @desc    Get all members with Total Shared Capital and Average Shared Capital
+// @route   GET /api/accounts/share-capital-summary
+// @access  Protected (Admin, Staff)
+export const getAllShareCapitalSummary = async (_req, res, next) => {
+  try {
+    const result = await query(`
+      SELECT
+        m.id,
+        m.member_no,
+        m.first_name,
+        m.middle_name,
+        m.last_name,
+        m.membership_type,
+        m.status,
+        COALESCE(
+          (
+            SELECT sct.balance_after
+            FROM share_capital_transactions sct
+            WHERE sct.member_id = m.id
+              AND COALESCE(sct.status, 'completed') = 'completed'
+            ORDER BY sct.transaction_date DESC, sct.id DESC
+            LIMIT 1
+          ),
+          0
+        ) AS total_shared_capital,
+        COALESCE(
+          (
+            SELECT AVG(sct.amount)
+            FROM share_capital_transactions sct
+            WHERE sct.member_id = m.id
+              AND sct.transaction_type = 'credit'
+              AND COALESCE(sct.status, 'completed') = 'completed'
+          ),
+          0
+        ) AS average_shared_capital,
+        COALESCE(
+          (
+            SELECT COUNT(*)::int
+            FROM share_capital_transactions sct
+            WHERE sct.member_id = m.id
+              AND COALESCE(sct.status, 'completed') = 'completed'
+          ),
+          0
+        ) AS tx_count
+      FROM members m
+      LEFT JOIN users u ON m.user_id = u.id
+      WHERE (u.role IS NULL OR u.role = 'member' OR (m.member_no IS NOT NULL AND m.member_no != '' AND m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%'))
+        AND (m.member_no IS NULL OR (m.member_no NOT LIKE 'ADM-%' AND m.member_no NOT LIKE 'STF-%'))
+      ORDER BY
+        CASE WHEN m.member_no ~ '^[0-9]+-[0-9]+$' THEN 0 ELSE 1 END ASC,
+        CASE WHEN m.member_no ~ '^[0-9]+-[0-9]+$' THEN SPLIT_PART(m.member_no, '-', 1)::INT ELSE 9999 END ASC,
+        CASE WHEN m.member_no ~ '^[0-9]+-[0-9]+$' THEN SPLIT_PART(m.member_no, '-', 2)::INT ELSE 999999 END ASC,
+        m.member_no ASC NULLS LAST,
+        m.last_name ASC
+    `);
+
+    const rows = result.rows.map((r) => ({
+      ...r,
+      total_shared_capital: Math.round((parseFloat(r.total_shared_capital) || 0) * 100) / 100,
+      average_shared_capital: Math.round((parseFloat(r.average_shared_capital) || 0) * 100) / 100,
+      tx_count: Number(r.tx_count) || 0,
+    }));
+
+    const overallTotal = Math.round(rows.reduce((s, r) => s + r.total_shared_capital, 0) * 100) / 100;
+    const withBalance = rows.filter((r) => r.total_shared_capital > 0);
+    const overallAverage = withBalance.length > 0
+      ? Math.round((overallTotal / withBalance.length) * 100) / 100
+      : 0;
+
+    return res.status(200).json({
+      success: true,
+      overall_total: overallTotal,
+      overall_average: overallAverage,
+      members_with_balance: withBalance.length,
+      data: rows,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Update an existing share capital transaction and recalculate running balances
 // @route   PUT /api/accounts/share-capital/tx/:id
 // @access  Protected (Admin, Staff)

@@ -7,8 +7,8 @@ import api from '@/lib/api';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/context/AuthContext';
 import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
-import PendingPlacementsSection from '@/components/accounting/PendingPlacementsSection';
 import SearchInput from '@/components/SearchInput';
+import AnimatedSelect from '@/components/ui/AnimatedSelect';
 import {
   Coins,
   TrendingUp,
@@ -186,6 +186,17 @@ export default function AccountingPage() {
   const [invSubmitting, setInvSubmitting] = useState(false);
   const [invError, setInvError] = useState<string | null>(null);
 
+  // Share Capital All-Members Ledger & Subledger Modal state (Admin/Staff)
+  const [scSummaryRows, setScSummaryRows] = useState<any[]>([]);
+  const [scSummaryTotals, setScSummaryTotals] = useState({ overall_total: 0, overall_average: 0, members_with_balance: 0 });
+  const [loadingScSummary, setLoadingScSummary] = useState(false);
+  const [scSearch, setScSearch] = useState('');
+  const [scMembershipFilter, setScMembershipFilter] = useState('');
+  const [scStatusFilter, setScStatusFilter] = useState('');
+  const [scPage, setScPage] = useState(1);
+  const [scPageSize, setScPageSize] = useState(20);
+  const [viewingScMember, setViewingScMember] = useState<any | null>(null);
+
   // Load members dropdown on mount (Admin/Manager only)
   useEffect(() => {
     async function loadMembers() {
@@ -229,6 +240,34 @@ export default function AccountingPage() {
       setLoadingAllSavings(false);
     }
   }, [isAdminOrManager]);
+
+  const loadAllShareCapitalSummary = useCallback(async () => {
+    if (!isAdminOrManager) return;
+    try {
+      setLoadingScSummary(true);
+      const res = await api.get('/accounts/share-capital-summary');
+      setScSummaryRows(res.data?.data || []);
+      setScSummaryTotals({
+        overall_total: res.data?.overall_total || 0,
+        overall_average: res.data?.overall_average || 0,
+        members_with_balance: res.data?.members_with_balance || 0,
+      });
+    } catch (err) {
+      console.error('Error fetching share capital summary:', err);
+    } finally {
+      setLoadingScSummary(false);
+    }
+  }, [isAdminOrManager]);
+
+  useEffect(() => {
+    if (isAdminOrManager && activeTab === 'share_capital') {
+      loadAllShareCapitalSummary();
+    }
+  }, [isAdminOrManager, activeTab, loadAllShareCapitalSummary]);
+
+  useEffect(() => {
+    setScPage(1);
+  }, [scSearch, scMembershipFilter, scStatusFilter, scPageSize]);
 
   useEffect(() => {
     if (isAdminOrManager && activeTab === 'savings') {
@@ -293,6 +332,7 @@ export default function AccountingPage() {
       if (shareRes.data) setShareData(shareRes.data);
       if (fdRes.data) setFixedDeposits(fdRes.data.data || []);
       if (invRes.data) setInvestments(invRes.data.data || []);
+      if (isAdminOrManager) loadAllShareCapitalSummary();
 
     } catch (err: any) {
       console.error('Error fetching ledger details:', err);
@@ -300,7 +340,7 @@ export default function AccountingPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedMemberId]);
+  }, [selectedMemberId, isAdminOrManager, loadAllShareCapitalSummary]);
 
   useEffect(() => {
     loadLedgerData();
@@ -889,116 +929,6 @@ export default function AccountingPage() {
           <span>Share Capital Ledger</span>
         </button>
       </div>
-
-      {/* Member Selection for Admins/Staff - only for share capital */}
-      {isAdminOrManager && activeTab === 'share_capital' && (() => {
-        const selectedMemberObj = members.find((m: any) => String(m.id) === String(selectedMemberId));
-        const mq = memberSearchQuery.toLowerCase().trim();
-        const filteredMemberOptions = members.filter((m: any) => {
-          if (!mq) return true;
-          const full = `${m.last_name || ''} ${m.first_name || ''} ${m.middle_name || ''} ${m.member_no || ''}`.toLowerCase();
-          const rev = `${m.first_name || ''} ${m.last_name || ''}`.toLowerCase();
-          return full.includes(mq) || rev.includes(mq);
-        });
-
-        return (
-          <div
-            ref={memberDropdownRef}
-            className="relative flex flex-col sm:flex-row sm:items-center gap-3 bg-white dark:bg-surface-container-low p-4 rounded-3xl border border-outline-variant/50 shadow-sm max-w-lg"
-          >
-            <label className="text-xs font-bold text-neutral-600 dark:text-neutral-400 whitespace-nowrap font-label">
-              Auditing Member Profile:
-            </label>
-            <div className="relative w-full">
-              <button
-                type="button"
-                onClick={() => setIsMemberDropdownOpen(prev => !prev)}
-                className={`w-full flex items-center justify-between gap-2 px-3.5 py-2 text-xs font-semibold border rounded-xl bg-white dark:bg-surface-container-low text-on-surface dark:text-white transition-all cursor-pointer ${
-                  isMemberDropdownOpen
-                    ? 'border-emerald-500 ring-2 ring-emerald-500/20'
-                    : 'border-outline-variant hover:border-emerald-400'
-                }`}
-              >
-                <span className="truncate">
-                  {selectedMemberObj
-                    ? `${selectedMemberObj.last_name}, ${selectedMemberObj.first_name} (Member ID: ${selectedMemberObj.member_no || 'N/A'})`
-                    : '-- Choose Member Profile --'}
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 text-emerald-600 shrink-0 transition-transform duration-200 ${
-                    isMemberDropdownOpen ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
-
-              {isMemberDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full mt-2 z-40 rounded-2xl bg-white dark:bg-surface-container-high border border-outline-variant/80 shadow-xl overflow-hidden animate-modal-pop origin-top">
-                  <div className="p-2 border-b border-outline-variant/40 bg-neutral-50/70 dark:bg-neutral-900/50">
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        ref={memberSearchInputRef}
-                        type="text"
-                        placeholder="Search member name or ID..."
-                        value={memberSearchQuery}
-                        onChange={(e) => setMemberSearchQuery(e.target.value)}
-                        className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl border border-outline-variant/60 bg-white dark:bg-surface-container-low text-on-surface dark:text-white outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
-                      />
-                      {memberSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setMemberSearchQuery('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto custom-scrollbar divide-y divide-outline-variant/20">
-                    {filteredMemberOptions.length === 0 ? (
-                      <div className="px-4 py-5 text-center text-xs text-neutral-500 italic">
-                        No matching members found.
-                      </div>
-                    ) : (
-                      filteredMemberOptions.map((m: any) => {
-                        const isSel = String(m.id) === String(selectedMemberId);
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedMemberId(m.id);
-                              setIsMemberDropdownOpen(false);
-                              setMemberSearchQuery('');
-                            }}
-                            className={`w-full px-3.5 py-2 text-left text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                              isSel
-                                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-bold'
-                                : 'text-on-surface dark:text-white hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60'
-                            }`}
-                          >
-                            <span className="truncate">
-                              {m.last_name}, {m.first_name}{' '}
-                              <span className="text-[10.5px] font-mono text-neutral-500 dark:text-neutral-400">
-                                ({m.member_no || 'N/A'})
-                              </span>
-                            </span>
-                            {isSel && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Pending Office Cash Payment Queue for Admins/Staff - only for share capital */}
-      {activeTab === 'share_capital' && <PendingPlacementsSection onConfirmed={loadLedgerData} />}
 
       {/* Member Pending Office Payment Placements Banner - only for share capital */}
       {activeTab === 'share_capital' && (!isAdminOrManager || selectedMemberId) && (() => {
@@ -1666,8 +1596,407 @@ export default function AccountingPage() {
             </div>
           )}
 
-          {/* TAB 1: SHARE CAPITAL LEDGER */}
-          {activeTab === 'share_capital' && shareData && (() => {
+          {/* TAB 1: SHARE CAPITAL LEDGER — ADMIN/STAFF ALL-MEMBERS VIEW */}
+          {activeTab === 'share_capital' && isAdminOrManager && (() => {
+            const q = scSearch.trim().toLowerCase();
+            const filteredRows = scSummaryRows.filter((r: any) => {
+              if (scMembershipFilter && String(r.membership_type || '') !== scMembershipFilter) return false;
+              if (scStatusFilter && String(r.status || '').toLowerCase() !== scStatusFilter) return false;
+              if (!q) return true;
+              const fullName = `${r.last_name || ''} ${r.first_name || ''} ${r.middle_name || ''}`.toLowerCase();
+              const revName = `${r.first_name || ''} ${r.last_name || ''}`.toLowerCase();
+              const memNo = String(r.member_no || '').toLowerCase();
+              return memNo.includes(q) || fullName.includes(q) || revName.includes(q);
+            });
+            const totalScPages = Math.max(1, Math.ceil(filteredRows.length / scPageSize));
+            const safeScPage = Math.min(scPage, totalScPages);
+            const paginatedRows = filteredRows.slice((safeScPage - 1) * scPageSize, safeScPage * scPageSize);
+
+            const postedTransactions = (shareData?.transactions || []).filter(
+              (tx: any) => !tx.status || tx.status === 'completed'
+            );
+            const subTotalCredits = postedTransactions
+              .filter((tx: any) => tx.transaction_type === 'credit')
+              .reduce((sum: number, tx: any) => sum + (parseFloat(tx.amount) || 0), 0);
+            const subTotalDebits = postedTransactions
+              .filter((tx: any) => tx.transaction_type === 'debit')
+              .reduce((sum: number, tx: any) => sum + (parseFloat(tx.amount) || 0), 0);
+
+            return (
+              <div className="space-y-6">
+                {/* Summary KPI Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
+                    <span className="text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-400 font-label">Total Shared Capital</span>
+                    <h3 className="font-headline text-2xl font-extrabold text-primary dark:text-secondary mt-1">
+                      {formatCurrency(scSummaryTotals.overall_total)}
+                    </h3>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1">Combined member share capital equity</p>
+                  </div>
+
+                  <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
+                    <span className="text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-400 font-label">Contributors</span>
+                    <h3 className="font-headline text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+                      {scSummaryTotals.members_with_balance}{' '}
+                      <span className="text-sm font-bold text-neutral-400">/ {scSummaryRows.length}</span>
+                    </h3>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1">Members with recorded share capital</p>
+                  </div>
+
+                  <div className="p-5 bg-white dark:bg-surface-container-low border border-outline-variant/65 rounded-3xl shadow-sm">
+                    <span className="text-[10px] uppercase font-bold text-neutral-500 dark:text-neutral-400 font-label">Average Shared Capital</span>
+                    <h3 className="font-headline text-2xl font-extrabold text-sky-600 dark:text-sky-400 mt-1">
+                      {formatCurrency(scSummaryTotals.overall_average)}
+                    </h3>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1">Average per contributing member</p>
+                  </div>
+                </div>
+
+                {/* Search & Filters */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-3xl bg-white dark:bg-surface-container-low border border-outline-variant/60 shadow-sm">
+                  <div className="relative w-full sm:max-w-sm">
+                    <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={scSearch}
+                      onChange={(e) => setScSearch(e.target.value)}
+                      placeholder="Search Member ID or Member Name..."
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container text-xs text-on-surface dark:text-white outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <AnimatedSelect
+                      value={scMembershipFilter}
+                      onChange={(val) => setScMembershipFilter(val)}
+                      className="min-w-[165px] py-2"
+                      options={[
+                        { value: '', label: 'All Memberships' },
+                        { value: 'Regular', label: 'Regular Member' },
+                        { value: 'Associate', label: 'Associate Member' },
+                      ]}
+                    />
+                    <AnimatedSelect
+                      value={scStatusFilter}
+                      onChange={(val) => setScStatusFilter(val)}
+                      className="min-w-[155px] py-2"
+                      options={[
+                        { value: '', label: 'All Statuses' },
+                        { value: 'active', label: 'Active' },
+                        { value: 'pending', label: 'Pending Review' },
+                        { value: 'dormant', label: 'Dormant' },
+                        { value: 'withdrawn', label: 'Withdrawn' },
+                      ]}
+                    />
+                    <button
+                      type="button"
+                      onClick={loadAllShareCapitalSummary}
+                      className="p-2 rounded-xl border border-outline-variant/60 hover:bg-neutral/5 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                      title="Refresh"
+                    >
+                      <Loader2 className={`w-4 h-4 ${loadingScSummary ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* All Members Share Capital Table */}
+                <div className="bg-white dark:bg-surface-container-low border border-outline-variant/60 rounded-3xl shadow-sm p-1.5">
+                  <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between gap-3 flex-wrap">
+                    <h4 className="font-headline text-sm font-bold text-on-surface dark:text-white flex items-center gap-2">
+                      <History className="w-4 h-4 text-primary" /> Share Capital Ledger
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300">
+                        {filteredRows.length} {filteredRows.length === 1 ? 'member' : 'members'}
+                      </span>
+                    </h4>
+                    <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                      Click any member row to open their Share Capital subledger
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-surface-container-low dark:bg-surface-container-high/40 border-b border-outline-variant/45">
+                          <th className="px-5 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Member ID</th>
+                          <th className="px-5 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Member Name</th>
+                          <th className="px-5 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider text-right whitespace-nowrap">Total Shared Capital</th>
+                          <th className="px-5 py-3 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider text-right whitespace-nowrap">Average Shared Capital</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
+                        {loadingScSummary && scSummaryRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-10 text-center text-neutral-500">Loading Share Capital Ledger...</td>
+                          </tr>
+                        ) : paginatedRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-10 text-center text-neutral-500 italic">No members found matching your filter.</td>
+                          </tr>
+                        ) : (
+                          paginatedRows.map((row: any) => (
+                            <tr
+                              key={row.id}
+                              onClick={() => {
+                                setSelectedMemberId(String(row.id));
+                                setViewingScMember(row);
+                              }}
+                              className="hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-colors cursor-pointer group"
+                              title="Click to view member Share Capital subledger"
+                            >
+                              <td className="px-5 py-3.5 whitespace-nowrap">
+                                <span className="font-mono text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                                  {row.member_no || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="font-bold text-on-surface dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                                    {row.last_name}, {row.first_name}{row.middle_name ? ` ${row.middle_name}` : ''}
+                                  </span>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    row.membership_type === 'Associate'
+                                      ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300'
+                                      : 'bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                                  }`}>
+                                    {row.membership_type || 'Regular'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5 text-right font-mono font-extrabold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                                {formatCurrency(row.total_shared_capital)}
+                              </td>
+                              <td className="px-5 py-3.5 text-right font-mono font-semibold text-neutral-700 dark:text-neutral-300 whitespace-nowrap">
+                                <span>{formatCurrency(row.average_shared_capital)}</span>
+                                <span className="ml-2 text-[10px] text-neutral-400">
+                                  ({row.tx_count} {row.tx_count === 1 ? 'entry' : 'entries'})
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {filteredRows.length > 0 && (
+                    <div className="px-5 py-3 border-t border-outline-variant/40 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div className="text-neutral-500 font-medium">
+                        Showing <span className="font-bold text-on-surface dark:text-white">{(safeScPage - 1) * scPageSize + 1}</span>–
+                        <span className="font-bold text-on-surface dark:text-white">{Math.min(safeScPage * scPageSize, filteredRows.length)}</span> of{' '}
+                        <span className="font-bold text-on-surface dark:text-white">{filteredRows.length}</span> members
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <AnimatedSelect
+                          value={String(scPageSize)}
+                          onChange={(val) => setScPageSize(Number(val))}
+                          openUpwards
+                          className="min-w-[115px]"
+                          options={[10, 20, 50, 100].map((s) => ({ value: String(s), label: `${s} / page` }))}
+                        />
+                        <button
+                          type="button"
+                          disabled={safeScPage <= 1}
+                          onClick={() => setScPage((p) => Math.max(1, p - 1))}
+                          className="px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-white dark:bg-surface-container-high font-bold text-on-surface dark:text-white disabled:opacity-40 cursor-pointer"
+                        >
+                          Prev
+                        </button>
+                        <span className="font-mono font-bold text-neutral-600 dark:text-neutral-300 px-1">
+                          {safeScPage} / {totalScPages}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={safeScPage >= totalScPages}
+                          onClick={() => setScPage((p) => Math.min(totalScPages, p + 1))}
+                          className="px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-white dark:bg-surface-container-high font-bold text-on-surface dark:text-white disabled:opacity-40 cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Member Share Capital Subledger Modal */}
+                {viewingScMember && typeof document !== 'undefined' && createPortal(
+                  <div
+                    onClick={() => setViewingScMember(null)}
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop"
+                  >
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-modal-pop"
+                    >
+                      <div className="px-6 py-4 border-b border-outline-variant/60 bg-neutral-50 dark:bg-surface-container flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shrink-0">
+                            <PiggyBank className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                                {viewingScMember.member_no || 'N/A'}
+                              </span>
+                              <span className="text-[11px] text-neutral-500">
+                                {viewingScMember.membership_type || 'Regular'} • Share Capital Subledger
+                              </span>
+                            </div>
+                            <h2 className="text-base font-black text-on-surface dark:text-white mt-0.5">
+                              {viewingScMember.last_name}, {viewingScMember.first_name}{viewingScMember.middle_name ? ` ${viewingScMember.middle_name}` : ''}
+                            </h2>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingScTx(null);
+                              setScEditDate(new Date().toISOString().split('T')[0]);
+                              setScEditAmount('');
+                              setSharePaymentMethod('otc');
+                              setSharePaymentRefNo('');
+                              setScEditError(null);
+                              setIsAddScModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Entry</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setViewingScMember(null)}
+                            className="p-2 rounded-full hover:bg-neutral/10 text-neutral-500 cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="p-3.5 rounded-2xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/50">
+                            <span className="text-[10px] uppercase font-bold text-neutral-500 block">Total Shared Capital</span>
+                            <span className="text-lg font-black font-mono text-emerald-600 dark:text-emerald-400">
+                              {formatCurrency(shareData?.balance ?? viewingScMember.total_shared_capital)}
+                            </span>
+                          </div>
+                          <div className="p-3.5 rounded-2xl bg-surface-container-low dark:bg-surface-container border border-outline-variant/50">
+                            <span className="text-[10px] uppercase font-bold text-neutral-500 block">Average Shared Capital</span>
+                            <span className="text-lg font-black font-mono text-sky-600 dark:text-sky-400">
+                              {formatCurrency(viewingScMember.average_shared_capital)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="border border-outline-variant/60 rounded-2xl overflow-hidden">
+                          <div className="overflow-x-auto custom-scrollbar">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-surface-container-low dark:bg-surface-container border-b border-outline-variant/45">
+                                  <th className="px-3 py-2.5 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">#</th>
+                                  <th className="px-3 py-2.5 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Transaction Date</th>
+                                  <th className="px-3 py-2.5 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Invoice / Mode</th>
+                                  <th className="px-3 py-2.5 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Amount</th>
+                                  <th className="px-3 py-2.5 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider whitespace-nowrap">Running Balance</th>
+                                  <th className="px-3 py-2.5 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">Remarks / Source</th>
+                                  <th className="px-3 py-2.5 font-headline text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider text-right">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-outline-variant/35 font-body text-xs text-on-surface dark:text-white/95">
+                                {loading ? (
+                                  <tr>
+                                    <td colSpan={7} className="px-6 py-8 text-center text-neutral-500">Loading member subledger...</td>
+                                  </tr>
+                                ) : postedTransactions.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={7} className="px-6 py-8 text-center text-neutral-500 italic">No share capital transactions recorded for this member.</td>
+                                  </tr>
+                                ) : (
+                                  postedTransactions.map((tx: any, idx: number) => (
+                                    <tr key={tx.id || idx} className="hover:bg-neutral/5 transition-colors">
+                                      <td className="px-3 py-2.5 font-mono text-[11px] text-neutral-400">{idx + 1}</td>
+                                      <td className="px-3 py-2.5 font-mono text-[11px] whitespace-nowrap">
+                                        {new Date(tx.transaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                      </td>
+                                      <td className="px-3 py-2.5 whitespace-nowrap">
+                                        <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-neutral/10 text-neutral-600 dark:text-neutral-300">
+                                          {tx.invoice_no || tx.mode || 'SD'}
+                                        </span>
+                                      </td>
+                                      <td className={`px-3 py-2.5 font-mono font-bold whitespace-nowrap ${
+                                        tx.transaction_type === 'debit'
+                                          ? 'text-rose-600 dark:text-rose-400'
+                                          : 'text-emerald-600 dark:text-emerald-400'
+                                      }`}>
+                                        {tx.transaction_type === 'debit' ? '-' : '+'}{formatCurrency(parseFloat(tx.amount))}
+                                      </td>
+                                      <td className="px-3 py-2.5 font-mono font-extrabold text-on-surface dark:text-white whitespace-nowrap">
+                                        {formatCurrency(parseFloat(tx.balance_after))}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-neutral-500 dark:text-neutral-400 truncate max-w-[200px]" title={tx.remarks || 'Share capital placement'}>
+                                        {tx.remarks || 'Share capital placement'}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                          <button
+                                            onClick={() => downloadContributionReceipt(tx)}
+                                            disabled={downloadingTxId === tx.id}
+                                            className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 hover:bg-emerald-100 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                            title="Download receipt"
+                                          >
+                                            {downloadingTxId === tx.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                                          </button>
+                                          <button
+                                            onClick={() => openContributionReceiptModal(tx)}
+                                            className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 hover:bg-emerald-100 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                            title="Print receipt"
+                                          >
+                                            <Printer className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingScTx(tx);
+                                              setScEditDate(tx.transaction_date ? new Date(tx.transaction_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+                                              setScEditAmount(String(tx.amount ?? ''));
+                                              setScEditError(null);
+                                            }}
+                                            title="Edit entry"
+                                            className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-neutral-600 dark:text-neutral-300 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+                                          >
+                                            <Edit2 className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setScEditError(null);
+                                              setDeletingScTx(tx);
+                                            }}
+                                            title="Delete entry"
+                                            className="p-1.5 rounded-lg border border-outline-variant/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-neutral-600 dark:text-neutral-300 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>,
+                  document.body
+                )}
+              </div>
+            );
+          })()}
+
+          {/* TAB 1: SHARE CAPITAL LEDGER — MEMBER PERSONAL VIEW */}
+          {activeTab === 'share_capital' && !isAdminOrManager && shareData && (() => {
             const postedTransactions = (shareData.transactions || []).filter(
               (tx: any) => !tx.status || tx.status === 'completed'
             );
@@ -2961,7 +3290,7 @@ export default function AccountingPage() {
 
       {/* MODAL 6: COMPLETED CONTRIBUTION RECEIPT PREVIEW */}
       {completedReceiptMode === 'receipt' && completedReceiptTx && auditedMember && mounted && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-950/70 backdrop-blur-md p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-neutral-950/70 backdrop-blur-md p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-low border border-outline-variant/70 rounded-3xl w-full max-w-2xl shadow-2xl p-6 md:p-7 relative animate-modal-pop max-h-[92vh] overflow-y-auto font-sans flex flex-col gap-5">
             {/* Modal Top Bar */}
             <div className="flex justify-between items-center pb-3 border-b border-outline-variant/30">
@@ -3382,7 +3711,7 @@ export default function AccountingPage() {
 
       {/* Add / Edit Share Capital Entry Modal */}
       {(isAddScModalOpen || editingScTx) && mounted && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl w-full max-w-lg shadow-2xl p-6 animate-modal-pop max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2.5">
@@ -3609,7 +3938,7 @@ export default function AccountingPage() {
 
       {/* Delete Share Capital Entry Modal */}
       {deletingScTx && mounted && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-neutral-950/60 backdrop-blur-sm p-4 animate-modal-backdrop">
           <div className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl w-full max-w-sm shadow-2xl p-6 animate-modal-pop">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400">

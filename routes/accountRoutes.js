@@ -2,6 +2,7 @@ import express from 'express';
 import {
   postShareCapitalTransaction,
   getShareCapital,
+  getAllShareCapitalSummary,
   updateShareCapitalTransaction,
   deleteShareCapitalTransaction,
   createFixedDeposit,
@@ -47,6 +48,9 @@ router.route('/savings/:memberId')
   .get(getSavingsAccount);
 
 // 1. Share Capital Ledger
+router.route('/share-capital-summary')
+  .get(restrictTo('admin', 'staff'), getAllShareCapitalSummary);
+
 router.route('/share-capital')
   .post(restrictTo('admin', 'staff', 'member'), requireApprovedProfile, postShareCapitalTransaction);
 
