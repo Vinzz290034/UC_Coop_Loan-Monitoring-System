@@ -628,7 +628,7 @@ function CollectionPageContent() {
   const [selectedRemarks, setSelectedRemarks] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<string>('2026');
   const [selectedMonth, setSelectedMonth] = useState<string | number>('all');
-  const [onlyToday, setOnlyToday] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [sortBy, setSortBy] = useState<'or_no' | 'date'>('or_no');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -2317,12 +2317,10 @@ function CollectionPageContent() {
         if (selectedRemarks === 'edit' && isSealed) return false;
       }
 
-      // Today-only filter (toggled by Collection Today / Invoices Issued Today cards)
-      if (onlyToday) {
-        const now = new Date();
-        const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      // Specific date filter (set via date picker or Collection Today / Invoices Issued Today cards)
+      if (selectedDate) {
         const parsed = parseCollectionDate(item.date);
-        if (parsed.dateKey !== todayKey) return false;
+        if (parsed.dateKey !== selectedDate) return false;
       } else {
         // Year filter
         if (selectedYear !== 'all') {
@@ -2385,7 +2383,7 @@ function CollectionPageContent() {
     });
 
     return result;
-  }, [collections, activeTab, selectedMethod, selectedStatus, selectedRemarks, selectedYear, selectedMonth, onlyToday, searchQuery, sortBy, sortOrder]);
+  }, [collections, activeTab, selectedMethod, selectedStatus, selectedRemarks, selectedYear, selectedMonth, selectedDate, searchQuery, sortBy, sortOrder]);
 
   // Tab Stats for 5 KPI Cards (Calculated over current tab's scope + active month/year filters)
   const tabStats = useMemo(() => {
@@ -2696,7 +2694,7 @@ function CollectionPageContent() {
   // Reset pagination on filter or search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, searchQuery, selectedMethod, selectedStatus, selectedRemarks, selectedYear, selectedMonth, onlyToday, sortBy, sortOrder, itemsPerPage]);
+  }, [activeTab, searchQuery, selectedMethod, selectedStatus, selectedRemarks, selectedYear, selectedMonth, selectedDate, sortBy, sortOrder, itemsPerPage]);
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filteredCollections.length / itemsPerPage));
@@ -3418,31 +3416,38 @@ function CollectionPageContent() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch">
           {/* Card 1: Collection Today */}
-          <button
-            type="button"
-            onClick={() => setOnlyToday(prev => !prev)}
-            title={onlyToday ? 'Click to show all receipts' : "Click to filter today's receipts"}
-            className={`p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border text-left shadow-xs flex items-center justify-between transition-all cursor-pointer ${
-              onlyToday
-                ? 'border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
-                : 'border-outline-variant/60 hover:border-primary/50 dark:hover:border-secondary/50'
-            }`}
-          >
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Collection Today
-              </span>
-              <p className="text-xl sm:text-2xl font-headline font-black text-primary dark:text-secondary">
-                ₱{tabStats.todayTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              <p className="text-[10px] text-neutral-500">
-                {onlyToday ? 'Showing today only · Click to reset' : 'Total collected for today'}
-              </p>
-            </div>
-            <div className="p-3 bg-primary/10 dark:bg-secondary/10 rounded-2xl text-primary dark:text-secondary">
-              <DollarSign className="w-5 h-5" />
-            </div>
-          </button>
+          {(() => {
+            const now = new Date();
+            const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const isTodaySelected = selectedDate === todayKey;
+            return (
+              <button
+                type="button"
+                onClick={() => setSelectedDate(prev => (prev === todayKey ? '' : todayKey))}
+                title={isTodaySelected ? 'Click to show all receipts' : "Click to filter today's receipts"}
+                className={`p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border text-left shadow-xs flex items-center justify-between transition-all cursor-pointer ${
+                  isTodaySelected
+                    ? 'border-primary dark:border-secondary ring-2 ring-primary/20 dark:ring-secondary/20'
+                    : 'border-outline-variant/60 hover:border-primary/50 dark:hover:border-secondary/50'
+                }`}
+              >
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    Collection Today
+                  </span>
+                  <p className="text-xl sm:text-2xl font-headline font-black text-primary dark:text-secondary">
+                    ₱{tabStats.todayTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[10px] text-neutral-500">
+                    {isTodaySelected ? 'Showing today only · Click to reset' : 'Total collected for today'}
+                  </p>
+                </div>
+                <div className="p-3 bg-primary/10 dark:bg-secondary/10 rounded-2xl text-primary dark:text-secondary">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+              </button>
+            );
+          })()}
 
           {/* Card 2: Collection This Month */}
           <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
@@ -3481,31 +3486,38 @@ function CollectionPageContent() {
           </div>
 
           {/* Card 4: Invoices Issued Today */}
-          <button
-            type="button"
-            onClick={() => setOnlyToday(prev => !prev)}
-            title={onlyToday ? 'Click to show all receipts' : "Click to filter today's receipts"}
-            className={`p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border text-left shadow-xs flex items-center justify-between transition-all cursor-pointer ${
-              onlyToday
-                ? 'border-amber-500 ring-2 ring-amber-500/20'
-                : 'border-outline-variant/60 hover:border-amber-500/50'
-            }`}
-          >
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Invoices Issued Today
-              </span>
-              <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
-                {tabStats.todayCount}
-              </p>
-              <p className="text-[10px] text-neutral-500">
-                {onlyToday ? 'Showing today only · Click to reset' : 'Receipts issued today'}
-              </p>
-            </div>
-            <div className="p-3 bg-amber-700/10 dark:bg-amber-400/10 rounded-2xl text-amber-700 dark:text-amber-400">
-              <Receipt className="w-5 h-5" />
-            </div>
-          </button>
+          {(() => {
+            const now = new Date();
+            const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const isTodaySelected = selectedDate === todayKey;
+            return (
+              <button
+                type="button"
+                onClick={() => setSelectedDate(prev => (prev === todayKey ? '' : todayKey))}
+                title={isTodaySelected ? 'Click to show all receipts' : "Click to filter today's receipts"}
+                className={`p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border text-left shadow-xs flex items-center justify-between transition-all cursor-pointer ${
+                  isTodaySelected
+                    ? 'border-amber-500 ring-2 ring-amber-500/20'
+                    : 'border-outline-variant/60 hover:border-amber-500/50'
+                }`}
+              >
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    Invoices Issued Today
+                  </span>
+                  <p className="text-xl sm:text-2xl font-headline font-black text-neutral-900 dark:text-white">
+                    {tabStats.todayCount}
+                  </p>
+                  <p className="text-[10px] text-neutral-500">
+                    {isTodaySelected ? 'Showing today only · Click to reset' : 'Receipts issued today'}
+                  </p>
+                </div>
+                <div className="p-3 bg-amber-700/10 dark:bg-amber-400/10 rounded-2xl text-amber-700 dark:text-amber-400">
+                  <Receipt className="w-5 h-5" />
+                </div>
+              </button>
+            );
+          })()}
 
           {/* Card 5: Average Daily Collection */}
           <div className="p-5 rounded-3xl bg-surface-container-lowest dark:bg-surface-container-low border border-outline-variant/60 shadow-xs flex items-center justify-between">
@@ -3717,7 +3729,7 @@ function CollectionPageContent() {
                   setSelectedRemarks('all');
                   setSelectedYear('2026');
                   setSelectedMonth('all');
-                  setOnlyToday(false);
+                  setSelectedDate('');
                 }}
                 className="p-2.5 rounded-xl border border-outline-variant/60 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all cursor-pointer"
                 title="Reset all filters"
@@ -3749,9 +3761,9 @@ function CollectionPageContent() {
               <span className="text-xs font-bold text-neutral-800 dark:text-neutral-200">
                 Filter by Month:
               </span>
-              {onlyToday ? (
+              {selectedDate ? (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                  Today Only ({new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})
+                  Date: {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </span>
               ) : selectedMonth !== 'all' ? (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
@@ -3766,12 +3778,35 @@ function CollectionPageContent() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[11px] font-semibold text-neutral-500">Date:</span>
+              <div className="relative flex items-center">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="px-2.5 py-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container text-xs font-semibold text-neutral-800 dark:text-neutral-200 outline-none focus:border-emerald-500 cursor-pointer"
+                  title="Filter receipts by specific date"
+                />
+                {selectedDate && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate('')}
+                    className="ml-1 p-1 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
+                    title="Clear date filter"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {availableYears.length > 1 && (
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[11px] font-semibold text-neutral-500">Year:</span>
                 <AnimatedSelect
                   value={selectedYear}
-                  onChange={(val) => { setOnlyToday(false); setSelectedYear(val); }}
+                  onChange={(val) => { setSelectedDate(''); setSelectedYear(val); }}
                   options={[
                     { value: 'all', label: 'All Years' },
                     ...availableYears.map(y => ({ value: y, label: y }))
@@ -3785,9 +3820,9 @@ function CollectionPageContent() {
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5">
               <button
                 type="button"
-                onClick={() => { setOnlyToday(false); setSelectedMonth('all'); }}
+                onClick={() => { setSelectedDate(''); setSelectedMonth('all'); }}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                  !onlyToday && selectedMonth === 'all'
+                  !selectedDate && selectedMonth === 'all'
                     ? 'bg-emerald-700 text-white shadow-xs'
                     : 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300'
                 }`}
@@ -3796,7 +3831,7 @@ function CollectionPageContent() {
               </button>
 
             {MONTHS_SHORT.map((mShort, idx) => {
-              const isSelected = !onlyToday && selectedMonth === idx;
+              const isSelected = !selectedDate && selectedMonth === idx;
               const hasData = !!monthActivity[idx];
               const disabled = isMonthDisabled(idx);
               return (
@@ -3804,7 +3839,7 @@ function CollectionPageContent() {
                   key={mShort}
                   type="button"
                   disabled={disabled}
-                  onClick={() => { if (!disabled) { setOnlyToday(false); setSelectedMonth(idx); } }}
+                  onClick={() => { if (!disabled) { setSelectedDate(''); setSelectedMonth(idx); } }}
                   className={`relative px-2.5 py-1.5 rounded-xl text-xs font-mono font-bold transition-all whitespace-nowrap flex items-center gap-1 ${
                     disabled
                       ? 'opacity-30 bg-neutral-100 dark:bg-neutral-800/40 text-neutral-400 dark:text-neutral-600 cursor-not-allowed select-none'
@@ -3837,19 +3872,19 @@ function CollectionPageContent() {
             <div className="flex items-center gap-2">
               <Wallet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span className="font-bold text-neutral-800 dark:text-neutral-200">
-                Deposit Custody Breakdown {onlyToday ? `— Today (${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})` : selectedMonth !== 'all' ? `— ${MONTH_NAMES[selectedMonth as number]} ${selectedYear === 'all' ? '' : selectedYear}` : selectedYear !== 'all' ? `— Full Year ${selectedYear}` : '— All Records'}
+                Deposit Custody Breakdown {selectedDate ? `— ${new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : selectedMonth !== 'all' ? `— ${MONTH_NAMES[selectedMonth as number]} ${selectedYear === 'all' ? '' : selectedYear}` : selectedYear !== 'all' ? `— Full Year ${selectedYear}` : '— All Records'}
               </span>
               <span className="text-[11px] text-neutral-400 font-medium">
                 ({filteredCollections.length} receipt{filteredCollections.length === 1 ? '' : 's'} · Total: ₱{filteredCollections.reduce((sum, c) => sum + getDisplayCollectionAmount(c), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
               </span>
             </div>
-            {onlyToday ? (
+            {selectedDate ? (
               <button
                 type="button"
-                onClick={() => setOnlyToday(false)}
+                onClick={() => setSelectedDate('')}
                 className="text-[11px] text-amber-700 dark:text-amber-400 hover:underline font-semibold cursor-pointer"
               >
-                Clear today filter
+                Clear date filter
               </button>
             ) : selectedMonth !== 'all' && (
               <button
