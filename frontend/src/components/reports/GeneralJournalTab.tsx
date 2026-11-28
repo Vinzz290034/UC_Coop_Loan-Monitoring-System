@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import api from '@/lib/api';
 import AnimatedSelect from '@/components/ui/AnimatedSelect';
+import ExcelJS from 'exceljs';
 import {
   BookOpen,
   Search,
@@ -13,6 +14,11 @@ import {
   AlertTriangle,
   X,
   RefreshCw,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  RotateCcw,
 } from 'lucide-react';
 
 interface JournalLine {
@@ -57,6 +63,12 @@ const MONTHS = [
 ];
 
 export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?: number }) {
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+  const [viewMode, setViewMode] = useState<'daily' | 'all'>('daily');
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState('');
   const [sourceFilter, setSourceFilter] = useState('all');
@@ -80,6 +92,26 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
   ]);
   const [jevSubmitting, setJevSubmitting] = useState(false);
   const [jevError, setJevError] = useState<string | null>(null);
+  const [openAccountLineIdx, setOpenAccountLineIdx] = useState<number | null>(null);
+
+  const handleOpenReverseJev = (je: JournalEntry) => {
+    const entryYear = Number(String(je.date || '').slice(0, 4)) || year;
+    const reverseDate = `${entryYear + 1}-01-01`;
+    setJevNo(je.jev_no ? `REV-${je.jev_no}` : '');
+    setJevDate(reverseDate);
+    setJevDesc(`Reversing Entry for ${je.jev_no || 'Adjusting JEV'}${je.description ? ` — ${je.description}` : ''}`);
+    setJevLines(
+      (je.lines || []).map((line) => ({
+        account_name: line.account_name || '',
+        account_type: line.account_type || 'Expense',
+        debit: line.credit > 0 ? String(line.credit) : '',
+        credit: line.debit > 0 ? String(line.debit) : '',
+      }))
+    );
+    setJevError(null);
+    setOpenAccountLineIdx(null);
+    setIsJevModalOpen(true);
+  };
 
   const loadJournal = useCallback(async () => {
     try {
@@ -109,9 +141,32 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
     loadJournal();
   }, [loadJournal]);
 
+  useEffect(() => {
+    if (viewMode === 'daily' && selectedDate) {
+      const y = Number(selectedDate.slice(0, 4));
+      if (y && y !== year) setYear(y);
+    }
+  }, [viewMode, selectedDate, year]);
+
+  const shiftSelectedDate = (deltaDays: number) => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const dt = new Date(y, (m || 1) - 1, (d || 1) + deltaDays);
+    setSelectedDate(
+      `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+    );
+  };
+
+  const formattedAsOfDate = useMemo(() => {
+    if (!selectedDate) return '';
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const dt = new Date(y, (m || 1) - 1, d || 1);
+    return dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  }, [selectedDate]);
+
   const filteredEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
     return entries.filter((e) => {
+      if (viewMode === 'daily' && selectedDate && e.date !== selectedDate) return false;
       if (sourceFilter !== 'all' && e.source_type !== sourceFilter) return false;
       if (!q) return true;
       return (
@@ -121,11 +176,30 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
         e.lines.some((l) => l.account_name.toLowerCase().includes(q))
       );
     });
-  }, [entries, sourceFilter, search]);
+  }, [entries, viewMode, selectedDate, sourceFilter, search]);
+
+  const activeSummary = useMemo(() => {
+    let totalDebit = 0;
+    let totalCredit = 0;
+    for (const entry of filteredEntries) {
+      for (const line of entry.lines || []) {
+        totalDebit += Number(line.debit) || 0;
+        totalCredit += Number(line.credit) || 0;
+      }
+    }
+    totalDebit = Math.round(totalDebit * 100) / 100;
+    totalCredit = Math.round(totalCredit * 100) / 100;
+    return {
+      entry_count: filteredEntries.length,
+      total_debit: totalDebit,
+      total_credit: totalCredit,
+      is_balanced: Math.abs(totalDebit - totalCredit) < 0.01,
+    };
+  }, [filteredEntries]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, sourceFilter, year, month, pageSize]);
+  }, [search, sourceFilter, viewMode, selectedDate, year, month, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -188,29 +262,332 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
     }
   };
 
+  const handleExportExcel = async () => {
+    if (filteredEntries.length === 0) return;
+    const periodLabel =
+      viewMode === 'daily'
+        ? `As of ${formattedAsOfDate}`
+        : `Year ${year}${month ? ` (${MONTHS.find((m) => m.value === month)?.label || `Month ${month}`})` : ' (Full Year YTD)'}`;
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'UC-METC MPC Loan & Accounting System';
+    wb.created = new Date();
+
+    const ws = wb.addWorksheet('Journal Entry', {
+      views: [{ state: 'frozen', ySplit: 5 }],
+      pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    });
+
+    ws.columns = [
+      { key: 'date', width: 13 },
+      { key: 'jev', width: 20 },
+      { key: 'source', width: 18 },
+      { key: 'account', width: 46 },
+      { key: 'type', width: 13 },
+      { key: 'payee', width: 26 },
+      { key: 'debit', width: 18 },
+      { key: 'credit', width: 18 },
+    ];
+
+    // Formal Letterhead
+    ws.mergeCells('A1:H1');
+    const r1 = ws.getCell('A1');
+    r1.value = 'UNIVERSITY OF CEBU - METC MULTIPURPOSE COOPERATIVE (UC-METC MPC)';
+    r1.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF064E3B' } };
+    r1.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 24;
+
+    ws.mergeCells('A2:H2');
+    const r2 = ws.getCell('A2');
+    r2.value = 'GENERAL JOURNAL / JOURNAL ENTRY';
+    r2.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF111827' } };
+    r2.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(2).height = 20;
+
+    ws.mergeCells('A3:H3');
+    const r3 = ws.getCell('A3');
+    r3.value = `Period: ${periodLabel}   |   Entries: ${activeSummary.entry_count}   |   Status: ${activeSummary.is_balanced ? 'Balanced (Dr = Cr)' : 'Unbalanced'}`;
+    r3.font = { name: 'Calibri', size: 10, italic: true, color: { argb: 'FF4B5563' } };
+    r3.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(3).height = 18;
+    ws.getRow(4).height = 8;
+
+    // Header Row
+    const headerRow = ws.getRow(5);
+    headerRow.values = [
+      'Date',
+      'JEV / Ref #',
+      'Source',
+      'Account Title & Particulars',
+      'Type',
+      'Payee / Party',
+      'Debit (₱)',
+      'Credit (₱)',
+    ];
+    headerRow.height = 24;
+    headerRow.eachCell((cell, colNumber) => {
+      cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF064E3B' } };
+      cell.alignment = {
+        horizontal: colNumber >= 7 ? 'right' : colNumber === 1 || colNumber === 3 || colNumber === 5 ? 'center' : 'left',
+        vertical: 'middle',
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF064E3B' } },
+        bottom: { style: 'medium', color: { argb: 'FF064E3B' } },
+        left: { style: 'thin', color: { argb: 'FF047857' } },
+        right: { style: 'thin', color: { argb: 'FF047857' } },
+      };
+    });
+
+    const currencyFmt = '"₱"#,##0.00;("₱"#,##0.00);"-"';
+    const thinGrid = { style: 'thin' as const, color: { argb: 'FFE2E8F0' } };
+    const jevTopBorder = { style: 'thin' as const, color: { argb: 'FF94A3B8' } };
+
+    filteredEntries.forEach((je, jeIdx) => {
+      const bandFill = jeIdx % 2 === 1 ? 'FFF8FAFC' : 'FFFFFFFF';
+      je.lines.forEach((line, idx) => {
+        const isFirst = idx === 0;
+        const isCreditOnly = line.credit > 0 && line.debit === 0;
+        const row = ws.addRow([
+          isFirst ? je.date : '',
+          isFirst ? je.jev_no : '',
+          isFirst ? je.source_label : '',
+          isCreditOnly ? `      ${line.account_name}` : line.account_name,
+          line.account_type,
+          isFirst ? je.payee : '',
+          line.debit > 0 ? Number(line.debit) : null,
+          line.credit > 0 ? Number(line.credit) : null,
+        ]);
+        row.height = 19;
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandFill } };
+          cell.border = {
+            top: isFirst ? jevTopBorder : thinGrid,
+            bottom: thinGrid,
+            left: thinGrid,
+            right: thinGrid,
+          };
+          cell.font = {
+            name: 'Calibri',
+            size: 10,
+            bold: colNumber === 2 && isFirst,
+            color: {
+              argb:
+                colNumber === 7 && line.debit > 0
+                  ? 'FF065F46'
+                  : colNumber === 8 && line.credit > 0
+                    ? 'FF0369A1'
+                    : isCreditOnly && colNumber === 4
+                      ? 'FF334155'
+                      : 'FF111827',
+            },
+          };
+          if (colNumber >= 7) {
+            cell.numFmt = currencyFmt;
+            cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          } else if (colNumber === 1 || colNumber === 3 || colNumber === 5) {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          } else {
+            cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+          }
+        });
+      });
+
+      // Formal indented explanation row under each JEV
+      const noteRow = ws.addRow([
+        '',
+        '',
+        '',
+        `   (${je.description || 'Journal Entry'})`,
+        '',
+        '',
+        null,
+        null,
+      ]);
+      noteRow.height = 17;
+      noteRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandFill } };
+        cell.border = {
+          top: thinGrid,
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          left: thinGrid,
+          right: thinGrid,
+        };
+        if (colNumber === 4) {
+          cell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF64748B' } };
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        }
+      });
+    });
+
+    // Grand Total Row
+    const totalRow = ws.addRow([
+      '',
+      '',
+      '',
+      'GRAND TOTAL',
+      '',
+      '',
+      activeSummary.total_debit,
+      activeSummary.total_credit,
+    ]);
+    totalRow.height = 24;
+    totalRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFDF5' } };
+      cell.font = {
+        name: 'Calibri',
+        size: 11,
+        bold: true,
+        color: { argb: colNumber === 8 ? 'FF0369A1' : 'FF064E3B' },
+      };
+      cell.border = {
+        top: { style: 'medium', color: { argb: 'FF064E3B' } },
+        bottom: { style: 'double', color: { argb: 'FF064E3B' } },
+        left: thinGrid,
+        right: thinGrid,
+      };
+      if (colNumber >= 7) {
+        cell.numFmt = currencyFmt;
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      } else if (colNumber === 4) {
+        cell.alignment = { horizontal: 'right', vertical: 'middle' };
+      }
+    });
+
+    // Signatory Block
+    ws.addRow([]);
+    ws.addRow([]);
+    const sigLabelRow = ws.addRow(['', 'Prepared by:', '', 'Verified by (Accountant):', '', 'Approved by (Manager):', '', '']);
+    sigLabelRow.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF374151' } };
+    const sigLineRow = ws.addRow(['', '___________________________', '', '___________________________', '', '___________________________', '', '']);
+    sigLineRow.font = { name: 'Calibri', size: 10, color: { argb: 'FF6B7280' } };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fileTag =
+      viewMode === 'daily'
+        ? selectedDate
+        : `${year}_${month ? `Through_M${month}` : 'YTD'}`;
+    a.href = url;
+    a.download = `Journal_Entry_${fileTag}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-4">
+      {/* Daily Header Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 rounded-2xl border border-outline-variant/60 bg-white dark:bg-surface-container-low">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shrink-0">
+            <Calendar className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-black text-on-surface dark:text-white">
+              {viewMode === 'daily'
+                ? `Journal Entry as of ${formattedAsOfDate}`
+                : `All Journal Entries — Year ${year}`}
+            </h2>
+            <p className="text-[11px] text-neutral-500">
+              {viewMode === 'daily'
+                ? 'Showing all balanced double-entry postings recorded on this date'
+                : 'Showing full-year / YTD chronological journal entries'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-xl border border-outline-variant/60 bg-neutral-100 dark:bg-surface-container p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode('daily')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'daily'
+                  ? 'bg-[#064e3b] text-white shadow-xs'
+                  : 'text-neutral-600 dark:text-neutral-300 hover:text-on-surface'
+                }`}
+            >
+              Daily
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'all'
+                  ? 'bg-[#064e3b] text-white shadow-xs'
+                  : 'text-neutral-600 dark:text-neutral-300 hover:text-on-surface'
+                }`}
+            >
+              All Dates (YTD)
+            </button>
+          </div>
+
+          {viewMode === 'daily' && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => shiftSelectedDate(-1)}
+                className="p-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container hover:bg-neutral/5 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                title="Previous day"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => {
+                  if (e.target.value) setSelectedDate(e.target.value);
+                }}
+                className="px-3 py-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container text-xs font-bold text-on-surface dark:text-white outline-none focus:border-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={() => shiftSelectedDate(1)}
+                className="p-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container hover:bg-neutral/5 text-neutral-600 dark:text-neutral-300 cursor-pointer"
+                title="Next day"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(todayStr)}
+                className="px-3 py-1.5 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container hover:bg-neutral/5 text-xs font-bold text-emerald-700 dark:text-emerald-400 cursor-pointer"
+              >
+                Today
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="p-4 rounded-2xl border border-outline-variant/60 bg-white dark:bg-surface-container-low">
           <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Journal Entries</div>
-          <div className="text-2xl font-black text-on-surface dark:text-white mt-1 font-mono">{filteredEntries.length}</div>
-          <div className="text-[11px] text-neutral-500 mt-0.5">Chronological double-entry JEVs</div>
+          <div className="text-2xl font-black text-on-surface dark:text-white mt-1 font-mono">{activeSummary.entry_count}</div>
+          <div className="text-[11px] text-neutral-500 mt-0.5">
+            {viewMode === 'daily' ? `Entries on ${formattedAsOfDate}` : 'Chronological double-entry JEVs'}
+          </div>
         </div>
         <div className="p-4 rounded-2xl border border-outline-variant/60 bg-white dark:bg-surface-container-low">
           <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Total Debits</div>
-          <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-1 font-mono">{fmt(summary.total_debit)}</div>
-          <div className="text-[11px] text-neutral-500 mt-0.5">Sum of all debit postings</div>
+          <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-1 font-mono">{fmt(activeSummary.total_debit)}</div>
+          <div className="text-[11px] text-neutral-500 mt-0.5">Sum of debit postings</div>
         </div>
         <div className="p-4 rounded-2xl border border-outline-variant/60 bg-white dark:bg-surface-container-low">
           <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Total Credits</div>
-          <div className="text-2xl font-black text-sky-700 dark:text-sky-400 mt-1 font-mono">{fmt(summary.total_credit)}</div>
-          <div className="text-[11px] text-neutral-500 mt-0.5">Sum of all credit postings</div>
+          <div className="text-2xl font-black text-sky-700 dark:text-sky-400 mt-1 font-mono">{fmt(activeSummary.total_credit)}</div>
+          <div className="text-[11px] text-neutral-500 mt-0.5">Sum of credit postings</div>
         </div>
         <div className="p-4 rounded-2xl border border-outline-variant/60 bg-white dark:bg-surface-container-low">
           <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">Ledger Status</div>
           <div className="mt-1.5 flex items-center gap-2">
-            {summary.is_balanced ? (
+            {activeSummary.is_balanced ? (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Balanced (Dr = Cr)
               </span>
@@ -277,7 +654,22 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
 
           <button
             type="button"
-            onClick={() => { setJevError(null); setIsJevModalOpen(true); }}
+            disabled={filteredEntries.length === 0}
+            onClick={handleExportExcel}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container hover:bg-neutral/5 text-xs font-bold text-on-surface dark:text-white disabled:opacity-40 cursor-pointer"
+            title="Export filtered Journal Entries to Excel"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+            <span>Export Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setJevError(null);
+              if (viewMode === 'daily' && selectedDate) setJevDate(selectedDate);
+              setIsJevModalOpen(true);
+            }}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -359,14 +751,24 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
                         </td>
                         <td className="p-2.5 text-center">
                           {idx === 0 && je.source_type === 'manual_jev' && je.manual_id && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteManualJev(je.manual_id!)}
-                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 cursor-pointer"
-                              title="Delete Manual JEV"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="inline-flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenReverseJev(je)}
+                                className="p-1.5 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                                title="Create Reversing Entry (flips debits & credits)"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteManualJev(je.manual_id!)}
+                                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 cursor-pointer"
+                                title="Delete Manual JEV"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -418,8 +820,19 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
 
       {/* New Adjusting Journal Entry Modal */}
       {isJevModalOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop">
-          <div className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 animate-modal-pop">
+        <div
+          onClick={() => setOpenAccountLineIdx(null)}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-modal-backdrop"
+        >
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!(e.target as HTMLElement).closest('[data-account-combo]')) {
+                setOpenAccountLineIdx(null);
+              }
+            }}
+            className="bg-white dark:bg-surface-container-high border border-outline-variant/80 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-visible shadow-2xl p-6 animate-modal-pop"
+          >
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
@@ -440,12 +853,6 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
                 {jevError}
               </div>
             )}
-
-            <datalist id="jev-account-options">
-              {accountOptions.map((opt) => (
-                <option key={`${opt.account_type}-${opt.account_title}`} value={opt.account_title} />
-              ))}
-            </datalist>
 
             <form onSubmit={handleCreateJev} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -503,43 +910,84 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
                   <div className="col-span-1"></div>
                 </div>
 
-                {jevLines.map((line, i) => (
+                {jevLines.map((line, i) => {
+                  const q = line.account_name.trim().toLowerCase();
+                  const filteredOpts = accountOptions
+                    .filter((o) =>
+                      q
+                        ? o.account_title.toLowerCase().includes(q)
+                        : o.account_type === line.account_type
+                    )
+                    .slice(0, 40);
+                  const isOpen = openAccountLineIdx === i && filteredOpts.length > 0;
+                  return (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                    <input
-                      type="text"
-                      required
-                      list="jev-account-options"
-                      placeholder="Select or type account..."
-                      value={line.account_name}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const next = [...jevLines];
-                        next[i].account_name = val;
-                        const matched = accountOptions.find(
-                          (o) => o.account_title.toLowerCase() === val.trim().toLowerCase()
-                        );
-                        if (matched) {
-                          next[i].account_type = matched.account_type;
-                        }
-                        setJevLines(next);
-                      }}
-                      className="col-span-5 px-3 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container text-on-surface dark:text-white outline-none focus:border-emerald-500"
-                    />
-                    <select
-                      value={line.account_type}
-                      onChange={(e) => {
-                        const next = [...jevLines];
-                        next[i].account_type = e.target.value;
-                        setJevLines(next);
-                      }}
-                      className="col-span-2 px-2.5 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container text-on-surface dark:text-white outline-none focus:border-emerald-500"
-                    >
-                      <option value="Asset">Asset</option>
-                      <option value="Liabilities">Liabilities</option>
-                      <option value="Equity">Equity</option>
-                      <option value="Revenue">Revenue</option>
-                      <option value="Expense">Expense</option>
-                    </select>
+                    <div className="col-span-5 relative" data-account-combo>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Select or type account..."
+                        value={line.account_name}
+                        onFocus={() => setOpenAccountLineIdx(i)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const next = [...jevLines];
+                          next[i].account_name = val;
+                          const matched = accountOptions.find(
+                            (o) => o.account_title.toLowerCase() === val.trim().toLowerCase()
+                          );
+                          if (matched) {
+                            next[i].account_type = matched.account_type;
+                          }
+                          setJevLines(next);
+                          setOpenAccountLineIdx(i);
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-low dark:bg-surface-container text-on-surface dark:text-white outline-none focus:border-emerald-500"
+                      />
+                      <div
+                        className={`absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-outline-variant/60 bg-white dark:bg-surface-container-high shadow-xl max-h-40 overflow-y-auto origin-top transition-all duration-200 ease-out ${
+                          isOpen
+                            ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto'
+                            : 'opacity-0 scale-95 -translate-y-1.5 pointer-events-none'
+                        }`}
+                      >
+                        {filteredOpts.map((opt) => (
+                          <button
+                            key={`${opt.account_type}-${opt.account_title}`}
+                            type="button"
+                            onClick={() => {
+                              const next = [...jevLines];
+                              next[i].account_name = opt.account_title;
+                              next[i].account_type = opt.account_type;
+                              setJevLines(next);
+                              setOpenAccountLineIdx(null);
+                            }}
+                            className="w-full px-3 py-1.5 text-left text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                          >
+                            <span className="truncate font-semibold text-on-surface dark:text-white">{opt.account_title}</span>
+                            <span className="text-[10px] font-bold text-neutral-400 shrink-0">{opt.account_type}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <AnimatedSelect
+                        value={line.account_type}
+                        onChange={(val) => {
+                          const next = [...jevLines];
+                          next[i].account_type = val;
+                          setJevLines(next);
+                        }}
+                        className="py-2"
+                        options={[
+                          { value: 'Asset', label: 'Asset' },
+                          { value: 'Liabilities', label: 'Liabilities' },
+                          { value: 'Equity', label: 'Equity' },
+                          { value: 'Revenue', label: 'Revenue' },
+                          { value: 'Expense', label: 'Expense' },
+                        ]}
+                      />
+                    </div>
                     <input
                       type="number"
                       step="0.01"
@@ -578,7 +1026,8 @@ export default function GeneralJournalTab({ initialYear = 2026 }: { initialYear?
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="p-3.5 rounded-xl bg-neutral-50 dark:bg-surface-container border border-outline-variant/60 flex flex-wrap items-center justify-between gap-2 font-mono text-xs">

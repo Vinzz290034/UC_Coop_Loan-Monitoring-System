@@ -22,7 +22,7 @@ export const OPENING_BASELINE = {
   special_loans: { label: 'Loans Receivable - Special Occasion', type: 'Asset', normal: 'debit', cur: 126799.00, prev: 119046.00 },
   emergency_loans: { label: 'Loans Receivable - Emergency', type: 'Asset', normal: 'debit', cur: 32500.00, prev: 83750.00 },
   calamity_loans: { label: 'Loans Receivable - Calamity', type: 'Asset', normal: 'debit', cur: 650625.03, prev: 0.00 },
-  unearned_interest: { label: 'Unearned Interest & Discounts', type: 'Asset', normal: 'credit', cur: 0.00, prev: -172315.00 },
+  unearned_interest: { label: 'Unearned Interest & Discounts', type: 'Asset', normal: 'debit', cur: 0.00, prev: -172315.00 },
   ar_insurance: { label: 'Accounts Receivable - Insurance', type: 'Asset', normal: 'debit', cur: 3300.00, prev: 0.00 },
   ar_uc: { label: 'Accounts Receivable - UC', type: 'Asset', normal: 'debit', cur: 0.00, prev: 134781.00 },
   rec_members: { label: 'Accounts Receivable - Members', type: 'Asset', normal: 'debit', cur: 12124.50, prev: 0.00 },
@@ -41,9 +41,9 @@ export const OPENING_BASELINE = {
   unused_supplies: { label: 'Unused Office Supplies', type: 'Asset', normal: 'debit', cur: 20754.84, prev: 27500.00 },
   prepaid_expenses: { label: 'Prepaid Expenses', type: 'Asset', normal: 'debit', cur: 0.00, prev: 437933.40 },
   office_equipment: { label: 'Office Equipment', type: 'Asset', normal: 'debit', cur: 61669.60, prev: 42979.00 },
-  depr_office_equipment: { label: 'Accumulated Depreciation - Office Equipment', type: 'Asset', normal: 'credit', cur: -28230.40, prev: -1797.00 },
+  depr_office_equipment: { label: 'Accumulated Depreciation - Office Equipment', type: 'Asset', normal: 'debit', cur: -28230.40, prev: -1797.00 },
   furnitures_fixtures: { label: 'Furnitures & Fixtures', type: 'Asset', normal: 'debit', cur: 326177.20, prev: 52744.00 },
-  depr_furnitures_fixtures: { label: 'Accumulated Depreciation - Furnitures & Fixtures', type: 'Asset', normal: 'credit', cur: -56574.13, prev: -18261.04 },
+  depr_furnitures_fixtures: { label: 'Accumulated Depreciation - Furnitures & Fixtures', type: 'Asset', normal: 'debit', cur: -56574.13, prev: -18261.04 },
   deposit_container: { label: 'Returnable Container Deposit', type: 'Asset', normal: 'debit', cur: 7500.00, prev: 0.00 },
   ap_trade: { label: 'Accounts Payable - Trade', type: 'Liabilities', normal: 'credit', cur: 291050.00, prev: 0.00 },
   ap_others: { label: 'Accounts Payable - Others', type: 'Liabilities', normal: 'credit', cur: 39965.00, prev: 0.00 },
@@ -83,6 +83,23 @@ export async function ensureManualJournalTables() {
       account_type VARCHAR(64) NOT NULL DEFAULT 'Expense',
       debit NUMERIC(15, 2) NOT NULL DEFAULT 0,
       credit NUMERIC(15, 2) NOT NULL DEFAULT 0
+    );
+  `);
+}
+
+export async function ensureImportedOpeningBalancesTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS imported_opening_balances (
+      id SERIAL PRIMARY KEY,
+      target_year INTEGER NOT NULL,
+      source_label VARCHAR(255) DEFAULT 'Imported Trial Balance',
+      account_code VARCHAR(64) DEFAULT '',
+      account_name VARCHAR(255) NOT NULL,
+      account_type VARCHAR(64) NOT NULL DEFAULT 'Asset',
+      normal_balance VARCHAR(16) NOT NULL DEFAULT 'debit',
+      opening_balance NUMERIC(15, 2) NOT NULL DEFAULT 0,
+      created_by VARCHAR(150) DEFAULT 'Admin',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
   `);
 }
@@ -199,11 +216,52 @@ export async function buildAccountingLedger({ year, month = null } = {}) {
   ]);
 
   const coaTypeMap = new Map();
+  const coaTitleByLower = new Map();
+  const coaCanonicalMap = new Map();
+  const canonicalKey = (raw) => {
+    let s = String(raw || '').trim().toLowerCase();
+    s = s.replace(/^cib\s*[-–—]?\s*bdo\b/, 'cash in bank bdo');
+    s = s.replace(/^cib\s*[-–—]?\s*mbtc\b/, 'cash in bank mbtc');
+    s = s.replace(/^cib\s*[-–—]?\s*metro\s*bank\b/, 'cash in bank mbtc');
+    s = s.replace(/\bloans\s+receivable\b/g, 'loan receivable');
+    s = s.replace(/\bloans\s+payable\b/g, 'loan payable');
+    return s.replace(/[^a-z0-9]+/g, ' ').trim();
+  };
+
   for (const row of coaRes.rows) {
     if (row.account_title && row.account_type) {
-      coaTypeMap.set(String(row.account_title).trim().toLowerCase(), String(row.account_type).trim());
+      const title = String(row.account_title).trim();
+      const lower = title.toLowerCase();
+      coaTypeMap.set(lower, String(row.account_type).trim());
+      coaTitleByLower.set(lower, title);
+      const cKey = canonicalKey(title);
+      if (cKey && !coaCanonicalMap.has(cKey)) {
+        coaCanonicalMap.set(cKey, title);
+      }
     }
   }
+
+  const normalizeGlAccountTitle = (raw) => {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return '';
+    const lower = trimmed.toLowerCase();
+    if (/^(cib\s*[-–—]?\s*bdo|cash\s*in\s*bank\s*[-–—]?\s*bdo|bdo)$/i.test(trimmed)) {
+      return 'Cash in Bank - BDO';
+    }
+    if (/^(cib\s*[-–—]?\s*(mbtc|metro\s*bank)|cash\s*in\s*bank\s*[-–—]?\s*(mbtc|metro\s*bank)|mbtc)$/i.test(trimmed)) {
+      return 'Cash in Bank - MBTC';
+    }
+    if (/^(cash\s*in\s*vault|cash\s*on\s*hand\s*[-–—]?\s*vault)$/i.test(trimmed)) {
+      return 'Cash in Vault';
+    }
+    if (/^(common\s*shares?|share\s*capital(\s*[-–—]?\s*common)?)$/i.test(trimmed)) {
+      return 'Common Shares - Subscribed & Paid-Up';
+    }
+    if (coaTitleByLower.has(lower)) return coaTitleByLower.get(lower);
+    const cKey = canonicalKey(trimmed);
+    if (cKey && coaCanonicalMap.has(cKey)) return coaCanonicalMap.get(cKey);
+    return trimmed;
+  };
 
   const journalEntries = [];
   const matchesPeriod = (dateStr) => {
@@ -220,9 +278,10 @@ export async function buildAccountingLedger({ year, month = null } = {}) {
   const pushBalancedEntry = (entry) => {
     const lines = (entry.lines || [])
       .map((l) => {
-        const cls = inferAccountClassification(l.account_name, coaTypeMap);
+        const normalizedName = normalizeGlAccountTitle(l.account_name);
+        const cls = inferAccountClassification(normalizedName, coaTypeMap);
         return {
-          account_name: String(l.account_name).trim(),
+          account_name: normalizedName,
           account_type: l.account_type || cls.type,
           normal: l.normal || cls.normal,
           debit: round2(l.debit),
@@ -482,7 +541,44 @@ export async function buildAccountingLedger({ year, month = null } = {}) {
     return accountMap.get(key);
   };
 
-  if (targetYear === 2026 || targetYear === 2025) {
+  await ensureManualJournalTables();
+  await ensureImportedOpeningBalancesTable();
+
+  const importedOpeningRes = await pool.query(
+    `SELECT id, source_label, account_code, account_name, account_type, normal_balance, opening_balance
+     FROM imported_opening_balances
+     WHERE target_year = $1
+     ORDER BY id ASC`,
+    [targetYear]
+  );
+
+  if (importedOpeningRes.rows.length > 0) {
+    for (const row of importedOpeningRes.rows) {
+      const val = round2(row.opening_balance);
+      if (val === 0) continue;
+      const normal = row.normal_balance === 'credit' ? 'credit' : 'debit';
+      const acc = ensureAccount(row.account_name, row.account_type, normal);
+      acc.opening_balance = round2(acc.opening_balance + val);
+      const desc = row.source_label || 'Imported Opening Balance';
+      if (normal === 'debit') {
+        if (val >= 0) {
+          acc.debit_total = round2(acc.debit_total + val);
+          acc.debits.push({ date: `${targetYear}-01-01`, jev_no: 'OPENING', description: desc, amount: val, source_type: 'opening' });
+        } else {
+          acc.credit_total = round2(acc.credit_total + Math.abs(val));
+          acc.credits.push({ date: `${targetYear}-01-01`, jev_no: 'OPENING', description: `${desc} (Contra)`, amount: Math.abs(val), source_type: 'opening' });
+        }
+      } else {
+        if (val >= 0) {
+          acc.credit_total = round2(acc.credit_total + val);
+          acc.credits.push({ date: `${targetYear}-01-01`, jev_no: 'OPENING', description: desc, amount: val, source_type: 'opening' });
+        } else {
+          acc.debit_total = round2(acc.debit_total + Math.abs(val));
+          acc.debits.push({ date: `${targetYear}-01-01`, jev_no: 'OPENING', description: `${desc} (Contra)`, amount: Math.abs(val), source_type: 'opening' });
+        }
+      }
+    }
+  } else if (targetYear === 2026 || targetYear === 2025) {
     const field = targetYear === 2026 ? 'cur' : 'prev';
     for (const cfg of Object.values(OPENING_BASELINE)) {
       const val = round2(cfg[field]);

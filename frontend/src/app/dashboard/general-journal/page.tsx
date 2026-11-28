@@ -31,10 +31,10 @@ function GeneralJournalPageContent() {
           <BackButton href="/dashboard">Back to Overview</BackButton>
           <div className="mt-2">
             <h1 className="text-2xl font-black tracking-tight text-neutral-900 dark:text-white">
-              General Journal
+              Journal Entry
             </h1>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Daily double-entry book of original entry (Check Vouchers, Collections, RF Liquidations, Share Capital &amp; Adjusting JEVs).
+              Daily double-entry journal — managed day by day (Check Vouchers, Collections, RF Liquidations, Share Capital &amp; Adjusting JEVs).
             </p>
           </div>
         </div>

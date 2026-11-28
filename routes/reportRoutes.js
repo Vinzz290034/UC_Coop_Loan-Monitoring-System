@@ -27,6 +27,8 @@ import {
   getGeneralJournalReport,
   getTAccountsReport,
   getTrialBalanceReport,
+  importTrialBalanceOpeningBalances,
+  clearImportedOpeningBalances,
   createManualJournalEntry,
   deleteManualJournalEntry
 } from '../controllers/reportController.js';
@@ -90,6 +92,8 @@ router.delete('/chart-of-accounts', clearChartOfAccounts);
 router.get('/general-journal', getGeneralJournalReport);
 router.get('/t-accounts', getTAccountsReport);
 router.get('/trial-balance', getTrialBalanceReport);
+router.post('/trial-balance/import', importTrialBalanceOpeningBalances);
+router.delete('/trial-balance/import', clearImportedOpeningBalances);
 router.post('/journal-entries', createManualJournalEntry);
 router.delete('/journal-entries/:id', deleteManualJournalEntry);
 

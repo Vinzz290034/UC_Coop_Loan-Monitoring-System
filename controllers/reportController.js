@@ -4,7 +4,7 @@ import { exportToExcel } from '../services/reportExporter.js';
 import XLSX from 'xlsx';
 import fs from 'fs';
 import { generateNextMemberNo } from '../utils/memberIdGenerator.js';
-import { buildAccountingLedger, ensureManualJournalTables } from '../services/accountingLedgerService.js';
+import { buildAccountingLedger, ensureManualJournalTables, ensureImportedOpeningBalancesTable } from '../services/accountingLedgerService.js';
 
 // ==========================================
 // 1. CASH DISBURSEMENT REFERENCE REPORT
@@ -6292,6 +6292,124 @@ export const deleteManualJournalEntry = async (req, res, next) => {
       return res.status(404).json({ success: false, error: { message: 'Manual journal entry not found.' } });
     }
     return res.status(200).json({ success: true, message: 'Manual journal entry deleted.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Import Trial Balance Ending Balances as Opening Balances for a Target Year
+// @route   POST /api/reports/trial-balance/import
+// @access  Protected (Admin, Staff)
+export const importTrialBalanceOpeningBalances = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await ensureImportedOpeningBalancesTable();
+    const {
+      target_year,
+      source_label = 'Imported Trial Balance (2025 Ending)',
+      replace_existing = true,
+      accounts,
+    } = req.body || {};
+
+    const yearNum = Number(target_year);
+    if (!Number.isInteger(yearNum) || yearNum < 2000 || yearNum > 2099) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Please provide a valid target year (e.g. 2026).' }
+      });
+    }
+
+    if (!Array.isArray(accounts) || accounts.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'No trial balance accounts provided to import.' }
+      });
+    }
+
+    const cleanAccounts = accounts
+      .map((a) => {
+        const accountName = String(a.account_name || '').trim();
+        const accountType = String(a.account_type || 'Asset').trim();
+        const normalBalance =
+          a.normal_balance === 'credit' ||
+          ['Liabilities', 'Equity', 'Revenue'].includes(accountType)
+            ? 'credit'
+            : 'debit';
+        const openingBalance = Math.round((parseFloat(a.opening_balance) || 0) * 100) / 100;
+        return {
+          account_code: String(a.account_code || '').trim(),
+          account_name: accountName,
+          account_type: accountType,
+          normal_balance: normalBalance,
+          opening_balance: openingBalance,
+        };
+      })
+      .filter((a) => a.account_name && Math.abs(a.opening_balance) >= 0.005);
+
+    if (cleanAccounts.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'All imported rows had blank account titles or zero balances.' }
+      });
+    }
+
+    const createdBy = req.user?.username || req.user?.email || 'Admin';
+    const cleanSource = String(source_label || 'Imported Trial Balance').trim();
+
+    await client.query('BEGIN');
+    if (replace_existing) {
+      await client.query('DELETE FROM imported_opening_balances WHERE target_year = $1', [yearNum]);
+    }
+
+    for (const acc of cleanAccounts) {
+      await client.query(
+        `INSERT INTO imported_opening_balances
+         (target_year, source_label, account_code, account_name, account_type, normal_balance, opening_balance, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          yearNum,
+          cleanSource,
+          acc.account_code,
+          acc.account_name,
+          acc.account_type,
+          acc.normal_balance,
+          acc.opening_balance,
+          createdBy,
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+    return res.status(201).json({
+      success: true,
+      target_year: yearNum,
+      imported_count: cleanAccounts.length,
+      message: `Imported ${cleanAccounts.length} account opening balances for Year ${yearNum}.`
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
+// @desc    Clear Imported Opening Balances for a Target Year (reverts to built-in baseline)
+// @route   DELETE /api/reports/trial-balance/import
+// @access  Protected (Admin, Staff)
+export const clearImportedOpeningBalances = async (req, res, next) => {
+  try {
+    await ensureImportedOpeningBalancesTable();
+    const yearNum = Number(req.query.year || req.body?.target_year);
+    if (!Number.isInteger(yearNum)) {
+      return res.status(400).json({ success: false, error: { message: 'Valid year is required.' } });
+    }
+    const result = await pool.query('DELETE FROM imported_opening_balances WHERE target_year = $1', [yearNum]);
+    return res.status(200).json({
+      success: true,
+      deleted_count: result.rowCount,
+      message: `Cleared ${result.rowCount} imported opening balances for Year ${yearNum}.`
+    });
   } catch (error) {
     next(error);
   }

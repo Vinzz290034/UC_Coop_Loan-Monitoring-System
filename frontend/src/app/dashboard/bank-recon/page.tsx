@@ -5,11 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import BackButton from '@/components/BackButton';
 import BankReconTab from '@/components/reports/BankReconTab';
-import TAccountsTab from '@/components/reports/TAccountsTab';
 import TrialBalanceTab from '@/components/reports/TrialBalanceTab';
-import { Layers, Scale, Landmark } from 'lucide-react';
+import { BookOpen, Scale, Landmark } from 'lucide-react';
 
-type GlTab = 't_accounts' | 'trial_balance' | 'bank_recon';
+type GlTab = 'general_ledger' | 'trial_balance' | 'bank_recon';
 
 function BankReconPageContent() {
   const { user } = useAuth();
@@ -17,9 +16,9 @@ function BankReconPageContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get('tab') as GlTab | null;
   const [activeTab, setActiveTab] = useState<GlTab>(
-    tabParam && ['t_accounts', 'trial_balance', 'bank_recon'].includes(tabParam)
+    tabParam && ['general_ledger', 'trial_balance', 'bank_recon'].includes(tabParam)
       ? tabParam
-      : 'trial_balance'
+      : 'general_ledger'
   );
 
   useEffect(() => {
@@ -41,7 +40,7 @@ function BankReconPageContent() {
               General Ledger
             </h1>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              T-Accounts, Trial Balance &amp; General Ledger, and Cash-in-Bank Reconciliation (BDO, MBTC &amp; Vault).
+              General Ledger (click any account for T-Account), Trial Balance, and Cash-in-Bank Reconciliation.
             </p>
           </div>
         </div>
@@ -50,8 +49,8 @@ function BankReconPageContent() {
       {/* Accounting Cycle Tabs */}
       <div className="flex items-center gap-2 flex-wrap border-b border-outline-variant/60 pb-3 print:hidden">
         {[
-          { key: 'trial_balance' as GlTab, label: 'Trial Balance & GL', icon: Scale },
-          { key: 't_accounts' as GlTab, label: 'T-Accounts', icon: Layers },
+          { key: 'general_ledger' as GlTab, label: 'General Ledger', icon: BookOpen },
+          { key: 'trial_balance' as GlTab, label: 'Trial Balance', icon: Scale },
           { key: 'bank_recon' as GlTab, label: 'Bank Reconciliation', icon: Landmark },
         ].map(({ key, label, icon: Icon }) => {
           const isActive = activeTab === key;
@@ -73,8 +72,8 @@ function BankReconPageContent() {
         })}
       </div>
 
-      {activeTab === 't_accounts' && <TAccountsTab initialYear={initialYear} />}
-      {activeTab === 'trial_balance' && <TrialBalanceTab initialYear={initialYear} />}
+      {activeTab === 'general_ledger' && <TrialBalanceTab initialYear={initialYear} mode="general_ledger" />}
+      {activeTab === 'trial_balance' && <TrialBalanceTab initialYear={initialYear} mode="trial_balance" />}
       {activeTab === 'bank_recon' && <BankReconTab initialYear={initialYear} />}
     </div>
   );

@@ -109,7 +109,7 @@ function DashboardLayoutContent({
       allowed: true,
     },
     {
-      name: 'General Journal',
+      name: 'Journal Entry',
       path: '/dashboard/general-journal',
       icon: BookOpen,
       allowed: isAdminOrStaff,
@@ -499,7 +499,7 @@ function DashboardLayoutContent({
                         appointments: 'Schedule',
                         messages: 'Inbox',
                         notifications: isMember ? 'Notification' : 'Inbox',
-                        'general-journal': 'General Journal',
+                        'general-journal': 'Journal Entry',
                         'bank-recon': 'General Ledger',
                       };
                       return breadcrumbLabels[segment] || staticOverrides[segment] || segment;
