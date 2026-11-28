@@ -201,12 +201,12 @@ export const getShareCapital = async (req, res, next) => {
     }
 
     const txs = await query(
-      'SELECT * FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC',
+      'SELECT * FROM share_capital_transactions WHERE member_id = $1 ORDER BY transaction_date DESC, id DESC',
       [memberId]
     );
 
     const completedTx = await query(
-      "SELECT balance_after FROM share_capital_transactions WHERE member_id = $1 AND status = 'completed' ORDER BY transaction_date DESC LIMIT 1",
+      "SELECT balance_after FROM share_capital_transactions WHERE member_id = $1 AND COALESCE(status, 'completed') = 'completed' ORDER BY transaction_date DESC, id DESC LIMIT 1",
       [memberId]
     );
 
